@@ -1,0 +1,37 @@
+{
+  "Model": "Items/Vehicles/Hotair_Balloon.blockymodel",
+  "Texture": "Items/Vehicles/Hotair_Balloon_Texture.png",
+  "EyeHeight": 1,
+  "HitBox": {
+    "Max": {
+      "X": 21,
+      "Y": 34,
+      "Z": 21
+    },
+    "Min": {
+      "X": -21,
+      "Y": -8,
+      "Z": -21
+    }
+  },
+  "MinScale": 1,
+  "MaxScale": 1,
+  "Particles": [
+    {
+      "SystemId": "Campfire_New_Cartoon",
+      "Scale": 0.9,
+      "TargetNodeName": "Burner_Fire"
+    },
+    {
+      "SystemId": "Flamethrower",
+      "Scale": 0.8,
+      "TargetNodeName": "Burner_Fire",
+      "PositionOffset": {
+        "Y": 3
+      },
+      "RotationOffset": {
+        "Pitch": 90
+      }
+    }
+  ]
+}

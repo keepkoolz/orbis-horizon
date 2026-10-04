@@ -1,0 +1,19 @@
+{
+    "Group": "KeepKoolz",
+    "Name": "Orbis Horizon",
+    "Version": "1.1.1",
+    "Description": "Adds a hot air balloon you can fly and a camping tent, both carried in a crate and set up wherever you go.",
+    "Authors": [
+        {
+            "Name": "KeepKoolz"
+        }
+    ],
+    "ServerVersion": ">=0.6.8 <0.7.0",
+    "Main": "com.keepkoolz.orbishorizon.OrbisHorizonPlugin",
+    "Dependencies": {},
+    "OptionalDependencies": {},
+    "LoadBefore": {},
+    "DisabledByDefault": false,
+    "IncludesAssetPack": true,
+    "SubPlugins": []
+}

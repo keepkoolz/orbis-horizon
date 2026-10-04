@@ -1,0 +1,47 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.camping_tent_crate_empty.name",
+    "Description": "server.orbis_horizon.items.camping_tent_crate_empty.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Camping_Tent_Crate_Empty.png",
+  "PlayerAnimationsId": "Block",
+  "MaxStack": 1,
+  "Categories": [
+    "Furniture.Containers"
+  ],
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Cube",
+    "Opacity": "Transparent",
+    "Group": "Wood",
+    "RandomRotation": "YawStep1",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Benches"
+      }
+    },
+    "BlockParticleSetId": "Wood",
+    "Textures": [
+      {
+        "Weight": 1,
+        "Sides": "BlockTextures/Camping_Tent_Crate_Empty_Side.png",
+        "UpDown": "BlockTextures/Furniture_Village_Crate.png"
+      }
+    ],
+    "ParticleColor": "#3f2720",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "TextureComputedColor": "#47291D"
+  },
+  "Interactions": {
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "Camping_PackTent"
+        }
+      ]
+    }
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

@@ -1,0 +1,90 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.camping_tent_crate.name",
+    "Description": "server.orbis_horizon.items.camping_tent_crate.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Camping_Tent_Crate.png",
+  "PlayerAnimationsId": "Block",
+  "MaxStack": 1,
+  "Categories": [
+    "Furniture.Containers"
+  ],
+  "Recipe": {
+    "Input": [
+      {
+        "ItemId": "Ingredient_Fibre",
+        "Quantity": 40
+      },
+      {
+        "ItemId": "Ingredient_Hide_Light",
+        "Quantity": 10
+      },
+      {
+        "ItemId": "Ingredient_Stick",
+        "Quantity": 20
+      },
+      {
+        "ItemId": "Bench_Campfire",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Furniture_Crude_Bed",
+        "Quantity": 1
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Tinkering"
+        ],
+        "Id": "Workbench",
+        "RequiredTierLevel": 1
+      }
+    ],
+    "TimeSeconds": 3
+  },
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Cube",
+    "Opacity": "Transparent",
+    "Group": "Wood",
+    "RandomRotation": "YawStep1",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Benches"
+      }
+    },
+    "BlockParticleSetId": "Wood",
+    "Textures": [
+      {
+        "Weight": 1,
+        "Sides": "BlockTextures/Camping_Tent_Crate_Side.png",
+        "UpDown": "BlockTextures/Furniture_Village_Crate.png"
+      }
+    ],
+    "ParticleColor": "#3f2720",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "TextureComputedColor": "#47291D"
+  },
+  "Interactions": {
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "Camping_DeployTent",
+          "PrefabPath": "Camping_Tent.prefab.json",
+          "Offset": {
+            "X": 0,
+            "Y": 1,
+            "Z": -3
+          },
+          "RotationOffset": "Ninety",
+          "Force": true
+        }
+      ]
+    }
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

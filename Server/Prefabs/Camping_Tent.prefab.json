@@ -1,0 +1,414 @@
+{
+  "version": 8,
+  "blockIdVersion": 11,
+  "anchorX": 0,
+  "anchorY": 0,
+  "anchorZ": 0,
+  "blocks": [
+    {
+      "x": -3,
+      "y": 0,
+      "z": 0,
+      "name": "Furniture_Crude_Stool",
+      "rotation": 3
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 1,
+      "name": "Bench_Campfire",
+      "components": {
+        "Components": {
+          "BenchBlock": {
+            "TierLevel": 1,
+            "UpgradeItems": []
+          },
+          "ProcessingBenchBlock": {
+            "InputContainer": {
+              "Id": "Simple",
+              "Capacity": 2,
+              "Items": {}
+            },
+            "FuelContainer": {
+              "Id": "Simple",
+              "Capacity": 1,
+              "Items": {}
+            },
+            "OutputContainer": {
+              "Id": "Simple",
+              "Capacity": 4,
+              "Items": {}
+            },
+            "Progress": 0.0,
+            "FuelTime": 0.0,
+            "Active": false,
+            "NextExtra": 2
+          }
+        }
+      },
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": -1,
+      "name": "*Cloth_Roof_Orange_State_Definitions_Corner_Right",
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 0,
+      "name": "Cloth_Roof_Orange_Vertical"
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 0,
+      "name": "Cloth_Roof_Orange",
+      "rotation": 2
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 1,
+      "name": "Cloth_Roof_Orange_Vertical",
+      "rotation": 2
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 1,
+      "name": "Cloth_Roof_Orange"
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 2,
+      "name": "*Cloth_Roof_Orange_State_Definitions_Corner_Left",
+      "rotation": 3
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -1,
+      "name": "Cloth_Roof_Orange",
+      "rotation": 2
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 0,
+      "name": "Cloth_Roof_Orange",
+      "rotation": 2
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 1,
+      "name": "Cloth_Roof_Orange"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 2,
+      "name": "Cloth_Roof_Orange"
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": -1,
+      "name": "Cloth_Roof_Orange",
+      "rotation": 2
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 0,
+      "name": "Furniture_Crude_Bed",
+      "filler": 31,
+      "rotation": 3
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 0,
+      "name": "Cloth_Roof_Orange",
+      "rotation": 2
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 1,
+      "name": "Cloth_Roof_Orange"
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 2,
+      "name": "Cloth_Roof_Orange"
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": -1,
+      "name": "Cloth_Roof_Orange",
+      "rotation": 2
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 0,
+      "name": "Furniture_Crude_Bed",
+      "components": {
+        "Components": {
+          "RespawnBlock": {}
+        }
+      },
+      "rotation": 3
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 0,
+      "name": "*Cloth_Roof_Orange_State_Definitions_Corner_Left",
+      "rotation": 1
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 1,
+      "name": "Deco_Lantern"
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 1,
+      "name": "*Cloth_Roof_Orange_State_Definitions_Corner_Left"
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 2,
+      "name": "Cloth_Roof_Orange"
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": -1,
+      "name": "*Cloth_Roof_Orange_State_Definitions_Corner_Right",
+      "rotation": 2
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 0,
+      "name": "Cloth_Roof_Orange",
+      "rotation": 1
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 1,
+      "name": "Cloth_Roof_Orange",
+      "rotation": 1
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 2,
+      "name": "*Cloth_Roof_Orange_State_Definitions_Corner_Left"
+    }
+  ],
+  "fluids": [
+    {
+      "x": -3,
+      "y": 0,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    }
+  ]
+}

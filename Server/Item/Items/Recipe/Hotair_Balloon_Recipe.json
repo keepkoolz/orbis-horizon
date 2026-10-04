@@ -1,0 +1,57 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.hotair_balloon_recipe.name",
+    "Description": "server.orbis_horizon.items.hotair_balloon_recipe.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Recipe_Page.png",
+  "Quality": "Rare",
+  "Categories": [
+    "Items.Recipes"
+  ],
+  "PlayerAnimationsId": "Item",
+  "Model": "Items/Consumables/Recipes/Recipe.blockymodel",
+  "Texture": "Items/Consumables/Recipes/Recipe_Texture.png",
+  "IconProperties": {
+    "Scale": 0.76,
+    "Rotation": [
+      135,
+      135,
+      0
+    ],
+    "Translation": [
+      -1,
+      5
+    ]
+  },
+  "Consumable": true,
+  "Interactions": {
+    "Primary": {
+      "Interactions": [
+        {
+          "Type": "HotairBalloon_LearnRecipes",
+          "Next": {
+            "Type": "ModifyInventory",
+            "AdjustHeldItemQuantity": -1
+          }
+        }
+      ]
+    },
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "HotairBalloon_LearnRecipes",
+          "Next": {
+            "Type": "ModifyInventory",
+            "AdjustHeldItemQuantity": -1
+          }
+        }
+      ]
+    }
+  },
+  "Tags": {
+    "Type": [
+      "Recipe"
+    ]
+  },
+  "MaxStack": 10
+}

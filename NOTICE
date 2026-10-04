@@ -1,0 +1,22 @@
+Orbis Horizon
+Required Notice: Copyright 2026 KeepKoolz
+
+Licence
+
+The original work in this repository is licensed under the PolyForm Noncommercial License 1.0.0 (see the LICENSE file and https://polyformproject.org/licenses/noncommercial/1.0.0). In short, you may use, copy and modify it for noncommercial purposes, and any commercial use is not permitted. Anything not allowed by that licence is reserved.
+
+The original work is the plugin source code (plugin/src and dist/classes), the scripts, the documentation, the item, model and interaction definitions written for the mod, and the language files.
+
+Third-party content, excluded from this licence
+
+The following content is not covered by the licence above. It belongs to its authors and is subject to their own terms. Check them before distributing the mod.
+
+- Prefabs. Server/Prefabs/Hotair_Balloon.prefab.json is based on the "Hot Air Ballon" prefab published on CurseForge (https://www.curseforge.com/hytale/prefabs/hot-air-ballon). Server/Prefabs/Camping_Tent.prefab.json is based on "Desert Base Camp - Tent (Model 2)" (https://www.curseforge.com/hytale/prefabs/desert-base-camp-tent-model-2) and "Desert Base Camp - Tent (Model 1)" (https://www.curseforge.com/hytale/prefabs/desert-base-camp-tent). Both were modified for this mod.
+- Hytale game assets, which belong to Hypixel Studios. This covers the content copied or adapted from the game:
+  - the flight model and its texture atlas (Common/Items/Vehicles), generated from the prefab with the game's block textures
+  - the crate icons and side textures (Common/Icons/ItemsGenerated, Common/BlockTextures), drawn from the village crate of the game
+  - the merchant shop and role (Server/BarterShops/Hotair_Balloon_Temple_Merchant.json and Server/NPC/Roles/Intelligent/Passive/Temple/Temple_Kweebec_Merchant.json), copied from the game and modified
+  - the flamethrower sound effect (Server/Entity/Effects/Hotair_Balloon_Burner_Boost.json), copied from the game and modified
+  - the parts of the item and block definitions copied from game items
+
+The mod needs the game to run. HytaleServer.jar and Assets.zip are not part of this repository.

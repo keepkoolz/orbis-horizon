@@ -1,0 +1,171 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.hotair_balloon_burner.name",
+    "Description": "server.orbis_horizon.items.hotair_balloon_burner.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Metal_Iron_Pipe_Large_Mouthpiece.png",
+  "Categories": [
+    "Blocks.Metal"
+  ],
+  "Recipe": {
+    "KnowledgeRequired": true,
+    "Input": [
+      {
+        "ItemId": "Ingredient_Bar_Iron",
+        "Quantity": 12
+      },
+      {
+        "ItemId": "Ingredient_Bar_Copper",
+        "Quantity": 6
+      },
+      {
+        "ItemId": "Ingredient_Charcoal",
+        "Quantity": 4
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Tinkering"
+        ],
+        "Id": "Workbench",
+        "RequiredTierLevel": 3
+      }
+    ],
+    "TimeSeconds": 3
+  },
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Model",
+    "CustomModel": "Blocks/Structures/Pillars/Pillar_Base.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Structures/Pillars/Pillar_Base_Textures/Metal_Iron.png",
+        "Weight": 1
+      }
+    ],
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Rocks"
+      }
+    },
+    "VariantRotation": "DoublePipe",
+    "BlockParticleSetId": "Metal",
+    "Supporting": {
+      "Down": [
+        {}
+      ],
+      "Up": [
+        {}
+      ]
+    },
+    "BlockSoundSetId": "Metal",
+    "PhysicalMaterialId": "Metal",
+    "IgnoreSupportWhenPlaced": true,
+    "Group": "Metal",
+    "ParticleColor": "#87928e",
+    "TextureComputedColor": "#7E8684",
+    "Bench": {
+      "Type": "Processing",
+      "Id": "Hotair_Balloon_Burner",
+      "AllowNoInputProcessing": false,
+      "Input": [
+        {
+          "ResourceTypeId": "Fuel",
+          "Icon": "Icons/Processing/FuelSlotIcon.png"
+        },
+        {
+          "ResourceTypeId": "Fuel",
+          "Icon": "Icons/Processing/FuelSlotIcon.png"
+        },
+        {
+          "ResourceTypeId": "Fuel",
+          "Icon": "Icons/Processing/FuelSlotIcon.png"
+        }
+      ],
+      "ExtraOutput": {
+        "Outputs": [
+          {
+            "ItemId": "Ingredient_Charcoal"
+          }
+        ],
+        "PerFuelItemsConsumed": 2,
+        "IgnoredFuelSources": [
+          {
+            "ItemId": "Ingredient_Charcoal"
+          },
+          {
+            "ItemId": "Ingredient_Fibre"
+          },
+          {
+            "ItemId": "Ingredient_Tree_Sap"
+          }
+        ]
+      },
+      "OutputSlotsCount": 2,
+      "LocalOpenSoundEventId": "SFX_Campfire_Open_Local",
+      "LocalCloseSoundEventId": "SFX_Campfire_Close_Local",
+      "EndSoundEventId": "SFX_Campfire_Processing_End",
+      "FailedSoundEventId": "SFX_Campfire_Processing_Failed"
+    },
+    "BlockEntity": {
+      "Components": {
+        "BenchBlock": {},
+        "ProcessingBenchBlock": {}
+      }
+    },
+    "Interactions": {
+      "Use": "Open_Processing_Bench"
+    },
+    "State": {
+      "Definitions": {
+        "On": {
+          "Light": {
+            "Color": "#dba"
+          },
+          "Particles": [
+            {
+              "SystemId": "Campfire_New_Cartoon",
+              "Scale": 0.9,
+              "TargetNodeName": "",
+              "PositionOffset": {
+                "Y": 0.5
+              },
+              "RotationOffset": {
+                "Yaw": 0,
+                "Pitch": 180,
+                "Roll": 0
+              }
+            }
+          ],
+          "AmbientSoundEventId": "SFX_Campfire_Default_Loop"
+        }
+      }
+    }
+  },
+  "PlayerAnimationsId": "Block",
+  "IconProperties": {
+    "Scale": 0.58823,
+    "Rotation": [
+      22.5,
+      45.0,
+      22.5
+    ],
+    "Translation": [
+      0.0,
+      -13.5
+    ]
+  },
+  "Tags": {
+    "Family": [
+      "Iron"
+    ],
+    "Type": [
+      "Metal"
+    ]
+  },
+  "MaxStack": 1,
+  "ItemSoundSetId": "ISS_Items_Metal"
+}

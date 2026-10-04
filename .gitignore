@@ -1,0 +1,4 @@
+plugin/build/
+dist/*.jar
+.DS_Store
+__pycache__/
