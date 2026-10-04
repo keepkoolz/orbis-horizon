@@ -127,8 +127,8 @@ final class BalloonLights {
     /** Radius forced on all lights (diagnostics), null: the block's own. */
     private static volatile Integer radiusOverride;
 
-    private static volatile BalloonShape cachedShape;
-    private static volatile List<Spec> cachedSpecs = List.of();
+    /** Light specs per shape (one entry per balloon type, T54). */
+    private static final java.util.Map<BalloonShape, List<Spec>> SPECS = new java.util.concurrent.ConcurrentHashMap<>();
 
     static boolean enabled() {
         return enabled;
@@ -165,8 +165,9 @@ final class BalloonLights {
      * Computed once per shape.
      */
     static List<Spec> specsFor(BalloonShape s) {
-        if (cachedShape == s) {
-            return cachedSpecs;
+        List<Spec> cached = SPECS.get(s);
+        if (cached != null) {
+            return cached;
         }
         List<Spec> specs = new ArrayList<>();
         for (BalloonShape.Cell c : s.cells()) {
@@ -178,9 +179,9 @@ final class BalloonLights {
             specs.add(new Spec(KEY_BLOCK_PREFIX + c.x() + "," + c.y() + "," + c.z(),
                     new Vector3f(c.x(), c.y() + 0.5f, c.z()), new ColorLight(light)));
         }
-        cachedSpecs = List.copyOf(specs);
-        cachedShape = s;
-        return cachedSpecs;
+        cached = List.copyOf(specs);
+        SPECS.put(s, cached);
+        return cached;
     }
 
     /** Creates the prefab blocks' lights (if lights are enabled). Call on the world thread, once the flying entity is created. */
@@ -221,7 +222,7 @@ final class BalloonLights {
                 return null;
             }
             store.putComponent(light.ref, MountedComponent.getComponentType(),
-                    new MountedComponent(flight.balloonRef, BalloonManager.attachOffset(light.local), MountController.Minecart));
+                    new MountedComponent(flight.balloonRef, BalloonManager.attachOffset(flight.kind, light.local), MountController.Minecart));
             flight.lights.add(light);
             return light;
         } catch (RuntimeException e) {

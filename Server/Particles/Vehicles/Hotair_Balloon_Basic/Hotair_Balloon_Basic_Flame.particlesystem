@@ -1,0 +1,36 @@
+{
+  "Spawners": [
+    {
+      "SpawnerId": "Hotair_Balloon_Basic_Fireplace_Smoke_Cartoon",
+      "PositionOffset": {
+        "X": 0,
+        "Y": 0.25,
+        "Z": 0
+      }
+    },
+    {
+      "SpawnerId": "Hotair_Balloon_Basic_Fire_Up",
+      "PositionOffset": {
+        "X": 0,
+        "Y": 0.1,
+        "Z": 0
+      },
+      "Attractors": []
+    },
+    {
+      "SpawnerId": "Hotair_Balloon_Basic_Fire_Center",
+      "PositionOffset": {
+        "X": 0,
+        "Y": 0.1,
+        "Z": 0
+      }
+    },
+    {
+      "SpawnerId": "Hotair_Balloon_Basic_Fireplace_Sparks_Up"
+    },
+    {
+      "SpawnerId": "Hotair_Balloon_Basic_Fireplace_Distortion"
+    }
+  ],
+  "CullDistance": 60
+}

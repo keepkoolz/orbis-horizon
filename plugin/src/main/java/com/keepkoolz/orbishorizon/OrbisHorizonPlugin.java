@@ -34,9 +34,6 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 .register(TakeOffBalloonInteraction.TYPE_ID, TakeOffBalloonInteraction.class, TakeOffBalloonInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
                 .register(LandBalloonInteraction.TYPE_ID, LandBalloonInteraction.class, LandBalloonInteraction.CODEC);
-        // T32: the recipe item teaches the mod's three recipes at once.
-        getCodecRegistry(Interaction.CODEC)
-                .register(LearnBalloonRecipesInteraction.TYPE_ID, LearnBalloonRecipesInteraction.class, LearnBalloonRecipesInteraction.CODEC);
         getEntityStoreRegistry().registerSystem(new BalloonFlightSystem());
         try {
             // Burner flame on the ground according to the burner's fuel (T13). Needs the game's
@@ -89,11 +86,20 @@ public class OrbisHorizonPlugin extends JavaPlugin {
     protected void start() {
         // T44: the tent shape is read once (asset prefabs are loaded before start). A failure
         // is logged by Deployables and the shape will be read again on demand.
-        BalloonShape tent = Deployables.TENT.shapeOrNull();
-        if (tent != null) {
-            BalloonShape.Cell anchor = tent.anchor();
-            getLogger().at(Level.INFO).log("Tente : %d case(s), repère en (%d, %d, %d)",
-                    tent.cells().size(), anchor.x(), anchor.y(), anchor.z());
+        for (Deployables.Kind kind : Deployables.TENTS) {
+            BalloonShape tent = kind.shapeOrNull();
+            if (tent != null) {
+                BalloonShape.Cell anchor = tent.anchor();
+                getLogger().at(Level.INFO).log("%s : %d case(s), repère en (%d, %d, %d)",
+                        kind == Deployables.TENT ? "Tente" : "Grande tente", tent.cells().size(), anchor.x(), anchor.y(), anchor.z());
+            }
+        }
+        // T54: balloon types, with their number of seats (limit of passengers).
+        for (Deployables.Kind kind : Deployables.BALLOONS) {
+            BalloonShape shape = kind.shapeOrNull();
+            if (shape != null) {
+                getLogger().at(Level.INFO).log("Montgolfière « %s » : %d case(s), %d siège(s)", kind.id, shape.cells().size(), shape.seats().size());
+            }
         }
         // Worlds already started when the plugin starts (StartWorldEvent has already passed).
         for (World world : Universe.get().getWorlds().values()) {

@@ -15,7 +15,7 @@ The following content is not covered by the licence above. It belongs to its aut
 - Hytale game assets, which belong to Hypixel Studios. This covers the content copied or adapted from the game:
   - the flight model and its texture atlas (Common/Items/Vehicles), generated from the prefab with the game's block textures
   - the crate icons and side textures (Common/Icons/ItemsGenerated, Common/BlockTextures), drawn from the village crate of the game
-  - the merchant shop and role (Server/BarterShops/Hotair_Balloon_Temple_Merchant.json and Server/NPC/Roles/Intelligent/Passive/Temple/Temple_Kweebec_Merchant.json), copied from the game and modified
+  - the flame particle systems and spawners of the small balloon (Server/Particles/Vehicles/Hotair_Balloon_Basic), copied from the game and modified
   - the flamethrower sound effect (Server/Entity/Effects/Hotair_Balloon_Burner_Boost.json), copied from the game and modified
   - the parts of the item and block definitions copied from game items
 

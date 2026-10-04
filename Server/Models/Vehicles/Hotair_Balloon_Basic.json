@@ -1,0 +1,26 @@
+{
+  "Model": "Items/Vehicles/Hotair_Balloon_Basic.blockymodel",
+  "Texture": "Items/Vehicles/Hotair_Balloon_Basic_Texture.png",
+  "EyeHeight": 1,
+  "HitBox": {
+    "Max": {
+      "X": 8,
+      "Y": 18,
+      "Z": 8
+    },
+    "Min": {
+      "X": -8,
+      "Y": -4,
+      "Z": -8
+    }
+  },
+  "MinScale": 1,
+  "MaxScale": 1,
+  "Particles": [
+    {
+      "SystemId": "Hotair_Balloon_Basic_Flame",
+      "Scale": 0.45,
+      "TargetNodeName": "Burner_Fire"
+    }
+  ]
+}

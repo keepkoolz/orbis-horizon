@@ -27,6 +27,8 @@ final class BalloonFlight {
     volatile Ref<EntityStore> pilotRef;
     final World world;
     final Rotation rotation;
+    /** Balloon type of this flight (T54): prefab, pivot, gondola, model and crate. Always a balloon kind. */
+    final Deployables.Kind kind;
     Ref<EntityStore> balloonRef;
     /** Entity position (centre of the prefab origin block, at the prefab ground level). */
     final Vector3d entityPos = new Vector3d();
@@ -237,7 +239,8 @@ final class BalloonFlight {
     final List<BalloonLights.Light> lights = new CopyOnWriteArrayList<>();
 
 
-    BalloonFlight(UUID pilotUuid, Ref<EntityStore> pilotRef, World world, Rotation rotation) {
+    BalloonFlight(UUID pilotUuid, Ref<EntityStore> pilotRef, World world, Rotation rotation, Deployables.Kind kind) {
+        this.kind = kind;
         this.pilotUuid = pilotUuid;
         this.pilotRef = pilotRef;
         this.world = world;

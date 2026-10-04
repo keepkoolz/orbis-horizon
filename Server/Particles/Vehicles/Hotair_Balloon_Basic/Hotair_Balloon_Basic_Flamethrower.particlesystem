@@ -1,0 +1,45 @@
+{
+  "Spawners": [
+    {
+      "SpawnerId": "Hotair_Balloon_Basic_Flamethrower_Main",
+      "PositionOffset": {
+        "Z": 2.5
+      }
+    },
+    {
+      "SpawnerId": "Hotair_Balloon_Basic_Flamethrower_Sparks_End",
+      "PositionOffset": {
+        "Z": 1
+      }
+    },
+    {
+      "SpawnerId": "Hotair_Balloon_Basic_Flamethrower_Distortion",
+      "PositionOffset": {
+        "Z": 2
+      }
+    },
+    {
+      "SpawnerId": "Hotair_Balloon_Basic_Flamethrower_Glow_Start",
+      "PositionOffset": {
+        "Z": 2.5
+      }
+    },
+    {
+      "SpawnerId": "Hotair_Balloon_Basic_Flamethrower_EndSpread",
+      "PositionOffset": {
+        "Z": 1
+      }
+    },
+    {
+      "SpawnerId": "Hotair_Balloon_Basic_Flamethrower_EndSpread_FlyOff"
+    },
+    {
+      "SpawnerId": "Hotair_Balloon_Basic_Flamethrower_CoreThin",
+      "PositionOffset": {
+        "Z": 3
+      }
+    }
+  ],
+  "CullDistance": 100.0,
+  "IsImportant": false
+}

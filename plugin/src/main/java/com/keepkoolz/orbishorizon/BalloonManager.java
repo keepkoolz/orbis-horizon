@@ -85,9 +85,6 @@ import java.util.logging.Level;
  */
 public final class BalloonManager {
 
-    public static final String PREFAB_PATH = "Hotair_Balloon.prefab.json";
-    /** Model used in flight (the detailed one looks good and is visible from every side). */
-    public static final String DEFAULT_MODEL_ID = "Hotair_Balloon";
     /**
      * Quarter turn added to the pilot's look direction to orient the prefab on
      * landing. Same value as "RotationOffset" of the crate interaction.
@@ -136,8 +133,6 @@ public final class BalloonManager {
      * returns below BOOST_OFF_SPEED, after at least BOOST_MIN_MS.
      */
     static final String BOOST_MODEL_SUFFIX = "_Boost";
-    /** Flame system added by the _Boost model (T50: the Goblin Flamethrower jet), to be stopped when returning to the normal flame. */
-    private static final String BOOST_FLAME = "Flamethrower";
     /** Radius for stopping the jet (the jet is about 5 blocks long at scale 1, T50). */
     private static final double BOOST_FLAME_CANCEL_RADIUS = 8;
     /**
@@ -185,14 +180,11 @@ public final class BalloonManager {
     private static final long HOVER_SAVE_MS = 10000;
     /** Delay before a new attempt if the dry descent could not start. */
     private static final long HOVER_RETRY_MS = 5000;
-    /**
-     * Volume of the gondola in the prefab frame, relative to the centre of the origin block, before rotation.
-     * Prefab interior: floor y = 8, walking floor y = 9, railing up to y = 10, walls at
-     * x = -2 and 2 and at z = 6 and 10 (seats at (+-1, 9, 7) and (+-1, 9, 9)). A player whose feet
-     * are in this volume is "in the gondola".
+    /*
+     * T54: the gondola volume (a player whose feet are in it is "in the gondola"), the model pivot, the flight model and the crate
+     * item belong to each balloon type (Deployables.BalloonSpec). Large balloon: floor y = 8, walking floor y = 9, railing up to
+     * y = 10, walls at x = -2 and 2 and at z = 6 and 10 (seats at (+-1, 9, 7) and (+-1, 9, 9)).
      */
-    private static final Vector3f NACELLE_MIN = new Vector3f(-2.0f, 8.5f, 6.0f);
-    private static final Vector3f NACELLE_MAX = new Vector3f(2.0f, 12.0f, 10.0f);
     /**
      * T21, height of the seat point above the walking floor (blocks). The game places a player seated on
      * a stool at the centre of the cell plus 0.5 in height (BlockMountPoint.computeWorldSpacePosition: cell
@@ -218,7 +210,8 @@ public final class BalloonManager {
     private final Map<UUID, BalloonFlight> flights = new ConcurrentHashMap<>();
     /** Flights being resumed (T19), to avoid starting the same resume twice. */
     private final Set<UUID> recovering = ConcurrentHashMap.newKeySet();
-    private volatile String modelId = DEFAULT_MODEL_ID;
+    /** Model forced with /orbishorizon balloon model (test), null: each balloon type uses its own model. */
+    private volatile String modelOverride;
     /**
      * Display offset of the model, in blocks, in the prefab frame (before rotation).
      * Used to align the model with the block positions: adjustable in game with /orbishorizon balloon offset.
@@ -249,11 +242,19 @@ public final class BalloonManager {
     }
 
     /**
-     * Pivot of the 3D model, in blocks, in the frame of the logical position (centre of the origin block,
+     * Pivot of the 3D model of this balloon type, in blocks, in the frame of the logical position (centre of the origin block,
      * bottom of the block): the pilot's feet at the centre of the gondola, under the burner. Must match
      * PIVOT in scripts/prefab_to_model.py, which shifts the model by the same amount.
      */
-    static final Vector3f MODEL_PIVOT = new Vector3f(0, 9, 8);
+    static Vector3f pivot(Deployables.Kind kind) {
+        return kind.balloon.pivot;
+    }
+
+    /** Model used by a flight of this type: the forced one (test) or the type's own. */
+    private String modelFor(Deployables.Kind kind) {
+        String o = modelOverride;
+        return o != null ? o : kind.balloon.modelId;
+    }
 
     /** World point matching a point of the prefab frame (in blocks, before rotation). */
     static Vector3d prefabPoint(Vector3d logical, Rotation rotation, Vector3f local) {
@@ -267,14 +268,14 @@ public final class BalloonManager {
      * MODEL_YAW_CORRECTION), so it is the prefab offset (point minus pivot) with x and z inverted. A single calculation
      * for the passenger seats (T21) and the lights (T34, BalloonLights).
      */
-    static Vector3f attachOffset(Vector3f local) {
-        Vector3f d = new Vector3f(local).sub(MODEL_PIVOT);
+    static Vector3f attachOffset(Deployables.Kind kind, Vector3f local) {
+        Vector3f d = new Vector3f(local).sub(pivot(kind));
         return new Vector3f(-d.x, d.y, -d.z);
     }
 
     /** Display position of the entity: model pivot + alignment offset, rotated like the prefab. */
-    private Vector3d displayPosition(Vector3d logical, Rotation rotation) {
-        return prefabPoint(logical, rotation, new Vector3f(MODEL_PIVOT).add(modelOffset));
+    private Vector3d displayPosition(Deployables.Kind kind, Vector3d logical, Rotation rotation) {
+        return prefabPoint(logical, rotation, new Vector3f(pivot(kind)).add(modelOffset));
     }
 
     /** Diagnostic text about the player's current flight. */
@@ -282,14 +283,14 @@ public final class BalloonManager {
         // Diagnostic output (op), in English whatever the client language: technical values.
         BalloonFlight f = flights.get(player.getUuid());
         if (f == null) {
-            return "No flight in progress. Model " + modelId + ", offset " + modelOffset
+            return "No flight in progress. Model " + modelId() + ", offset " + modelOffset
                     + ", passenger seating " + passengerMode + ", seat pose " + pose.describe()
                     + ", seat height " + seatHeight + ", lights " + BalloonLights.describe(null);
         }
         TransformComponent pt = f.pilotRef != null ? store.getComponent(f.pilotRef, TransformComponent.getComponentType()) : null;
         TransformComponent bt = f.balloonRef != null && f.balloonRef.isValid()
                 ? store.getComponent(f.balloonRef, TransformComponent.getComponentType()) : null;
-        return "Rotation " + f.rotation + " (" + f.rotation.getDegrees() + " deg)"
+        return "Type " + f.kind.id + ", rotation " + f.rotation + " (" + f.rotation.getDegrees() + " deg)"
                 + ", origin " + f.originCell(f.entityPos)
                 + ", logical position " + fmt(f.entityPos)
                 + ", entity " + (bt != null ? fmt(bt.getPosition()) + " yaw " + bt.getRotation().y : "missing")
@@ -308,14 +309,14 @@ public final class BalloonManager {
      * lights (enabled), removes them (disabled) or updates their colour (forced radius). On the world thread.
      */
     void applyLightSetting(Store<EntityStore> store, World world) {
-        BalloonShape s;
-        try {
-            s = shape();
-        } catch (IOException e) {
-            return;
-        }
         for (BalloonFlight f : flights.values()) {
             if (f.world != world) {
+                continue;
+            }
+            BalloonShape s;
+            try {
+                s = f.kind.shape();
+            } catch (IOException e) {
                 continue;
             }
             if (!BalloonLights.enabled()) {
@@ -333,16 +334,22 @@ public final class BalloonManager {
     /** Test entities created by /orbishorizon balloon spawnmodel, one per player. */
     private final Map<UUID, Ref<EntityStore>> testEntities = new ConcurrentHashMap<>();
 
+    /** The forced model, or "default" (each balloon type uses its own model). */
     public String modelId() {
-        return modelId;
+        String o = modelOverride;
+        return o != null ? o : "default";
     }
 
-    /** Returns null if the model exists, otherwise an error message. */
+    /** Returns null if the model exists, otherwise an error message. "default" goes back to each type's own model. */
     public Message setModelId(String id) {
+        if ("default".equalsIgnoreCase(id)) {
+            modelOverride = null;
+            return null;
+        }
         if (ModelAsset.getAssetMap().getAsset(id) == null) {
             return Texts.t("error.unknownModel").param("model", id);
         }
-        modelId = id;
+        modelOverride = id;
         return null;
     }
 
@@ -370,11 +377,6 @@ public final class BalloonManager {
         return INSTANCE;
     }
 
-    private BalloonShape shape() throws IOException {
-        // T43: the shape is loaded once by Deployables, the same instance as the one used for locking.
-        return Deployables.BALLOON.shape();
-    }
-
     public boolean isFlying(UUID pilot) {
         return flights.containsKey(pilot);
     }
@@ -390,12 +392,9 @@ public final class BalloonManager {
         if (flights.containsKey(player.getUuid())) {
             return Texts.t("error.alreadyPiloting");
         }
-        BalloonShape s;
-        try {
-            s = shape();
-        } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Lecture du prefab impossible");
-            return Texts.t("error.prefabUnreadable").param("error", String.valueOf(e.getMessage()));
+        Message unreadable = checkPrefabsReadable();
+        if (unreadable != null) {
+            return unreadable;
         }
         TransformComponent pilotTransform = store.getComponent(pilotRef, TransformComponent.getComponentType());
         if (pilotTransform == null) {
@@ -403,9 +402,14 @@ public final class BalloonManager {
         }
         Vector3d pilotPos = new Vector3d(pilotTransform.getPosition());
 
-        Found found = findBalloon(world, s, pilotPos);
+        // T54: the large and the small balloon share the same anchor burner, the better match decides the type.
+        Found found = findBalloon(world, pilotPos);
         if (found == null) {
             return Texts.t("error.noBalloon");
+        }
+        BalloonShape s = found.kind().shapeOrNull();
+        if (s == null) {
+            return Texts.t("error.prefabUnreadable").param("error", found.kind().prefabPath);
         }
         // Burner (T12): fuel is needed to take off. Its contents are kept during the flight.
         Vector3i burnerPos = s.burner().rotated(found.rotation).add(found.origin);
@@ -418,19 +422,33 @@ public final class BalloonManager {
         }
 
         // T21: the other players in the gondola are passengers, one seat each. Beyond the
-        // seats (pilot plus 4 passengers), take-off is refused before any block is removed.
+        // seats of the prefab (large balloon: pilot plus 4 passengers, small one: pilot alone), take-off is refused
+        // before any block is removed.
         List<Occupant> passengers = new ArrayList<>();
-        for (Occupant o : nacelleOccupants(world, store, found.origin, found.rotation)) {
+        for (Occupant o : nacelleOccupants(world, store, found.kind(), found.origin, found.rotation)) {
             if (!o.player().getUuid().equals(player.getUuid()) && !flights.containsKey(o.player().getUuid())) {
                 passengers.add(o);
             }
         }
         if (passengers.size() > s.seats().size()) {
-            return Texts.t("error.tooManyPassengers").param("count", passengers.size())
-                    .param("seats", s.seats().size()).param("extra", passengers.size() - s.seats().size());
+            return Texts.t("error.balloonFull").param("max", s.seats().size() + 1)
+                    .param("extra", passengers.size() - s.seats().size());
         }
 
         return launch(store, world, s, found, bench, pilotRef, player, false, passengers);
+    }
+
+    /** Null if every balloon prefab is readable, otherwise the error message for the player (logged). */
+    private static Message checkPrefabsReadable() {
+        for (Deployables.Kind k : Deployables.BALLOONS) {
+            try {
+                k.shape();
+            } catch (IOException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Lecture du prefab impossible");
+                return Texts.t("error.prefabUnreadable").param("error", String.valueOf(e.getMessage()));
+            }
+        }
+        return null;
     }
 
     /**
@@ -457,7 +475,8 @@ public final class BalloonManager {
         UUID flightId = pilotless ? UUID.randomUUID() : player.getUuid();
 
         // 1. The pilot switches to flight before the blocks are removed, to avoid falling.
-        BalloonFlight flight = new BalloonFlight(flightId, pilotRef, world, found.rotation);
+        Deployables.Kind kind = found.kind();
+        BalloonFlight flight = new BalloonFlight(flightId, pilotRef, world, found.rotation, kind);
         if (!pilotless && !setPilotFlying(store, pilotRef, player, true)) {
             return Texts.t("error.movement");
         }
@@ -465,7 +484,7 @@ public final class BalloonManager {
         flight.descentSpeed = pilotless ? defaultDescentSpeed(world, store) : pilotDescentSpeed(store, pilotRef);
         // T21: seats assigned before any block is removed (players' current positions). A player already seated
         // on a stool (block mount) is dismounted first: the block is going to disappear.
-        List<BalloonFlight.Passenger> seated = assignSeats(store, s, found.origin, found.rotation, passengers, dry);
+        List<BalloonFlight.Passenger> seated = assignSeats(store, kind, s, found.origin, found.rotation, passengers, dry);
         for (BalloonFlight.Passenger p : seated) {
             MountUtil.unseat(store, p.ref);
         }
@@ -475,6 +494,7 @@ public final class BalloonManager {
         flight.burner = BurnerFuel.takeFrom(bench);
         // T18: same precaution for the gondola chests, their contents travel with the flight.
         flight.cargo = BalloonCargo.takeFrom(world, s, found.origin, found.rotation);
+        String modelId = modelFor(kind);
         flight.modelId = modelId;
         // T19: the contents now only exist in the plugin's memory. The resume file is written
         // (fsync) before the blocks are removed: if the server stops, the next world load
@@ -483,7 +503,7 @@ public final class BalloonManager {
 
         // T27: the blocks are going to disappear, the balloon is no longer locked during the flight (landing
         // registers it again, pasteKeepingTerrain). The removals below do not go through the break events.
-        BalloonRegistry.remove(world, found.origin, found.rotation);
+        BalloonRegistry.remove(world, found.origin, found.rotation, kind.id);
 
         // 2. Remove the balloon's blocks.
         // First the objects placed on other blocks (ropes, chests, trapdoors...), then the
@@ -496,11 +516,11 @@ public final class BalloonManager {
         if (dry && ModelAsset.getAssetMap().getAsset(modelId + UNLIT_MODEL_SUFFIX) != null) {
             spawnId = modelId + UNLIT_MODEL_SUFFIX;
         }
-        Ref<EntityStore> balloon = spawnModelEntity(store, displayPosition(flight.entityPos, found.rotation), found.rotation, spawnId);
+        Ref<EntityStore> balloon = spawnModelEntity(store, displayPosition(kind, flight.entityPos, found.rotation), found.rotation, spawnId);
         if (balloon == null) {
             // Failure: the blocks are put back and normal walking is restored.
-            pastePrefab(world, store, found.origin, found.rotation);
-            restoreBurner(world, store, flight.burner, found.origin, found.rotation);
+            pastePrefab(kind, world, store, found.origin, found.rotation);
+            restoreBurner(kind, world, store, flight.burner, found.origin, found.rotation);
             restoreCargo(world, store, flight.cargo, found.origin, found.rotation);
             if (!pilotless) {
                 setPilotFlying(store, pilotRef, player, false);
@@ -516,7 +536,7 @@ public final class BalloonManager {
             // by the pilot's yaw (seen on 3 October 2026: the balloon rotated around the pilot when
             // they looked around). So the pilot is placed on the model's pivot (centre of the
             // gondola), which gives a zero offset.
-            Vector3d seat = prefabPoint(flight.entityPos, found.rotation, MODEL_PIVOT);
+            Vector3d seat = prefabPoint(flight.entityPos, found.rotation, pivot(kind));
             Rotation3f look = new Rotation3f(pilotTransform.getRotation());
             store.putComponent(pilotRef, Teleport.getComponentType(), Teleport.createForPlayer(seat, look));
             pilotPos.set(seat);
@@ -598,33 +618,50 @@ public final class BalloonManager {
         return removed;
     }
 
-    private record Found(Vector3i origin, Rotation rotation, int matches) {
+    /** A balloon recognised in the world: type, origin, rotation and share of its flight cells in place (0 if not measured). */
+    private record Found(Deployables.Kind kind, Vector3i origin, Rotation rotation, double ratio) {
     }
 
-    /** Looks for an anchor burner then checks that the prefab blocks are in place around it. */
-    private Found findBalloon(World world, BalloonShape s, Vector3d around) {
+    /**
+     * Looks for an anchor burner then checks that the prefab blocks are in place around it. T54: every balloon type is tried
+     * (same anchor block for all), with the 4 rotations, and the best share of flight cells in place wins (at least MATCH_RATIO).
+     */
+    private Found findBalloon(World world, Vector3d around) {
         int cx = (int) Math.floor(around.x), cy = (int) Math.floor(around.y), cz = (int) Math.floor(around.z);
         Found best = null;
-        int needed = (int) Math.ceil(s.flightCells().size() * MATCH_RATIO);
-        BalloonShape.Cell anchor = s.anchor();
         for (int x = cx - SEARCH_RADIUS; x <= cx + SEARCH_RADIUS; x++) {
             for (int y = cy - SEARCH_RADIUS; y <= cy + SEARCH_RADIUS; y++) {
                 for (int z = cz - SEARCH_RADIUS; z <= cz + SEARCH_RADIUS; z++) {
                     BlockType bt = world.getBlockType(x, y, z);
-                    if (bt == null || !sameBlock(bt, anchor)) {
+                    if (bt == null) {
                         continue;
                     }
-                    for (Rotation r : Rotation.VALUES) {
-                        Vector3i origin = new Vector3i(x, y, z).sub(anchor.rotated(r));
-                        int m = countMatches(world, s, origin, r);
-                        if (m >= needed && (best == null || m > best.matches)) {
-                            best = new Found(origin, r, m);
+                    for (Deployables.Kind kind : Deployables.BALLOONS) {
+                        BalloonShape s = kind.shapeOrNull();
+                        if (s == null || !sameBlock(bt, s.anchor())) {
+                            continue;
+                        }
+                        for (Rotation r : Rotation.VALUES) {
+                            Vector3i origin = new Vector3i(x, y, z).sub(s.anchor().rotated(r));
+                            double ratio = matchRatio(world, s, origin, r);
+                            if (ratio >= MATCH_RATIO && (best == null || ratio > best.ratio)) {
+                                best = new Found(kind, origin, r, ratio);
+                            }
                         }
                     }
                 }
             }
         }
         return best;
+    }
+
+    /** Share of the flight cells (0 to 1) that are in place for a prefab at this origin and rotation. */
+    private double matchRatio(World world, BalloonShape s, Vector3i origin, Rotation r) {
+        int total = s.flightCells().size();
+        // Same threshold as before T54: ceil(total * MATCH_RATIO) cells are needed. Rounded here to avoid a different float result.
+        int needed = (int) Math.ceil(total * MATCH_RATIO);
+        int m = countMatches(world, s, origin, r);
+        return m >= needed ? Math.max(MATCH_RATIO, m / (double) total) : 0;
     }
 
     private int countMatches(World world, BalloonShape s, Vector3i origin, Rotation r) {
@@ -717,14 +754,14 @@ public final class BalloonManager {
         mm.update(player.getPacketHandler());
     }
 
-    private void pastePrefab(World world, Store<EntityStore> store, Vector3i origin, Rotation rotation) {
-        Path path = PrefabStore.get().findAssetPrefabPath(PREFAB_PATH);
+    private void pastePrefab(Deployables.Kind kind, World world, Store<EntityStore> store, Vector3i origin, Rotation rotation) {
+        Path path = PrefabStore.get().findAssetPrefabPath(kind.prefabPath);
         if (path == null) {
-            LOGGER.at(Level.WARNING).log("Prefab %s introuvable pour l'atterrissage", PREFAB_PATH);
+            LOGGER.at(Level.WARNING).log("Prefab %s introuvable pour l'atterrissage", kind.prefabPath);
             return;
         }
         try {
-            pasteKeepingTerrain(PrefabBufferUtil.getCached(path), world, shape(), origin, rotation, 1 | 8, store);
+            pasteKeepingTerrain(PrefabBufferUtil.getCached(path), world, kind.shape(), origin, rotation, 1 | 8, store, kind.id, null);
         } catch (IOException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Prefab illisible, pose sans protection du terrain");
             PrefabUtil.paste(PrefabBufferUtil.getCached(path), world, new Vector3i(origin), rotation,
@@ -745,13 +782,7 @@ public final class BalloonManager {
      * no fluid entry on these cells, so PrefabUtil.paste does not touch the water there.
      * Used by every placement path: landing, double jump, dry burner, resume from T19 and crate.
      */
-    static void pasteKeepingTerrain(com.hypixel.hytale.server.core.prefab.selection.buffer.impl.IPrefabBuffer buffer,
-                                    World world, BalloonShape s, Vector3i origin, Rotation rotation, int flags,
-                                    com.hypixel.hytale.component.ComponentAccessor<EntityStore> accessor) {
-        pasteKeepingTerrain(buffer, world, s, origin, rotation, flags, accessor, Deployables.BALLOON_KIND, null);
-    }
-
-    /** As above, registering the structure of the given type (T43) and its owner (nullable) in the registry. */
+    /** Registers the structure of the given type (T43) and its owner (nullable) in the registry. */
     static void pasteKeepingTerrain(com.hypixel.hytale.server.core.prefab.selection.buffer.impl.IPrefabBuffer buffer,
                                     World world, BalloonShape s, Vector3i origin, Rotation rotation, int flags,
                                     com.hypixel.hytale.component.ComponentAccessor<EntityStore> accessor,
@@ -779,17 +810,10 @@ public final class BalloonManager {
         BalloonRegistry.add(world, origin, rotation, kind, owner);
     }
 
-    /** Balloon prefab for the crate (T24), null if the given prefab is not the balloon's. */
-    BalloonShape shapeFor(String prefabPath) {
-        if (!PREFAB_PATH.equals(prefabPath)) {
-            return null;
-        }
-        try {
-            return shape();
-        } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Prefab illisible : pose par la caisse sans protection du terrain");
-            return null;
-        }
+    /** Balloon type of a crate's prefab (T54), null if the given prefab is not a balloon's. */
+    Deployables.Kind balloonKindFor(String prefabPath) {
+        Deployables.Kind k = Deployables.forPrefab(prefabPath);
+        return k != null && k.isBalloon() ? k : null;
     }
 
     // ------------------------------------------------------------------ landing
@@ -804,7 +828,7 @@ public final class BalloonManager {
             // last free cell of the descent and with the flight's orientation.
             Vector3i here = flight.currentOrigin();
             try {
-                if (collides(flight.world, shape(), here, flight.rotation)) {
+                if (collides(flight.world, flight.kind.shape(), here, flight.rotation)) {
                     return Texts.t("error.noRoom");
                 }
             } catch (IOException e) {
@@ -837,7 +861,7 @@ public final class BalloonManager {
         Vector3d entity = new Vector3d(pilotPos).sub(turned.x, turned.y, turned.z);
         Vector3i origin = flight.originCell(entity);
         try {
-            if (collides(flight.world, shape(), origin, newRotation)) {
+            if (collides(flight.world, flight.kind.shape(), origin, newRotation)) {
                 return Texts.t("error.noRoom");
             }
         } catch (IOException e) {
@@ -857,8 +881,8 @@ public final class BalloonManager {
         // T34: lights first (the luminous blocks come back with the prefab, no double lighting).
         BalloonLights.removeAll(store, flight);
         setBurnerRoar(store, flight, false);
-        pastePrefab(flight.world, store, origin, rotation);
-        restoreBurner(flight.world, store, flight.burner, origin, rotation);
+        pastePrefab(flight.kind, flight.world, store, origin, rotation);
+        restoreBurner(flight.kind, flight.world, store, flight.burner, origin, rotation);
         restoreCargo(flight.world, store, flight.cargo, origin, rotation);
         // T21: passengers are dismounted and placed next to their seat (the balloon is back to blocks).
         disembarkPassengers(store, flight, origin, rotation);
@@ -890,14 +914,14 @@ public final class BalloonManager {
         }
         // T39: a dead pilot or passenger is removed from the flight (safety net of BalloonDeathSystem).
         checkDeaths(store, world);
-        BalloonShape s;
-        try {
-            s = shape();
-        } catch (IOException e) {
-            return;
-        }
         for (BalloonFlight flight : flights.values()) {
             if (flight.world != world) {
+                continue;
+            }
+            BalloonShape s;
+            try {
+                s = flight.kind.shape();
+            } catch (IOException e) {
                 continue;
             }
             if (flight.serverDriven()) {
@@ -979,7 +1003,7 @@ public final class BalloonManager {
             }
             flight.lastValidPilotPos.set(pilotPos);
             flight.entityPos.set(desired);
-            balloonTransform.setPosition(displayPosition(desired, flight.rotation));
+            balloonTransform.setPosition(displayPosition(flight.kind, desired, flight.rotation));
             BalloonLights.follow(store, flight);
         }
     }
@@ -1252,8 +1276,7 @@ public final class BalloonManager {
 
     /** Search radius of /orbishorizon balloon despawn around the administrator, in blocks. */
     private static final double DESPAWN_RADIUS = 48;
-    /** Item given back to the administrator (deployment crate item, Hotair_Balloon_Crate.json). */
-    static final String CRATE_ITEM_ID = "Hotair_Balloon_Crate";
+    /* Crate item given back to the administrator: that of the removed balloon's type (Deployables.BalloonSpec.crateItemId, T54). */
 
     /** Result of /orbishorizon balloon despawn: success or not, and the message to display. */
     record DespawnResult(boolean ok, Message message) {
@@ -1276,12 +1299,9 @@ public final class BalloonManager {
      * done by the command. The administrator's own flight (pilot or passenger) takes priority over the others.
      */
     DespawnResult despawn(Store<EntityStore> store, Ref<EntityStore> adminRef, PlayerRef admin, World world) {
-        BalloonShape s;
-        try {
-            s = shape();
-        } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Lecture du prefab impossible");
-            return new DespawnResult(false, Texts.t("error.prefabUnreadable").param("error", String.valueOf(e.getMessage())));
+        Message unreadable = checkPrefabsReadable();
+        if (unreadable != null) {
+            return new DespawnResult(false, unreadable);
         }
         TransformComponent at = store.getComponent(adminRef, TransformComponent.getComponentType());
         if (at == null) {
@@ -1297,7 +1317,7 @@ public final class BalloonManager {
                 continue;
             }
             boolean mine = admin.getUuid().equals(f.pilotUuid) || hasPassenger(f, admin.getUuid());
-            double d = mine ? 0 : prefabPoint(f.entityPos, f.rotation, MODEL_PIVOT).distance(here);
+            double d = mine ? 0 : prefabPoint(f.entityPos, f.rotation, pivot(f.kind)).distance(here);
             if (d <= DESPAWN_RADIUS && d < flightDist) {
                 flight = f;
                 flightDist = d;
@@ -1309,6 +1329,11 @@ public final class BalloonManager {
         Found posed = null;
         double posedDist = Double.MAX_VALUE;
         for (BalloonRegistry.Entry e : BalloonRegistry.entriesIn(world)) {
+            Deployables.Kind entryKind = Deployables.get(e.kind());
+            BalloonShape s = entryKind != null ? entryKind.shapeOrNull() : null;
+            if (s == null) {
+                continue;
+            }
             Vector3i origin = new Vector3i(e.x(), e.y(), e.z());
             Vector3i burner = s.burner().rotated(e.rotation()).add(origin);
             BlockType bt = world.getBlockType(burner.x, burner.y, burner.z);
@@ -1317,14 +1342,14 @@ public final class BalloonManager {
             }
             double d = new Vector3d(burner.x + 0.5, burner.y + 0.5, burner.z + 0.5).distance(here);
             if (d <= DESPAWN_RADIUS && d < posedDist) {
-                posed = new Found(origin, e.rotation(), 0);
+                posed = new Found(entryKind, origin, e.rotation(), 0);
                 posedDist = d;
             }
         }
         if (posed == null) {
-            Found f = findBalloon(world, s, here);
+            Found f = findBalloon(world, here);
             if (f != null) {
-                Vector3i burner = s.burner().rotated(f.rotation).add(f.origin);
+                Vector3i burner = f.kind().shapeOrNull().burner().rotated(f.rotation).add(f.origin);
                 posed = f;
                 posedDist = new Vector3d(burner.x + 0.5, burner.y + 0.5, burner.z + 0.5).distance(here);
             }
@@ -1334,15 +1359,18 @@ public final class BalloonManager {
             return new DespawnResult(false, Texts.t("despawn.none").param("radius", (int) DESPAWN_RADIUS));
         }
         Message error;
+        String crateItem;
         if (flight != null && (posed == null || flightDist <= posedDist)) {
+            crateItem = flight.kind.balloon.crateItemId;
             error = despawnFlight(store, flight, adminRef, admin, here);
         } else {
-            error = despawnPosed(store, world, s, posed.origin, posed.rotation, adminRef, admin, here);
+            crateItem = posed.kind().balloon.crateItemId;
+            error = despawnPosed(store, world, posed.kind(), posed.kind().shapeOrNull(), posed.origin, posed.rotation, adminRef, admin, here);
         }
         if (error != null) {
             return new DespawnResult(false, error);
         }
-        boolean given = giveCrate(store, adminRef, here);
+        boolean given = giveCrate(store, adminRef, here, crateItem);
         return new DespawnResult(true, Texts.t(given ? "despawn.done" : "despawn.doneInventoryFull"));
     }
 
@@ -1350,8 +1378,8 @@ public final class BalloonManager {
      * Gives a deployment crate to the administrator (Player.giveItem, like picking up an item). If
      * the inventory is full, the crate is dropped at their feet. Returns true if it is in the inventory.
      */
-    private boolean giveCrate(Store<EntityStore> store, Ref<EntityStore> adminRef, Vector3d at) {
-        ItemStack crate = new ItemStack(CRATE_ITEM_ID, 1);
+    private boolean giveCrate(Store<EntityStore> store, Ref<EntityStore> adminRef, Vector3d at, String crateItemId) {
+        ItemStack crate = new ItemStack(crateItemId, 1);
         ItemStack rest = crate;
         try {
             ItemStackTransaction t = Player.giveItem(crate, adminRef, store);
@@ -1383,14 +1411,14 @@ public final class BalloonManager {
      * dropped at each container's location. Contents still waiting to be put back after a recent
      * landing (pendingRestores, pendingCargos) are taken and emptied the same way.
      */
-    private Message despawnPosed(Store<EntityStore> store, World world, BalloonShape s, Vector3i origin, Rotation rotation,
-                                Ref<EntityStore> adminRef, PlayerRef admin, Vector3d adminPos) {
+    private Message despawnPosed(Store<EntityStore> store, World world, Deployables.Kind kind, BalloonShape s, Vector3i origin,
+                                Rotation rotation, Ref<EntityStore> adminRef, PlayerRef admin, Vector3d adminPos) {
         Vector3i burnerPos = s.burner().rotated(rotation).add(origin);
         if (!allChunksLoaded(world, s, burnerPos)) {
             return Texts.t("despawn.chunks");
         }
         // Players in the gondola lose their floor: they are put on the ground after the removal.
-        List<Occupant> inside = nacelleOccupants(world, store, origin, rotation);
+        List<Occupant> inside = nacelleOccupants(world, store, kind, origin, rotation);
         List<Vector3d> insidePos = new ArrayList<>();
         for (Occupant o : inside) {
             TransformComponent t = store.getComponent(o.ref(), TransformComponent.getComponentType());
@@ -1417,7 +1445,7 @@ public final class BalloonManager {
         }
 
         // The T27 registry first (the plugin's removals do not go through the locking events).
-        BalloonRegistry.remove(world, origin, rotation);
+        BalloonRegistry.remove(world, origin, rotation, kind.id);
         int removed = removeBlocks(world, s, origin, rotation);
         hovers.remove(world.getName() + ":" + burnerPos.x + "," + burnerPos.y + "," + burnerPos.z);
 
@@ -1473,7 +1501,7 @@ public final class BalloonManager {
         flights.remove(flight.pilotUuid);
         BalloonLights.removeAll(store, flight);
         setBurnerRoar(store, flight, false);
-        Vector3d pivot = prefabPoint(flight.entityPos, flight.rotation, MODEL_PIVOT);
+        Vector3d pivot = prefabPoint(flight.entityPos, flight.rotation, pivot(flight.kind));
         boolean pilotSeated = false;
         for (BalloonFlight.Passenger p : flight.passengers) {
             if (flight.pilotRef != null && flight.pilotRef.equals(p.ref)) {
@@ -1621,7 +1649,7 @@ public final class BalloonManager {
                 continue;
             }
             try {
-                BalloonShape s = shape();
+                BalloonShape s = rec.kind().shape();
                 // Chunks covered by the balloon: they must be loaded before placing the blocks.
                 int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
                 for (BalloonShape.Cell c : s.cells()) {
@@ -1672,7 +1700,7 @@ public final class BalloonManager {
                     LOGGER.at(Level.INFO).log("Entité volante restée dans le monde supprimée (%s)", rec.balloon());
                 }
             }
-            BalloonShape s = shape();
+            BalloonShape s = rec.kind().shape();
             // T34: auxiliary lights left in a world that survived the plugin (never saved otherwise).
             BalloonLights.removeOrphans(world, store, rec.balloon(), s);
             // If the world was saved before take-off, the old balloon and its contents are
@@ -1683,8 +1711,8 @@ public final class BalloonManager {
             if (bench != null) {
                 BurnerFuel.takeFrom(bench);
             }
-            pastePrefab(world, store, rec.origin(), rec.rotation());
-            restoreBurner(world, store, rec.burner(), rec.origin(), rec.rotation());
+            pastePrefab(rec.kind(), world, store, rec.origin(), rec.rotation());
+            restoreBurner(rec.kind(), world, store, rec.burner(), rec.origin(), rec.rotation());
             restoreCargo(world, store, rec.cargo(), rec.origin(), rec.rotation());
             restoreStrandedPassengers(world, store, rec);
             BalloonResume.delete(rec.pilot());
@@ -1765,11 +1793,25 @@ public final class BalloonManager {
      * more players than seats, the extra players are ignored (shareSeats false) or share the closest
      * seat (shareSeats true, automatic descent).
      */
-    private List<BalloonFlight.Passenger> assignSeats(Store<EntityStore> store, BalloonShape s, Vector3i origin, Rotation rotation,
-                                                       List<Occupant> people, boolean shareSeats) {
+    private List<BalloonFlight.Passenger> assignSeats(Store<EntityStore> store, Deployables.Kind kind, BalloonShape s, Vector3i origin,
+                                                       Rotation rotation, List<Occupant> people, boolean shareSeats) {
         List<BalloonFlight.Passenger> result = new ArrayList<>();
         List<BalloonShape.Cell> seats = s.seats();
-        if (people == null || people.isEmpty() || seats.isEmpty()) {
+        if (people == null || people.isEmpty()) {
+            return result;
+        }
+        if (seats.isEmpty()) {
+            // T54: a balloon without seats (the small one). Take-off refuses passengers, but the automatic descent cannot
+            // refuse: the extra players sit at the pivot, like the seated pilot of T26 (seat -1, shared).
+            if (!shareSeats) {
+                return result;
+            }
+            Vector3f pv = pivot(kind);
+            Vector3i block = new Vector3i(Math.round(pv.x), Math.round(pv.y), Math.round(pv.z));
+            for (Occupant o : people) {
+                result.add(new BalloonFlight.Passenger(o.ref(), o.player().getUuid(), o.player().getUsername(), -1, block,
+                        new Vector3f(pv.x, pv.y + seatHeight, pv.z), true, passengerMode, pose));
+            }
             return result;
         }
         Vector3d logical = new Vector3d(origin.x + 0.5, origin.y, origin.z + 0.5);
@@ -1926,7 +1968,7 @@ public final class BalloonManager {
      * gives another seat, never a position outside the gondola.
      */
     private void mountPassenger(Store<EntityStore> store, BalloonFlight flight, BalloonFlight.Passenger p) {
-        Vector3f attach = attachOffset(p.seatLocal);
+        Vector3f attach = attachOffset(flight.kind, p.seatLocal);
         store.putComponent(p.ref, MountedComponent.getComponentType(),
                 new MountedComponent(flight.balloonRef, attach,
                         p.pose.controller() ? MountController.BlockMount : MountController.Minecart));
@@ -2039,8 +2081,8 @@ public final class BalloonManager {
      * towards the centre of the gondola (the seats are at the corners, the chests in the middle of the sides, the
      * pivot column is free), a little above the floor.
      */
-    private static Vector3d landingSpot(Vector3i origin, Rotation rotation, Vector3i seatBlock) {
-        float x = seatBlock.x - Integer.signum(seatBlock.x - Math.round(MODEL_PIVOT.x)) * 0.75f;
+    private static Vector3d landingSpot(Deployables.Kind kind, Vector3i origin, Rotation rotation, Vector3i seatBlock) {
+        float x = seatBlock.x - Integer.signum(seatBlock.x - Math.round(pivot(kind).x)) * 0.75f;
         Vector3d logical = new Vector3d(origin.x + 0.5, origin.y, origin.z + 0.5);
         return prefabPoint(logical, rotation, new Vector3f(x, seatBlock.y + LANDING_LIFT, seatBlock.z));
     }
@@ -2058,7 +2100,7 @@ public final class BalloonManager {
                 TransformComponent pt = store.getComponent(p.ref, TransformComponent.getComponentType());
                 Rotation3f look = pt != null ? new Rotation3f(pt.getRotation()) : new Rotation3f();
                 store.putComponent(p.ref, Teleport.getComponentType(),
-                        Teleport.createForPlayer(landingSpot(origin, rotation, p.seatBlock), look));
+                        Teleport.createForPlayer(landingSpot(flight.kind, origin, rotation, p.seatBlock), look));
                 PlayerRef pr = store.getComponent(p.ref, PlayerRef.getComponentType());
                 if (pr != null) {
                     pr.sendMessage(Texts.t("landedStandUp"));
@@ -2081,7 +2123,7 @@ public final class BalloonManager {
             if (sb.length() > 0) {
                 sb.append("; ");
             }
-            sb.append(p.name).append(p.seat < 0 ? " seated pilot" : " seat " + (p.seat + 1)).append(" ").append(p.mode)
+            sb.append(p.name).append(p.seat < 0 ? " seated at the pivot" : " seat " + (p.seat + 1)).append(" ").append(p.mode)
                     .append(p.mode == BalloonFlight.PassengerMode.MOUNT ? (mc != null && f.balloonRef != null
                             && f.balloonRef.equals(mc.getMountedToEntity()) ? " mounted" : " NOT mounted") : "")
                     .append(" losses ").append(p.losses).append(" pose ").append(p.pose.describe());
@@ -2158,7 +2200,7 @@ public final class BalloonManager {
     private void restoreStrandedPassengers(World world, Store<EntityStore> store, BalloonResume.Record rec) {
         for (BalloonResume.Seated sp : rec.passengers()) {
             try {
-                Vector3d spot = landingSpot(rec.origin(), rec.rotation(), new Vector3i(sp.x(), sp.y(), sp.z()));
+                Vector3d spot = landingSpot(rec.kind(), rec.origin(), rec.rotation(), new Vector3i(sp.x(), sp.y(), sp.z()));
                 Ref<EntityStore> online = null;
                 for (PlayerRef pr : world.getPlayerRefs()) {
                     if (pr.getUuid().equals(sp.uuid()) && pr.getReference() != null && pr.getReference().isValid()) {
@@ -2208,6 +2250,8 @@ public final class BalloonManager {
         /** Origin and rotation of the prefab, null if the burner does not belong to a recognised balloon. */
         Vector3i origin;
         Rotation rotation;
+        /** Balloon type recognised (T54). */
+        Deployables.Kind kind;
         long validatedMs;
         long nextRetryMs;
         long lastSaveMs;
@@ -2241,12 +2285,6 @@ public final class BalloonManager {
             // A landing has just taken place and its contents are not put back yet: wait.
             return;
         }
-        BalloonShape s;
-        try {
-            s = shape();
-        } catch (IOException e) {
-            return;
-        }
         ProcessingBenchBlock bench = BurnerFuel.live(world, burnerPos);
         if (bench == null) {
             return;
@@ -2261,17 +2299,20 @@ public final class BalloonManager {
             }
             h.validatedMs = now;
             h.origin = null;
-            if (!allChunksLoaded(world, s, burnerPos)) {
-                return;
-            }
-            Found f = locate(world, s, burnerPos);
+            h.kind = null;
+            Found f = locate(world, burnerPos);
             if (f != null) {
                 h.origin = f.origin();
                 h.rotation = f.rotation();
+                h.kind = f.kind();
             }
         }
         if (h.origin == null) {
-            return; // burner alone or balloon too damaged: nothing to monitor
+            return; // burner alone, balloon too damaged or chunks not loaded: nothing to monitor
+        }
+        BalloonShape s = h.kind.shapeOrNull();
+        if (s == null) {
+            return;
         }
         if (!isInAir(world, s, h.origin, h.rotation)) {
             h.warned30 = false;
@@ -2312,7 +2353,7 @@ public final class BalloonManager {
             msgKey = "hover.fuelLow";
         }
         if (msgKey != null) {
-            for (Occupant o : nacelleOccupants(world, store, h.origin, h.rotation)) {
+            for (Occupant o : nacelleOccupants(world, store, h.kind, h.origin, h.rotation)) {
                 o.player().sendMessage(Texts.t(msgKey).param("time", durationText(left)));
             }
         }
@@ -2323,15 +2364,23 @@ public final class BalloonManager {
         return left >= 60 ? (left / 60) + " min " + (left % 60) + " s" : left + " s";
     }
 
-    /** Looks for the rotation and origin of the prefab whose burner is at this position (at least MATCH_RATIO of the blocks in place). */
-    private Found locate(World world, BalloonShape s, Vector3i burnerPos) {
-        int needed = (int) Math.ceil(s.flightCells().size() * MATCH_RATIO);
+    /**
+     * Looks for the type, rotation and origin of the prefab whose burner is at this position (at least MATCH_RATIO of the blocks
+     * in place, the best match among the balloon types, T54). A type whose chunks are not all loaded is skipped.
+     */
+    private Found locate(World world, Vector3i burnerPos) {
         Found best = null;
-        for (Rotation r : Rotation.VALUES) {
-            Vector3i origin = new Vector3i(burnerPos).sub(s.burner().rotated(r));
-            int m = countMatches(world, s, origin, r);
-            if (m >= needed && (best == null || m > best.matches)) {
-                best = new Found(origin, r, m);
+        for (Deployables.Kind kind : Deployables.BALLOONS) {
+            BalloonShape s = kind.shapeOrNull();
+            if (s == null || !allChunksLoaded(world, s, burnerPos)) {
+                continue;
+            }
+            for (Rotation r : Rotation.VALUES) {
+                Vector3i origin = new Vector3i(burnerPos).sub(s.burner().rotated(r));
+                double ratio = matchRatio(world, s, origin, r);
+                if (ratio >= MATCH_RATIO && (best == null || ratio > best.ratio)) {
+                    best = new Found(kind, origin, r, ratio);
+                }
             }
         }
         return best;
@@ -2396,7 +2445,10 @@ public final class BalloonManager {
      * pivot first. To be called on the world thread. Used to choose the pilot of a dry descent and, for
      * T21, to find the passengers.
      */
-    List<Occupant> nacelleOccupants(World world, Store<EntityStore> store, Vector3i origin, Rotation rotation) {
+    List<Occupant> nacelleOccupants(World world, Store<EntityStore> store, Deployables.Kind kind, Vector3i origin, Rotation rotation) {
+        Vector3f nMin = kind.balloon.nacelleMin;
+        Vector3f nMax = kind.balloon.nacelleMax;
+        Vector3f pv = pivot(kind);
         Vector3d logical = new Vector3d(origin.x + 0.5, origin.y, origin.z + 0.5);
         Rotation back = Rotation.None.subtract(rotation);
         List<Occupant> list = new ArrayList<>();
@@ -2413,11 +2465,11 @@ public final class BalloonManager {
             Vector3f local = back.rotateYaw(
                     new Vector3f((float) (pos.x - logical.x), (float) (pos.y - logical.y), (float) (pos.z - logical.z)),
                     new Vector3f());
-            if (local.x < NACELLE_MIN.x || local.x > NACELLE_MAX.x || local.y < NACELLE_MIN.y || local.y > NACELLE_MAX.y
-                    || local.z < NACELLE_MIN.z || local.z > NACELLE_MAX.z) {
+            if (local.x < nMin.x || local.x > nMax.x || local.y < nMin.y || local.y > nMax.y
+                    || local.z < nMin.z || local.z > nMax.z) {
                 continue;
             }
-            list.add(new Occupant(p, ref, local.distance(MODEL_PIVOT)));
+            list.add(new Occupant(p, ref, local.distance(pv)));
         }
         list.sort(Comparator.comparingDouble(Occupant::distance));
         return list;
@@ -2430,12 +2482,12 @@ public final class BalloonManager {
      * and the server moves it (tickDriven). The burner and chest contents are kept as at take-off.
      */
     private void startDryDescent(World world, Store<EntityStore> store, BalloonShape s, Hover h, ProcessingBenchBlock bench) {
-        List<Occupant> occupants = nacelleOccupants(world, store, h.origin, h.rotation);
+        List<Occupant> occupants = nacelleOccupants(world, store, h.kind, h.origin, h.rotation);
         Occupant pilot = occupants.isEmpty() ? null : occupants.get(0);
         // T21: the other players become seated passengers. There is no refusal here (the balloon must
         // descend): if there are more people than seats, the seats are shared (assignSeats, dry true).
         List<Occupant> others = pilot != null ? new ArrayList<>(occupants.subList(1, occupants.size())) : new ArrayList<>();
-        Found found = new Found(new Vector3i(h.origin), h.rotation, 0);
+        Found found = new Found(h.kind, new Vector3i(h.origin), h.rotation, 0);
         Message error = launch(store, world, s, found, bench,
                 pilot != null ? pilot.ref() : null, pilot != null ? pilot.player() : null, true, others);
         if (error != null && pilot != null) {
@@ -2477,7 +2529,7 @@ public final class BalloonManager {
             if (collision(world, s, next, flight.rotation) != null) {
                 flight.stopping = true;
                 flight.entityPos.y = cell;
-                balloonTransform.setPosition(displayPosition(flight.entityPos, flight.rotation));
+                balloonTransform.setPosition(displayPosition(flight.kind, flight.entityPos, flight.rotation));
                 Vector3i origin = new Vector3i(flight.lastCheckedOrigin);
                 world.execute(() -> {
                     if (flights.get(flight.pilotUuid) != flight) {
@@ -2496,7 +2548,7 @@ public final class BalloonManager {
             cell = next.y;
         }
         flight.entityPos.y = y;
-        balloonTransform.setPosition(displayPosition(flight.entityPos, flight.rotation));
+        balloonTransform.setPosition(displayPosition(flight.kind, flight.entityPos, flight.rotation));
         BalloonLights.follow(store, flight);
     }
 
@@ -2695,9 +2747,9 @@ public final class BalloonManager {
         if (!boost) {
             // Assumption: the client may not remove the particles of the previous model.
             try {
-                BalloonShape.Cell a = shape().anchor();
+                BalloonShape.Cell a = flight.kind.shape().anchor();
                 Vector3d p = prefabPoint(flight.entityPos, flight.rotation, new Vector3f(a.x(), a.y() + 1, a.z()));
-                cancelFlame(flight.world, p, BOOST_FLAME_CANCEL_RADIUS, BOOST_FLAME);
+                cancelFlame(flight.world, p, BOOST_FLAME_CANCEL_RADIUS, flight.kind.balloon.boostSystem);
             } catch (IOException e) {
                 // Unreadable shape: only the model change applies.
             }
@@ -2780,9 +2832,10 @@ public final class BalloonManager {
         flight.attached = false;
         long now = System.currentTimeMillis();
         flight.lastDescentMs = now;
-        Vector3i block = new Vector3i(Math.round(MODEL_PIVOT.x), Math.round(MODEL_PIVOT.y), Math.round(MODEL_PIVOT.z));
+        Vector3f pv = pivot(flight.kind);
+        Vector3i block = new Vector3i(Math.round(pv.x), Math.round(pv.y), Math.round(pv.z));
         BalloonFlight.Passenger p = new BalloonFlight.Passenger(flight.pilotRef, player.getUuid(), player.getUsername(), -1,
-                block, new Vector3f(MODEL_PIVOT.x, MODEL_PIVOT.y + seatHeight, MODEL_PIVOT.z), false, passengerMode, pose);
+                block, new Vector3f(pv.x, pv.y + seatHeight, pv.z), false, passengerMode, pose);
         boardPassengers(store, flight, List.of(p));
         flight.driven = true;
         LOGGER.at(Level.INFO).log("Descente automatique de %s : %.2f blocs par seconde, pilote assis", p.name, flight.descentSpeed);
@@ -2840,10 +2893,10 @@ public final class BalloonManager {
         BalloonLights.set(store, flight, BalloonLights.KEY_BURNER, BalloonLights.burnerColor(!lit, false));
         if (!lit) {
             try {
-                BalloonShape.Cell a = shape().anchor();
+                BalloonShape.Cell a = flight.kind.shape().anchor();
                 Vector3d p = prefabPoint(flight.entityPos, flight.rotation, new Vector3f(a.x(), a.y() + 1, a.z()));
-                cancelFlame(flight.world, p, 3, BURNER_FLAME);
-                cancelFlame(flight.world, p, BOOST_FLAME_CANCEL_RADIUS, BOOST_FLAME);
+                cancelFlame(flight.world, p, 3, flight.kind.balloon.flameSystem);
+                cancelFlame(flight.world, p, BOOST_FLAME_CANCEL_RADIUS, flight.kind.balloon.boostSystem);
             } catch (IOException e) {
                 // Unreadable shape: only the model change applies.
             }
@@ -2882,10 +2935,10 @@ public final class BalloonManager {
      * assumption), it retries on the following ticks for RESTORE_TIMEOUT_MS, then drops the
      * items into the world so as not to lose anything.
      */
-    private void restoreBurner(World world, Store<EntityStore> store, BurnerFuel fuel, Vector3i origin, Rotation rotation) {
+    private void restoreBurner(Deployables.Kind kind, World world, Store<EntityStore> store, BurnerFuel fuel, Vector3i origin, Rotation rotation) {
         BalloonShape s;
         try {
-            s = shape();
+            s = kind.shape();
         } catch (IOException e) {
             return;
         }

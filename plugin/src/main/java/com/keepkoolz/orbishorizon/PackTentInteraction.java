@@ -26,7 +26,7 @@ import java.util.logging.Level;
  * Interaction "Camping_PackTent" (T46): right click with the empty crate on a placed tent, the tent is packed and
  * the empty crate becomes full again, in the same slot (the DeployTentInteraction swap in the other direction).
  *
- * The targeted block must belong to a tent in the registry (BalloonRegistry.find, kind "tent"). Only the player who
+ * The targeted block must belong to a tent in the registry (BalloonRegistry.find, any tent kind). Only the player who
  * placed it (owner of the entry) or an op packs it, an entry without an owner is only packed by an op. The removal
  * (chunks loaded, players dismounted, campfire contents dropped, blocks removed) is in StructureRemoval.
  * A refusal sets the Failed state and nothing is changed.
@@ -61,7 +61,7 @@ public class PackTentInteraction extends SimpleInstantInteraction {
         }
         ItemStack held = context.getHeldItem();
         ItemContainer heldContainer = context.getHeldItemContainer();
-        if (held == null || heldContainer == null || !DeployTentInteraction.EMPTY_CRATE.equals(held.getItemId())) {
+        if (held == null || heldContainer == null || !isEmptyCrate(held.getItemId())) {
             LOGGER.at(Level.WARNING).log("Camping_PackTent: objet tenu inattendu (%s)", held != null ? held.getItemId() : "aucun");
             fail(context);
             return;
@@ -69,8 +69,15 @@ public class PackTentInteraction extends SimpleInstantInteraction {
         BlockPosition target = context.getTargetBlock();
         World world = ((EntityStore) commandBuffer.getExternalData()).getWorld();
         BalloonRegistry.Entry entry = target != null ? BalloonRegistry.find(world, new Vector3i(target.x, target.y, target.z)) : null;
-        if (entry == null || !Deployables.TENT_KIND.equals(entry.kind())) {
+        Deployables.Kind kind = entry != null ? Deployables.get(entry.kind()) : null;
+        if (kind == null || !kind.isTent()) {
             playerRef.sendMessage(Texts.t("tent.aimTent"));
+            fail(context);
+            return;
+        }
+        // The empty crate must be that of the targeted tent type (small crate for the small tent, big for the big).
+        if (!kind.tent.emptyCrateId.equals(held.getItemId())) {
+            playerRef.sendMessage(Texts.t("tent.wrongCrate"));
             fail(context);
             return;
         }
@@ -83,14 +90,14 @@ public class PackTentInteraction extends SimpleInstantInteraction {
         }
         BalloonShape shape;
         try {
-            shape = Deployables.TENT.shape();
+            shape = kind.shape();
         } catch (IOException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Camping_PackTent: forme de la tente illisible");
             fail(context);
             return;
         }
         Vector3i origin = new Vector3i(entry.x(), entry.y(), entry.z());
-        StructureRemoval.Result result = StructureRemoval.remove(commandBuffer, world, Deployables.TENT, shape, origin, entry.rotation());
+        StructureRemoval.Result result = StructureRemoval.remove(commandBuffer, world, kind, shape, origin, entry.rotation());
         if (result.error() != null) {
             playerRef.sendMessage(result.error());
             fail(context);
@@ -99,7 +106,7 @@ public class PackTentInteraction extends SimpleInstantInteraction {
 
         // The empty crate becomes the full crate again, in the same slot. If the swap fails, the full crate
         // is dropped at the foot of the campfire: the tent is already removed, the crate must not be lost.
-        ItemStack full = new ItemStack(DeployTentInteraction.FULL_CRATE, 1);
+        ItemStack full = new ItemStack(kind.tent.fullCrateId, 1);
         if (heldContainer.setItemStackForSlot((short) context.getHeldItemSlot(), full).succeeded()) {
             context.setHeldItem(full);
         } else {
@@ -107,8 +114,18 @@ public class PackTentInteraction extends SimpleInstantInteraction {
             BalloonManager.dropItems(commandBuffer, List.of(full), result.anchorPos());
         }
         playerRef.sendMessage(Texts.t(result.items() > 0 ? "tent.packedDropped" : "tent.packed"));
-        LOGGER.at(Level.INFO).log("Tente rangée par %s en (%d, %d, %d) : %d bloc(s) retirés, %d objet(s) lâchés",
-                playerRef.getUsername(), origin.x, origin.y, origin.z, result.removed(), result.items());
+        LOGGER.at(Level.INFO).log("Tente « %s » rangée par %s en (%d, %d, %d) : %d bloc(s) retirés, %d objet(s) lâchés",
+                kind.id, playerRef.getUsername(), origin.x, origin.y, origin.z, result.removed(), result.items());
+    }
+
+    /** True if this item is the empty crate of some tent type. */
+    private static boolean isEmptyCrate(String itemId) {
+        for (Deployables.Kind k : Deployables.TENTS) {
+            if (k.tent.emptyCrateId.equals(itemId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void fail(InteractionContext context) {

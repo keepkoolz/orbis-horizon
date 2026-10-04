@@ -1,0 +1,768 @@
+{
+  "version": 8,
+  "blockIdVersion": 11,
+  "anchorX": 0,
+  "anchorY": 0,
+  "anchorZ": 0,
+  "blocks": [
+    {
+      "x": -3,
+      "y": 0,
+      "z": 3,
+      "name": "Cloth_Roof_Orange_Vertical",
+      "rotation": 3
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 4,
+      "name": "Cloth_Roof_Orange_Vertical",
+      "rotation": 3
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 5,
+      "name": "Cloth_Roof_Orange_Vertical",
+      "rotation": 3
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "z": 2,
+      "name": "Cloth_Roof_Orange_Vertical",
+      "rotation": 2
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "z": 3,
+      "name": "Furniture_Kweebec_Chest_Small",
+      "components": {
+        "Components": {
+          "ItemContainerBlock": {
+            "ItemContainer": {
+              "Capacity": 18,
+              "Items": {}
+            },
+            "Capacity": 18
+          }
+        }
+      },
+      "rotation": 1
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 3,
+      "name": "*Cloth_Roof_Orange_State_Definitions_Corner_Right",
+      "rotation": 3
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 4,
+      "name": "Cloth_Roof_Orange",
+      "rotation": 3
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "z": 5,
+      "name": "Furniture_Crude_Candle"
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 5,
+      "name": "*Cloth_Roof_Orange_State_Definitions_Corner_Left",
+      "rotation": 3
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "z": 6,
+      "name": "Cloth_Roof_Orange_Vertical"
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 2,
+      "name": "Furniture_Kweebec_Ladder",
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 2,
+      "name": "Furniture_Kweebec_Ladder",
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 3,
+      "name": "Cloth_Roof_Orange_Vertical"
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 3,
+      "name": "Cloth_Roof_Orange",
+      "rotation": 2
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 4,
+      "name": "Furniture_Crude_Bed",
+      "filler": 992,
+      "rotation": 2
+    },
+    {
+      "x": -1,
+      "y": 2,
+      "z": 4,
+      "name": "Cloth_Roof_Orange_Flat"
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 5,
+      "name": "Furniture_Crude_Bed",
+      "components": {
+        "Components": {
+          "CompanionBlockSpawnerBlock": {},
+          "RespawnBlock": {}
+        }
+      },
+      "rotation": 2
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 5,
+      "name": "Cloth_Roof_Orange"
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 6,
+      "name": "Cloth_Roof_Orange_Vertical"
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 1,
+      "name": "Cloth_Roof_Orange_Flap",
+      "rotation": 2
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 2,
+      "name": "Cloth_Roof_Orange_Flat"
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "z": 2,
+      "name": "Cloth_Roof_Orange_Flat"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 3,
+      "name": "Cloth_Roof_Orange_Flat"
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "z": 3,
+      "name": "Cloth_Roof_Orange_Flat"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 4,
+      "name": "Cloth_Roof_Orange_Flat"
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "z": 4,
+      "name": "Cloth_Roof_Orange_Flat"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 5,
+      "name": "Cloth_Roof_Orange_Flat"
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 5,
+      "name": "Cloth_Roof_Orange"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 6,
+      "name": "Cloth_Roof_Orange_Vertical"
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 2,
+      "name": "Furniture_Kweebec_Ladder",
+      "rotation": 1
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 2,
+      "name": "Furniture_Kweebec_Ladder",
+      "rotation": 1
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 3,
+      "name": "Cloth_Roof_Orange_Vertical"
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 3,
+      "name": "Cloth_Roof_Orange",
+      "rotation": 2
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 4,
+      "name": "Furniture_Crude_Bed",
+      "filler": 992,
+      "rotation": 2
+    },
+    {
+      "x": 1,
+      "y": 2,
+      "z": 4,
+      "name": "Cloth_Roof_Orange_Flat"
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 5,
+      "name": "Furniture_Crude_Bed",
+      "components": {
+        "Components": {
+          "CompanionBlockSpawnerBlock": {},
+          "RespawnBlock": {}
+        }
+      },
+      "rotation": 2
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 5,
+      "name": "Cloth_Roof_Orange"
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 6,
+      "name": "Cloth_Roof_Orange_Vertical"
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": -1,
+      "name": "Furniture_Crude_Stool",
+      "rotation": 2
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 0,
+      "name": "Bench_Campfire",
+      "components": {
+        "Components": {
+          "BenchBlock": {
+            "TierLevel": 1,
+            "UpgradeItems": []
+          },
+          "ProcessingBenchBlock": {
+            "InputContainer": {
+              "Id": "Simple",
+              "Capacity": 2,
+              "Items": {}
+            },
+            "FuelContainer": {
+              "Id": "Simple",
+              "Capacity": 1,
+              "Items": {}
+            },
+            "OutputContainer": {
+              "Id": "Simple",
+              "Capacity": 4,
+              "Items": {}
+            },
+            "Progress": 0.0,
+            "FuelTime": 0.0,
+            "Active": false,
+            "NextExtra": 2
+          }
+        }
+      },
+      "rotation": 2
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 1,
+      "name": "Furniture_Crude_Stool",
+      "rotation": 2
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 2,
+      "name": "Cloth_Roof_Orange_Vertical",
+      "rotation": 2
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 3,
+      "name": "Furniture_Kweebec_Chest_Small",
+      "components": {
+        "Components": {
+          "ItemContainerBlock": {
+            "ItemContainer": {
+              "Capacity": 18,
+              "Items": {}
+            },
+            "Capacity": 18
+          }
+        }
+      },
+      "rotation": 3
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 3,
+      "name": "*Cloth_Roof_Orange_State_Definitions_Corner_Left",
+      "rotation": 1
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 4,
+      "name": "Cloth_Roof_Orange",
+      "rotation": 1
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 5,
+      "name": "Furniture_Crude_Candle"
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 5,
+      "name": "*Cloth_Roof_Orange_State_Definitions_Corner_Left"
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 6,
+      "name": "Cloth_Roof_Orange_Vertical"
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 3,
+      "name": "Cloth_Roof_Orange_Vertical",
+      "rotation": 1
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 4,
+      "name": "Cloth_Roof_Orange_Vertical",
+      "rotation": 1
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 5,
+      "name": "Cloth_Roof_Orange_Vertical",
+      "rotation": 1
+    }
+  ],
+  "fluids": [
+    {
+      "x": -3,
+      "y": 0,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "z": 6,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 2,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 6,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 6,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 2,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 6,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 6,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    }
+  ]
+}

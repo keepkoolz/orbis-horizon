@@ -2,19 +2,23 @@
 # Montgolfière
 orbis_horizon.items.hotair_balloon_crate.name = Caisse de montgolfière
 orbis_horizon.items.hotair_balloon_crate.description = Déploie une grande montgolfière. Demande un espace libre de 25 x 25 x 40 blocs.
+orbis_horizon.items.hotair_balloon_basic_crate.name = Caisse de petite montgolfière
+orbis_horizon.items.hotair_balloon_basic_crate.description = Déploie une petite montgolfière monoplace. Demande un espace libre de 7 x 14 x 7 blocs.
 orbis_horizon.items.hotair_balloon_chain.name = Chaîne du brûleur de montgolfière
 orbis_horizon.items.hotair_balloon_chain.description = Tirez-la pour décoller. En vol, un double saut arrête la montgolfière et la pose sur place.
 orbis_horizon.items.hotair_balloon_burner.name = Brûleur de montgolfière
 orbis_horizon.items.hotair_balloon_burner.description = Réservoir de combustible de la montgolfière. Mettez-y du bois ou du charbon avant de décoller. Une flamme en sort tant qu'il a du combustible. Il brûle en vol et peut laisser du charbon en sortie.
 orbis_horizon.items.hotair_balloon_brazier.name = Brasero de montgolfière
 orbis_horizon.items.hotair_balloon_brazier.description = Inutilisé depuis que le brûleur porte lui-même la flamme. Peut être supprimé.
-orbis_horizon.items.hotair_balloon_recipe.name = Recette : montgolfière
-orbis_horizon.items.hotair_balloon_recipe.description = Apprend d'un coup toutes les recettes de la montgolfière : la caisse, le brûleur et sa chaîne. Elles se fabriquent à l'établi (niveau 3), onglet Tinkering.
 # Tente de camping
 orbis_horizon.items.camping_tent_crate.name = Petite Tente
 orbis_horizon.items.camping_tent_crate.description = Clic droit sur le sol pour monter une tente avec un lit et un feu de camp. La caisse vide reste dans votre inventaire.
 orbis_horizon.items.camping_tent_crate_empty.name = Petite Tente (caisse vide)
 orbis_horizon.items.camping_tent_crate_empty.description = Clic droit sur votre tente pour la ranger dans cette caisse.
+orbis_horizon.items.camping_tent_big_crate.name = Grande Tente
+orbis_horizon.items.camping_tent_big_crate.description = Clic droit sur le sol pour monter une grande tente avec deux lits, deux coffres et un feu de camp. La caisse vide reste dans votre inventaire.
+orbis_horizon.items.camping_tent_big_crate_empty.name = Grande Tente (caisse vide)
+orbis_horizon.items.camping_tent_big_crate_empty.description = Clic droit sur votre tente pour la ranger dans cette caisse.
 # Messages de chat envoyés par le plugin
 orbis_horizon.chat.takeoff.chain = Décollage ! Double saut pour vous arrêter et poser la montgolfière sur place.
 orbis_horizon.chat.takeoff.command = Décollage ! Double saut ou /orbishorizon balloon land pour atterrir.
@@ -40,7 +44,7 @@ orbis_horizon.chat.error.noPosition = Position du joueur inconnue.
 orbis_horizon.chat.error.noBalloon = Aucune montgolfière posée trouvée autour de vous. Montez dans la nacelle.
 orbis_horizon.chat.error.noBurner = Brûleur introuvable. Cette montgolfière date peut-être d'une ancienne version du mod : posez-en une nouvelle avec une caisse.
 orbis_horizon.chat.error.burnerEmpty = Le brûleur est vide. Mettez du combustible (bois, planches, charbon...) dans le brûleur, le tuyau au-dessus de la chaîne, puis réessayez.
-orbis_horizon.chat.error.tooManyPassengers = Trop de monde dans la nacelle : {count} passagers pour {seats} sièges (le pilote en plus). Faites descendre {extra, plural, one {1 joueur} other {{extra} joueurs}} puis réessayez.
+orbis_horizon.chat.error.balloonFull = Cette montgolfière transporte {max, plural, one {1 personne} other {{max} personnes}} au plus, le pilote compris. Faites descendre {extra, plural, one {1 joueur} other {{extra} joueurs}} puis réessayez.
 orbis_horizon.chat.error.movement = Impossible de modifier les déplacements du joueur.
 orbis_horizon.chat.error.modelMissing = Modèle {model} introuvable. Les blocs ont été remis en place.
 orbis_horizon.chat.error.unknownModel = Modèle inconnu : {model}
@@ -60,9 +64,8 @@ orbis_horizon.chat.tent.aimTent = Visez une tente posée.
 orbis_horizon.chat.tent.notOwner = Seul le joueur qui a posé cette tente peut la ranger.
 orbis_horizon.chat.tent.approach = Approchez-vous de la tente.
 orbis_horizon.chat.tent.packed = Tente rangée.
-orbis_horizon.chat.tent.packedDropped = Tente rangée. Le contenu du feu de camp est tombé au sol.
-orbis_horizon.chat.recipes.learned = Recettes de la montgolfière apprises : caisse, brûleur et chaîne.
-orbis_horizon.chat.recipes.known = Vous connaissez déjà toutes les recettes de la montgolfière.
+orbis_horizon.chat.tent.packedDropped = Tente rangée. Son contenu est tombé au sol.
+orbis_horizon.chat.tent.wrongCrate = Cette caisse n'est pas celle de cette tente.
 orbis_horizon.chat.cmd.light.invalidRadius = Rayon invalide : {value}
 orbis_horizon.chat.cmd.light.usage = Usage : /orbishorizon balloon light on|off|radius:N|radius:default|show
 orbis_horizon.chat.cmd.light.state = Lumières de la montgolfière : {state} (effet immédiat sur les vols de ce monde, sinon au prochain décollage).

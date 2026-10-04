@@ -8,7 +8,6 @@
     "Blocks.Metal"
   ],
   "Recipe": {
-    "KnowledgeRequired": true,
     "Input": [
       {
         "ItemId": "Ingredient_Bar_Iron",
@@ -30,7 +29,7 @@
           "Workbench_Tinkering"
         ],
         "Id": "Workbench",
-        "RequiredTierLevel": 3
+        "RequiredTierLevel": 2
       }
     ],
     "TimeSeconds": 3

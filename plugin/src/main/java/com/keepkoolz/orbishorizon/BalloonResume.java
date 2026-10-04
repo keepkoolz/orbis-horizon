@@ -48,7 +48,7 @@ final class BalloonResume {
     }
 
     /** A flight read back from disk. */
-    record Record(UUID pilot, String world, Vector3i origin, Rotation rotation, UUID balloon,
+    record Record(UUID pilot, String world, Deployables.Kind kind, Vector3i origin, Rotation rotation, UUID balloon,
                   BurnerFuel burner, BalloonCargo cargo, List<Seated> passengers) {
     }
 
@@ -79,6 +79,8 @@ final class BalloonResume {
             doc.put("version", new BsonInt32(VERSION));
             doc.put("pilot", new BsonString(f.pilotUuid.toString()));
             doc.put("world", new BsonString(f.world.getName()));
+            // T54: balloon type (absent in older files: the large balloon).
+            doc.put("kind", new BsonString(f.kind.id));
             doc.put("x", new BsonInt32(origin.x));
             doc.put("y", new BsonInt32(origin.y));
             doc.put("z", new BsonInt32(origin.z));
@@ -177,7 +179,12 @@ final class BalloonResume {
                                 d2.getNumber("x").intValue(), d2.getNumber("y").intValue(), d2.getNumber("z").intValue()));
                     }
                 }
-                list.add(new Record(UUID.fromString(doc.getString("pilot").getValue()), worldName,
+                String kindId = doc.containsKey("kind") ? doc.getString("kind").getValue() : Deployables.BALLOON_KIND;
+                Deployables.Kind kind = Deployables.get(kindId);
+                if (kind == null || !kind.isBalloon()) {
+                    throw new IllegalStateException("Type de montgolfière inconnu : " + kindId);
+                }
+                list.add(new Record(UUID.fromString(doc.getString("pilot").getValue()), worldName, kind,
                         new Vector3i(doc.getNumber("x").intValue(), doc.getNumber("y").intValue(), doc.getNumber("z").intValue()),
                         Rotation.valueOf(doc.getString("rotation").getValue()),
                         doc.containsKey("balloon") ? UUID.fromString(doc.getString("balloon").getValue()) : null,

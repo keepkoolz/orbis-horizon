@@ -1,0 +1,131 @@
+{
+  "RenderMode": "Distortion",
+  "ParticleRotationInfluence": "Billboard",
+  "LinearFiltering": false,
+  "LightInfluence": 0.0,
+  "ParticleRotateWithSpawner": false,
+  "MaxConcurrentParticles": 300,
+  "ParticleLifeSpan": {
+    "Min": 0.4,
+    "Max": 0.4
+  },
+  "SpawnRate": {
+    "Min": 30,
+    "Max": 40
+  },
+  "Particle": {
+    "Texture": "Particles/Textures/Fire/Fire_Small.png",
+    "ScaleRatioConstraint": "None",
+    "Animation": {
+      "0": {
+        "FrameIndex": {
+          "Min": 0,
+          "Max": 3
+        },
+        "Scale": {
+          "X": {
+            "Min": 1,
+            "Max": 1
+          },
+          "Y": {
+            "Min": 1,
+            "Max": 1
+          }
+        },
+        "Opacity": 1,
+        "Color": "#0009ff"
+      },
+      "50": {},
+      "70": {
+        "Scale": {
+          "X": {
+            "Min": 3,
+            "Max": 3
+          },
+          "Y": {
+            "Max": 3,
+            "Min": 3
+          }
+        }
+      },
+      "90": {
+        "Opacity": 1
+      },
+      "100": {
+        "Opacity": 0,
+        "Scale": {
+          "X": {
+            "Min": 10,
+            "Max": 10
+          },
+          "Y": {
+            "Min": 15,
+            "Max": 15
+          }
+        }
+      }
+    },
+    "InitialAnimationFrame": {
+      "Opacity": 0.94,
+      "FrameIndex": {
+        "Min": 0,
+        "Max": 3
+      },
+      "Scale": {
+        "X": {
+          "Min": 0.4,
+          "Max": 0.4
+        },
+        "Y": {
+          "Min": 0.4,
+          "Max": 0.4
+        }
+      },
+      "Rotation": {
+        "Z": {
+          "Min": -180.0,
+          "Max": -180.0
+        }
+      }
+    },
+    "FrameSize": {
+      "Width": 32,
+      "Height": 32
+    },
+    "SoftParticles": "Require"
+  },
+  "SpawnBurst": false,
+  "InitialVelocity": {
+    "Speed": {
+      "Min": 12,
+      "Max": 14
+    }
+  },
+  "EmitOffset": {
+    "X": {
+      "Max": 0.5
+    },
+    "Y": {
+      "Max": 0.5
+    },
+    "Z": {
+      "Max": 1.0
+    }
+  },
+  "UseEmitDirection": false,
+  "TrailSpawnerPositionMultiplier": 0,
+  "TrailSpawnerRotationMultiplier": 0,
+  "UVMotion": {
+    "Texture": "Particles/Textures/UVMotion/FlowMapSmoke.png",
+    "Scale": 0.8,
+    "Strength": 8.8,
+    "SpeedY": 0.64
+  },
+  "Attractors": [
+    {
+      "LinearAcceleration": {
+        "Y": 5
+      }
+    }
+  ]
+}

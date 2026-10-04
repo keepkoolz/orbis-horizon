@@ -73,21 +73,20 @@ final class BalloonRegistry {
         return ENTRIES.size();
     }
 
-    /** The deployed balloons registered for this world (T40, administration command). Balloon kinds only. */
+    /** The deployed balloons registered for this world (T40, administration command). All balloon kinds (T54). */
     static java.util.List<Entry> entriesIn(World world) {
         java.util.List<Entry> list = new java.util.ArrayList<>();
         String name = world.getName();
         for (Entry e : ENTRIES) {
-            if (e.world.equals(name) && Deployables.BALLOON_KIND.equals(e.kind)) {
+            if (e.world.equals(name)) {
+                Deployables.Kind k = Deployables.get(e.kind);
+                if (k == null || !k.isBalloon()) {
+                    continue;
+                }
                 list.add(e);
             }
         }
         return list;
-    }
-
-    /** Registers a deployed balloon (no effect if already there). Never throws. */
-    static void add(World world, Vector3i origin, Rotation rotation) {
-        add(world, origin, rotation, Deployables.BALLOON_KIND, null);
     }
 
     /** Registers a deployed structure of the given type, with its owner (nullable). No effect if already there. Never throws. */
@@ -99,11 +98,6 @@ final class BalloonRegistry {
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Structure « %s » non enregistrée dans le registre de verrouillage", kind);
         }
-    }
-
-    /** Removes a balloon from the registry (take-off). Never throws. */
-    static void remove(World world, Vector3i origin, Rotation rotation) {
-        remove(world, origin, rotation, Deployables.BALLOON_KIND);
     }
 
     /** Removes a structure from the registry, whatever its owner. Never throws. */

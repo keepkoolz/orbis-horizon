@@ -2,19 +2,23 @@
 # Hot air balloon
 orbis_horizon.items.hotair_balloon_crate.name = Hot air balloon crate
 orbis_horizon.items.hotair_balloon_crate.description = Deploys a giant hot air balloon. Needs a clear space of 25 x 25 x 40 blocks.
+orbis_horizon.items.hotair_balloon_basic_crate.name = Small hot air balloon crate
+orbis_horizon.items.hotair_balloon_basic_crate.description = Deploys a small one-person hot air balloon. Needs a clear space of 7 x 14 x 7 blocks.
 orbis_horizon.items.hotair_balloon_chain.name = Hot air balloon burner chain
 orbis_horizon.items.hotair_balloon_chain.description = Pull it to take off. Double jump in flight to stop and set the balloon down where it is.
 orbis_horizon.items.hotair_balloon_burner.name = Hot air balloon burner
 orbis_horizon.items.hotair_balloon_burner.description = Fuel tank of the balloon. Put wood or charcoal in it before taking off. A flame comes out of it while it has fuel. It burns in flight and may leave charcoal in its output.
 orbis_horizon.items.hotair_balloon_brazier.name = Hot air balloon brazier
 orbis_horizon.items.hotair_balloon_brazier.description = Unused since the burner shows the flame itself. Can be deleted.
-orbis_horizon.items.hotair_balloon_recipe.name = Recipe: hot air balloon
-orbis_horizon.items.hotair_balloon_recipe.description = Teaches every hot air balloon recipe at once: the crate, the burner and the burner chain. They are crafted at a Workbench (tier 3), in the Tinkering tab.
 # Camping tent
 orbis_horizon.items.camping_tent_crate.name = Small Tent
 orbis_horizon.items.camping_tent_crate.description = Right-click on the ground to pitch a tent with a bed and a campfire. The empty crate stays in your inventory.
 orbis_horizon.items.camping_tent_crate_empty.name = Small Tent (empty crate)
 orbis_horizon.items.camping_tent_crate_empty.description = Right-click on your tent to pack it back into this crate.
+orbis_horizon.items.camping_tent_big_crate.name = Large Tent
+orbis_horizon.items.camping_tent_big_crate.description = Right-click on the ground to pitch a large tent with two beds, two chests and a campfire. The empty crate stays in your inventory.
+orbis_horizon.items.camping_tent_big_crate_empty.name = Large Tent (empty crate)
+orbis_horizon.items.camping_tent_big_crate_empty.description = Right-click on your tent to pack it back into this crate.
 # Chat messages sent by the plugin
 orbis_horizon.chat.takeoff.chain = Takeoff! Double jump to stop and set the balloon down where it is.
 orbis_horizon.chat.takeoff.command = Takeoff! Double jump or /orbishorizon balloon land to land.
@@ -40,7 +44,7 @@ orbis_horizon.chat.error.noPosition = Your position is unknown.
 orbis_horizon.chat.error.noBalloon = No placed hot air balloon found around you. Get into the basket.
 orbis_horizon.chat.error.noBurner = Burner not found. This hot air balloon may come from an older version of the mod: place a new one with a crate.
 orbis_horizon.chat.error.burnerEmpty = The burner is empty. Put fuel (wood, planks, charcoal...) in the burner, the pipe above the chain, then try again.
-orbis_horizon.chat.error.tooManyPassengers = Too many people in the basket: {count} passengers for {seats} seats (plus the pilot). Have {extra, plural, one {1 player} other {{extra} players}} get off, then try again.
+orbis_horizon.chat.error.balloonFull = This balloon carries {max, plural, one {1 person} other {{max} people}} at most, the pilot included. Have {extra, plural, one {1 player} other {{extra} players}} get off, then try again.
 orbis_horizon.chat.error.movement = The player's movement cannot be changed.
 orbis_horizon.chat.error.modelMissing = Model {model} not found. The blocks have been put back.
 orbis_horizon.chat.error.unknownModel = Unknown model: {model}
@@ -60,9 +64,8 @@ orbis_horizon.chat.tent.aimTent = Aim at a pitched tent.
 orbis_horizon.chat.tent.notOwner = Only the player who pitched this tent can pack it.
 orbis_horizon.chat.tent.approach = Move closer to the tent.
 orbis_horizon.chat.tent.packed = Tent packed.
-orbis_horizon.chat.tent.packedDropped = Tent packed. The campfire contents dropped to the ground.
-orbis_horizon.chat.recipes.learned = Hot air balloon recipes learned: crate, burner and chain.
-orbis_horizon.chat.recipes.known = You already know every hot air balloon recipe.
+orbis_horizon.chat.tent.packedDropped = Tent packed. Its contents dropped to the ground.
+orbis_horizon.chat.tent.wrongCrate = This crate belongs to another tent.
 orbis_horizon.chat.cmd.light.invalidRadius = Invalid radius: {value}
 orbis_horizon.chat.cmd.light.usage = Usage: /orbishorizon balloon light on|off|radius:N|radius:default|show
 orbis_horizon.chat.cmd.light.state = Hot air balloon lights: {state} (applies now to flights in this world, otherwise at the next takeoff).

@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.2
+
+### Hot air balloons
+
+- New small hot air balloon for one person. It has its own crate ("Small hot air balloon crate"), crafted at the basic workbench (tier 2, Tinkering tab) from a burner, a chain, 16 white wool, 12 blue wool and 6 hardwood planks. It flies, refuels, hovers and lands like the large balloon, but has no seats and no chests.
+- The flame and the flamethrower jet of the small balloon are half the size of the large one and stay straight inside the envelope when you move.
+- A balloon now carries as many people as it has seats, plus the pilot: 5 for the large balloon, 1 for the small one. If too many players are in the basket, take-off is refused and the message tells you how many must get off.
+- `/orbishorizon balloon despawn` gives back the crate of the balloon it removed (small or large).
+
+### Recipes
+
+- The balloon recipe is no longer sold by the Kweebec merchant of the Forgotten Temple. Nothing needs to be learnt any more, and the merchant offers the game's usual trades again.
+- The burner, the chain and the small balloon crate need a tier 2 basic workbench. The large balloon crate still needs tier 3.
+
+### Tents
+
+- New Large Tent with 2 beds, 2 chests, 2 stools, 2 candles, a campfire and ladders at the entrance. Its crate ("Large Tent") is crafted at the basic workbench (tier 2, Tinkering tab) from 80 fibre, 20 light hide, 30 sticks, a campfire, 2 crude beds and 2 small crude chests.
+- It is set up and packed like the Small Tent, with its own empty crate ("Large Tent (empty crate)"). When packed, the contents of the campfire and of both chests drop to the ground.
+- The empty crate of one tent does not fit the other one. A message says so and nothing changes.
+
+### Known limits
+
+- The small balloon and the Large Tent have not been tested in game yet. The position and facing of the Large Tent when it is set up may still need adjusting.
+- A player climbing a ladder of the Large Tent when it is packed is not moved first and may fall.
+- Recipe quantities are balance suggestions and may change.
+
 ## v1.1.1
 
 ### Hot air balloon

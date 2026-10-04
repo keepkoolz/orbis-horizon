@@ -10,7 +10,6 @@
     "Items.Vehicles"
   ],
   "Recipe": {
-    "KnowledgeRequired": true,
     "Input": [
       {
         "ItemId": "Hotair_Balloon_Burner",

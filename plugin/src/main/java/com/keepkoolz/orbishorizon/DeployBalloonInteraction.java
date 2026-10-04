@@ -107,11 +107,18 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
         origin.add(rotatedOffset);
 
         int flags = (force ? 1 : 0) | 8; // same options as SpawnPrefab
-        // T24: the unfolded ladder does not replace the terrain (a slope, a wall). Only the mod's crate has this prefab.
-        BalloonShape shape = BalloonManager.get().shapeFor(prefabPath);
+        // T24: the unfolded ladder does not replace the terrain (a slope, a wall). T54: the balloon type is found by the
+        // prefab, and it is the one registered (the small balloon is registered as balloon_basic).
+        Deployables.Kind kind = BalloonManager.get().balloonKindFor(prefabPath);
+        if (kind == null) {
+            LOGGER.at(Level.WARNING).log("HotairBalloon_Deploy: prefab %s is not one of the balloon types, nothing placed", prefabPath);
+            return;
+        }
+        BalloonShape shape = kind.shapeOrNull();
         if (shape != null) {
-            BalloonManager.pasteKeepingTerrain(buffer, world, shape, origin, rotation, flags, commandBuffer);
+            BalloonManager.pasteKeepingTerrain(buffer, world, shape, origin, rotation, flags, commandBuffer, kind.id, null);
         } else {
+            // Unreadable shape: placed without terrain protection and without registry entry (logged by shapeOrNull).
             PrefabUtil.paste(buffer, world, origin, rotation, new FastRandom(), flags, 0, commandBuffer);
         }
     }

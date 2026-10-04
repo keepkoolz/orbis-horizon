@@ -45,7 +45,7 @@ import java.util.logging.Level;
  * 1. Room test before placement: if a tent chunk is not loaded or if a prefab cell contains a
  *    solid block (BlockMaterial.Solid, the pasteKeepingTerrain test), placement is refused with a message and
  *    the Failed state (the Next, so the crate, is not touched, and no block is placed). Grass and plants are overwritten.
- * 2. After placement, the tent is entered in the lock registry (type "tent", owner = the player).
+ * 2. After placement, the tent is entered in the lock registry (tent type, owner = the player).
  * 3. The full crate is replaced in place by the empty crate in the held slot. The game's ModifyInventory
  *    does not do this reliably (AdjustHeldItemQuantity then ItemToAdd by addOrDropItemStack, which puts the empty
  *    crate in the first free slot, not necessarily the crate's own), so the swap is done here.
@@ -59,9 +59,6 @@ import java.util.logging.Level;
 public class DeployTentInteraction extends SimpleInstantInteraction {
 
     public static final String TYPE_ID = "Camping_DeployTent";
-    /** Crate identifiers: the full one is held on click, the empty one replaces it. */
-    static final String FULL_CRATE = "Camping_Tent_Crate";
-    static final String EMPTY_CRATE = "Camping_Tent_Crate_Empty";
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 
     public static final BuilderCodec<DeployTentInteraction> CODEC = BuilderCodec
@@ -89,7 +86,7 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
     public DeployTentInteraction() {
     }
 
-    /** Like LearnBalloonRecipesInteraction: the interaction changes the inventory, the server decides. */
+    /** The interaction changes the inventory, the server decides. */
     @Override
     public WaitForDataFrom getWaitForDataFrom() {
         return WaitForDataFrom.Server;
@@ -104,7 +101,9 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
             fail(context);
             return;
         }
-        if (prefabPath == null || !prefabPath.equals(Deployables.TENT.prefabPath)) {
+        // The tent type comes from the prefab (small or big tent): it gives the crates, the shape and the registry kind.
+        Deployables.Kind kind = prefabPath != null ? Deployables.forPrefab(prefabPath) : null;
+        if (kind == null || !kind.isTent()) {
             LOGGER.at(Level.WARNING).log("Camping_DeployTent: PrefabPath inattendu : %s", prefabPath);
             fail(context);
             return;
@@ -117,7 +116,7 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
         }
         BalloonShape shape;
         try {
-            shape = Deployables.TENT.shape();
+            shape = kind.shape();
         } catch (IOException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Camping_DeployTent: forme de la tente illisible");
             fail(context);
@@ -126,7 +125,7 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
         // The crate swap is done in the held slot: without it, nothing is placed (no tent without a swapped crate).
         ItemStack held = context.getHeldItem();
         ItemContainer heldContainer = context.getHeldItemContainer();
-        if (held == null || heldContainer == null || !FULL_CRATE.equals(held.getItemId())) {
+        if (held == null || heldContainer == null || !kind.tent.fullCrateId.equals(held.getItemId())) {
             LOGGER.at(Level.WARNING).log("Camping_DeployTent: objet tenu inattendu (%s)", held != null ? held.getItemId() : "aucun");
             fail(context);
             return;
@@ -169,16 +168,16 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
 
         int flags = (force ? 1 : 0) | 8; // same options as SpawnPrefab
         PrefabUtil.paste(buffer, world, new Vector3i(origin), rotation, new FastRandom(), flags, 0, commandBuffer);
-        BalloonRegistry.add(world, origin, rotation, Deployables.TENT_KIND, playerRef.getUuid());
+        BalloonRegistry.add(world, origin, rotation, kind.id, playerRef.getUuid());
 
         // The full crate becomes the empty crate, in the same slot.
-        ItemStack empty = new ItemStack(EMPTY_CRATE, 1);
+        ItemStack empty = new ItemStack(kind.tent.emptyCrateId, 1);
         if (heldContainer.setItemStackForSlot((short) context.getHeldItemSlot(), empty).succeeded()) {
             context.setHeldItem(empty);
         } else {
             LOGGER.at(Level.WARNING).log("Camping_DeployTent: la caisse n'a pas pu être remplacée par la caisse vide");
         }
-        LOGGER.at(Level.INFO).log("Tente posée en (%d, %d, %d) rotation %s par %s", origin.x, origin.y, origin.z, rotation, playerRef.getUsername());
+        LOGGER.at(Level.INFO).log("Tente « %s » posée en (%d, %d, %d) rotation %s par %s", kind.id, origin.x, origin.y, origin.z, rotation, playerRef.getUsername());
     }
 
     private static void fail(InteractionContext context) {
