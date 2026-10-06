@@ -1,0 +1,119 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.airship_engine.name",
+    "Description": "server.orbis_horizon.items.airship_engine.description"
+  },
+  "ItemLevel": 15,
+  "MaxStack": 100,
+  "Icon": "Icons/ItemsGenerated/Metal_Iron_Ornate.png",
+  "Categories": [
+    "Blocks.Metal"
+  ],
+  "PlayerAnimationsId": "Block",
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Cube",
+    "Group": "Stone",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Rocks"
+      }
+    },
+    "BlockParticleSetId": "Metal",
+    "Textures": [
+      {
+        "All": "BlockTextures/Metal_Iron_Ornate.png",
+        "Weight": 1
+      }
+    ],
+    "ParticleColor": "#87928e",
+    "BlockSoundSetId": "Metal",
+    "PhysicalMaterialId": "Metal",
+    "TextureComputedColor": "#4F5150",
+    "RandomRotation": "YawStep90",
+    "State": {
+      "Definitions": {
+        "On": {
+          "DrawType": "CubeWithModel",
+          "CustomModel": "Blocks/Structures/Base_Shapes/Cube_Overlay.blockymodel",
+          "CustomModelTexture": [
+            {
+              "Texture": "Blocks/Vehicles/Airship_Firebox_Glow.png",
+              "Weight": 1
+            }
+          ],
+          "Light": {
+            "Color": "#c62"
+          },
+          "Particles": [
+            {
+              "SystemId": "Airship_Firebox_Embers",
+              "Scale": 0.6,
+              "TargetNodeName": "",
+              "PositionOffset": {
+                "Y": 0.45
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Tags": {
+    "Type": [
+      "Metal"
+    ],
+    "Family": [
+      "Iron"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Items_Metal",
+  "IconProperties": {
+    "Scale": 0.58823,
+    "Rotation": [
+      22.5,
+      45,
+      22.5
+    ],
+    "Translation": [
+      0,
+      -13.5
+    ]
+  },
+  "Recipe": {
+    "Input": [
+      {
+        "ItemId": "Ingredient_Bar_Iron",
+        "Quantity": 24
+      },
+      {
+        "ItemId": "Ingredient_Bar_Thorium",
+        "Quantity": 12
+      },
+      {
+        "ItemId": "Ingredient_Bar_Adamantite",
+        "Quantity": 8
+      },
+      {
+        "ItemId": "Ingredient_Charcoal",
+        "Quantity": 20
+      },
+      {
+        "ItemId": "Ingredient_Fire_Essence",
+        "Quantity": 10
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Tinkering"
+        ],
+        "Id": "Workbench",
+        "RequiredTierLevel": 3
+      }
+    ],
+    "TimeSeconds": 8
+  }
+}

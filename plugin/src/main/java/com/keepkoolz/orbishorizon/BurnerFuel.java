@@ -396,8 +396,11 @@ final class BurnerFuel {
         return remainingSeconds() <= 0;
     }
 
-    /** Burns for dt seconds (same logic as ProcessingBenchBlock.consumeFuelForDuration). */
-    void burn(double dt) {
+    /**
+     * Burns for dt seconds (same logic as ProcessingBenchBlock.consumeFuelForDuration). Returns the part of dt that could
+     * not be burned because the fuel ran out (0 if all of it was burned): T57 pools several engines with it.
+     */
+    double burn(double dt) {
         double left = dt;
         while (left > 0) {
             if (fuelTime > 0) {
@@ -406,9 +409,10 @@ final class BurnerFuel {
                 left -= use;
             } else if (!consumeOne()) {
                 fuelTime = 0;
-                return;
+                return left;
             }
         }
+        return 0;
     }
 
     private static double seconds(Item item) {

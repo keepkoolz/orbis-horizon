@@ -38,10 +38,8 @@ final class BalloonFlight {
     final Vector3d lastValidPilotPos = new Vector3d();
     /** Last origin (in blocks) checked, so the collision test is only redone when it changes. */
     final Vector3i lastCheckedOrigin = new Vector3i(Integer.MIN_VALUE);
-    /** Take-off time (ms), for the double jump delays. */
+    /** Take-off time (ms). */
     volatile long takeoffMs;
-    /** The flight mode went from forced to allowed (the double jump becomes possible). */
-    volatile boolean flyAllowed;
     /** The end of the flight is being processed. */
     volatile boolean stopping;
     /** After a collision: ticks ignored until this time (teleport in progress). */
@@ -237,6 +235,8 @@ final class BalloonFlight {
 
     /** Lights attached to the flying entity (T34: yellow crystals, T35: burner flame). See BalloonLights. */
     final List<BalloonLights.Light> lights = new CopyOnWriteArrayList<>();
+    /** Interactable helper on the chain cell: using it in flight lands the balloon, like the airship lever. See BalloonLights.spawnChain. */
+    volatile AirshipLever.Helper chain;
 
 
     BalloonFlight(UUID pilotUuid, Ref<EntityStore> pilotRef, World world, Rotation rotation, Deployables.Kind kind) {

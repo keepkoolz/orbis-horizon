@@ -41,7 +41,15 @@ public final class BalloonShape {
      */
     public static final String LADDER_BLOCK = "Furniture_Kweebec_Ladder";
 
-    public record Cell(int x, int y, int z, String name) {
+    /**
+     * A prefab block. filler is the prefab's "filler" value: 0 for the origin cell of a block, non-zero for the other
+     * cells of a multi-cell block (T57: the engine bench is the origin cell only).
+     */
+    public record Cell(int x, int y, int z, String name, int filler) {
+        public Cell(int x, int y, int z, String name) {
+            this(x, y, z, name, 0);
+        }
+
         /** Name without "*" prefix or state suffix (e.g. "_State_Definitions_OpenDoorOut"). */
         public String baseName() {
             String n = name.startsWith("*") ? name.substring(1) : name;
@@ -134,7 +142,8 @@ public final class BalloonShape {
         for (BsonValue v : blocks) {
             BsonDocument b = v.asDocument();
             Cell c = new Cell(b.getNumber("x").intValue(), b.getNumber("y").intValue(),
-                    b.getNumber("z").intValue(), b.getString("name").getValue());
+                    b.getNumber("z").intValue(), b.getString("name").getValue(),
+                    b.containsKey("filler") ? b.getNumber("filler").intValue() : 0);
             cells.add(c);
             if (anchorBlock.equals(c.baseName())) {
                 anchor = c;
@@ -168,7 +177,7 @@ public final class BalloonShape {
 
     /**
      * Cells of the prefab in flight (T24): all except the unfolded ladder cells. This is the list for collisions,
-     * room tests (landing, double jump, resume), recognition at take-off and the
+     * room tests (landing, resume), recognition at take-off and the
      * "in the air" test of T20. The full prefab (`cells()`) is used for placement, block removal, chests
      * and the chunk computation.
      */

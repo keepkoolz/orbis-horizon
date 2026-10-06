@@ -26,7 +26,7 @@ import java.util.logging.Level;
  * generic in T43: the structure type is the kind from Deployables).
  *
  * An entry is (world, prefab origin, rotation, kind, nullable owner). It is added by each paste of the mod's prefab
- * (crate, landing, double jump, running dry, T19 recovery: all go through
+ * (crate, landing (chain or command), running dry, T19 recovery: all go through
  * BalloonManager.pasteKeepingTerrain) and removed at take-off (the blocks no longer exist during the flight). The
  * "deployed.json" file in the plugin's data folder keeps the registry between two starts. Balloons
  * deployed before this version are not in the registry, so they are not locked until their
@@ -83,6 +83,18 @@ final class BalloonRegistry {
                 if (k == null || !k.isBalloon()) {
                     continue;
                 }
+                list.add(e);
+            }
+        }
+        return list;
+    }
+
+    /** The deployed structures of exactly this type registered for this world (airship despawn). */
+    static java.util.List<Entry> entriesOfKind(World world, String kindId) {
+        java.util.List<Entry> list = new java.util.ArrayList<>();
+        String name = world.getName();
+        for (Entry e : ENTRIES) {
+            if (e.world.equals(name) && e.kind.equals(kindId)) {
                 list.add(e);
             }
         }

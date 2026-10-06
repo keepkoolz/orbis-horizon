@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.3
+
+### Cloudwork airship
+
+- New airship, a large ship that turns freely toward the direction you fly. Its crate ("Cloudwork airship crate") is crafted at a tier 3 basic workbench and needs an engine, a fuel tank, 2 burner outlets, all the workbenches the ship carries, wool, planks and iron.
+- You take off by pulling the lever at the pilot spot, and you land by pulling the lever again in flight. The ship stays in the air without fuel. It only burns fuel while it moves sideways.
+- The fuel tank sits between the two furnaces. The engine under it glows and lights up while the tank has fuel. Two burners at the back spit short flames and smoke when the ship moves, and only a light smoke at rest.
+- The ship has 15 seats, 7 stools and 4 tavern benches of 2 places. Players on board at take-off are seated automatically and set down at landing.
+- Workbench levels and chest contents are kept during the flight.
+- Death, disconnection and server shutdown in flight are handled, and `/orbishorizon airship despawn` removes a ship and gives the crate back.
+- The crate icon and sides show a small airship.
+
+### Hot air balloons
+
+- You now land by pulling the chain again in flight, as you take off. The double jump no longer stops the flight, for the balloons and for the airship.
+
+### Known limits
+
+- Most of the airship has been tested only in part. Passengers, the persistence of workbench levels and the lever in flight may still need adjusting.
+- Recipe quantities are balance suggestions and may change.
+
 ## v1.2
 
 ### Hot air balloons

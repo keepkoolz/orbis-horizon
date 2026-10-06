@@ -1,0 +1,145 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.airship_cloudwork_crate.name",
+    "Description": "server.orbis_horizon.items.airship_cloudwork_crate.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Airship_Cloudwork_Crate.png",
+  "PlayerAnimationsId": "Block",
+  "MaxStack": 1,
+  "Categories": [
+    "Items.Vehicles"
+  ],
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Cube",
+    "Opacity": "Transparent",
+    "Group": "Wood",
+    "RandomRotation": "YawStep1",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Benches"
+      }
+    },
+    "BlockParticleSetId": "Wood",
+    "Textures": [
+      {
+        "Weight": 1,
+        "Sides": "BlockTextures/Airship_Cloudwork_Crate_Side.png",
+        "UpDown": "BlockTextures/Furniture_Village_Crate.png"
+      }
+    ],
+    "ParticleColor": "#3f2720",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "TextureComputedColor": "#47291D"
+  },
+  "Interactions": {
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "HotairBalloon_Deploy",
+          "PrefabPath": "The_Cloudwork.prefab.json",
+          "Offset": {
+            "X": 0,
+            "Y": 0,
+            "Z": -15
+          },
+          "RotationOffset": "None",
+          "Force": true,
+          "Next": {
+            "Type": "ModifyInventory",
+            "AdjustHeldItemQuantity": -1
+          }
+        }
+      ]
+    }
+  },
+  "Recipe": {
+    "Input": [
+      {
+        "ItemId": "Airship_Engine",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Airship_Fuel_Tank",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Airship_Burner_Outlet",
+        "Quantity": 2
+      },
+      {
+        "ItemId": "Bench_WorkBench",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Furnace",
+        "Quantity": 2
+      },
+      {
+        "ItemId": "Bench_Campfire",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Cooking",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Farming",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Furniture",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Tannery",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Salvage",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Armour",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Weapon",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Alchemy",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Arcane",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Cloth_Block_Wool_White",
+        "Quantity": 90
+      },
+      {
+        "ItemId": "Wood_Softwood_Planks",
+        "Quantity": 90
+      },
+      {
+        "ItemId": "Ingredient_Bar_Iron",
+        "Quantity": 20
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Tinkering"
+        ],
+        "Id": "Workbench",
+        "RequiredTierLevel": 3
+      }
+    ],
+    "TimeSeconds": 5
+  }
+}

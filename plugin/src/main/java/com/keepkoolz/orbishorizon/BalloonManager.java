@@ -95,21 +95,13 @@ public final class BalloonManager {
      * yaw of pi (OneEighty rotation), the model appeared unrotated, shifted by 17 blocks
      * (test of 3 October 2026, adjusted by hand with /orbishorizon balloon offset 1 0 17). So pi is added.
      */
-    private static final double MODEL_YAW_CORRECTION = Math.PI;
+    static final double MODEL_YAW_CORRECTION = Math.PI;
     /** Burner chain block: take-off. */
     public static final String CHAIN_BLOCK = "Hotair_Balloon_Chain";
-    /**
-     * Stopping the flight with a double jump: at take-off the flight is forced (the pilot flies straight away),
-     * then after FLY_ALLOW_DELAY_MS it becomes merely allowed, as in creative mode. When the
-     * client reports that the pilot is no longer flying (double jump), the balloon is placed back as blocks
-     * in place, on the ground or in the air. The first STOP_GRACE_MS milliseconds are ignored.
-     */
-    private static final long FLY_ALLOW_DELAY_MS = 600;
-    private static final long STOP_GRACE_MS = 1200;
     /** Pause of the tracking after a collision, while the teleport arrives. */
-    private static final long COLLISION_PAUSE_MS = 250;
+    static final long COLLISION_PAUSE_MS = 250;
     /** Minimum interval between two collision messages. */
-    private static final long COLLISION_MSG_INTERVAL_MS = 2000;
+    static final long COLLISION_MSG_INTERVAL_MS = 2000;
     /** setBlock option that suppresses destruction particles (read in WorldChunk.setBlock). */
     private static final int SET_BLOCK_NO_PARTICLES = 4;
     /** Search radius for the anchor burner around the pilot, in blocks. */
@@ -555,7 +547,7 @@ public final class BalloonManager {
         flight.lastBurnMs = flight.takeoffMs;
         flight.nextFuelMsgMs = flight.takeoffMs + FUEL_MSG_INTERVAL_MS;
         if (dry) {
-            // Dry descent: the flight starts out of fuel (no fuel, no double jump).
+            // Dry descent: the flight starts out of fuel.
             flight.dry = true;
             flight.lastDescentMs = flight.takeoffMs;
         }
@@ -565,6 +557,8 @@ public final class BalloonManager {
         BalloonLights.spawnAll(store, flight, s);
         // T35: light of the burner flame (not for a dry descent, flame off).
         BalloonLights.spawnBurner(store, flight, s);
+        // The chain in flight: an interactable helper entity, using it lands the balloon (like the airship lever).
+        BalloonLights.spawnChain(store, flight, s);
         flights.put(flightId, flight);
         flight.lastResumeMs = flight.takeoffMs;
         BalloonResume.write(flight, found.origin, false);
@@ -595,10 +589,18 @@ public final class BalloonManager {
      * Returns the number of blocks removed.
      */
     static int removeBlocks(World world, BalloonShape s, Vector3i origin, Rotation rotation) {
+        return removeBlocks(world, s, origin, rotation, false);
+    }
+
+    /**
+     * Same, with a broader notion of "attached" for the airship prototype (benches, posters, potions, books...): everything that
+     * is not a structural block (Cloth_, Wood_, Rock_, Soil_) is removed first. The balloon and the tent keep the original rule.
+     */
+    static int removeBlocks(World world, BalloonShape s, Vector3i origin, Rotation rotation, boolean broadAttached) {
         int removed = 0;
         for (int pass = 0; pass < 2; pass++) {
             for (BalloonShape.Cell c : s.cells()) {
-                if (isAttached(c) != (pass == 0)) {
+                if ((broadAttached ? isAttachedBroad(c) : isAttached(c)) != (pass == 0)) {
                     continue;
                 }
                 Vector3i p = c.rotated(rotation).add(origin);
@@ -619,7 +621,7 @@ public final class BalloonManager {
     }
 
     /** A balloon recognised in the world: type, origin, rotation and share of its flight cells in place (0 if not measured). */
-    private record Found(Deployables.Kind kind, Vector3i origin, Rotation rotation, double ratio) {
+    record Found(Deployables.Kind kind, Vector3i origin, Rotation rotation, double ratio) {
     }
 
     /**
@@ -627,6 +629,14 @@ public final class BalloonManager {
      * (same anchor block for all), with the 4 rotations, and the best share of flight cells in place wins (at least MATCH_RATIO).
      */
     private Found findBalloon(World world, Vector3d around) {
+        return find(world, around, Deployables.BALLOONS);
+    }
+
+    /**
+     * Generalised recognition (airship prototype): tries every type of the list around the anchor blocks found within
+     * SEARCH_RADIUS of the point, with the 4 rotations, best share of flight cells in place wins (at least MATCH_RATIO).
+     */
+    Found find(World world, Vector3d around, List<Deployables.Kind> kinds) {
         int cx = (int) Math.floor(around.x), cy = (int) Math.floor(around.y), cz = (int) Math.floor(around.z);
         Found best = null;
         for (int x = cx - SEARCH_RADIUS; x <= cx + SEARCH_RADIUS; x++) {
@@ -636,7 +646,7 @@ public final class BalloonManager {
                     if (bt == null) {
                         continue;
                     }
-                    for (Deployables.Kind kind : Deployables.BALLOONS) {
+                    for (Deployables.Kind kind : kinds) {
                         BalloonShape s = kind.shapeOrNull();
                         if (s == null || !sameBlock(bt, s.anchor())) {
                             continue;
@@ -684,6 +694,11 @@ public final class BalloonManager {
                 || n.startsWith("Hotair_Balloon_");
     }
 
+    private static boolean isAttachedBroad(BalloonShape.Cell c) {
+        String n = c.baseName();
+        return !(n.startsWith("Cloth_") || n.startsWith("Wood_") || n.startsWith("Rock_") || n.startsWith("Soil_")) || n.startsWith("Wood_Softwood_Fence");
+    }
+
     static boolean sameBlock(BlockType bt, BalloonShape.Cell c) {
         String id = bt.getId();
         if (id == null) {
@@ -694,6 +709,11 @@ public final class BalloonManager {
     }
 
     private Ref<EntityStore> spawnModelEntity(Store<EntityStore> store, Vector3d position, Rotation rotation, String id) {
+        return spawnModelEntity(store, position, rotation.getRadians() + MODEL_YAW_CORRECTION, id);
+    }
+
+    /** Same as above with the entity's yaw given directly, in radians (airship: free heading). */
+    Ref<EntityStore> spawnModelEntity(Store<EntityStore> store, Vector3d position, double yawRadians, String id) {
         ModelAsset asset = ModelAsset.getAssetMap().getAsset(id);
         if (asset == null) {
             LOGGER.at(Level.WARNING).log("Modèle %s introuvable", id);
@@ -701,7 +721,7 @@ public final class BalloonManager {
         }
         Model model = Model.createUnitScaleModel(asset);
         Rotation3f rot = new Rotation3f();
-        rot.setYaw((float) (rotation.getRadians() + MODEL_YAW_CORRECTION));
+        rot.setYaw((float) yawRadians);
 
         Holder<EntityStore> holder = EntityStore.REGISTRY.newHolder();
         holder.addComponent(TransformComponent.getComponentType(), new TransformComponent(new Vector3d(position), rot));
@@ -724,6 +744,11 @@ public final class BalloonManager {
 
     /** Enables or disables the pilot's free flight. */
     private boolean setPilotFlying(Store<EntityStore> store, Ref<EntityStore> pilotRef, PlayerRef player, boolean flying) {
+        return setPilotFlying(store, pilotRef, player, flying, FLY_SPEED_FACTOR);
+    }
+
+    /** Same with the flight speed factor given (airship: tunable). The factor applies to the current settings. */
+    boolean setPilotFlying(Store<EntityStore> store, Ref<EntityStore> pilotRef, PlayerRef player, boolean flying, float speedFactor) {
         MovementManager mm = store.getComponent(pilotRef, MovementManager.getComponentType());
         if (mm == null) {
             return false;
@@ -731,8 +756,8 @@ public final class BalloonManager {
         if (flying) {
             MovementSettings settings = mm.getSettings();
             settings.fly = FlyMode.Forced;
-            settings.horizontalFlySpeed *= FLY_SPEED_FACTOR;
-            settings.verticalFlySpeed *= FLY_SPEED_FACTOR;
+            settings.horizontalFlySpeed *= speedFactor;
+            settings.verticalFlySpeed *= speedFactor;
             mm.update(player.getPacketHandler());
         } else {
             mm.resetDefaultsAndUpdate(pilotRef, store);
@@ -741,7 +766,7 @@ public final class BalloonManager {
     }
 
     /** Only changes the pilot's flight mode (without touching the speeds). */
-    private static void setFlyMode(Store<EntityStore> store, Ref<EntityStore> pilotRef, FlyMode mode) {
+    static void setFlyMode(Store<EntityStore> store, Ref<EntityStore> pilotRef, FlyMode mode) {
         if (!pilotRef.isValid()) {
             return;
         }
@@ -755,13 +780,18 @@ public final class BalloonManager {
     }
 
     private void pastePrefab(Deployables.Kind kind, World world, Store<EntityStore> store, Vector3i origin, Rotation rotation) {
+        pastePrefab(kind, world, store, origin, rotation, null);
+    }
+
+    /** Same with the owner registered for the placed structure (airship: the pilot). */
+    void pastePrefab(Deployables.Kind kind, World world, Store<EntityStore> store, Vector3i origin, Rotation rotation, UUID owner) {
         Path path = PrefabStore.get().findAssetPrefabPath(kind.prefabPath);
         if (path == null) {
             LOGGER.at(Level.WARNING).log("Prefab %s introuvable pour l'atterrissage", kind.prefabPath);
             return;
         }
         try {
-            pasteKeepingTerrain(PrefabBufferUtil.getCached(path), world, kind.shape(), origin, rotation, 1 | 8, store, kind.id, null);
+            pasteKeepingTerrain(PrefabBufferUtil.getCached(path), world, kind.shape(), origin, rotation, 1 | 8, store, kind.id, owner);
         } catch (IOException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Prefab illisible, pose sans protection du terrain");
             PrefabUtil.paste(PrefabBufferUtil.getCached(path), world, new Vector3i(origin), rotation,
@@ -780,7 +810,7 @@ public final class BalloonManager {
      * kept. Ladder cells already occupied by something other than a solid block are overwritten, except
      * liquid cells: the ladder stops at the surface, the original empty block is put back. The prefab has
      * no fluid entry on these cells, so PrefabUtil.paste does not touch the water there.
-     * Used by every placement path: landing, double jump, dry burner, resume from T19 and crate.
+     * Used by every placement path: landing (chain or command), dry burner, resume from T19 and crate.
      */
     /** Registers the structure of the given type (T43) and its owner (nullable) in the registry. */
     static void pasteKeepingTerrain(com.hypixel.hytale.server.core.prefab.selection.buffer.impl.IPrefabBuffer buffer,
@@ -880,6 +910,7 @@ public final class BalloonManager {
         flights.remove(flight.pilotUuid);
         // T34: lights first (the luminous blocks come back with the prefab, no double lighting).
         BalloonLights.removeAll(store, flight);
+        BalloonLights.removeChain(store, flight);
         setBurnerRoar(store, flight, false);
         pastePrefab(flight.kind, flight.world, store, origin, rotation);
         restoreBurner(flight.kind, flight.world, store, flight.burner, origin, rotation);
@@ -957,21 +988,7 @@ public final class BalloonManager {
             if (!flight.dry && !flight.stopping) {
                 updateBoost(store, world, flight, pilotTransform.getPosition().y, now);
             }
-            if (flight.dry) {
-                // Out of fuel (T26): no double jump. enterDry (already requested on the world thread) switches the flight to
-                // automatic descent, serverDriven. Until then, one tick at most, normal tracking continues.
-            } else if (!flight.flyAllowed && now - flight.takeoffMs > FLY_ALLOW_DELAY_MS) {
-                flight.flyAllowed = true;
-                Ref<EntityStore> pilotRef = flight.pilotRef;
-                world.execute(() -> setFlyMode(store, pilotRef, FlyMode.Allowed));
-            } else if (flight.flyAllowed && !flight.stopping && now - flight.takeoffMs > STOP_GRACE_MS) {
-                MovementStatesComponent states = store.getComponent(flight.pilotRef, MovementStatesComponent.getComponentType());
-                if (states != null && states.getMovementStates() != null && !states.getMovementStates().flying) {
-                    flight.stopping = true;
-                    world.execute(() -> stopFlying(store, flight));
-                    continue;
-                }
-            }
+            // The fly mode stays forced for the whole flight: only the chain (helper entity) or the land command ends it.
             if (now < flight.teleportUntilMs) {
                 continue;
             }
@@ -1008,27 +1025,18 @@ public final class BalloonManager {
         }
     }
 
-    /** The pilot stopped flying (double jump): the balloon is placed back as blocks in place. */
-    private void stopFlying(Store<EntityStore> store, BalloonFlight flight) {
-        // T39: the pilot died in the meantime, the flight became a flight without a pilot (pilotRef null).
-        if (flights.get(flight.pilotUuid) != flight || flight.pilotRef == null || !flight.pilotRef.isValid()) {
-            return;
-        }
-        PlayerRef player = store.getComponent(flight.pilotRef, PlayerRef.getComponentType());
-        if (player == null) {
+    /**
+     * The player used the chain in flight (helper entity, HotairBalloon_Land): if they pilot a balloon, it is placed back as blocks
+     * in place, on the ground or in the air (same rules as /orbishorizon balloon land). Anybody else (passenger, other player) is
+     * ignored. If it cannot be placed here, the flight simply continues. Call on the world thread.
+     */
+    void chainLand(Store<EntityStore> store, PlayerRef player) {
+        BalloonFlight flight = flights.get(player.getUuid());
+        if (flight == null || flight.stopping) {
             return;
         }
         Message error = land(store, player);
-        if (error == null) {
-            player.sendMessage(Texts.t("stopped"));
-            return;
-        }
-        // Cannot place it here: the pilot is put back into flight and the cycle starts again.
-        player.sendMessage(Texts.t("landFailedContinue").param("error", error));
-        setFlyMode(store, flight.pilotRef, FlyMode.Forced);
-        flight.takeoffMs = System.currentTimeMillis();
-        flight.flyAllowed = false;
-        flight.stopping = false;
+        player.sendMessage(error == null ? Texts.t("stopped") : Texts.t("landFailedContinue").param("error", error));
     }
 
     /** True if a solid block occupies a cell of the balloon placed at this origin. */
@@ -1097,11 +1105,11 @@ public final class BalloonManager {
         return (bt != null && bt.getMaterial() == BlockMaterial.Solid) || liquidAt(world, x, y, z) != null;
     }
 
-    private static boolean collides(World world, BalloonShape s, Vector3i origin, Rotation rotation) {
+    static boolean collides(World world, BalloonShape s, Vector3i origin, Rotation rotation) {
         return collides(world, s, origin, rotation, java.util.Set.of());
     }
 
-    private static boolean collides(World world, BalloonShape s, Vector3i origin, Rotation rotation, java.util.Set<Vector3i> ignore) {
+    static boolean collides(World world, BalloonShape s, Vector3i origin, Rotation rotation, java.util.Set<Vector3i> ignore) {
         // T24: folded ladder in flight, only the flight cells hit the scenery.
         for (BalloonShape.Cell c : s.flightCells()) {
             Vector3i p = c.rotated(rotation).add(origin);
@@ -1123,7 +1131,7 @@ public final class BalloonManager {
      * point (RespawnController, HomeOrSpawnPoint or WorldSpawnPoint) then removes DeathComponent. A dead
      * player therefore keeps a valid reference throughout the death.
      */
-    private static boolean isDead(Store<EntityStore> store, Ref<EntityStore> ref) {
+    static boolean isDead(Store<EntityStore> store, Ref<EntityStore> ref) {
         return ref != null && ref.isValid() && store.getComponent(ref, DeathComponent.getComponentType()) != null;
     }
 
@@ -1132,6 +1140,7 @@ public final class BalloonManager {
      * respawn. Processing goes through the world thread (outside the system) because it changes components.
      */
     void onPlayerDeath(Store<EntityStore> store, Ref<EntityStore> ref) {
+        AirshipManager.get().onPlayerDeath(store, ref);
         if (flights.isEmpty()) {
             return;
         }
@@ -1214,7 +1223,7 @@ public final class BalloonManager {
         }
         boolean wasFree = !flight.driven;
         if (wasFree) {
-            // A pending double-jump stop (stopFlying) will do nothing any more: the pilot is no longer there.
+            // The pilot is no longer there: nothing of theirs is stopping the flight any more.
             flight.stopping = false;
         }
         long now = System.currentTimeMillis();
@@ -1378,7 +1387,7 @@ public final class BalloonManager {
      * Gives a deployment crate to the administrator (Player.giveItem, like picking up an item). If
      * the inventory is full, the crate is dropped at their feet. Returns true if it is in the inventory.
      */
-    private boolean giveCrate(Store<EntityStore> store, Ref<EntityStore> adminRef, Vector3d at, String crateItemId) {
+    boolean giveCrate(Store<EntityStore> store, Ref<EntityStore> adminRef, Vector3d at, String crateItemId) {
         ItemStack crate = new ItemStack(crateItemId, 1);
         ItemStack rest = crate;
         try {
@@ -1395,7 +1404,7 @@ public final class BalloonManager {
     }
 
     /** Teleports a player to the ground under a point (dismounted first: a teleport removes the mount, T21). */
-    private static void putOnGround(Store<EntityStore> store, World world, Ref<EntityStore> ref, Vector3d from) {
+    static void putOnGround(Store<EntityStore> store, World world, Ref<EntityStore> ref, Vector3d from) {
         MountUtil.unseat(store, ref);
         TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
         Rotation3f look = t != null ? new Rotation3f(t.getRotation()) : new Rotation3f();
@@ -1473,7 +1482,7 @@ public final class BalloonManager {
         return null;
     }
 
-    private static int dropAndCount(Store<EntityStore> store, List<ItemStack> list, Vector3i pos) {
+    static int dropAndCount(Store<EntityStore> store, List<ItemStack> list, Vector3i pos) {
         int n = 0;
         for (ItemStack st : list) {
             if (st != null && !st.isEmpty()) {
@@ -1500,6 +1509,7 @@ public final class BalloonManager {
         World world = flight.world;
         flights.remove(flight.pilotUuid);
         BalloonLights.removeAll(store, flight);
+        BalloonLights.removeChain(store, flight);
         setBurnerRoar(store, flight, false);
         Vector3d pivot = prefabPoint(flight.entityPos, flight.rotation, pivot(flight.kind));
         boolean pilotSeated = false;
@@ -1581,7 +1591,7 @@ public final class BalloonManager {
      * already on it. False if the world no longer accepts tasks (stopped: World.execute then throws an exception) or
      * if the task did not finish in time.
      */
-    private static boolean runOnWorld(World world, Runnable task, long timeoutMs) {
+    static boolean runOnWorld(World world, Runnable task, long timeoutMs) {
         if (world.isInThread()) {
             task.run();
             return true;
@@ -1898,7 +1908,7 @@ public final class BalloonManager {
      * MovementStatesSystems$TickingSystem broadcasts the change to the other clients. anim: repeated PlayAnimation
      * (AnimationUtils.playAnimation, also to the passenger themselves). An error is logged once per passenger.
      */
-    private void applyPose(Store<EntityStore> store, BalloonFlight.Passenger p, long now) {
+    void applyPose(Store<EntityStore> store, BalloonFlight.Passenger p, long now) {
         BalloonFlight.Pose pose = p.pose;
         try {
             if (pose.states()) {
@@ -1928,7 +1938,7 @@ public final class BalloonManager {
     }
 
     /** T25: sets sitting back to false on a player whose flight was resumed (T19 resume). Never throws. */
-    private static void clearSittingFlag(Store<EntityStore> store, Ref<EntityStore> ref) {
+    static void clearSittingFlag(Store<EntityStore> store, Ref<EntityStore> ref) {
         try {
             MovementStatesComponent msc = store.getComponent(ref, MovementStatesComponent.getComponentType());
             if (msc != null && msc.getMovementStates() != null) {
@@ -1940,7 +1950,7 @@ public final class BalloonManager {
     }
 
     /** T25: undoes a passenger's seated pose (landing, departure). Never throws. */
-    private static void clearPose(Store<EntityStore> store, BalloonFlight.Passenger p) {
+    static void clearPose(Store<EntityStore> store, BalloonFlight.Passenger p) {
         try {
             if (p.poseStatesOn) {
                 MovementStatesComponent msc = store.getComponent(p.ref, MovementStatesComponent.getComponentType());
@@ -2181,7 +2191,7 @@ public final class BalloonManager {
      * First solid block or first liquid surface under this point (1 block above), or the point itself
      * if there is none. A player placed above water falls into it and swims, instead of being placed on the bottom.
      */
-    private static Vector3d groundBelow(World world, Vector3d from) {
+    static Vector3d groundBelow(World world, Vector3d from) {
         int x = (int) Math.floor(from.x);
         int z = (int) Math.floor(from.z);
         int top = (int) Math.floor(from.y);
@@ -2359,7 +2369,7 @@ public final class BalloonManager {
         }
     }
 
-    private static String durationText(double seconds) {
+    static String durationText(double seconds) {
         long left = Math.round(Math.ceil(seconds));
         return left >= 60 ? (left / 60) + " min " + (left % 60) + " s" : left + " s";
     }
@@ -2598,7 +2608,7 @@ public final class BalloonManager {
      * What does not fit (slot taken, smaller container) is dropped next to the chest, with
      * a warning in the logs.
      */
-    private void restoreCargo(World world, Store<EntityStore> store, BalloonCargo cargo, Vector3i origin, Rotation rotation) {
+    void restoreCargo(World world, Store<EntityStore> store, BalloonCargo cargo, Vector3i origin, Rotation rotation) {
         if (cargo == null || cargo.isEmpty()) {
             return;
         }
@@ -2952,6 +2962,19 @@ public final class BalloonManager {
         }
     }
 
+    /**
+     * T57: puts the contents back into the bench (airship engine) at this position, with the same retry and drop rules as
+     * the burner: retried every tick for RESTORE_TIMEOUT_MS if the component does not exist yet, then dropped on the ground.
+     */
+    void restoreBenchAt(World world, Store<EntityStore> store, Vector3i pos, BurnerFuel fuel) {
+        if (fuel == null) {
+            return;
+        }
+        if (!tryRestore(world, store, pos, fuel)) {
+            pendingRestores.add(new PendingRestore(world, new Vector3i(pos), fuel, System.currentTimeMillis() + RESTORE_TIMEOUT_MS));
+        }
+    }
+
     private static boolean tryRestore(World world, Store<EntityStore> store, Vector3i burnerPos, BurnerFuel fuel) {
         ProcessingBenchBlock bench = BurnerFuel.live(world, burnerPos);
         if (bench == null) {
@@ -2991,7 +3014,7 @@ public final class BalloonManager {
     }
 
     /** Stops the flame particles in a cube of radius r around a point. */
-    private static void cancelFlame(World world, Vector3d c, double r, String... systems) {
+    static void cancelFlame(World world, Vector3d c, double r, String... systems) {
         CancelParticleSystems packet = new CancelParticleSystems(
                 new Position(c.x - r, c.y - r, c.z - r), new Position(c.x + r, c.y + r, c.z + r),
                 systems, true);

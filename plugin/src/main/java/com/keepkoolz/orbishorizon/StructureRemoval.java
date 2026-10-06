@@ -61,6 +61,12 @@ final class StructureRemoval {
     /** Removes the structure placed at this origin. The registry, blocks, contents and mounts are handled here. */
     static Result remove(ComponentAccessor<EntityStore> accessor, World world, Deployables.Kind kind, BalloonShape shape,
                          Vector3i origin, Rotation rotation) {
+        return remove(accessor, world, kind, shape, origin, rotation, false);
+    }
+
+    /** Same, broadAttached true removes everything that is not a structural block first (airship prototype). */
+    static Result remove(ComponentAccessor<EntityStore> accessor, World world, Deployables.Kind kind, BalloonShape shape,
+                         Vector3i origin, Rotation rotation, boolean broadAttached) {
         // Box of the structure, in world cells.
         int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
@@ -77,7 +83,7 @@ final class StructureRemoval {
         for (int cx = ChunkUtil.chunkCoordinate(minX); cx <= ChunkUtil.chunkCoordinate(maxX); cx++) {
             for (int cz = ChunkUtil.chunkCoordinate(minZ); cz <= ChunkUtil.chunkCoordinate(maxZ); cz++) {
                 if (world.getChunkIfLoaded(ChunkUtil.indexChunk(cx, cz)) == null) {
-                    return Result.failure(Texts.t("tent.approach"));
+                    return Result.failure(Texts.t(kind.isAirship() ? "airship.approach" : "tent.approach"));
                 }
             }
         }
@@ -104,7 +110,7 @@ final class StructureRemoval {
         // d. Registry first (the plugin's removals do not go through the lock events).
         BalloonRegistry.remove(world, origin, rotation, kind.id);
         // e. Blocks: the marker is removed with the default options then its particles are cancelled.
-        int removed = BalloonManager.removeBlocks(world, shape, origin, rotation);
+        int removed = BalloonManager.removeBlocks(world, shape, origin, rotation, broadAttached);
         // f. Items dropped at the location of their container.
         int items = 0;
         Map<Vector3i, List<com.hypixel.hytale.server.core.inventory.ItemStack>> byPos = new LinkedHashMap<>();

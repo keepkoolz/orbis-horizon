@@ -1,0 +1,18 @@
+{
+  "Spawners": [
+    {
+      "SpawnerId": "Airship_Burner_Flame_Outer"
+    },
+    {
+      "SpawnerId": "Airship_Burner_Flame_Core"
+    },
+    {
+      "SpawnerId": "Airship_Burner_Tip_Smoke",
+      "PositionOffset": {
+        "Z": 1.3
+      }
+    }
+  ],
+  "CullDistance": 100.0,
+  "IsImportant": false
+}

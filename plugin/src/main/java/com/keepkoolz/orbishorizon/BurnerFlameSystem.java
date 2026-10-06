@@ -25,6 +25,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * The test is done at most once per second per burner, and the block change is
  * deferred with world.execute (blocks are not modified during the ChunkStore tick).
  *
+ * T58: the same pass also lights the firebox block under an airship engine (Airship_Fuel_Tank bench, the firebox being the Airship_Engine block since T61) when the engine has fuel in its
+ * inputs or a combustion in progress, and puts it out otherwise (AirshipEngines.setFireboxLit). Nothing else is done for engines.
+ *
  * T20: the same pass, at the same rate, calls BalloonManager.hoverTick. It is what spots a
  * balloon placed in mid-air (the burner is the source of truth, it is saved with the chunk:
  * no list to reload after a restart), burns its fuel and triggers the dry descent.
@@ -61,7 +64,12 @@ public final class BurnerFlameSystem extends EntityTickingSystem<ChunkStore> {
             return;
         }
         Bench config = bench.getBench();
-        if (config == null || !BURNER_BENCH_ID.equals(config.getId())) {
+        if (config == null) {
+            return;
+        }
+        // T58: the airship engine drives the glow of the firebox under it (no burning on the ground, hover and fuel are the burner's job).
+        boolean engine = AirshipEngines.TANK_BLOCK.equals(config.getId());
+        if (!engine && !BURNER_BENCH_ID.equals(config.getId())) {
             return;
         }
         BlockModule.BlockStateInfo info = chunk.getComponent(index, infoType);
@@ -77,6 +85,12 @@ public final class BurnerFlameSystem extends EntityTickingSystem<ChunkStore> {
             return;
         }
         lastCheck.put(key, now);
+        if (engine) {
+            boolean glow = BurnerFuel.hasFuel(bench);
+            Vector3i enginePos = new Vector3i(p);
+            world.execute(() -> AirshipEngines.setFireboxLit(world, enginePos, glow));
+            return;
+        }
         // First pass (block placed or chunk loaded): nothing burns.
         double dtSeconds = last == null ? 0 : Math.min((now - last) / 1000.0, MAX_BURN_DT_SECONDS);
         boolean lit = BurnerFuel.hasFuel(bench);

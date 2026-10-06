@@ -111,7 +111,12 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
         // prefab, and it is the one registered (the small balloon is registered as balloon_basic).
         Deployables.Kind kind = BalloonManager.get().balloonKindFor(prefabPath);
         if (kind == null) {
-            LOGGER.at(Level.WARNING).log("HotairBalloon_Deploy: prefab %s is not one of the balloon types, nothing placed", prefabPath);
+            // Airship prototype: the same crate interaction places the airship (its kind is registered as "airship").
+            Deployables.Kind other = Deployables.forPrefab(prefabPath);
+            kind = other != null && other.isAirship() ? other : null;
+        }
+        if (kind == null) {
+            LOGGER.at(Level.WARNING).log("HotairBalloon_Deploy: prefab %s is not one of the balloon types or the airship, nothing placed", prefabPath);
             return;
         }
         BalloonShape shape = kind.shapeOrNull();

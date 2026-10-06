@@ -4,7 +4,6 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.protocol.InteractionType;
-import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHandler;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInstantInteraction;
@@ -13,8 +12,9 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 /**
- * Interaction "HotairBalloon_Land": puts the balloon down (same effect as /orbishorizon balloon land).
- * No longer used by the assets (stopping is done by double jump), kept registered.
+ * Interaction "HotairBalloon_Land": the Use interaction of the chain helper entity in flight (BalloonLights.spawnChain, root
+ * Hotair_Balloon_Chain_Use). The acting entity is the player. If they pilot a balloon, it is put down in place (same rules as
+ * /orbishorizon balloon land). Anybody else is ignored.
  */
 public class LandBalloonInteraction extends SimpleInstantInteraction {
 
@@ -42,8 +42,7 @@ public class LandBalloonInteraction extends SimpleInstantInteraction {
             if (player == null) {
                 return;
             }
-            Message error = BalloonManager.get().land(store, player);
-            player.sendMessage(error != null ? error : Texts.t("landed"));
+            BalloonManager.get().chainLand(store, player);
         });
     }
 }

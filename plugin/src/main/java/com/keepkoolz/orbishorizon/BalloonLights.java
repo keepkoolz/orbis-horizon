@@ -66,6 +66,28 @@ final class BalloonLights {
     static final String KEY_BLOCK_PREFIX = "block:";
     /** Key reserved for the burner flame light (T35). */
     static final String KEY_BURNER = "burner";
+    /** Key of the airship's flickering firebox light (T58). */
+    static final String KEY_FIREBOX = "firebox";
+    /** Key of the chain helper entity (not a light, same UUID scheme so a resume finds an orphan). */
+    static final String KEY_CHAIN = "chain";
+    /** Root interaction of the chain helper's Use entry (type HotairBalloon_Land). */
+    static final String CHAIN_ROOT_INTERACTION = "Hotair_Balloon_Chain_Use";
+
+    /**
+     * Airship firebox light (T58): one hexadecimal digit per channel (0 to 15), radius 0 like the game's blocks. Hovering with fuel the
+     * embers glow dimly, from (8, 3, 1) to (11, 4, 1) ("#c62" is the block's own On light, (12, 6, 2)). While the engine burns (the
+     * ship travels horizontally) they run from (11, 4, 1) to (15, 7, 2). The flicker level (0 to 1) picks the point between the two.
+     */
+    private static final int[][] FIREBOX_HOVER = {{8, 3, 1}, {11, 4, 1}};
+    private static final int[][] FIREBOX_BURN = {{11, 4, 1}, {15, 7, 2}};
+
+    /** Colour of the firebox light for a flicker level (0 to 1), brighter when the engine burns. */
+    static ColorLight fireboxColor(boolean burning, double level) {
+        int[][] r = burning ? FIREBOX_BURN : FIREBOX_HOVER;
+        double t = Math.max(0, Math.min(1, level));
+        return new ColorLight((byte) 0, (byte) Math.round(r[0][0] + (r[1][0] - r[0][0]) * t),
+                (byte) Math.round(r[0][1] + (r[1][1] - r[0][1]) * t), (byte) Math.round(r[0][2] + (r[1][2] - r[0][2]) * t));
+    }
 
     /**
      * Colour of the lit burner flame (T35): "#dba" from the On state of Hotair_Balloon_Burner.json, like the
@@ -231,8 +253,41 @@ final class BalloonLights {
         }
     }
 
-    /** Puts the light entities back on their world point, to be called after each movement of the flying entity. */
+    /**
+     * Creates the interactable chain helper (AirshipLever.Helper) on the centre of the chain cell, mounted on the flying entity like
+     * the lights. In flight the chain is only part of the model: using this entity lands the balloon, as the airship lever does.
+     * Not affected by /orbishorizon balloon light. No effect if the prefab has no chain or the entity cannot be made (logged).
+     */
+    static void spawnChain(Store<EntityStore> store, BalloonFlight flight, BalloonShape s) {
+        if (flight.balloonRef == null || !flight.balloonRef.isValid() || flight.chain != null) {
+            return;
+        }
+        for (BalloonShape.Cell c : s.cells()) {
+            if (BalloonManager.CHAIN_BLOCK.equals(c.baseName())) {
+                Vector3f local = new Vector3f(c.x(), c.y() + 0.5f, c.z());
+                flight.chain = AirshipLever.spawn(store, uuidFor(flight.balloonUuid, KEY_CHAIN), CHAIN_ROOT_INTERACTION,
+                        flight.balloonRef, local, BalloonManager.attachOffset(flight.kind, local),
+                        BalloonManager.prefabPoint(flight.entityPos, flight.rotation, local));
+                return;
+            }
+        }
+    }
+
+    /** Removes the chain helper. Never throws. */
+    static void removeChain(Store<EntityStore> store, BalloonFlight flight) {
+        AirshipLever.remove(store, flight.chain);
+        flight.chain = null;
+    }
+
+    /** Puts the light entities (and the chain helper) back on their world point, to be called after each movement of the flying entity. */
     static void follow(Store<EntityStore> store, BalloonFlight flight) {
+        AirshipLever.Helper chain = flight.chain;
+        if (chain != null && chain.ref != null && chain.ref.isValid()) {
+            TransformComponent t = store.getComponent(chain.ref, TransformComponent.getComponentType());
+            if (t != null) {
+                t.setPosition(BalloonManager.prefabPoint(flight.entityPos, flight.rotation, chain.local));
+            }
+        }
         if (flight.lights.isEmpty()) {
             return;
         }
@@ -302,6 +357,8 @@ final class BalloonLights {
             keys.add(spec.key());
         }
         keys.add(KEY_BURNER);
+        keys.add(KEY_FIREBOX);
+        keys.add(KEY_CHAIN);
         for (String key : keys) {
             try {
                 Ref<EntityStore> ref = world.getEntityStore().getRefFromUUID(uuidFor(balloonUuid, key));

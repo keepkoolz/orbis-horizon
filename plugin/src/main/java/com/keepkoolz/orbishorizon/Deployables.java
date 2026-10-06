@@ -87,7 +87,24 @@ final class Deployables {
             "lock.tent.break", "lock.tent.place", null,
             new TentSpec("Camping_Tent_Big_Crate", "Camping_Tent_Big_Crate_Empty"));
 
-    private static final List<Kind> ALL = List.of(BALLOON, BALLOON_BASIC, TENT, TENT_BIG);
+    static final String AIRSHIP_KIND = "airship";
+
+    /**
+     * Airship prototype (The_Cloudwork). Prefab frame, before rotation. Same names as the other types: scripts/prefab_to_model.py
+     * parses AIRSHIP_PIVOT, AIRSHIP_PLACE_MIN and AIRSHIP_PLACE_MAX. The pivot is the cell where the pilot stands (the model's pivot, no stool), the
+     * forbidden placement volume is the whole box of the (recentred) prefab: nothing can be added to a deployed airship.
+     */
+    static final int[] AIRSHIP_PIVOT = {0, 8, -10};
+    static final int[] AIRSHIP_PLACE_MIN = {-5, 2, -15};
+    static final int[] AIRSHIP_PLACE_MAX = {5, 18, 15};
+
+    /** The airship prototype: marker = the lever block, no burner. Not a balloon (not in BALLOONS), not a tent. */
+    static final Kind AIRSHIP = new Kind(AIRSHIP_KIND, "The_Cloudwork.prefab.json", "Airship_Lever", false,
+            AIRSHIP_PLACE_MIN, AIRSHIP_PLACE_MAX,
+            "lock.airship.break", "lock.airship.place", null, null,
+            new AirshipSpec("Airship_Cloudwork", "Airship_Cloudwork_Idle", "Airship_Cloudwork_Off", "Airship_Cloudwork_Crate", AIRSHIP_PIVOT));
+
+    private static final List<Kind> ALL = List.of(BALLOON, BALLOON_BASIC, TENT, TENT_BIG, AIRSHIP);
 
     /** Tent types, in the order they are logged at startup. */
     static final List<Kind> TENTS = List.of(TENT, TENT_BIG);
@@ -144,6 +161,38 @@ final class Deployables {
         }
     }
 
+    /**
+     * Data specific to the airship type: flight models, crate item, pivot (the cell where the pilot stands, prefab frame).
+     * Three models share one blockymodel: modelId while the ship travels (burner flames with full smoke at their tips),
+     * idleModelId while it does not (half smoke at the burner mouths), offModelId when the engine is dry or nobody pilots.
+     */
+    static final class AirshipSpec {
+        final String modelId;
+        final String idleModelId;
+        final String offModelId;
+        final String crateItemId;
+        /** Model pivot = pilot's standing cell, prefab frame before rotation. Same as PIVOT in prefab_to_model.py. */
+        final Vector3f pivot;
+        /**
+         * Particle system of the idle smoke at the burner mouths (Metal_Iron_Pipe_Short cells), on the Exhaust_Left and
+         * Exhaust_Right nodes of the idle model: cancelled when the ship starts travelling, lands or is removed.
+         */
+        volatile String smokeSystemId = "Airship_Exhaust_Smoke";
+        /**
+         * Particle system of the horizontal burner flames (with the travel smoke at their tips), on the same nodes of the
+         * travelling model: cancelled when the ship stops travelling, lands or is removed.
+         */
+        volatile String flameSystemId = "Airship_Burner_Flame";
+
+        AirshipSpec(String modelId, String idleModelId, String offModelId, String crateItemId, int[] pivot) {
+            this.modelId = modelId;
+            this.idleModelId = idleModelId;
+            this.offModelId = offModelId;
+            this.crateItemId = crateItemId;
+            this.pivot = new Vector3f(pivot[0], pivot[1], pivot[2]);
+        }
+    }
+
     /** Data specific to a tent type: the full crate (held to deploy) and the empty crate (held to pack, left after deploying). */
     static final class TentSpec {
         final String fullCrateId;
@@ -171,6 +220,8 @@ final class Deployables {
         final BalloonSpec balloon;
         /** Tent data, null for a type that is not a tent. */
         final TentSpec tent;
+        /** Airship data, null for a type that is not the airship. */
+        final AirshipSpec airship;
         private volatile BalloonShape shape;
         private boolean warned;
 
@@ -186,6 +237,12 @@ final class Deployables {
 
         Kind(String id, String prefabPath, String anchorBlock, boolean requireBurner, int[] placeMin, int[] placeMax,
              String messageBreak, String messagePlace, BalloonSpec balloon, TentSpec tent) {
+            this(id, prefabPath, anchorBlock, requireBurner, placeMin, placeMax, messageBreak, messagePlace, balloon, tent, null);
+        }
+
+        Kind(String id, String prefabPath, String anchorBlock, boolean requireBurner, int[] placeMin, int[] placeMax,
+             String messageBreak, String messagePlace, BalloonSpec balloon, TentSpec tent, AirshipSpec airship) {
+            this.airship = airship;
             this.balloon = balloon;
             this.tent = tent;
             this.id = id;
@@ -204,6 +261,10 @@ final class Deployables {
 
         boolean isTent() {
             return tent != null;
+        }
+
+        boolean isAirship() {
+            return airship != null;
         }
 
         /** The shape, read on first call (the same instance afterwards). */

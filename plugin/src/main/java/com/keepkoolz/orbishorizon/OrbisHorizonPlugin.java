@@ -35,6 +35,11 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         getCodecRegistry(Interaction.CODEC)
                 .register(LandBalloonInteraction.TYPE_ID, LandBalloonInteraction.class, LandBalloonInteraction.CODEC);
         getEntityStoreRegistry().registerSystem(new BalloonFlightSystem());
+        getCodecRegistry(Interaction.CODEC)
+                .register(AirshipTakeOffInteraction.TYPE_ID, AirshipTakeOffInteraction.class, AirshipTakeOffInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
+                .register(AirshipLeverInteraction.TYPE_ID, AirshipLeverInteraction.class, AirshipLeverInteraction.CODEC);
+        registerAirshipSystems();
         try {
             // Burner flame on the ground according to the burner's fuel (T13). Needs the game's
             // crafting module (ProcessingBenchBlock), loaded before the mods (hypothesis: the game's
@@ -53,6 +58,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         // T19: resume files in the plugin data folder, landing on pilot disconnection and on
         // server shutdown, resume when worlds load.
         BalloonResume.init(getDataDirectory());
+        AirshipResume.init(getDataDirectory());
         // T27: registry of placed balloons and locking (breaking, break damage and block placement cancelled).
         BalloonRegistry.init(getDataDirectory());
         try {
@@ -70,13 +76,22 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         }
         // T21: a passenger who disconnects is dismounted cleanly (they would otherwise be saved in the air).
         getEventRegistry().register(PlayerDisconnectEvent.class,
-                event -> BalloonManager.get().onPlayerGone(event.getPlayerRef().getUuid()));
+                event -> {
+                    BalloonManager.get().onPlayerGone(event.getPlayerRef().getUuid());
+                    AirshipManager.get().onPlayerGone(event.getPlayerRef().getUuid());
+                });
         // T21: a passenger left in the air when a flight was resumed is put down on their next arrival.
         getEventRegistry().registerGlobal(AddPlayerToWorldEvent.class,
                 event -> BalloonManager.get().onPlayerAdded(event.getHolder(), event.getWorld()));
         // Before the players are disconnected (-48) and the worlds stopped (-32): the worlds are still running.
-        getEventRegistry().register((short) -50, ShutdownEvent.class, event -> BalloonManager.get().landAll());
-        getEventRegistry().registerGlobal(StartWorldEvent.class, event -> BalloonManager.get().recoverWorld(event.getWorld()));
+        getEventRegistry().register((short) -50, ShutdownEvent.class, event -> {
+            BalloonManager.get().landAll();
+            AirshipManager.get().landAll();
+        });
+        getEventRegistry().registerGlobal(StartWorldEvent.class, event -> {
+            BalloonManager.get().recoverWorld(event.getWorld());
+            AirshipManager.get().recoverWorld(event.getWorld());
+        });
         getCommandRegistry().registerCommand(new OrbisHorizonCommand());
         getLogger().at(Level.INFO).log("Orbis Horizon plugin: interaction %s, /orbishorizon balloon command and flight system registered",
                 DeployBalloonInteraction.TYPE_ID);
@@ -94,6 +109,13 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                         kind == Deployables.TENT ? "Tente" : "Grande tente", tent.cells().size(), anchor.x(), anchor.y(), anchor.z());
             }
         }
+        // Airship prototype: the shape is read once and the collision hull computed (logged by AirshipManager).
+        BalloonShape airship = Deployables.AIRSHIP.shapeOrNull();
+        if (airship != null) {
+            getLogger().at(Level.INFO).log("Dirigeable : %d case(s), repère « %s » en (%d, %d, %d)", airship.cells().size(),
+                    airship.anchor().baseName(), airship.anchor().x(), airship.anchor().y(), airship.anchor().z());
+            AirshipManager.get().warmUp(airship);
+        }
         // T54: balloon types, with their number of seats (limit of passengers).
         for (Deployables.Kind kind : Deployables.BALLOONS) {
             BalloonShape shape = kind.shapeOrNull();
@@ -104,11 +126,27 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         // Worlds already started when the plugin starts (StartWorldEvent has already passed).
         for (World world : Universe.get().getWorlds().values()) {
             BalloonManager.get().recoverWorld(world);
+            AirshipManager.get().recoverWorld(world);
         }
     }
 
     @Override
     protected void shutdown() {
         BalloonManager.get().landAll();
+        AirshipManager.get().landAll();
+    }
+
+    /** Airship: the head-yaw reader (before ProcessPlayerInput) and the flight tick. A failure is logged and the system is skipped. */
+    private void registerAirshipSystems() {
+        try {
+            getEntityStoreRegistry().registerSystem(new AirshipInputSystem());
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Dirigeable : lecteur d'entrées désactivé, le mode de cap « look » ne marchera pas");
+        }
+        try {
+            getEntityStoreRegistry().registerSystem(new AirshipFlightSystem());
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Dirigeable : tick de vol désactivé");
+        }
     }
 }
