@@ -28,9 +28,9 @@ final class StructureContents {
     private StructureContents() {
     }
 
-    static List<Found> takeAll(World world, BalloonShape shape, Vector3i origin, Rotation rotation) {
+    static List<Found> takeAll(World world, StructureShape shape, Vector3i origin, Rotation rotation) {
         List<Found> list = new ArrayList<>();
-        for (BalloonShape.Cell c : shape.cells()) {
+        for (StructureShape.Cell c : shape.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             // Processing bench: inputs, fuel (taken by BurnerFuel.takeFrom), outputs and extra outputs.
             // BurnerFuel.takeFrom also resets the burn time in progress (reflection).

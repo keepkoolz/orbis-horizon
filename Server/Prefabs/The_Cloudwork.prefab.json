@@ -4702,13 +4702,6 @@
     },
     {
       "x": -1,
-      "y": 8,
-      "z": -10,
-      "name": "Airship_Lever",
-      "rotation": 2
-    },
-    {
-      "x": -1,
       "y": 5,
       "z": -9,
       "name": "Wood_Softwood_Planks"
@@ -5656,7 +5649,7 @@
       "x": -1,
       "y": 8,
       "z": 7,
-      "name": "Deco_Inkwell"
+      "name": "Airship_Inkwell"
     },
     {
       "x": -1,
@@ -6126,7 +6119,7 @@
       "x": 0,
       "y": 9,
       "z": -11,
-      "name": "Furniture_Crude_Window"
+      "name": "Airship_Helm"
     },
     {
       "x": 0,
@@ -7226,14 +7219,14 @@
       "x": 0,
       "y": 8,
       "z": 9,
-      "name": "Furniture_Village_Chair",
+      "name": "Airship_Chair",
       "rotation": 2
     },
     {
       "x": 0,
       "y": 9,
       "z": 9,
-      "name": "Furniture_Village_Chair",
+      "name": "Airship_Chair",
       "filler": 1024,
       "rotation": 2
     },
@@ -11298,7 +11291,7 @@
     {
       "x": 3,
       "y": 8,
-      "z": 4,
+      "z": 8,
       "name": "Bench_WorkBench",
       "filler": 992,
       "rotation": 3
@@ -11382,7 +11375,7 @@
     {
       "x": 3,
       "y": 8,
-      "z": 5,
+      "z": 9,
       "name": "Bench_WorkBench",
       "components": {
         "Components": {
@@ -11473,7 +11466,7 @@
     {
       "x": 3,
       "y": 8,
-      "z": 6,
+      "z": 4,
       "name": "Bench_Weapon",
       "filler": 992,
       "rotation": 3
@@ -11481,7 +11474,7 @@
     {
       "x": 3,
       "y": 9,
-      "z": 6,
+      "z": 4,
       "name": "Bench_Weapon",
       "filler": 2016,
       "rotation": 3
@@ -11559,7 +11552,7 @@
     {
       "x": 3,
       "y": 8,
-      "z": 7,
+      "z": 5,
       "name": "Bench_Weapon",
       "components": {
         "Components": {
@@ -11574,7 +11567,7 @@
     {
       "x": 3,
       "y": 9,
-      "z": 7,
+      "z": 5,
       "name": "Bench_Weapon",
       "filler": 1024,
       "rotation": 3
@@ -11646,7 +11639,7 @@
     {
       "x": 3,
       "y": 8,
-      "z": 8,
+      "z": 6,
       "name": "Bench_Armour",
       "filler": 992,
       "rotation": 3
@@ -11654,7 +11647,7 @@
     {
       "x": 3,
       "y": 9,
-      "z": 8,
+      "z": 6,
       "name": "Bench_Armour",
       "filler": 2016,
       "rotation": 3
@@ -11720,7 +11713,7 @@
     {
       "x": 3,
       "y": 8,
-      "z": 9,
+      "z": 7,
       "name": "Bench_Armour",
       "components": {
         "Components": {
@@ -11735,7 +11728,7 @@
     {
       "x": 3,
       "y": 9,
-      "z": 9,
+      "z": 7,
       "name": "Bench_Armour",
       "filler": 1024,
       "rotation": 3
@@ -13511,49 +13504,49 @@
       "x": 1,
       "y": 4,
       "z": -1,
-      "name": "Furniture_Crude_Stool",
+      "name": "Airship_Stool",
       "rotation": 1
     },
     {
       "x": 1,
       "y": 4,
       "z": 1,
-      "name": "Furniture_Crude_Stool",
+      "name": "Airship_Stool",
       "rotation": 1
     },
     {
       "x": 1,
       "y": 4,
       "z": 5,
-      "name": "Furniture_Crude_Stool",
+      "name": "Airship_Stool",
       "rotation": 1
     },
     {
       "x": 2,
       "y": 8,
-      "z": 5,
-      "name": "Furniture_Crude_Stool",
+      "z": 9,
+      "name": "Airship_Stool",
       "rotation": 1
     },
     {
       "x": -2,
       "y": 8,
       "z": 4,
-      "name": "Furniture_Crude_Stool",
+      "name": "Airship_Stool",
       "rotation": 1
     },
     {
       "x": -4,
       "y": 7,
       "z": -2,
-      "name": "Furniture_Crude_Stool",
+      "name": "Airship_Stool",
       "rotation": 1
     },
     {
       "x": 4,
       "y": 7,
       "z": -2,
-      "name": "Furniture_Crude_Stool",
+      "name": "Airship_Stool",
       "rotation": 3
     },
     {
@@ -27908,6 +27901,20 @@
       "x": 0,
       "y": 8,
       "z": -15,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 3,
+      "y": 9,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 3,
+      "y": 9,
+      "z": 5,
       "name": "Empty",
       "level": 0
     }

@@ -30,6 +30,14 @@ final class BalloonFlight {
     /** Balloon type of this flight (T54): prefab, pivot, gondola, model and crate. Always a balloon kind. */
     final Deployables.Kind kind;
     Ref<EntityStore> balloonRef;
+    /**
+     * T82: observer entity (same model as balloonRef, never mounted, position written by the server every tick). With dual rendering,
+     * balloonRef (mounted on the pilot) is seen by the pilot only and this one by everybody else. Null in single rendering and
+     * whenever the flight has no pilot on board (one entity, seen by everybody).
+     */
+    volatile Ref<EntityStore> observerRef;
+    /** T82: dual rendering is active for this flight (set at take-off, cleared when the flight collapses to a single entity). */
+    volatile boolean dual;
     /** Entity position (centre of the prefab origin block, at the prefab ground level). */
     final Vector3d entityPos = new Vector3d();
     /** Pilot position minus entity position, fixed at take-off. */
@@ -48,6 +56,8 @@ final class BalloonFlight {
     volatile boolean attached;
     /** Last collision message sent to the pilot. */
     volatile long lastCollisionMsgMs;
+    /** T76: last "height limit reached" message sent to the pilot. */
+    volatile long lastHeightMsgMs;
     /** Model used at take-off (the unlit model is this name followed by BalloonManager.UNLIT_MODEL_SUFFIX). */
     String modelId;
     /** Burner contents during the flight (fuel, output, burn in progress). */
@@ -96,7 +106,15 @@ final class BalloonFlight {
      * server teleports them to their seat on every drift, in forced flight at zero speed (jerks possible).
      * Adjustable with /orbishorizon balloon passengers.
      */
-    enum PassengerMode { MOUNT, TELEPORT }
+    enum PassengerMode {
+        /**
+         * T82 default: forced flight at zero flight speed and a ChangeVelocity (Set) sent every tick (seat velocity plus a correction toward the
+         * seat), like the airship passengers (T64, validated in game). No mount: a player mounted on an entity drives it on their own client.
+         */
+        FOLLOW,
+        MOUNT,
+        TELEPORT
+    }
 
     /**
      * Seated pose of a passenger in flight (T25). No server data alone chooses the pose on the
@@ -189,7 +207,7 @@ final class BalloonFlight {
         final Ref<EntityStore> ref;
         final UUID uuid;
         final String name;
-        /** Seat number (0 to 3), in the order of BalloonShape.seats(). */
+        /** Seat number (0 to 3), in the order of StructureShape.seats(). */
         final int seat;
         /** Stool cell, prefab frame. */
         final Vector3i seatBlock;
@@ -215,6 +233,12 @@ final class BalloonFlight {
         boolean poseStatesOn;
         /** A pose error has already been logged for this passenger. */
         boolean poseFailed;
+        /** FOLLOW mode (T82): seat point at the previous update (for the seat velocity), its time, and a non-zero velocity was sent. */
+        Vector3d lastSeat;
+        long lastSeatMs;
+        boolean velActive;
+        /** FOLLOW mode: no action until this time (after a correction teleport the reported position is stale). */
+        long pauseUntilMs;
 
         Passenger(Ref<EntityStore> ref, UUID uuid, String name, int seat, Vector3i seatBlock, Vector3f seatLocal,
                   boolean shared, PassengerMode mode, Pose pose) {
@@ -233,10 +257,16 @@ final class BalloonFlight {
     /** Seated passengers (T21). Empty for a flight without passengers. */
     final List<Passenger> passengers = new CopyOnWriteArrayList<>();
 
+    /**
+     * Animals captured in the cage of a transport balloon (T74), taken from the registry entry at take-off. They are teleported to their place
+     * every tick (CageAnimals.follow), put back in the cage at landing, and written in the resume file. Empty for the other balloons.
+     */
+    final List<CageAnimals.Animal> animals = new CopyOnWriteArrayList<>();
+
     /** Lights attached to the flying entity (T34: yellow crystals, T35: burner flame). See BalloonLights. */
     final List<BalloonLights.Light> lights = new CopyOnWriteArrayList<>();
-    /** Interactable helper on the chain cell: using it in flight lands the balloon, like the airship lever. See BalloonLights.spawnChain. */
-    volatile AirshipLever.Helper chain;
+    /** Interactable helper on the chain cell: using it in flight lands the balloon, like the airship helm. See BalloonLights.spawnChain. */
+    volatile AirshipHelm.Helper chain;
 
 
     BalloonFlight(UUID pilotUuid, Ref<EntityStore> pilotRef, World world, Rotation rotation, Deployables.Kind kind) {

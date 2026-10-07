@@ -1,5 +1,62 @@
 # Changelog
 
+## v1.4
+
+This release is mostly about player feedback. After the airship came out, players sent us what bothered them: vehicles that looked strange to other players, balloons that kept climbing past the top of the world, a game mode switch that trapped the pilot, a bed in the Small Tent that put you outside, ladders you climbed by accident, invisible walls and flickering in the airship cabin. We took each report one at a time, fixed it, tried it in game, and kept only what actually worked. Some ideas were tried and taken back out, and they are listed at the end.
+
+### Breaking changes from v1.3
+
+- Airships placed with v1.3 are no longer recognised, because their lever block no longer exists. They cannot take off any more and are no longer locked. Empty the chests and workbenches, break the ship by hand and place a new one from a crate. A lever left in an inventory becomes an unknown item.
+- An airship that was in flight when you updated is set down with the new layout of v1.4, so you do not lose it.
+- Large Tents set up with v1.3 keep their climbable ladders and the cloth on the floor until you pack them and set them up again. When packed, that floor cloth may stay on the ground and has to be broken by hand.
+- Several recipes changed: the large balloon crate needs the new large balloon burner, the tent crates need medium hide, the airship fuel tank needs heavy leather, and the burner, the airship engine, the burner outlet and the crates of the flying vehicles cost more. Crates and parts already crafted are not affected.
+- For operators: the airship setting `tune leverIntangible` is now `tune helmIntangible`.
+
+### Fixes from player feedback
+
+- Changing game mode (creative and survival) while piloting or riding a balloon or the airship no longer traps you. You leave the vehicle, which is set down where it is or comes down by itself, and your movement is the one of your new mode.
+- Balloons and the airship stop at the height limit of the world, with a message. A crate that would place something above the limit is refused and stays in your inventory.
+- Other players now see a flying balloon or airship properly, with its flames, lights and sound. Only the pilot can pull the chain or the helm in flight.
+- Passengers of the large balloon now stay on their seat the same way as on the airship.
+- Pulling the take-off chain now always takes off the balloon it belongs to, even with another balloon parked nearby.
+- In the Small Tent, getting up from the bed or waking up puts you just outside the entrance, facing away from the tent. If your respawn point is the bed, you respawn there too. Tents already set up benefit from it.
+- The ladders at the entrance of the Large Tent are decoration only. You can no longer climb them by mistake.
+- The Large Tent no longer has an orange cloth lying on the floor between the beds.
+- In the airship, the inkwell, the chair and the stools of the cabin no longer block you. You can still sit on them.
+- The anvil, the armour bench and the basic workbench of the upper deck are rearranged so they no longer overlap and flicker. The stool moved in front of the workbench.
+- The airship turns more smoothly, with a gentler start and stop.
+
+### Cloudwork airship
+
+- The lever is gone. You take off and land with the helm, the window at the bow in front of the pilot spot.
+- The airship turns toward the direction you fly, and at rest toward where you look.
+- A workbench level kept during the flight is only given back to a workbench of the same type.
+
+### Animal transport balloon
+
+- New balloon as large as the large one, with a green and white envelope, for a pilot and one passenger, with an iron cage hanging under the basket. It is placed, takes off, flies and lands like the other balloons.
+- While the balloon hovers, the cage lever lowers the cage on its chain, up to 20 blocks, and raises it again. Pull it during the move to stop the cage. The gate lever opens and closes the front of the cage, once the cage rests on the ground. Take-off is refused while the cage is lowered or open.
+- Closing the gate with passive animals inside (cows, sheep, pigs, chickens, turkeys, goats, horses, rabbits, deer and their young, wild or tamed, up to 3) catches them. They stay visible and protected in the cage, follow it up and down, fly with the balloon and are still there after landing or a restart. Opening the gate releases them.
+- Lure an animal by dropping its favourite food in the cage: lettuce for cows and sheep, carrots for rabbits and horses, corn for chickens, apples for goats.
+
+### Hot air balloons
+
+- The large balloon has its own burner ("Large hot air balloon burner"), which its crate now needs instead of the shared burner. Balloons already placed are not affected.
+
+### Recipes
+
+- More wool in the crates of the four flying vehicles, in line with their size: large balloon 300 red and 250 white, small balloon 37 white and 25 blue, animal transport balloon 300 green and 250 white, airship 750 white.
+- The animal transport balloon crate is crafted at a tier 2 basic workbench from a large balloon burner, a chain, 250 white wool, 300 green wool, 24 hardwood planks and 30 iron bars. It needs a clear space of 23 x 41 x 23 blocks.
+- The large balloon burner is crafted at a tier 2 basic workbench from 12 iron bars, 6 cobalt bars, 4 thorium bars and 4 fire essences.
+- Rebalanced. The burner costs 36 iron bars, 18 copper bars and 12 charcoal. The airship burner outlet costs 36 iron bars, 18 cobalt bars, 12 thorium bars and 12 fire essences. The airship engine costs 72 iron bars, 36 thorium bars, 40 adamantite bars, 60 charcoal and 30 fire essences. The airship fuel tank needs 6 heavy leather instead of medium leather. Both tent crates need medium hide instead of light hide (10 for the Small Tent, 20 for the Large Tent).
+
+### What we could not do, and why
+
+- A camera pulled back during flight. We tried a far view forced by the server, then a view you could switch to first person, then a zoom with the mouse wheel. The game does not tell the server which view you use and does not send the mouse wheel, so none of these could be made comfortable. The far view also made it hard to reach the chain and the helm. We removed it: you fly with the normal game view.
+- Turning the airship with the side movement keys. The game does not send key presses to the server, so the key could only be guessed from how the pilot moved. In practice it turned your character's view before the ship. We went back to turning toward where you fly or look.
+- A wider hatch with a ladder down to the lower deck of the airship. It turned out unusable, so the original hatch is back until we find a better design.
+- A taller interior for the Small Tent, so you could stand up next to the bed. Moving you outside the entrance when you get up solves the same problem without changing the tent.
+
 ## v1.3
 
 ### Cloudwork airship
@@ -25,7 +82,7 @@
 
 ### Hot air balloons
 
-- New small hot air balloon for one person. It has its own crate ("Small hot air balloon crate"), crafted at the basic workbench (tier 2, Tinkering tab) from a burner, a chain, 16 white wool, 12 blue wool and 6 hardwood planks. It flies, refuels, hovers and lands like the large balloon, but has no seats and no chests.
+- New small hot air balloon for one person. It has its own crate ("Small hot air balloon crate"), crafted at the basic workbench (tier 2, Tinkering tab) from a burner, a chain, 37 white wool, 25 blue wool and 6 hardwood planks. It flies, refuels, hovers and lands like the large balloon, but has no seats and no chests.
 - The flame and the flamethrower jet of the small balloon are half the size of the large one and stay straight inside the envelope when you move.
 - A balloon now carries as many people as it has seats, plus the pilot: 5 for the large balloon, 1 for the small one. If too many players are in the basket, take-off is refused and the message tells you how many must get off.
 - `/orbishorizon balloon despawn` gives back the crate of the balloon it removed (small or large).

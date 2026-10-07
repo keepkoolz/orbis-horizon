@@ -15,6 +15,8 @@ import com.hypixel.hytale.protocol.BlockMaterial;
 import com.hypixel.hytale.protocol.ChangeVelocityType;
 import com.hypixel.hytale.protocol.ColorLight;
 import com.hypixel.hytale.protocol.FlyMode;
+import com.hypixel.hytale.protocol.GameMode;
+import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.protocol.MountController;
 import com.hypixel.hytale.protocol.Position;
 import com.hypixel.hytale.protocol.packets.entities.ChangeVelocity;
@@ -60,14 +62,14 @@ import java.util.logging.Level;
  * Airship prototype (The_Cloudwork): take-off, flight on the balloon model, landing with alignment, edge cases.
  *
  * Flight model of the balloon (validated in game), plus a free heading:
- * - the pilot flies freely (forced fly mode, flight speeds halved, lever or land command to stop) and the ship entity is mounted ON the
+ * - the pilot flies freely (forced fly mode, flight speeds halved, helm or land command to stop) and the ship entity is mounted ON the
  *   pilot (MountedComponent, Minecart controller, offset 0, pivot under the pilot). The pilot is not mounted and not seated.
  *   (Test of 5 October 2026: a rider mounted on the entity has his own client drive it like a minecart, so that was dropped.)
  * - every tick the ship takes the pilot's position. Collisions are tested for any angle against the "hull" cells of the prefab;
  *   on a collision the pilot is teleported back to the last valid position, like the balloon.
  * - the heading theta (server side) eases toward the direction the pilot travels, or toward his head yaw, with a limited turn
  *   rate. A new heading that would collide is refused.
- * - stopping (lever, command) aligns the ship to the nearest quarter turn and cell, then pastes the prefab again.
+ * - stopping (helm, command) aligns the ship to the nearest quarter turn and cell, then pastes the prefab again.
  *
  * Maths: AirshipMath (same convention as Rotation.rotateYaw, verified offline). Every method here that changes
  * components runs on the world thread (take-off by interaction or command, tick, events through runOnWorld).
@@ -103,6 +105,18 @@ final class AirshipManager {
     /** Factor applied to the pilot's flight speeds at the next take-off (the balloon uses 0.5). */
     volatile float flySpeedFactor = 0.5f;
     volatile Steer steer = Steer.TRAVEL;
+    /**
+     * T85 smoothness. yawJerk (deg/s3, 0 = off: linear rate ramp as before T85) limits the change of the yaw acceleration, so the turn
+     * starts and stops with rounded corners. retrySmaller: a heading step refused by the hull test is retried at half and a quarter
+     * (the rate is scaled down) before falling back to "keep the old heading, rate 0". thrustModels: 2 = all burner models, 1 = turns use
+     * the FORWARD model (no LEFT/RIGHT swaps), 0 = never swap the model in flight. swapMinMs: minimum time between two model swaps.
+     * observerSmoothMs: time constant of the observer entity position smoothing (0 = raw copy).
+     */
+    volatile double yawJerkDeg = 60;
+    volatile boolean retrySmaller = true;
+    volatile int thrustModels = 2;
+    volatile long swapMinMs = 800;
+    volatile double observerSmoothMs = 60;
     /** How the pilot is moved along the arc when the ship turns around its rotation centre. */
     enum Carry {
         /** The server sends the pilot a ChangeVelocity (Set) with the arc velocity every tick while turning (default). */
@@ -114,8 +128,8 @@ final class AirshipManager {
     }
 
     volatile Carry carry = Carry.VELOCITY;
-    /** Z (prefab frame, x = 0) of the rotation centre C: -15 is the bow, 15 the stern. 7 = start of the rear quarter, 0 = middle. */
-    volatile double rotationCenterZ = 7;
+    /** Z (prefab frame, x = 0) of the rotation centre C: -15 is the bow, 15 the stern. 0 = middle (default), 7 = start of the rear quarter. */
+    volatile double rotationCenterZ = 0;
     /** Velocity carry: factor on the velocity sent (in case the client applies it more or less strongly). */
     volatile double carryGain = 1.0;
     /** Teleport carry: smallest displacement (blocks) that triggers a teleport. */
@@ -128,6 +142,19 @@ final class AirshipManager {
      */
     volatile double fuelFactor = 2;
     volatile double fuelMoveMin = 0.5;
+    /** Turning also burns fuel: mean absolute turn rate (deg/s) over a sample window above which the ship counts as burning. */
+    volatile double turnFuelMinDeg = 0.2;
+    /**
+     * Rest turn (Steer.TRAVEL): while the pilot is not travelling the ship turns toward his head yaw. Starts after the head stayed
+     * more than restDeadZoneDeg away from the heading for restHoldMs, stops when within restStopDeg.
+     */
+    volatile boolean restTurn = true;
+    volatile double restDeadZoneDeg = 25;
+    volatile long restHoldMs = 500;
+    volatile double restStopDeg = 3;
+    /** Thrust state thresholds on the yaw rate (deg/s): a turn state is entered at or above ON and left below OFF. */
+    private static final double TURN_FLAME_ON_DEG = 2;
+    private static final double TURN_FLAME_OFF_DEG = 1;
     /** Travel time left (s) at which the low and critical fuel messages are sent. */
     private static final double FUEL_LOW_S = 30;
     private static final double FUEL_CRITICAL_S = 10;
@@ -165,7 +192,7 @@ final class AirshipManager {
     private final Map<UUID, AirshipFlight> flights = new ConcurrentHashMap<>();
     private final Set<UUID> recovering = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Watch> watches = new ConcurrentHashMap<>();
-    private final Map<BalloonShape, Hull> hulls = new ConcurrentHashMap<>();
+    private final Map<StructureShape, Hull> hulls = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> particleIdsByBlock = new ConcurrentHashMap<>();
     /** Passengers seated on the ship's stools (T64). */
     final AirshipPassengers passengers = new AirshipPassengers(this);
@@ -181,6 +208,11 @@ final class AirshipManager {
 
     boolean isFlying(UUID pilot) {
         return flights.containsKey(pilot);
+    }
+
+    /** The flights in progress. */
+    Iterable<AirshipFlight> flights() {
+        return flights.values();
     }
 
     boolean needsInput() {
@@ -221,12 +253,12 @@ final class AirshipManager {
      * only face a closed interior (cabins) are left out: they cannot touch the scenery before the outer shell does, and the
      * test is paid every tick. Positions are relative to the pivot.
      */
-    private Hull hullOf(BalloonShape s) {
+    private Hull hullOf(StructureShape s) {
         return hulls.computeIfAbsent(s, shape -> {
             Vector3f pv = pivot();
             int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
             int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
-            for (BalloonShape.Cell c : shape.cells()) {
+            for (StructureShape.Cell c : shape.cells()) {
                 minX = Math.min(minX, c.x());
                 minY = Math.min(minY, c.y());
                 minZ = Math.min(minZ, c.z());
@@ -257,8 +289,8 @@ final class AirshipManager {
                     queue.add(new int[]{x, y, z});
                 }
             }
-            List<BalloonShape.Cell> hull = new ArrayList<>();
-            for (BalloonShape.Cell c : shape.cells()) {
+            List<StructureShape.Cell> hull = new ArrayList<>();
+            for (StructureShape.Cell c : shape.cells()) {
                 int x = c.x() - ox, y = c.y() - oy, z = c.z() - oz;
                 for (int[] d : dirs) {
                     int nx = x + d[0], ny = y + d[1], nz = z + d[2];
@@ -322,6 +354,17 @@ final class AirshipManager {
         return count;
     }
 
+    /** T76: true if a hull cell of a pose at this height reaches outside the world's height range (samples of testPoint). */
+    private static boolean heightExceeded(Hull h, double py) {
+        for (int k = 0; k < h.size(); k++) {
+            double ccy = py + 0.5 + h.dy[k];
+            if (BalloonManager.outOfHeight((int) Math.floor(ccy + HALF)) || BalloonManager.outOfHeight((int) Math.floor(ccy - HALF))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean testPoint(World world, LongOpenHashSet seen, double x, double y, double z) {
         int bx = (int) Math.floor(x);
         int by = (int) Math.floor(y);
@@ -334,7 +377,7 @@ final class AirshipManager {
     }
 
     /** Computes the collision hull of the shape now (logged), instead of at the first take-off. */
-    void warmUp(BalloonShape s) {
+    void warmUp(StructureShape s) {
         hullOf(s);
     }
 
@@ -346,7 +389,7 @@ final class AirshipManager {
             return Texts.t("airship.error.alreadyPiloting");
         }
         Deployables.Kind kind = Deployables.AIRSHIP;
-        BalloonShape s;
+        StructureShape s;
         try {
             s = kind.shape();
         } catch (IOException e) {
@@ -363,13 +406,14 @@ final class AirshipManager {
         }
         Vector3i origin = found.origin();
         Rotation rotation = found.rotation();
-        for (String id : new String[]{spec().modelId, spec().idleModelId, spec().offModelId}) {
+        for (String id : new String[]{spec().modelId, spec().idleModelId, spec().offModelId, spec().turnLeftModelId,
+                spec().turnRightModelId}) {
             if (ModelAsset.getAssetMap().getAsset(id) == null) {
                 return Texts.t("airship.error.modelMissing").param("model", id);
             }
         }
         // Processing benches (tannery...) other than the engines must be empty: their contents are not carried (prototype rule).
-        for (BalloonShape.Cell c : s.cells()) {
+        for (StructureShape.Cell c : s.cells()) {
             if (AirshipEngines.isEngineCell(c)) {
                 continue; // T57: the engines carry their contents (fuel, charcoal) through the flight
             }
@@ -397,14 +441,14 @@ final class AirshipManager {
     }
 
     /** True if the world point is inside the box of the prefab placed at this origin and rotation. */
-    static boolean insideShape(BalloonShape s, Vector3i origin, Rotation rotation, Vector3d p) {
+    static boolean insideShape(StructureShape s, Vector3i origin, Rotation rotation, Vector3d p) {
         Vector3d local = AirshipMath.rotateY(p.x - origin.x - 0.5, p.y - origin.y, p.z - origin.z - 0.5,
                 -rotation.getRadians(), new Vector3d());
         // The cell (x, y, z) covers x - 0.5 .. x + 0.5 horizontally around its centre (centres at origin + R c + 0.5).
         return s.inBounds((int) Math.round(local.x), (int) Math.floor(local.y), (int) Math.round(local.z));
     }
 
-    private Message launch(Store<EntityStore> store, World world, BalloonShape s, Vector3i origin, Rotation rotation,
+    private Message launch(Store<EntityStore> store, World world, StructureShape s, Vector3i origin, Rotation rotation,
                            Ref<EntityStore> pilotRef, PlayerRef player, List<AirshipPassengers.Rider> riders) {
         Deployables.Kind kind = Deployables.AIRSHIP;
         Deployables.AirshipSpec spec = spec();
@@ -468,11 +512,20 @@ final class AirshipManager {
         Rotation3f look = new Rotation3f(pilotTransform.getRotation());
         store.putComponent(pilotRef, Teleport.getComponentType(), Teleport.createForPlayer(new Vector3d(f.pos), look));
         attachShip(store, f);
+        // T82: dual rendering. The ship entity mounted on the pilot is seen by the pilot only, an observer entity (same model, never
+        // mounted, moved by the server every tick) by everybody else.
+        if (renderDual && ViewFilter.available()) {
+            Ref<EntityStore> observer = VehicleView.spawnObserver(store, ship, f.shipUuid, f.pilotUuid, spec.idleModelId);
+            if (observer != null) {
+                f.observerRef = observer;
+                f.dual = true;
+            }
+        }
         long now = System.currentTimeMillis();
         f.teleportUntilMs = now + BalloonManager.COLLISION_PAUSE_MS;
         f.takeoffMs = now;
         spawnLights(store, f, s);
-        spawnLever(store, f, s);
+        spawnHelm(store, f, s);
         passengers.board(store, f);
         flights.put(f.id, f);
         f.lastResumeMs = f.lastTickMs;
@@ -490,6 +543,48 @@ final class AirshipManager {
                 player.getUsername(), origin, rotation, removed, f.cargo.itemCount(), f.engines.entryCount(), f.engines.itemCount(),
                 f.engines.remainingSeconds(), f.benches.describe(), f.riders.size());
         return null;
+    }
+
+    /** T82: dual rendering (pilot entity for the pilot, observer entity for the others) or the single entity of before. Next take-off. */
+    volatile boolean renderDual = true;
+
+    /**
+     * T82: the ship has no pilot on board any more (dead, gone, left through a game mode change): one entity seen by everybody is enough.
+     * The observer entity and the twin lights are removed, the ship entity, its lights and the helm helper become visible to everybody.
+     * The landing alignment with a pilot keeps both entities (the pilot is still aboard). No effect in single rendering.
+     */
+    void collapseView(Store<EntityStore> store, AirshipFlight f) {
+        if (!f.dual) {
+            return;
+        }
+        f.dual = false;
+        Ref<EntityStore> observer = f.observerRef;
+        f.observerRef = null;
+        VehicleView.removeObserver(store, observer);
+        if (f.shipRef != null) {
+            ViewFilter.clear(f.shipRef);
+        }
+        for (BalloonLights.Light l : f.lights) {
+            BalloonLights.dropTwin(store, l);
+        }
+        if (f.helm != null) {
+            ViewFilter.clear(f.helm.ref);
+        }
+        LOGGER.at(Level.INFO).log("Dirigeable de %s : affichage double terminé, une seule entité visible de tous", f.pilotName);
+    }
+
+    /** T82: removes the ship entity and its observer entity (and their visibility rules). Never throws. */
+    private void removeShipEntities(Store<EntityStore> store, AirshipFlight f) {
+        Ref<EntityStore> observer = f.observerRef;
+        f.observerRef = null;
+        f.dual = false;
+        VehicleView.removeObserver(store, observer);
+        if (f.shipRef != null) {
+            ViewFilter.clear(f.shipRef);
+            if (f.shipRef.isValid()) {
+                store.removeEntity(f.shipRef, RemoveReason.REMOVE);
+            }
+        }
     }
 
     /** Mounts the ship entity on the pilot with a zero offset (the balloon's attach mode: the client glues it to the pilot). */
@@ -561,7 +656,8 @@ final class AirshipManager {
 
     /**
      * Burns the engines' fuel for one travel sample (T57). Called with the sample length and the measured travel speed (carry
-     * excluded). Nothing burns while hovering, climbing or descending (speed under fuelMoveMin). Warns at 30 s and 10 s of travel
+     * excluded). Burns when travelling (speed above fuelMoveMin) or turning (mean turn rate above turnFuelMinDeg), nothing while
+     * hovering, climbing or descending. Warns at 30 s and 10 s of travel
      * left, and goes dry when the fuel runs out.
      */
     private void burnFuel(Store<EntityStore> store, AirshipFlight f, double seconds) {
@@ -570,9 +666,12 @@ final class AirshipManager {
             return;
         }
         boolean moving = f.travelSpeed > fuelMoveMin;
-        f.burning = moving;
-        updateThrust(store, f, moving);
-        if (!moving) {
+        double turnRateDeg = Math.toDegrees(f.windowTurn) / Math.max(seconds, 1e-3);
+        f.moving = moving;
+        // Turning needs thrust too: the mean turn rate over the window counts like travelling.
+        boolean burns = moving || turnRateDeg > turnFuelMinDeg;
+        f.burning = burns;
+        if (!burns) {
             return;
         }
         double unburned = f.engines.burn(seconds * fuelFactor);
@@ -596,47 +695,113 @@ final class AirshipManager {
     }
 
     /**
-     * Burner flames follow the fuel use: the travelling model (horizontal flames, full smoke at their tips) as soon as a travel
-     * sample burns fuel, the idle model (half smoke at the burner mouths) once no sample has burned for THRUST_HOLD_MS.
+     * Burner state machine, evaluated every tick while fuelled and lit. Wanted state: LEFT or RIGHT while the yaw rate (with
+     * hysteresis, on at 2 deg/s, off below 1 deg/s) says the ship turns (yaw rate above 0 = bow toward -x = the pilot's left),
+     * else FORWARD while the last travel sample burned fuel, else IDLE. Turning has priority over FORWARD. Leaving IDLE or entering
+     * a turn is immediate, any other change waits until the wanted state has been stable for THRUST_HOLD_MS (no flicker).
      */
-    private void updateThrust(Store<EntityStore> store, AirshipFlight f, boolean moving) {
-        long now = System.currentTimeMillis();
-        if (moving) {
-            f.thrustLastMs = now;
-            if (!f.thrust) {
-                setThrust(store, f, true);
+    private void updateThrust(Store<EntityStore> store, AirshipFlight f, long now) {
+        if (f.off || f.dry || f.engines == null || f.landing) {
+            return;
+        }
+        double rate = Math.toDegrees(f.yawRate);
+        if (Math.abs(rate) >= TURN_FLAME_ON_DEG) {
+            if (f.turnDir == 0) {
+                // A new turn starts: per-turn diagnostics restart.
+                f.turnRefused = f.refusedHeadings;
+                f.turnPartial = f.partialSteps;
+                f.turnSwaps = f.modelSwaps;
+                f.turnBaseCollisions = f.collisionCount;
+                f.turnBaseCarryTp = f.carryTeleports;
+                f.turnTicks = 0;
+                f.turnYawSends = 0;
+                f.turnMaxStepDeg = 0;
+                f.turnDtMin = Double.MAX_VALUE;
+                f.turnDtMax = 0;
+                f.turnDtSum = 0;
+                f.turnDtN = 0;
             }
-        } else if (f.thrust && now - f.thrustLastMs >= THRUST_HOLD_MS) {
-            setThrust(store, f, false);
+            f.turnDir = rate > 0 ? 1 : -1;
+        } else if (Math.abs(rate) < TURN_FLAME_OFF_DEG) {
+            f.turnDir = 0;
+        }
+        AirshipFlight.Thrust wanted = f.turnDir > 0 ? AirshipFlight.Thrust.LEFT : f.turnDir < 0 ? AirshipFlight.Thrust.RIGHT
+                : f.moving ? AirshipFlight.Thrust.FORWARD : AirshipFlight.Thrust.IDLE;
+        if (thrustModels == 0) {
+            wanted = f.thrust; // diagnostic: never swap the model in flight
+        } else if (thrustModels == 1 && (wanted == AirshipFlight.Thrust.LEFT || wanted == AirshipFlight.Thrust.RIGHT)) {
+            wanted = AirshipFlight.Thrust.FORWARD; // turns keep the forward flames
+        }
+        if (wanted != f.thrustWanted) {
+            f.thrustWanted = wanted;
+            f.thrustWantedSinceMs = now;
+        }
+        if (wanted == f.thrust) {
+            return;
+        }
+        boolean immediate = f.thrust == AirshipFlight.Thrust.IDLE || wanted == AirshipFlight.Thrust.LEFT
+                || wanted == AirshipFlight.Thrust.RIGHT;
+        if ((immediate || now - f.thrustWantedSinceMs >= THRUST_HOLD_MS) && now - f.lastSwapMs >= swapMinMs) {
+            setThrust(store, f, wanted);
         }
     }
 
     /**
-     * Swaps the travelling and idle models (only while fuelled and lit) and cancels the particle system of the model that goes
-     * away: the flames when the ship stops, the mouth smoke when it starts. The firebox embers are in both models. Never throws.
+     * Swaps the burner model (only while fuelled and lit), cancels every exhaust particle system of the old model that the new
+     * one does not carry, and turns the burner sound on in any flame state (off in IDLE). The firebox embers are in every model.
+     * Never throws.
      */
-    private void setThrust(Store<EntityStore> store, AirshipFlight f, boolean on) {
-        if (f.thrust == on) {
+    private void setThrust(Store<EntityStore> store, AirshipFlight f, AirshipFlight.Thrust to) {
+        AirshipFlight.Thrust from = f.thrust;
+        if (from == to) {
             return;
         }
-        f.thrust = on;
         if (f.off || f.dry || f.shipRef == null || !f.shipRef.isValid()) {
+            f.thrust = to;
             return;
         }
-        String id = on ? spec().modelId : spec().idleModelId;
+        String id = spec().modelFor(to);
         ModelAsset asset = ModelAsset.getAssetMap().getAsset(id);
         if (asset == null) {
             LOGGER.at(Level.WARNING).log("Modèle %s introuvable : le modèle actuel reste affiché", id);
             return;
         }
         try {
-            store.putComponent(f.shipRef, ModelComponent.getComponentType(), new ModelComponent(Model.createUnitScaleModel(asset)));
+            VehicleView.putModel(store, f.shipRef, f.observerRef, asset); // T82: both entities
             f.modelId = id;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Modèle %s non appliqué au dirigeable", id);
             return;
         }
-        cancelExhaust(f, on ? spec().smokeSystemId : spec().flameSystemId);
+        f.thrust = to;
+        f.modelSwaps++;
+        f.lastSwapMs = System.currentTimeMillis();
+        Set<String> keep = Set.of(spec().exhaustSystems(to));
+        for (String old : spec().exhaustSystems(from)) {
+            if (!keep.contains(old)) {
+                cancelExhaust(f, old);
+            }
+        }
+        setRoar(store, f, to != AirshipFlight.Thrust.IDLE);
+    }
+
+    /** Burner sound: the balloon's boost effect (infinite) on the ship entity while flames come out. Never throws. */
+    private void setRoar(Store<EntityStore> store, AirshipFlight f, boolean on) {
+        if (f.roar == on) {
+            return;
+        }
+        f.roar = on;
+        if (f.shipRef == null || !f.shipRef.isValid()) {
+            return;
+        }
+        if (!BalloonManager.get().applyRoarEffect(store, f.shipRef, on) && on) {
+            f.roar = false;
+        }
+        // T82: the sound is played where the entity is drawn, so the observer entity carries the effect too.
+        Ref<EntityStore> observer = f.observerRef;
+        if (observer != null && observer.isValid()) {
+            BalloonManager.get().applyRoarEffect(store, observer, on);
+        }
     }
 
     /** Gives the pilot back his normal movement (also after a death). Never throws. */
@@ -693,9 +858,9 @@ final class AirshipManager {
         }
     }
 
-    private List<Fx> collectParticles(World world, BalloonShape s, Vector3i origin, Rotation rotation) {
+    private List<Fx> collectParticles(World world, StructureShape s, Vector3i origin, Rotation rotation) {
         List<Fx> list = new ArrayList<>();
-        for (BalloonShape.Cell c : s.cells()) {
+        for (StructureShape.Cell c : s.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             Set<String> ids = new java.util.HashSet<>(particleIds(c.baseName()));
             BlockType actual = world.getBlockType(p.x, p.y, p.z);
@@ -749,11 +914,14 @@ final class AirshipManager {
         }
     }
 
-    /** Stops the burner flames, the burner smoke and the firebox embers of a ship at this pose. */
+    /** Stops every burner flame and smoke system (all thrust models) and the firebox embers of a ship at this pose. */
     private void cancelSmoke(AirshipFlight f) {
         cancelEmbers(f);
-        cancelExhaust(f, spec().smokeSystemId);
-        cancelExhaust(f, spec().flameSystemId);
+        for (AirshipFlight.Thrust t : AirshipFlight.Thrust.values()) {
+            for (String id : spec().exhaustSystems(t)) {
+                cancelExhaust(f, id);
+            }
+        }
     }
 
     /** Stops one particle system around the burner pipes (Metal_Iron_Pipe_Short cells) of a ship at this pose. */
@@ -762,10 +930,10 @@ final class AirshipManager {
             return;
         }
         try {
-            BalloonShape s = f.kind.shape();
+            StructureShape s = f.kind.shape();
             Vector3f pv = pivot();
             Vector3d out = new Vector3d();
-            for (BalloonShape.Cell c : s.cells()) {
+            for (StructureShape.Cell c : s.cells()) {
                 if (!c.baseName().equals("Metal_Iron_Pipe_Short")) {
                     continue;
                 }
@@ -783,12 +951,12 @@ final class AirshipManager {
 
     // ------------------------------------------------------------------ lights (BalloonLights helpers, yaw-aware follow)
 
-    private void spawnLights(Store<EntityStore> store, AirshipFlight f, BalloonShape s) {
+    private void spawnLights(Store<EntityStore> store, AirshipFlight f, StructureShape s) {
         if (!BalloonLights.enabled() || f.shipRef == null || !f.shipRef.isValid()) {
             return;
         }
         // T58: one slot of the cap is kept for the firebox light, the block lights share the others.
-        BalloonShape.Cell firebox = fireboxCell(s);
+        StructureShape.Cell firebox = fireboxCell(s);
         int cap = firebox != null ? LIGHT_CAP - 1 : LIGHT_CAP;
         List<BalloonLights.Spec> specs = BalloonLights.specsFor(s);
         int step = Math.max(1, (int) Math.ceil(specs.size() / (double) cap));
@@ -827,6 +995,11 @@ final class AirshipManager {
             Vector3f d = new Vector3f(light.local).sub(pivot());
             store.putComponent(light.ref, MountedComponent.getComponentType(),
                     new MountedComponent(f.shipRef, new Vector3f(-d.x, d.y, -d.z), MountController.Minecart));
+            // T82: this light is seen by the pilot only, its twin (on the observer entity) by everybody else.
+            if (f.dual && f.observerRef != null && f.observerRef.isValid()) {
+                BalloonLights.attachTwin(store, light, f.shipUuid, f.observerRef, new Vector3f(-d.x, d.y, -d.z),
+                        lightPosition(f, light.local), color, f.pilotUuid);
+            }
             f.lights.add(light);
             return light;
         } catch (RuntimeException e) {
@@ -845,8 +1018,8 @@ final class AirshipManager {
     /** Share of the distance to a new random target covered at each update (smooth flicker, no jumps from 0 to 1). */
     private static final double FIREBOX_SMOOTH = 0.55;
 
-    private static BalloonShape.Cell fireboxCell(BalloonShape s) {
-        for (BalloonShape.Cell c : s.cells()) {
+    private static StructureShape.Cell fireboxCell(StructureShape s) {
+        for (StructureShape.Cell c : s.cells()) {
             if (AirshipEngines.ENGINE_BLOCK.equals(c.baseName())) {
                 return c;
             }
@@ -878,6 +1051,7 @@ final class AirshipManager {
                 if (d != null) {
                     d.setColorLight(color);
                     l.color = color;
+                    BalloonLights.setTwinColor(store, l, color);
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Lumière du foyer du dirigeable non mise à jour");
@@ -904,7 +1078,7 @@ final class AirshipManager {
     /** Stops the firebox ember particles of the model, around the firebox cell at the ship's current pose. */
     private void cancelEmbers(AirshipFlight f) {
         try {
-            BalloonShape.Cell c = fireboxCell(f.kind.shape());
+            StructureShape.Cell c = fireboxCell(f.kind.shape());
             if (c == null) {
                 return;
             }
@@ -917,14 +1091,17 @@ final class AirshipManager {
         }
     }
 
-    /** The lever helper entity (interactable, mounted on the ship): created next to the lights. */
-    private void spawnLever(Store<EntityStore> store, AirshipFlight f, BalloonShape s) {
+    /** The helm helper entity (interactable, mounted on the ship): created next to the lights. */
+    private void spawnHelm(Store<EntityStore> store, AirshipFlight f, StructureShape s) {
         if (f.shipRef == null || !f.shipRef.isValid() || s.anchor() == null) {
             return;
         }
-        BalloonShape.Cell a = s.anchor();
+        StructureShape.Cell a = s.anchor();
         Vector3f local = new Vector3f(a.x(), a.y() + 0.5f, a.z());
-        f.lever = AirshipLever.spawn(store, f.shipUuid, f.shipRef, local, pivot(), lightPosition(f, local));
+        f.helm = AirshipHelm.spawn(store, f.shipUuid, f.shipRef, local, pivot(), lightPosition(f, local));
+        if (f.dual && f.helm != null) {
+            ViewFilter.only(f.helm.ref, f.pilotUuid); // T82: only the pilot can use it
+        }
     }
 
     /** World point of a prefab point of the ship at its current pose (pivot at pos, heading theta). */
@@ -939,34 +1116,22 @@ final class AirshipManager {
     }
 
     private void followLights(Store<EntityStore> store, AirshipFlight f) {
-        if (f.lever != null && f.lever.ref != null && f.lever.ref.isValid()) {
-            TransformComponent lt = store.getComponent(f.lever.ref, TransformComponent.getComponentType());
+        if (f.helm != null && f.helm.ref != null && f.helm.ref.isValid()) {
+            TransformComponent lt = store.getComponent(f.helm.ref, TransformComponent.getComponentType());
             if (lt != null) {
-                lt.setPosition(lightPosition(f, f.lever.local));
+                lt.setPosition(lightPosition(f, f.helm.local));
             }
         }
         for (BalloonLights.Light l : f.lights) {
-            if (l.ref == null || !l.ref.isValid()) {
-                continue;
-            }
-            TransformComponent t = store.getComponent(l.ref, TransformComponent.getComponentType());
-            if (t != null) {
-                t.setPosition(lightPosition(f, l.local));
-            }
+            BalloonLights.positionBoth(store, l, lightPosition(f, l.local));
         }
     }
 
     private static void removeLights(Store<EntityStore> store, AirshipFlight f) {
-        AirshipLever.remove(store, f.lever);
-        f.lever = null;
+        AirshipHelm.remove(store, f.helm);
+        f.helm = null;
         for (BalloonLights.Light l : f.lights) {
-            try {
-                if (l.ref != null && l.ref.isValid()) {
-                    store.removeEntity(l.ref, RemoveReason.REMOVE);
-                }
-            } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Lumière %s non supprimée", l.key);
-            }
+            BalloonLights.removeBoth(store, l); // T82: the twin too
         }
         f.lights.clear();
     }
@@ -1013,14 +1178,27 @@ final class AirshipManager {
             pilotDied(store, f);
             return;
         }
-        BalloonShape s;
+        StructureShape s;
         try {
             s = f.kind.shape();
         } catch (IOException e) {
             return;
         }
         double dt = f.lastTickMs == 0 ? 0 : Math.min((now - f.lastTickMs) / 1000.0, MAX_DT);
+        long nowNs = System.nanoTime();
+        if (f.lastTickNs != 0) {
+            // T85: sub-millisecond tick interval (the millisecond clock jitters by +-3 % at 30 ticks per second).
+            dt = Math.min((nowNs - f.lastTickNs) / 1e9, MAX_DT);
+        }
+        f.lastTickNs = nowNs;
+        f.lastDt = dt;
         f.lastTickMs = now;
+        if (f.turnDir != 0 && dt > 0) {
+            f.turnDtMin = Math.min(f.turnDtMin, dt);
+            f.turnDtMax = Math.max(f.turnDtMax, dt);
+            f.turnDtSum += dt;
+            f.turnDtN++;
+        }
 
         Hull hull = hullOf(s);
         if (f.landing) {
@@ -1127,7 +1305,7 @@ final class AirshipManager {
         if (pt == null) {
             return false;
         }
-        // The fly mode stays forced for the whole flight: only the lever (helper entity) or the land command ends it.
+        // The fly mode stays forced for the whole flight: only the helm (helper entity) or the land command ends it.
         Vector3d pp = new Vector3d(pt.getPosition());
         if (now < f.teleportUntilMs) {
             // Take-off or collision teleport in progress: the reported position is stale.
@@ -1148,38 +1326,50 @@ final class AirshipManager {
         }
         double newTheta = headingStep(store, f, pp, dt, now);
         Carry mode = effectiveCarry(f);
-        double dTheta = newTheta - f.theta;
-        Vector3d d = mode == Carry.OFF || Math.abs(dTheta) < 1e-12 ? new Vector3d() : carryDelta(f.theta, newTheta);
+        Vector3d d = carryFor(mode, f.theta, newTheta);
+        Vector3d candidate = candidateFor(f, mode, pp, d);
+        int allowed = f.blockedNow;
+        boolean changed = candidate.distanceSquared(f.pos) > 1e-12 || Math.abs(newTheta - f.theta) > 1e-9;
+        if (changed && blocked(world, hull, candidate.x, candidate.y, candidate.z, newTheta, allowed) > allowed) {
+            f.refusedHeadings++;
+            boolean done = false;
+            if (Math.abs(newTheta - f.theta) > 1e-9
+                    && blocked(world, hull, pp.x, pp.y, pp.z, f.theta, allowed) <= allowed) {
+                // Only the new heading collides. T85: first try half and a quarter of the step (the rate follows), so the turn slows
+                // instead of stopping dead and restarting from 0.
+                double full = newTheta - f.theta;
+                for (double frac = 0.5; retrySmaller && frac >= 0.2 && !done; frac *= 0.5) {
+                    double th = f.theta + full * frac;
+                    Vector3d d2 = carryFor(mode, f.theta, th);
+                    Vector3d c2 = candidateFor(f, mode, pp, d2);
+                    if (blocked(world, hull, c2.x, c2.y, c2.z, th, allowed) <= allowed) {
+                        newTheta = th;
+                        d = d2;
+                        candidate = c2;
+                        f.yawRate *= frac;
+                        f.yawAcc = 0;
+                        f.partialSteps++;
+                        done = true;
+                    }
+                }
+                if (!done) {
+                    // Keep the old heading, no carry this tick.
+                    f.yawRate = 0;
+                    f.yawAcc = 0;
+                    newTheta = f.theta;
+                    d = new Vector3d();
+                    candidate = candidateFor(f, mode, pp, d);
+                    done = true;
+                }
+            }
+            if (!done) {
+                collisionBack(store, world, f, hull, pt, pp, newTheta, now);
+                return false;
+            }
+        }
         if (mode == Carry.TELEPORT) {
             f.carryAccX += d.x;
             f.carryAccZ += d.z;
-        }
-        Vector3d candidate = new Vector3d(pp);
-        if (mode == Carry.VELOCITY) {
-            candidate.add(d.x, 0, d.z);
-        } else if (mode == Carry.TELEPORT) {
-            candidate.add(f.carryAccX, 0, f.carryAccZ);
-        }
-        int allowed = f.blockedNow;
-        boolean changed = candidate.distanceSquared(f.pos) > 1e-12 || Math.abs(dTheta) > 1e-9;
-        if (changed && blocked(world, hull, candidate.x, candidate.y, candidate.z, newTheta, allowed) > allowed) {
-            if (Math.abs(dTheta) > 1e-9 && blocked(world, hull, pp.x, pp.y, pp.z, f.theta, allowed) <= allowed) {
-                // Only the new heading (with its carry) collides: keep the old heading, no carry this tick.
-                f.yawRate = 0;
-                newTheta = f.theta;
-                if (mode == Carry.TELEPORT) {
-                    f.carryAccX -= d.x;
-                    f.carryAccZ -= d.z;
-                }
-                d.set(0, 0, 0);
-                candidate.set(pp);
-                if (mode == Carry.TELEPORT) {
-                    candidate.add(f.carryAccX, 0, f.carryAccZ);
-                }
-            } else {
-                collisionBack(store, world, f, pt, pp, newTheta, now);
-                return false;
-            }
         }
         // Delivering the carry.
         if (mode == Carry.VELOCITY) {
@@ -1218,23 +1408,55 @@ final class AirshipManager {
         } else {
             f.lastCarry = 0;
         }
+        f.windowTurn += Math.abs(newTheta - f.theta); // applied heading change (after collision refusal), for the fuel burn
+        if (f.turnDir != 0 || Math.abs(newTheta - f.theta) > 1e-9) {
+            double stepDeg = Math.toDegrees(Math.abs(newTheta - f.theta));
+            f.turnMaxStepDeg = Math.max(f.turnMaxStepDeg, stepDeg);
+            f.turnTicks++;
+            if (stepDeg > 1e-6) {
+                f.turnYawSends++;
+            }
+        }
         accept(world, f, hull, candidate, newTheta);
         writeEntity(store, f);
         return true;
     }
 
+    private Vector3d carryFor(Carry mode, double from, double to) {
+        return mode == Carry.OFF || Math.abs(to - from) < 1e-12 ? new Vector3d() : carryDelta(from, to);
+    }
+
+    /** Pose candidate for a heading change with the carry d (velocity: pilot moves by d, teleport: owed carry plus d). */
+    private Vector3d candidateFor(AirshipFlight f, Carry mode, Vector3d pp, Vector3d d) {
+        Vector3d c = new Vector3d(pp);
+        if (mode == Carry.VELOCITY) {
+            c.add(d.x, 0, d.z);
+        } else if (mode == Carry.TELEPORT) {
+            c.add(f.carryAccX + d.x, 0, f.carryAccZ + d.z);
+        }
+        return c;
+    }
+
     /** The pose is blocked: the pilot goes back to the last valid position (balloon logic: pause, throttled log). */
-    private void collisionBack(Store<EntityStore> store, World world, AirshipFlight f, TransformComponent pt, Vector3d pp,
+    private void collisionBack(Store<EntityStore> store, World world, AirshipFlight f, Hull hull, TransformComponent pt, Vector3d pp,
                                double newTheta, long now) {
         f.collisionCount++;
         f.teleportUntilMs = now + BalloonManager.COLLISION_PAUSE_MS;
-        f.yawRate = 0;
+        f.yawRate = 0; f.yawAcc = 0;
         stopCarry(store, f);
         resetSample(f, f.pos, now);
         if (now - f.lastCollisionLogMs > BalloonManager.COLLISION_MSG_INTERVAL_MS) {
             f.lastCollisionLogMs = now;
             f.lastCollision = String.format(Locale.ROOT, "pos %.2f %.2f %.2f theta %.1f deg", pp.x, pp.y, pp.z, Math.toDegrees(newTheta));
             LOGGER.at(Level.INFO).log("Collision du dirigeable de %s : %s", f.pilotName, f.lastCollision);
+        }
+        // T76: when the pose leaves the world's height range, the pilot is told (at most every 3 s).
+        if (heightExceeded(hull, pp.y) && now - f.lastHeightMsgMs >= BalloonManager.HEIGHT_MSG_INTERVAL_MS) {
+            f.lastHeightMsgMs = now;
+            PlayerRef pilotPlayer = playerOf(store, f.pilotRef);
+            if (pilotPlayer != null) {
+                pilotPlayer.sendMessage(Texts.t("heightLimit.reached"));
+            }
         }
         Vector3d back = new Vector3d(f.lastValidPos);
         Rotation3f look = new Rotation3f(pt.getRotation());
@@ -1253,6 +1475,8 @@ final class AirshipManager {
         f.sampleCarryX = 0;
         f.sampleCarryZ = 0;
         f.hasTarget = false;
+        f.restActive = false;
+        f.restSinceMs = 0;
     }
 
     /**
@@ -1315,6 +1539,7 @@ final class AirshipManager {
             double dz = obsZ - cz;
             f.travelSpeed = Math.hypot(dx, dz) / seconds;
             burnFuel(store, f, seconds);
+            f.windowTurn = 0;
             f.sampleMs = now;
             f.sampleX = pp.x;
             f.sampleZ = pp.z;
@@ -1336,6 +1561,13 @@ final class AirshipManager {
                 }
             }
         }
+        boolean noThrust = f.dry || f.engines == null;
+        if (mode == Steer.TRAVEL && !noThrust && restTurn && f.sampleMs != 0 && now - f.takeoffMs >= TAKEOFF_IGNORE_MS) {
+            restTurnStep(store, f, now);
+        } else if (mode == Steer.TRAVEL) {
+            f.restActive = false;
+            f.restSinceMs = 0;
+        }
         if (mode == Steer.LOOK) {
             double head = headYaw(store, f);
             f.hasTarget = !Double.isNaN(head);
@@ -1347,20 +1579,112 @@ final class AirshipManager {
         }
         double desired = 0;
         double step;
+        if (noThrust) {
+            // No thrust (dry or no engine data): the ship does not turn in any mode.
+            f.hasTarget = false;
+            f.restActive = false;
+            f.restSinceMs = 0;
+        }
         if (f.hasTarget) {
             double err = AirshipMath.wrapPi(f.targetHeading - f.theta);
-            desired = Math.signum(err) * Math.min(maxRate, Math.sqrt(2 * accel * Math.abs(err)));
-            f.yawRate = AirshipMath.approach(f.yawRate, desired, accel * dt);
+            desired = Math.signum(err) * Math.min(maxRate, brakingRate(Math.abs(err), accel));
+            stepRate(f, desired, accel, dt);
             step = f.yawRate * dt;
-            if (Math.abs(step) > Math.abs(err)) {
+            if (Math.abs(step) >= Math.abs(err) || (Math.signum(f.yawRate) != Math.signum(err) && f.yawRate != 0
+                    && Math.abs(err) < Math.toRadians(0.3))) {
                 step = err;
                 f.yawRate = 0;
+                f.yawAcc = 0;
             }
         } else {
-            f.yawRate = AirshipMath.approach(f.yawRate, 0, accel * dt);
+            stepRate(f, 0, accel, dt);
             step = f.yawRate * dt;
         }
+        updateThrust(store, f, now);
         return f.theta + step;
+    }
+
+    /**
+     * T85: yaw rate controller. yawJerk 0: the rate approaches the wanted rate linearly (acceleration limit only). Otherwise the yaw
+     * acceleration is itself limited in change (jerk), and eased toward zero as the rate nears the wanted one (sqrt profile), so there
+     * is no abrupt start of the acceleration nor abrupt end. The rate never crosses the wanted rate.
+     */
+    private void stepRate(AirshipFlight f, double desired, double accel, double dt) {
+        double jerk = Math.toRadians(yawJerkDeg);
+        if (jerk <= 0 || dt <= 1e-5) {
+            f.yawRate = AirshipMath.approach(f.yawRate, desired, accel * dt);
+            f.yawAcc = 0;
+            return;
+        }
+        double diff = desired - f.yawRate;
+        double aWanted = Math.signum(diff) * Math.min(accel, Math.sqrt(2 * jerk * Math.abs(diff)));
+        f.yawAcc = AirshipMath.approach(f.yawAcc, aWanted, jerk * dt);
+        double next = f.yawRate + f.yawAcc * dt;
+        if ((next - desired) * (f.yawRate - desired) <= 0) {
+            next = desired; // reached (or would cross) the wanted rate
+            f.yawAcc = 0;
+        }
+        f.yawRate = next;
+    }
+
+    /**
+     * Largest rate (rad/s) from which the ship can still stop within err radians braking at accel, with the jerk ramp
+     * (stopping distance v^2/(2a) + v a/(2j), solved for v). Without jerk limit the plain sqrt(2 a err).
+     */
+    private double brakingRate(double err, double accel) {
+        double jerk = Math.toRadians(yawJerkDeg);
+        if (jerk <= 0) {
+            return Math.sqrt(2 * accel * err);
+        }
+        double k = accel * accel / jerk;
+        return (-k + Math.sqrt(k * k + 8 * accel * err)) / 2;
+    }
+
+    /**
+     * Rest turn. Not travelling (sampled travel speed at most turnSpeedMin): once the pilot's head yaw has stayed more than
+     * restDeadZoneDeg away from the heading for restHoldMs, the heading target follows the head yaw until the error is under
+     * restStopDeg. A head within reverseConeDeg of the stern drops the target (looking behind does not turn the ship). When the
+     * pilot travels, the travel logic of the sample window decides and this does nothing.
+     */
+    private void restTurnStep(Store<EntityStore> store, AirshipFlight f, long now) {
+        if (f.travelSpeed > turnSpeedMin) {
+            f.restActive = false;
+            f.restSinceMs = 0;
+            return;
+        }
+        double head = headYaw(store, f);
+        if (Double.isNaN(head)) {
+            f.restActive = false;
+            f.restSinceMs = 0;
+            f.hasTarget = false;
+            return;
+        }
+        double err = Math.abs(AirshipMath.wrapPi(head - f.theta));
+        double fromStern = Math.abs(AirshipMath.wrapPi(head - (f.theta + Math.PI)));
+        if (fromStern < Math.toRadians(reverseConeDeg)) {
+            f.restActive = false;
+            f.restSinceMs = 0;
+            f.hasTarget = false;
+            return;
+        }
+        if (!f.restActive) {
+            if (err > Math.toRadians(restDeadZoneDeg)) {
+                if (f.restSinceMs == 0) {
+                    f.restSinceMs = now;
+                } else if (now - f.restSinceMs >= restHoldMs) {
+                    f.restActive = true;
+                }
+            } else {
+                f.restSinceMs = 0;
+            }
+        } else if (err < Math.toRadians(restStopDeg)) {
+            f.restActive = false;
+            f.restSinceMs = 0;
+        }
+        f.hasTarget = f.restActive;
+        if (f.restActive) {
+            f.targetHeading = head;
+        }
     }
 
     /** Head yaw of the pilot: the component updated by SetHead, else the last yaw seen in the queue, else NaN. */
@@ -1424,12 +1748,14 @@ final class AirshipManager {
             Rotation3f r = new Rotation3f();
             r.setYaw((float) visualYaw(f.theta));
             bt.setRotation(r);
+            double alpha = observerSmoothMs <= 0 || f.lastDt <= 0 ? 1.0 : 1 - Math.exp(-f.lastDt * 1000.0 / observerSmoothMs);
+            VehicleView.sync(store, f.shipRef, f.observerRef, alpha); // T82: the observer entity follows the ship's pose
         }
     }
 
     // ------------------------------------------------------------------ landing
 
-    /** /orbishorizon airship land, the lever: starts the alignment. */
+    /** /orbishorizon airship land, the helm: starts the alignment. */
     Message requestLanding(UUID pilot) {
         AirshipFlight f = flights.get(pilot);
         if (f == null) {
@@ -1471,10 +1797,13 @@ final class AirshipManager {
         f.landing = true;
         f.automatic = automatic || f.automatic;
         // No propulsion during the alignment: back to the idle smoke.
-        setThrust(f.world.getEntityStore().getStore(), f, false);
+        f.restActive = false;
+        f.restSinceMs = 0;
+        f.turnDir = 0;
+        setThrust(f.world.getEntityStore().getStore(), f, AirshipFlight.Thrust.IDLE);
         f.landingStartMs = System.currentTimeMillis();
         f.landingStuckMs = 0;
-        f.yawRate = 0;
+        f.yawRate = 0; f.yawAcc = 0;
         f.hasTarget = false;
         if (!f.pilotless() && f.pilotRef.isValid()) {
             holdPilot(f);
@@ -1493,7 +1822,7 @@ final class AirshipManager {
         return ref != null && ref.isValid() ? store.getComponent(ref, PlayerRef.getComponentType()) : null;
     }
 
-    private void landingStep(Store<EntityStore> store, World world, AirshipFlight f, BalloonShape s, Hull hull, double dt, long now) {
+    private void landingStep(Store<EntityStore> store, World world, AirshipFlight f, StructureShape s, Hull hull, double dt, long now) {
         double dTheta = f.targetTheta - f.theta;
         Vector3d target = new Vector3d(f.targetPivot.x + 0.5, f.targetPivot.y, f.targetPivot.z + 0.5);
         Vector3d delta = target.sub(f.pos, new Vector3d());
@@ -1509,7 +1838,7 @@ final class AirshipManager {
         double before = Math.abs(dTheta) + len;
         move(world, f, hull, newPos, newTheta, now);
         double after = Math.abs(f.targetTheta - f.theta) + target.distance(f.pos);
-        f.yawRate = 0;
+        f.yawRate = 0; f.yawAcc = 0;
         if (before - after < 1e-6) {
             f.landingStuckMs += (long) (dt * 1000);
             if (f.landingStuckMs >= LANDING_STUCK_MS) {
@@ -1520,7 +1849,7 @@ final class AirshipManager {
         }
     }
 
-    private void finalLanding(Store<EntityStore> store, World world, AirshipFlight f, BalloonShape s) {
+    private void finalLanding(Store<EntityStore> store, World world, AirshipFlight f, StructureShape s) {
         Rotation q = f.targetRotation;
         Vector3f pv = pivot();
         Vector3i origin = new Vector3i(f.targetPivot)
@@ -1589,9 +1918,8 @@ final class AirshipManager {
         releasePilot(store, f, origin, rotation);
         passengers.disembark(store, f, origin, rotation); // T64: each passenger stands next to their stool
         AirshipResume.delete(f.id);
-        if (f.shipRef != null && f.shipRef.isValid()) {
-            store.removeEntity(f.shipRef, RemoveReason.REMOVE);
-        }
+        setRoar(store, f, false); // the end sound plays before the entity goes
+        removeShipEntities(store, f);
         LOGGER.at(Level.INFO).log("Atterrissage du dirigeable de %s : origine %s, rotation %s", f.pilotName, origin, rotation);
     }
 
@@ -1632,7 +1960,7 @@ final class AirshipManager {
         }
         Store<EntityStore> store = f.world.getEntityStore().getStore();
         try {
-            BalloonShape s = f.kind.shape();
+            StructureShape s = f.kind.shape();
             Rotation q = nearestQuarter(f.theta);
             Vector3f pv = pivot();
             Vector3i pivotCell = f.pivotCell(f.pos);
@@ -1686,29 +2014,99 @@ final class AirshipManager {
     }
 
     /**
+     * T75: a pilot or rider changed game mode (called by GameModeSystem while the event is handled, the mode has not changed yet).
+     * Processed on the world thread after the change, only if the mode really changed. Pilot: immediate landing in place
+     * (landImmediately, nearest quarter turn, up to SEARCH_UP blocks upward), else pilotless automatic landing (pilotDied without the
+     * death). Rider: released and removed from the flight. The player is put on the ground if the new mode cannot fly, and the
+     * new mode's movement settings are re-applied after the mod's resets (BalloonManager.reapplyGameMode).
+     */
+    void onGameModeChange(Store<EntityStore> store, Ref<EntityStore> ref, GameMode newMode) {
+        boolean involved = false;
+        for (AirshipFlight f : flights.values()) {
+            if (ref.equals(f.pilotRef)) {
+                involved = true;
+            }
+            for (AirshipPassengers.Rider r : f.riders) {
+                if (ref.equals(r.p.ref)) {
+                    involved = true;
+                }
+            }
+        }
+        if (!involved) {
+            return;
+        }
+        World world = store.getExternalData().getWorld();
+        world.execute(() -> {
+            if (!ref.isValid()) {
+                return;
+            }
+            Player player = store.getComponent(ref, Player.getComponentType());
+            if (player == null || player.getGameMode() != newMode) {
+                return; // change cancelled
+            }
+            for (AirshipFlight f : new ArrayList<>(flights.values())) {
+                if (f.world != world || f.finishing) {
+                    continue;
+                }
+                if (ref.equals(f.pilotRef)) {
+                    TransformComponent pt = store.getComponent(ref, TransformComponent.getComponentType());
+                    Vector3d pilotPos = pt != null ? new Vector3d(pt.getPosition()) : null;
+                    boolean landed = landImmediately(f);
+                    if (!landed) {
+                        pilotDied(store, f, false);
+                    }
+                    boolean canFly = BalloonManager.reapplyGameMode(store, ref, newMode);
+                    if (!landed && !canFly && pilotPos != null) {
+                        BalloonManager.putOnGround(store, world, ref, pilotPos);
+                    }
+                    PlayerRef pr = playerOf(store, ref);
+                    if (pr != null) {
+                        pr.sendMessage(Texts.t("gameMode.left"));
+                    }
+                    LOGGER.at(Level.INFO).log("Pilote %s : changement de mode de jeu (%s), dirigeable %s", f.pilotName, newMode,
+                            landed ? "posé sur place" : "sans pilote");
+                    continue;
+                }
+                for (AirshipPassengers.Rider r : new ArrayList<>(f.riders)) {
+                    if (ref.equals(r.p.ref)) {
+                        passengers.leaveForGameMode(store, f, r, newMode);
+                        LOGGER.at(Level.INFO).log("Passager du dirigeable %s : changement de mode de jeu (%s), libéré", r.p.name, newMode);
+                    }
+                }
+            }
+        });
+    }
+
+    /**
      * The pilot died (mirrors the balloon's T39): the ship entity leaves him, his movement settings go back to normal, the ship
      * loses its pilot, its flight gets a new identifier (the respawned player can fly something else), the off model is shown
      * and the ship aligns itself and lands in place, retried every 5 s if impossible.
      */
     private void pilotDied(Store<EntityStore> store, AirshipFlight f) {
+        pilotDied(store, f, true);
+    }
+
+    /** Same, T75: dead false when the pilot leaves because of a game mode change (other message, same handling). */
+    private void pilotDied(Store<EntityStore> store, AirshipFlight f, boolean dead) {
         if (f.pilotless() || flights.get(f.id) != f) {
             return;
         }
         Ref<EntityStore> ref = f.pilotRef;
         stopCarry(store, f);
         detachShip(store, f);
+        collapseView(store, f); // T82
         restorePilotMovement(store, ref);
         UUID oldId = f.id;
         flights.remove(oldId);
         f.id = UUID.randomUUID();
         f.pilotRef = null;
-        f.yawRate = 0;
+        f.yawRate = 0; f.yawAcc = 0;
         f.hasTarget = false;
         f.landing = false;
         f.automatic = true;
         f.nextLandingRetryMs = 0;
         showOffModel(store, f);
-        AirshipPassengers.tell(store, f, "airship.passenger.pilotDied");
+        AirshipPassengers.tell(store, f, dead ? "airship.passenger.pilotDied" : "airship.passenger.pilotLeft");
         flights.put(f.id, f);
         f.lastResumeMs = System.currentTimeMillis();
         AirshipResume.write(f, true);
@@ -1722,14 +2120,18 @@ final class AirshipManager {
         }
         ModelAsset asset = ModelAsset.getAssetMap().getAsset(spec().offModelId);
         if (asset != null) {
-            store.putComponent(f.shipRef, ModelComponent.getComponentType(), new ModelComponent(Model.createUnitScaleModel(asset)));
+            VehicleView.putModel(store, f.shipRef, f.observerRef, asset); // T82: both entities
             f.modelId = spec().offModelId;
             f.off = true;
-            f.thrust = false;
+            f.thrust = AirshipFlight.Thrust.IDLE;
+            f.thrustWanted = AirshipFlight.Thrust.IDLE;
+            f.turnDir = 0;
+            f.restActive = false;
         } else {
             LOGGER.at(Level.WARNING).log("Modèle %s introuvable : le modèle allumé reste affiché", spec().offModelId);
         }
         setFireboxColor(store, f, null); // T58: the dark firebox of the off model has no light
+        setRoar(store, f, false);
         cancelSmoke(f);
     }
 
@@ -1816,7 +2218,24 @@ final class AirshipManager {
                 return;
             }
             Store<EntityStore> store = world.getEntityStore().getStore();
-            BalloonShape s = Deployables.AIRSHIP.shape();
+            StructureShape s = Deployables.AIRSHIP.shape();
+            // T76: a pose outside the world's height range is shifted to fit (the search below then goes on from there). If the
+            // ship cannot fit at all, the file is kept untouched with a warning, before anything is emptied or placed.
+            int heightDy = 0;
+            {
+                Rotation q0 = nearestQuarter(rec.heading());
+                Vector3f pv0 = pivot();
+                Vector3i base0 = new Vector3i(rec.pivotX(), rec.pivotY(), rec.pivotZ())
+                        .sub(q0.rotateYaw(new Vector3i(Math.round(pv0.x), Math.round(pv0.y), Math.round(pv0.z)), new Vector3i()));
+                heightDy = BalloonManager.heightShift(s, base0, q0);
+                if (heightDy == Integer.MIN_VALUE) {
+                    LOGGER.at(Level.WARNING).log("Reprise du dirigeable %s impossible : il dépasse la hauteur du monde, fichier gardé", rec.id());
+                    return;
+                }
+                if (heightDy != 0) {
+                    LOGGER.at(Level.WARNING).log("Reprise du dirigeable %s : pose hors de la limite de hauteur, décalée de %d bloc(s)", rec.id(), heightDy);
+                }
+            }
             if (rec.ship() != null) {
                 Ref<EntityStore> orphan = world.getEntityStore().getRefFromUUID(rec.ship());
                 if (orphan != null && orphan.isValid()) {
@@ -1826,9 +2245,9 @@ final class AirshipManager {
             }
             BalloonLights.removeOrphans(world, store, rec.ship(), s);
             if (rec.ship() != null) {
-                Ref<EntityStore> lever = world.getEntityStore().getRefFromUUID(AirshipLever.uuidFor(rec.ship()));
-                if (lever != null && lever.isValid()) {
-                    store.removeEntity(lever, RemoveReason.REMOVE);
+                Ref<EntityStore> helm = world.getEntityStore().getRefFromUUID(AirshipHelm.uuidFor(rec.ship()));
+                if (helm != null && helm.isValid()) {
+                    store.removeEntity(helm, RemoveReason.REMOVE);
                 }
             }
             // If the world was saved before take-off, the old ship and its contents are still there: the file is authoritative.
@@ -1837,6 +2256,7 @@ final class AirshipManager {
             Vector3f pv = pivot();
             Vector3i base = new Vector3i(rec.pivotX(), rec.pivotY(), rec.pivotZ())
                     .sub(q.rotateYaw(new Vector3i(Math.round(pv.x), Math.round(pv.y), Math.round(pv.z)), new Vector3i()));
+            base.add(0, heightDy, 0);
             Vector3i origin = new Vector3i(base);
             for (int up = 0; up <= SEARCH_UP; up++) {
                 Vector3i o = new Vector3i(base).add(0, up, 0);
@@ -1869,7 +2289,7 @@ final class AirshipManager {
     }
 
     /** Removes the ship still standing at its take-off place (world saved before the removal), contents emptied first. */
-    private void removeOldShip(World world, BalloonShape s, AirshipResume.Record rec) {
+    private void removeOldShip(World world, StructureShape s, AirshipResume.Record rec) {
         // The take-off origin is not stored in the file: the old ship, if any, is recognised from the take-off anchor kept in rec.
         // (Nothing to do when the file has no take-off data.)
         if (rec.takeoffOrigin() == null || rec.takeoffRotation() == null) {
@@ -1891,7 +2311,7 @@ final class AirshipManager {
         }
     }
 
-    private void restorePilot(World world, Store<EntityStore> store, BalloonShape s, UUID pilot, Vector3i origin, Rotation q) {
+    private void restorePilot(World world, Store<EntityStore> store, StructureShape s, UUID pilot, Vector3i origin, Rotation q) {
         Vector3d spot = pilotSpot(origin, q);
         for (PlayerRef pr : world.getPlayerRefs()) {
             Ref<EntityStore> ref = pr.getReference();
@@ -1910,7 +2330,7 @@ final class AirshipManager {
 
     /** /orbishorizon airship despawn: the nearest airship within DESPAWN_RADIUS, placed or in flight. World thread. */
     BalloonManager.DespawnResult despawn(Store<EntityStore> store, Ref<EntityStore> adminRef, PlayerRef admin, World world) {
-        BalloonShape s;
+        StructureShape s;
         try {
             s = Deployables.AIRSHIP.shape();
         } catch (IOException e) {
@@ -1976,7 +2396,7 @@ final class AirshipManager {
         return new BalloonManager.DespawnResult(true, Texts.t(given ? "airship.despawn.done" : "airship.despawn.doneInventoryFull"));
     }
 
-    private Message despawnPosed(Store<EntityStore> store, World world, BalloonShape s, Vector3i origin, Rotation rotation, PlayerRef admin) {
+    private Message despawnPosed(Store<EntityStore> store, World world, StructureShape s, Vector3i origin, Rotation rotation, PlayerRef admin) {
         // Players aboard lose their floor: put on the ground afterwards.
         List<Ref<EntityStore>> inside = new ArrayList<>();
         List<Vector3d> insidePos = new ArrayList<>();
@@ -2049,9 +2469,8 @@ final class AirshipManager {
             items += BalloonManager.dropAndCount(store, f.benches.takeAllItems(), dropPos);
         }
         AirshipResume.delete(f.id);
-        if (f.shipRef != null && f.shipRef.isValid()) {
-            store.removeEntity(f.shipRef, RemoveReason.REMOVE);
-        }
+        setRoar(store, f, false); // the end sound plays before the entity goes
+        removeShipEntities(store, f);
         LOGGER.at(Level.INFO).log("Retrait par %s : dirigeable en vol en %s, %d objet(s) lâchés", admin.getUsername(), fmt(pos), items);
         return null;
     }
@@ -2068,9 +2487,14 @@ final class AirshipManager {
         String tuning = String.format(Locale.ROOT,
                 "steer %s, yawSign %+.0f, maxYawRate %.1f deg/s, yawAccel %.1f deg/s2, turnSpeedMin %.2f b/s, reverseCone %.0f deg, "
                         + "flySpeedFactor %.2f, rotation centre pivotZ %.2f (prefab z, -15 bow, 15 stern), carry %s, carryGain %.2f, "
-                        + "carryStep %.2f, carryPauseMs %d, leverIntangible %s, fuelFactor %.2f, fuelMoveMin %.2f",
+                        + "carryStep %.2f, carryPauseMs %d, helmIntangible %s, fuelFactor %.2f, fuelMoveMin %.2f, restTurn %s, restDeadZone %.0f deg, restHoldMs %d, restStop %.1f deg, "
+                        + "turnFuelMin %.2f deg/s",
                 steer, yawSign, maxYawRateDeg, yawAccelDeg, turnSpeedMin, reverseConeDeg, flySpeedFactor, rotationCenterZ, carry,
-                carryGain, carryStep, carryPauseMs, AirshipLever.intangible, fuelFactor, fuelMoveMin) + ", " + passengers.tuning();
+                carryGain, carryStep, carryPauseMs, AirshipHelm.intangible, fuelFactor, fuelMoveMin, restTurn, restDeadZoneDeg,
+                restHoldMs, restStopDeg, turnFuelMinDeg)
+                + ", " + passengers.tuning();
+        tuning = "rendering setting " + (renderDual ? "dual" : "single") + " (view filter " + (ViewFilter.available() ? "registered" : "NOT registered")
+                + ", " + ViewFilter.ruleCount() + " rule(s)), " + tuning;
         if (f == null) {
             for (AirshipFlight g : flights.values()) {
                 for (AirshipPassengers.Rider r : g.riders) {
@@ -2085,15 +2509,30 @@ final class AirshipManager {
                 ? store.getComponent(f.shipRef, TransformComponent.getComponentType()) : null;
         TransformComponent pt = f.pilotRef != null && f.pilotRef.isValid()
                 ? store.getComponent(f.pilotRef, TransformComponent.getComponentType()) : null;
+        TransformComponent ot = f.observerRef != null && f.observerRef.isValid()
+                ? store.getComponent(f.observerRef, TransformComponent.getComponentType()) : null;
+        tuning = "flight rendering " + (f.dual ? "dual (ship entity rule " + ViewFilter.ruleOf(f.shipRef) + "; observer entity "
+                + (ot != null ? fmt(ot.getPosition()) : "missing") + ", rule " + ViewFilter.ruleOf(f.observerRef) + ")"
+                : "single entity (seen by everybody)") + ", " + tuning;
         double head = headYaw(store, f);
         Vector3d cw = centerWorld(f.pos, f.theta);
         String carryText = String.format(Locale.ROOT,
                 "rotation centre C %s (P - C = %.1f blocks), carry mode %s%s, carry this tick %.3f b, total carried %.2f b, "
-                        + "carry teleports %d, owed %.2f b, velocity sent %s, effect ratio %s, own velocity %.2f,%.2f b/s, lever helper %s",
+                        + "carry teleports %d, owed %.2f b, velocity sent %s, effect ratio %s, own velocity %.2f,%.2f b/s, helm helper %s",
                 fmt(cw), Math.abs(pivot().z - rotationCenterZ), effectiveCarry(f), f.carryFallback ? " (velocity judged ineffective, fallback)" : "",
                 f.lastCarry, f.totalCarry, f.carryTeleports, Math.hypot(f.carryAccX, f.carryAccZ), f.velActive,
                 Double.isNaN(f.chkRatio) ? "n/a" : String.format(Locale.ROOT, "%.2f", f.chkRatio), f.ownVx, f.ownVz,
-                f.lever != null && f.lever.ref != null && f.lever.ref.isValid() ? "present" : "absent");
+                f.helm != null && f.helm.ref != null && f.helm.ref.isValid() ? "present" : "absent");
+        carryText += ", steer " + steer;
+        carryText += String.format(Locale.ROOT, ", smoothness: yawJerk %.0f deg/s3, retrySmaller %s, thrustModels %d, swapMinMs %d, "
+                        + "observerSmoothMs %.0f | totals: refused headings %d, partial steps %d, model swaps %d, collisions %d | this turn (since the "
+                        + "rate last crossed %.0f deg/s): refused %d, partial %d, collision teleports %d, carry teleports %d, "
+                        + "model swaps %d, ticks %d, yaw writes %d, max yaw step %.3f deg/tick, tick interval min/mean/max %.1f/%.1f/%.1f ms",
+                yawJerkDeg, retrySmaller, thrustModels, swapMinMs, observerSmoothMs, f.refusedHeadings, f.partialSteps, f.modelSwaps,
+                f.collisionCount, TURN_FLAME_ON_DEG, f.refusedHeadings - f.turnRefused, f.partialSteps - f.turnPartial,
+                f.collisionCount - f.turnBaseCollisions, f.carryTeleports - f.turnBaseCarryTp,
+                f.modelSwaps - f.turnSwaps, f.turnTicks, f.turnYawSends, f.turnMaxStepDeg,
+                f.turnDtN == 0 ? 0 : f.turnDtMin * 1000, f.turnDtN == 0 ? 0 : f.turnDtSum / f.turnDtN * 1000, f.turnDtMax * 1000);
         return String.format(Locale.ROOT,
                 "Airship %s: theta %.1f deg (%.3f rad), yaw rate %.1f deg/s, travel speed %.2f b/s, travel direction %s%s, "
                         + "target heading %s, head yaw %s deg, ship %s, pos %s, pivot cell %s, entity %s yaw %s, pilot %s, "
@@ -2122,7 +2561,11 @@ final class AirshipManager {
                         + "%s, %s, travel speed %.2f b/s (burns above %.2f)", f.engines.entryCount(), f.engines.remainingSeconds(),
                 travelSecondsLeft(f), fuelFactor, f.engines.fuelItems(), f.burning ? "burning" : "not burning",
                 f.dry ? "DRY (horizontal speed 0)" : "fuelled", f.travelSpeed, fuelMoveMin)
-                + (f.thrust ? ", burner flames on" : ", burner flames off") + fireboxDebug(f);
+                + ", thrust state " + f.thrust + " (model " + f.modelId + "), burner sound " + (f.roar ? "on" : "off")
+                + ", moving " + f.moving + ", turn flame direction " + (f.turnDir > 0 ? "left" : f.turnDir < 0 ? "right" : "none")
+                + ", rest turn " + (restTurn ? "enabled" : "disabled") + ", rest turn active " + f.restActive
+                + String.format(Locale.ROOT, " (dead zone %.0f deg, hold %d ms, stop %.1f deg), turnFuelMin %.2f deg/s",
+                        restDeadZoneDeg, restHoldMs, restStopDeg, turnFuelMinDeg) + fireboxDebug(f);
     }
 
     /** Firebox light part of the debug text (English, T58). */
@@ -2174,18 +2617,35 @@ final class AirshipManager {
             case "carrygain" -> carryGain = Math.max(0, value);
             case "carrystep" -> carryStep = Math.max(0.02, value);
             case "carrypausems" -> carryPauseMs = Math.max(0, Math.round(value));
-            case "leverintangible" -> AirshipLever.intangible = value != 0;
+            case "helmintangible" -> AirshipHelm.intangible = value != 0;
             case "fuelfactor" -> fuelFactor = Math.max(0.01, value);
             case "fuelmovemin" -> fuelMoveMin = Math.max(0, value);
+            case "turnfuelmin" -> turnFuelMinDeg = Math.max(0, value);
+            case "restturn" -> restTurn = value != 0;
+            case "restdeadzone" -> restDeadZoneDeg = Math.max(0, Math.min(179, value));
+            case "restholdms" -> restHoldMs = Math.max(0, Math.round(value));
+            case "reststop" -> restStopDeg = Math.max(0.1, value);
+            case "yawjerk" -> yawJerkDeg = Math.max(0, value);
+            case "retrysmaller" -> retrySmaller = value != 0;
+            case "thrustmodels" -> thrustModels = (int) Math.max(0, Math.min(2, Math.round(value)));
+            case "swapminms" -> swapMinMs = Math.max(0, Math.round(value));
+            case "observersmoothms" -> observerSmoothMs = Math.max(0, value);
             case "passengergain" -> passengers.gain = Math.max(0, value);
             case "passengermaxcorrection" -> passengers.maxCorrection = Math.max(0, value);
             case "passengersnap" -> passengers.snap = Math.max(0.3, value);
             default -> {
                 return "Unknown parameter " + name + ". Parameters: maxYawRate (deg/s), yawAccel (deg/s2), turnSpeedMin (b/s), "
                         + "reverseCone (deg), flySpeedFactor (applies at the next take-off), pivotZ (rotation centre, prefab z from -15 "
-                        + "bow to 15 stern, default 7, 0 = middle), carry (velocity|teleport|off), carryGain, carryStep (blocks), "
-                        + "carryPauseMs, leverIntangible (0|1, next take-off), fuelFactor (burn seconds per second of travel, default 2), "
-                        + "fuelMoveMin (b/s of horizontal travel above which fuel burns, default 0.5), passengers (follow|mount|teleport, "
+                        + "bow to 15 stern, default 0 = middle, 7 = rear quarter), carry (velocity|teleport|off), carryGain, carryStep (blocks), "
+                        + "carryPauseMs, helmIntangible (0|1, next take-off), fuelFactor (burn seconds per second of travel, default 2), "
+                        + "fuelMoveMin (b/s of horizontal travel above which fuel burns, default 0.5), turnFuelMin (deg/s of mean turn rate above "
+                        + "which fuel burns, default 1), restTurn (0|1, ship turns toward the head yaw at rest, default 1), restDeadZone "
+                        + "(deg, default 25), restHoldMs (default 500), restStop (deg, default 3), "
+                        + "yawJerk (deg/s3, limits the change of the yaw acceleration for a smooth start and stop, 0 = "
+                        + "off, default 60), retrySmaller (0|1, a refused heading step is retried at half and a quarter instead of stopping the turn, default 1), "
+                        + "thrustModels (2 = all burner models, 1 = no left/right models, 0 = never swap the model in flight, default 2), swapMinMs "
+                        + "(minimum time between two model swaps, default 800), observerSmoothMs (smoothing of the observer entity position, 0 = raw, "
+                        + "default 60), passengers (follow|mount|teleport, "
                         + "next take-off), passengerGain (b/s per block toward the seat, default 2), passengerMaxCorrection (b/s, "
                         + "default 4), passengerSnap (blocks from the seat before a teleport, default 1.25).";
             }

@@ -4,6 +4,7 @@
     "Description": "server.orbis_horizon.items.airship_fuel_tank.description"
   },
   "Icon": "Icons/ItemsGenerated/Metal_Iron_Pipe_Large_Corner.png",
+  "ItemLevel": 5,
   "Categories": [
     "Blocks.Metal"
   ],
@@ -130,7 +131,7 @@
         "Quantity": 12
       },
       {
-        "ItemId": "Ingredient_Leather_Medium",
+        "ItemId": "Ingredient_Leather_Heavy",
         "Quantity": 6
       }
     ],

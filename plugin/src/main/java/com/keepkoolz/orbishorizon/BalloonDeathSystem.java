@@ -32,6 +32,9 @@ public final class BalloonDeathSystem extends RefChangeSystem<EntityStore, Death
     public void onComponentAdded(Ref<EntityStore> ref, DeathComponent death, Store<EntityStore> store,
                                  CommandBuffer<EntityStore> commandBuffer) {
         BalloonManager.get().onPlayerDeath(store, ref);
+        // T93: a respawn point set on a tent bed without sleeping is fixed before the respawn.
+        com.hypixel.hytale.server.core.universe.world.World world = store.getExternalData().getWorld();
+        world.execute(() -> TentBedSystem.patchRespawnPoints(store, ref, world));
     }
 
     @Override

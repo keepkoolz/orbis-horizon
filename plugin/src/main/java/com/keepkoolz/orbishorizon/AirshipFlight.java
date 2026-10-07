@@ -37,6 +37,10 @@ final class AirshipFlight {
     final Deployables.Kind kind;
     Ref<EntityStore> shipRef;
     UUID shipUuid;
+    /** T82: observer entity (same model, never mounted, moved by the server every tick), seen by everybody but the pilot. Null in single rendering. */
+    volatile Ref<EntityStore> observerRef;
+    /** T82: dual rendering is active (cleared when the flight has no pilot on board and collapses to one entity). */
+    volatile boolean dual;
 
     /** Entity position: bottom centre of the pivot cell (where the pilot stands), world frame. */
     final Vector3d pos = new Vector3d();
@@ -44,6 +48,27 @@ final class AirshipFlight {
     double theta;
     /** Yaw rate (rad/s). */
     double yawRate;
+    /** T85: yaw acceleration (rad/s2) of the jerk-limited rate controller. */
+    double yawAcc;
+    /** T85: smoothness diagnostics. Per-turn values are reset when a turn starts (turnDir leaves 0). */
+    long lastTickNs;
+    double lastDt;
+    int refusedHeadings;
+    int partialSteps;
+    int modelSwaps;
+    long lastSwapMs;
+    int turnRefused;
+    int turnPartial;
+    int turnSwaps;
+    int turnBaseCollisions;
+    int turnBaseCarryTp;
+    int turnTicks;
+    double turnMaxStepDeg;
+    double turnDtMin = Double.MAX_VALUE;
+    double turnDtMax;
+    double turnDtSum;
+    int turnDtN;
+    int turnYawSends;
 
     /** Last pose accepted by the collision test (pos and theta are always that pose). */
     final Vector3d lastValidPos = new Vector3d();
@@ -91,8 +116,8 @@ final class AirshipFlight {
     volatile double lastCarry;
     volatile double totalCarry;
     int carryTeleports;
-    /** The lever helper entity (null if it could not be created). */
-    AirshipLever.Helper lever;
+    /** The helm helper entity (null if it could not be created). */
+    AirshipHelm.Helper helm;
 
     // ---- balloon flight model (same fields as BalloonFlight)
     /** The ship entity is mounted on the pilot (MountedComponent on the entity). False while aligning for the landing. */
@@ -125,9 +150,24 @@ final class AirshipFlight {
     /** Model currently shown (travelling, idle or off). */
     volatile String modelId;
     volatile boolean off;
-    /** The travelling model (burner flames) is shown. thrustLastMs: last travel sample that burned fuel (hysteresis). */
-    volatile boolean thrust;
-    long thrustLastMs;
+    /** Burner state shown by the model: idle smoke, forward flames, or an asymmetric turn (LEFT = bow swings to the pilot's left). */
+    enum Thrust { IDLE, FORWARD, LEFT, RIGHT }
+
+    volatile Thrust thrust = Thrust.IDLE;
+    /** State wanted by the last evaluation and since when (hold before leaving a flame state). */
+    Thrust thrustWanted = Thrust.IDLE;
+    long thrustWantedSinceMs;
+    /** Turning hysteresis: +1 turning left (yaw rate > 0), -1 turning right, 0 not turning. */
+    int turnDir;
+    /** The last travel sample was above fuelMoveMin (forward flames). */
+    volatile boolean moving;
+    /** Absolute heading change (rad) applied since the start of the current sample window. */
+    double windowTurn;
+    /** The sound effect of the burners (Hotair_Balloon_Burner_Boost) is on the ship entity. */
+    volatile boolean roar;
+    /** Rest turn: the ship turns toward the pilot's head yaw. restSinceMs: when the head first left the dead zone (0 = not). */
+    volatile boolean restActive;
+    long restSinceMs;
 
     final List<BalloonLights.Light> lights = new CopyOnWriteArrayList<>();
     /** Passengers seated on the stools (T64). Empty without passengers. */
@@ -139,6 +179,8 @@ final class AirshipFlight {
     long lastTickMs;
     long lastResumeMs;
     long lastCollisionLogMs;
+    /** T76: last "height limit reached" message sent to the pilot. */
+    long lastHeightMsgMs;
 
     // ---- landing alignment
     volatile boolean landing;

@@ -13,7 +13,7 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 /**
- * Interaction "Airship_TakeOff": using the Airship_Lever block (Use interaction of its BlockType). Takes off with the
+ * Interaction "Airship_TakeOff": using the Airship_Helm block (the ship's helm window) (Use interaction of its BlockType). Takes off with the
  * airship placed around the player. If the player already pilots one, it starts the landing alignment instead.
  */
 public class AirshipTakeOffInteraction extends SimpleInstantInteraction {
@@ -22,7 +22,7 @@ public class AirshipTakeOffInteraction extends SimpleInstantInteraction {
 
     public static final BuilderCodec<AirshipTakeOffInteraction> CODEC = BuilderCodec
             .builder(AirshipTakeOffInteraction.class, AirshipTakeOffInteraction::new, SimpleInstantInteraction.CODEC)
-            .documentation("Takes off with the airship the player stands in (lever).")
+            .documentation("Takes off with the airship the player stands in (helm).")
             .build();
 
     public AirshipTakeOffInteraction() {

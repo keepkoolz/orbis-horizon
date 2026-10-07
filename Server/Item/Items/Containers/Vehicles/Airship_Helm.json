@@ -1,0 +1,69 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.airship_helm.name",
+    "Description": "server.orbis_horizon.items.airship_helm.description"
+  },
+  "PlayerAnimationsId": "Block",
+  "Categories": [
+    "Furniture.Doors"
+  ],
+  "Icon": "Icons/ItemsGenerated/Furniture_Crude_Window.png",
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": "Block_Secondary"
+  },
+  "BlockType": {
+    "InteractionHint": "server.orbis_horizon.interactionHints.helmTakeOff",
+    "BlockParticleSetId": "Wood",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "CustomModel": "Blocks/Decorative_Sets/Crude/Window.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Decorative_Sets/Crude/Window_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "DrawType": "Model",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Woods"
+      }
+    },
+    "Group": "Wood",
+    "HitboxType": "Window",
+    "Material": "Solid",
+    "Opacity": "Transparent",
+    "ParticleColor": "#63412c",
+    "Supporting": {
+      "Up": [
+        {
+          "FaceType": "Window"
+        }
+      ],
+      "Down": [
+        {
+          "FaceType": "Window"
+        }
+      ]
+    },
+    "VariantRotation": "Wall",
+    "TextureComputedColor": "#614029",
+    "Interactions": {
+      "Use": {
+        "Interactions": [
+          {
+            "Type": "Airship_TakeOff"
+          }
+        ]
+      }
+    }
+  },
+  "Tags": {
+    "Type": [
+      "Furniture"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

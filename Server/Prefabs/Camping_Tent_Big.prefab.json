@@ -88,14 +88,14 @@
       "x": -1,
       "y": 0,
       "z": 2,
-      "name": "Furniture_Kweebec_Ladder",
+      "name": "Camping_Tent_Decor_Ladder",
       "rotation": 3
     },
     {
       "x": -1,
       "y": 1,
       "z": 2,
-      "name": "Furniture_Kweebec_Ladder",
+      "name": "Camping_Tent_Decor_Ladder",
       "rotation": 3
     },
     {
@@ -159,20 +159,8 @@
     },
     {
       "x": 0,
-      "y": 0,
-      "z": 2,
-      "name": "Cloth_Roof_Orange_Flat"
-    },
-    {
-      "x": 0,
       "y": 2,
       "z": 2,
-      "name": "Cloth_Roof_Orange_Flat"
-    },
-    {
-      "x": 0,
-      "y": 0,
-      "z": 3,
       "name": "Cloth_Roof_Orange_Flat"
     },
     {
@@ -183,20 +171,8 @@
     },
     {
       "x": 0,
-      "y": 0,
-      "z": 4,
-      "name": "Cloth_Roof_Orange_Flat"
-    },
-    {
-      "x": 0,
       "y": 2,
       "z": 4,
-      "name": "Cloth_Roof_Orange_Flat"
-    },
-    {
-      "x": 0,
-      "y": 0,
-      "z": 5,
       "name": "Cloth_Roof_Orange_Flat"
     },
     {
@@ -215,14 +191,14 @@
       "x": 1,
       "y": 0,
       "z": 2,
-      "name": "Furniture_Kweebec_Ladder",
+      "name": "Camping_Tent_Decor_Ladder",
       "rotation": 1
     },
     {
       "x": 1,
       "y": 1,
       "z": 2,
-      "name": "Furniture_Kweebec_Ladder",
+      "name": "Camping_Tent_Decor_Ladder",
       "rotation": 1
     },
     {

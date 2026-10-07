@@ -1,7 +1,7 @@
 {
   "TranslationProperties": {
-    "Name": "server.orbis_horizon.items.airship_lever.name",
-    "Description": "server.orbis_horizon.items.airship_lever.description"
+    "Name": "server.orbis_horizon.items.cage_lever.name",
+    "Description": "server.orbis_horizon.items.cage_lever.description"
   },
   "Icon": "Icons/ItemsGenerated/Deco_Lever.png",
   "Categories": [
@@ -11,6 +11,7 @@
     "Secondary": "Block_Secondary"
   },
   "BlockType": {
+    "InteractionHint": "server.orbis_horizon.interactionHints.cageLever",
     "DrawType": "Model",
     "BlockSoundSetId": "Metal",
     "PhysicalMaterialId": "Metal",
@@ -34,7 +35,7 @@
       "Use": {
         "Interactions": [
           {
-            "Type": "Airship_TakeOff"
+            "Type": "HotairBalloon_CageLever"
           }
         ]
       }

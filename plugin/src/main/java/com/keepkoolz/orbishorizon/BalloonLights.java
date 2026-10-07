@@ -112,13 +112,13 @@ final class BalloonLights {
     }
 
     /** Emission point of the burner flame: the point where the model attaches its particles (Burner_Fire node). */
-    static Vector3f burnerPoint(BalloonShape s) {
-        BalloonShape.Cell a = s.anchor();
+    static Vector3f burnerPoint(StructureShape s) {
+        StructureShape.Cell a = s.anchor();
         return new Vector3f(a.x(), a.y() + 1, a.z());
     }
 
     /** Creates the burner flame light at take-off (T35), if lights are enabled and the burner is lit. */
-    static void spawnBurner(Store<EntityStore> store, BalloonFlight flight, BalloonShape s) {
+    static void spawnBurner(Store<EntityStore> store, BalloonFlight flight, StructureShape s) {
         if (!enabled || flight.dry || flight.lights.stream().anyMatch(l -> l.key.equals(KEY_BURNER))) {
             return;
         }
@@ -132,6 +132,9 @@ final class BalloonLights {
         final Vector3f local;
         Ref<EntityStore> ref;
         UUID uuid;
+        /** T82: twin light mounted on the observer entity (what the other players see), null in single rendering. */
+        Ref<EntityStore> twinRef;
+        UUID twinUuid;
         /** Colour currently given to the component (null: off). */
         volatile ColorLight color;
 
@@ -150,7 +153,7 @@ final class BalloonLights {
     private static volatile Integer radiusOverride;
 
     /** Light specs per shape (one entry per balloon type, T54). */
-    private static final java.util.Map<BalloonShape, List<Spec>> SPECS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<StructureShape, List<Spec>> SPECS = new java.util.concurrent.ConcurrentHashMap<>();
 
     static boolean enabled() {
         return enabled;
@@ -186,13 +189,13 @@ final class BalloonLights {
      * Rock_Crystal_Yellow_Block. The burner is not one of them: its light only exists in the On state, and in flight it has its own key (T35, spawnBurner).
      * Computed once per shape.
      */
-    static List<Spec> specsFor(BalloonShape s) {
+    static List<Spec> specsFor(StructureShape s) {
         List<Spec> cached = SPECS.get(s);
         if (cached != null) {
             return cached;
         }
         List<Spec> specs = new ArrayList<>();
-        for (BalloonShape.Cell c : s.cells()) {
+        for (StructureShape.Cell c : s.cells()) {
             BlockType bt = BlockType.getAssetMap().getAsset(c.baseName());
             ColorLight light = bt != null ? bt.getLight() : null;
             if (light == null || (light.red == 0 && light.green == 0 && light.blue == 0)) {
@@ -207,7 +210,7 @@ final class BalloonLights {
     }
 
     /** Creates the prefab blocks' lights (if lights are enabled). Call on the world thread, once the flying entity is created. */
-    static void spawnAll(Store<EntityStore> store, BalloonFlight flight, BalloonShape s) {
+    static void spawnAll(Store<EntityStore> store, BalloonFlight flight, StructureShape s) {
         if (!enabled) {
             return;
         }
@@ -245,6 +248,11 @@ final class BalloonLights {
             }
             store.putComponent(light.ref, MountedComponent.getComponentType(),
                     new MountedComponent(flight.balloonRef, BalloonManager.attachOffset(flight.kind, light.local), MountController.Minecart));
+            // T82: dual rendering, this light is seen by the pilot only, its twin (on the observer entity) by the others.
+            if (flight.dual && flight.observerRef != null && flight.observerRef.isValid()) {
+                attachTwin(store, light, flight.balloonUuid, flight.observerRef, BalloonManager.attachOffset(flight.kind, light.local),
+                        BalloonManager.prefabPoint(flight.entityPos, flight.rotation, light.local), c, flight.pilotUuid);
+            }
             flight.lights.add(light);
             return light;
         } catch (RuntimeException e) {
@@ -254,20 +262,23 @@ final class BalloonLights {
     }
 
     /**
-     * Creates the interactable chain helper (AirshipLever.Helper) on the centre of the chain cell, mounted on the flying entity like
-     * the lights. In flight the chain is only part of the model: using this entity lands the balloon, as the airship lever does.
+     * Creates the interactable chain helper (AirshipHelm.Helper) on the centre of the chain cell, mounted on the flying entity like
+     * the lights. In flight the chain is only part of the model: using this entity lands the balloon, as the airship helm does.
      * Not affected by /orbishorizon balloon light. No effect if the prefab has no chain or the entity cannot be made (logged).
      */
-    static void spawnChain(Store<EntityStore> store, BalloonFlight flight, BalloonShape s) {
+    static void spawnChain(Store<EntityStore> store, BalloonFlight flight, StructureShape s) {
         if (flight.balloonRef == null || !flight.balloonRef.isValid() || flight.chain != null) {
             return;
         }
-        for (BalloonShape.Cell c : s.cells()) {
+        for (StructureShape.Cell c : s.cells()) {
             if (BalloonManager.CHAIN_BLOCK.equals(c.baseName())) {
                 Vector3f local = new Vector3f(c.x(), c.y() + 0.5f, c.z());
-                flight.chain = AirshipLever.spawn(store, uuidFor(flight.balloonUuid, KEY_CHAIN), CHAIN_ROOT_INTERACTION,
+                flight.chain = AirshipHelm.spawn(store, uuidFor(flight.balloonUuid, KEY_CHAIN), CHAIN_ROOT_INTERACTION,
                         flight.balloonRef, local, BalloonManager.attachOffset(flight.kind, local),
                         BalloonManager.prefabPoint(flight.entityPos, flight.rotation, local));
+                if (flight.dual && flight.chain != null) {
+                    ViewFilter.only(flight.chain.ref, flight.pilotUuid); // T82: only the pilot can use it
+                }
                 return;
             }
         }
@@ -275,13 +286,13 @@ final class BalloonLights {
 
     /** Removes the chain helper. Never throws. */
     static void removeChain(Store<EntityStore> store, BalloonFlight flight) {
-        AirshipLever.remove(store, flight.chain);
+        AirshipHelm.remove(store, flight.chain);
         flight.chain = null;
     }
 
     /** Puts the light entities (and the chain helper) back on their world point, to be called after each movement of the flying entity. */
     static void follow(Store<EntityStore> store, BalloonFlight flight) {
-        AirshipLever.Helper chain = flight.chain;
+        AirshipHelm.Helper chain = flight.chain;
         if (chain != null && chain.ref != null && chain.ref.isValid()) {
             TransformComponent t = store.getComponent(chain.ref, TransformComponent.getComponentType());
             if (t != null) {
@@ -292,13 +303,7 @@ final class BalloonLights {
             return;
         }
         for (Light l : flight.lights) {
-            if (l.ref == null || !l.ref.isValid()) {
-                continue;
-            }
-            TransformComponent t = store.getComponent(l.ref, TransformComponent.getComponentType());
-            if (t != null) {
-                t.setPosition(BalloonManager.prefabPoint(flight.entityPos, flight.rotation, l.local));
-            }
+            positionBoth(store, l, BalloonManager.prefabPoint(flight.entityPos, flight.rotation, l.local));
         }
     }
 
@@ -313,6 +318,7 @@ final class BalloonLights {
                 ColorLight c = effective(color);
                 l.color = c;
                 d.setColorLight(c);
+                setTwinColor(store, l, c);
                 return true;
             }
         }
@@ -320,7 +326,7 @@ final class BalloonLights {
     }
 
     /** Applies the current setting (forced radius) to lights already created. */
-    static void refreshColors(Store<EntityStore> store, BalloonFlight flight, BalloonShape s) {
+    static void refreshColors(Store<EntityStore> store, BalloonFlight flight, StructureShape s) {
         for (Spec spec : specsFor(s)) {
             set(store, flight, spec.key(), spec.light());
         }
@@ -333,13 +339,7 @@ final class BalloonLights {
     /** Removes all the flight's lights. Never throws (called by finishFlight). */
     static void removeAll(Store<EntityStore> store, BalloonFlight flight) {
         for (Light l : flight.lights) {
-            try {
-                if (l.ref != null && l.ref.isValid()) {
-                    store.removeEntity(l.ref, RemoveReason.REMOVE);
-                }
-            } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Lumière %s non supprimée", l.key);
-            }
+            removeBoth(store, l);
         }
         flight.lights.clear();
     }
@@ -348,7 +348,7 @@ final class BalloonLights {
      * Removes the lights that an interrupted flight may have left in a world that stayed loaded (T19 recovery). They
      * are never saved (NonSerialized), so this only concerns a world that outlived the plugin.
      */
-    static void removeOrphans(World world, Store<EntityStore> store, UUID balloonUuid, BalloonShape s) {
+    static void removeOrphans(World world, Store<EntityStore> store, UUID balloonUuid, StructureShape s) {
         if (balloonUuid == null) {
             return;
         }
@@ -359,16 +359,122 @@ final class BalloonLights {
         keys.add(KEY_BURNER);
         keys.add(KEY_FIREBOX);
         keys.add(KEY_CHAIN);
+        // T82: the twin lights (mounted on the observer entity) and the observer entity itself have deterministic UUIDs too.
+        List<String> all = new ArrayList<>(keys);
         for (String key : keys) {
+            all.add(key + TWIN_SUFFIX);
+        }
+        all.add(KEY_OBSERVER);
+        for (String key : all) {
             try {
                 Ref<EntityStore> ref = world.getEntityStore().getRefFromUUID(uuidFor(balloonUuid, key));
                 if (ref != null && ref.isValid()) {
+                    ViewFilter.clear(ref);
                     store.removeEntity(ref, RemoveReason.REMOVE);
                     LOGGER.at(Level.INFO).log("Lumière %s restée dans le monde supprimée", key);
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Lumière %s restée dans le monde non supprimée", key);
             }
+        }
+    }
+
+    // ------------------------------------------------------------------ T82: twin lights (observer entity)
+
+    /** Key of the observer entity (not a light, same UUID scheme so a resume finds an orphan). */
+    static final String KEY_OBSERVER = "observer";
+    /** Suffix of the key of a twin light (the one mounted on the observer entity). */
+    static final String TWIN_SUFFIX = "+obs";
+
+    /**
+     * T82: dual rendering. Makes this light visible to the pilot only and creates its twin on the observer entity (same colour and
+     * point, mounted with the same offset), visible to everybody but the pilot. Never throws: without the twin, the others simply see no light.
+     */
+    static void attachTwin(Store<EntityStore> store, Light light, UUID mainUuid, Ref<EntityStore> observer, Vector3f mountOffset,
+                           Vector3d position, ColorLight color, UUID pilot) {
+        try {
+            ViewFilter.only(light.ref, pilot);
+            light.twinUuid = uuidFor(mainUuid, light.key + TWIN_SUFFIX);
+            Holder<EntityStore> holder = EntityStore.REGISTRY.newHolder();
+            holder.addComponent(TransformComponent.getComponentType(), new TransformComponent(new Vector3d(position), new Rotation3f()));
+            holder.addComponent(UUIDComponent.getComponentType(), new UUIDComponent(light.twinUuid));
+            holder.putComponent(NetworkId.getComponentType(), new NetworkId(store.getExternalData().takeNextNetworkId()));
+            holder.ensureComponent(Intangible.getComponentType());
+            holder.addComponent(EntityStore.REGISTRY.getNonSerializedComponentType(), NonSerialized.get());
+            holder.addComponent(DynamicLight.getComponentType(), new DynamicLight(color));
+            light.twinRef = store.addEntity(holder, AddReason.SPAWN);
+            if (light.twinRef == null) {
+                return;
+            }
+            ViewFilter.hide(light.twinRef, pilot);
+            store.putComponent(light.twinRef, MountedComponent.getComponentType(),
+                    new MountedComponent(observer, new Vector3f(mountOffset), MountController.Minecart));
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Lumière jumelle %s impossible", light.key);
+        }
+    }
+
+    /** Sets the world position of a light and of its twin. */
+    static void positionBoth(Store<EntityStore> store, Light l, Vector3d position) {
+        for (Ref<EntityStore> ref : new Ref[]{l.ref, l.twinRef}) {
+            if (ref == null || !ref.isValid()) {
+                continue;
+            }
+            TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
+            if (t != null) {
+                t.setPosition(new Vector3d(position));
+            }
+        }
+    }
+
+    /** Sets the colour of the twin of a light (the main light is set by the caller). Never throws. */
+    static void setTwinColor(Store<EntityStore> store, Light l, ColorLight c) {
+        try {
+            if (l.twinRef != null && l.twinRef.isValid()) {
+                DynamicLight d = store.getComponent(l.twinRef, DynamicLight.getComponentType());
+                if (d != null) {
+                    d.setColorLight(c);
+                }
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Lumière jumelle %s non mise à jour", l.key);
+        }
+    }
+
+    /** Removes the twin of a light and gives the main light back to everybody (the flight no longer has an observer). */
+    static void dropTwin(Store<EntityStore> store, Light l) {
+        try {
+            if (l.twinRef != null) {
+                ViewFilter.clear(l.twinRef);
+                if (l.twinRef.isValid()) {
+                    store.removeEntity(l.twinRef, RemoveReason.REMOVE);
+                }
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Lumière jumelle %s non supprimée", l.key);
+        }
+        l.twinRef = null;
+        ViewFilter.clear(l.ref);
+    }
+
+    /** Removes a light and its twin. Never throws. */
+    static void removeBoth(Store<EntityStore> store, Light l) {
+        try {
+            if (l.twinRef != null) {
+                ViewFilter.clear(l.twinRef);
+                if (l.twinRef.isValid()) {
+                    store.removeEntity(l.twinRef, RemoveReason.REMOVE);
+                }
+                l.twinRef = null;
+            }
+            if (l.ref != null) {
+                ViewFilter.clear(l.ref);
+                if (l.ref.isValid()) {
+                    store.removeEntity(l.ref, RemoveReason.REMOVE);
+                }
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Lumière %s non supprimée", l.key);
         }
     }
 

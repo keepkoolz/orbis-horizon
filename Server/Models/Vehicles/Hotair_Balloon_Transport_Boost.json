@@ -1,0 +1,37 @@
+{
+  "Model": "Items/Vehicles/Hotair_Balloon_Transport.blockymodel",
+  "Texture": "Items/Vehicles/Hotair_Balloon_Transport_Texture.png",
+  "EyeHeight": 1,
+  "HitBox": {
+    "Max": {
+      "X": 21,
+      "Y": 34,
+      "Z": 21
+    },
+    "Min": {
+      "X": -21,
+      "Y": -12,
+      "Z": -21
+    }
+  },
+  "MinScale": 1,
+  "MaxScale": 1,
+  "Particles": [
+    {
+      "SystemId": "Hotair_Balloon_Basic_Flame",
+      "Scale": 0.9,
+      "TargetNodeName": "Burner_Fire"
+    },
+    {
+      "SystemId": "Hotair_Balloon_Basic_Flamethrower",
+      "Scale": 0.8,
+      "TargetNodeName": "Burner_Fire",
+      "PositionOffset": {
+        "Y": 3
+      },
+      "RotationOffset": {
+        "Pitch": 90
+      }
+    }
+  ]
+}

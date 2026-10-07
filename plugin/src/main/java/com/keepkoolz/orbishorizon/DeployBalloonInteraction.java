@@ -11,7 +11,9 @@ import com.hypixel.hytale.math.vector.Vector3dUtil;
 import com.hypixel.hytale.math.vector.Vector3iUtil;
 import com.hypixel.hytale.math.util.FastRandom;
 import com.hypixel.hytale.protocol.BlockPosition;
+import com.hypixel.hytale.protocol.InteractionState;
 import com.hypixel.hytale.protocol.InteractionType;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
@@ -72,11 +74,13 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
     protected void firstRun(InteractionType type, InteractionContext context, CooldownHandler cooldownHandler) {
         if (prefabPath == null) {
             LOGGER.at(Level.WARNING).log("HotairBalloon_Deploy: PrefabPath is missing");
+            context.getState().state = InteractionState.Failed; // the crate is not consumed (the Next is skipped)
             return;
         }
         Path path = PrefabStore.get().findAssetPrefabPath(prefabPath);
         if (path == null) {
             LOGGER.at(Level.WARNING).log("HotairBalloon_Deploy: prefab not found: %s", prefabPath);
+            context.getState().state = InteractionState.Failed; // the crate is not consumed (the Next is skipped)
             return;
         }
         IPrefabBuffer buffer = PrefabBufferUtil.getCached(path);
@@ -88,6 +92,7 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
         TransformComponent transform = commandBuffer.getComponent(player, TransformComponent.getComponentType());
         if (transform == null) {
             LOGGER.at(Level.WARNING).log("HotairBalloon_Deploy: no transform on interacting entity");
+            context.getState().state = InteractionState.Failed; // the crate is not consumed (the Next is skipped)
             return;
         }
 
@@ -117,9 +122,21 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
         }
         if (kind == null) {
             LOGGER.at(Level.WARNING).log("HotairBalloon_Deploy: prefab %s is not one of the balloon types or the airship, nothing placed", prefabPath);
+            context.getState().state = InteractionState.Failed; // the crate is not consumed (the Next is skipped)
             return;
         }
-        BalloonShape shape = kind.shapeOrNull();
+        StructureShape shape = kind.shapeOrNull();
+        // T76: a pose with a cell outside the world's height range would lose blocks: refused, the Failed state skips the Next
+        // (ModifyInventory), so the crate is not consumed.
+        if (shape != null && BalloonManager.exceedsHeight(shape, origin, rotation)) {
+            PlayerRef playerRef = commandBuffer.getComponent(player, PlayerRef.getComponentType());
+            if (playerRef != null) {
+                playerRef.sendMessage(Texts.t("deploy.heightLimit"));
+            }
+            LOGGER.at(Level.INFO).log("Caisse %s refusée en (%d, %d, %d) : la structure dépasse la limite de hauteur", kind.id, origin.x, origin.y, origin.z);
+            context.getState().state = InteractionState.Failed;
+            return;
+        }
         if (shape != null) {
             BalloonManager.pasteKeepingTerrain(buffer, world, shape, origin, rotation, flags, commandBuffer, kind.id, null);
         } else {

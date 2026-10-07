@@ -1,7 +1,7 @@
 {
   "Interactions": [
     {
-      "Type": "Airship_LeverLand"
+      "Type": "Airship_HelmLand"
     }
   ]
 }

@@ -33,7 +33,7 @@ import java.util.logging.Level;
  * same prefab position at landing, with the block state of the level (Tier2, Tier3...), like CraftingManager does when a
  * bench is upgraded.
  *
- * Only the origin cell of a multi-cell bench counts (BalloonShape.Cell.filler is 0). Position in the file and in this list:
+ * Only the origin cell of a multi-cell bench counts (StructureShape.Cell.filler is 0). Position in the file and in this list:
  * prefab frame, before rotation.
  */
 final class AirshipBenches {
@@ -88,9 +88,9 @@ final class AirshipBenches {
      * clears the upgrade items of the live component (the blocks are about to be removed, the game would drop them).
      * Benches at level 1 without upgrade items are skipped. To be called on the world thread.
      */
-    static AirshipBenches takeFrom(World world, BalloonShape shape, Vector3i origin, Rotation rotation) {
+    static AirshipBenches takeFrom(World world, StructureShape shape, Vector3i origin, Rotation rotation) {
         AirshipBenches benches = new AirshipBenches();
-        for (BalloonShape.Cell c : shape.cells()) {
+        for (StructureShape.Cell c : shape.cells()) {
             if (c.filler() != 0) {
                 continue;
             }
@@ -212,6 +212,17 @@ final class AirshipBenches {
         BenchBlock bench = live(world, p);
         if (bench == null) {
             return false;
+        }
+        BlockType placed = world.getBlockType(p.x, p.y, p.z);
+        if (placed != null && !"?".equals(e.block)) {
+            BlockType placedBase = BenchBlock.getBaseBlockType(placed);
+            String placedName = placedBase != null ? placedBase.getId() : null;
+            if (placedName != null && !placedName.equals(e.block)) {
+                // Never put a level on a different bench (prefab layout changed between take-off and landing, T80).
+                LOGGER.at(Level.WARNING).log("Établi %s du dirigeable en %s : le bloc posé est %s, niveau %d non remis",
+                        e.block, p, placedName, e.tier);
+                return false;
+            }
         }
         bench.setTierLevel(e.tier);
         bench.setUpgradeItems(copy(e.upgradeItems));

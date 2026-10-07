@@ -34,11 +34,16 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 .register(TakeOffBalloonInteraction.TYPE_ID, TakeOffBalloonInteraction.class, TakeOffBalloonInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
                 .register(LandBalloonInteraction.TYPE_ID, LandBalloonInteraction.class, LandBalloonInteraction.CODEC);
+        // T73: levers of the transport balloon (cage up and down, cage side open and closed).
+        getCodecRegistry(Interaction.CODEC)
+                .register(CageLeverInteraction.TYPE_ID, CageLeverInteraction.class, CageLeverInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
+                .register(CageGateInteraction.TYPE_ID, CageGateInteraction.class, CageGateInteraction.CODEC);
         getEntityStoreRegistry().registerSystem(new BalloonFlightSystem());
         getCodecRegistry(Interaction.CODEC)
                 .register(AirshipTakeOffInteraction.TYPE_ID, AirshipTakeOffInteraction.class, AirshipTakeOffInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
-                .register(AirshipLeverInteraction.TYPE_ID, AirshipLeverInteraction.class, AirshipLeverInteraction.CODEC);
+                .register(AirshipHelmInteraction.TYPE_ID, AirshipHelmInteraction.class, AirshipHelmInteraction.CODEC);
         registerAirshipSystems();
         try {
             // Burner flame on the ground according to the burner's fuel (T13). Needs the game's
@@ -74,6 +79,25 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Mort du pilote en vol : système désactivé, seul le contrôle du tick reste");
         }
+        // T93: a player who gets up from the small tent's bed is put at the tent exit, the bed's respawn point too.
+        try {
+            getEntityStoreRegistry().registerSystem(new TentBedSystem());
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Sortie du lit de la tente : système désactivé");
+        }
+        // T75: a game mode change of a pilot or passenger makes them leave the vehicle (the game resets the movement settings).
+        try {
+            getEntityStoreRegistry().registerSystem(new GameModeSystem());
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Sortie du véhicule au changement de mode de jeu : système désactivé");
+        }
+        // T82: dual rendering of the vehicles in flight needs the per-viewer visibility filter. Without it every flight keeps the single entity.
+        try {
+            getEntityStoreRegistry().registerSystem(new ViewFilter.FilterSystem());
+            ViewFilter.markRegistered();
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Affichage double des véhicules en vol : filtre de visibilité désactivé, une seule entité par véhicule");
+        }
         // T21: a passenger who disconnects is dismounted cleanly (they would otherwise be saved in the air).
         getEventRegistry().register(PlayerDisconnectEvent.class,
                 event -> {
@@ -87,9 +111,11 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         getEventRegistry().register((short) -50, ShutdownEvent.class, event -> {
             BalloonManager.get().landAll();
             AirshipManager.get().landAll();
+            BalloonRegistry.flushCage();
         });
         getEventRegistry().registerGlobal(StartWorldEvent.class, event -> {
             BalloonManager.get().recoverWorld(event.getWorld());
+            CageAnimals.recoverWorld(event.getWorld());
             AirshipManager.get().recoverWorld(event.getWorld());
         });
         getCommandRegistry().registerCommand(new OrbisHorizonCommand());
@@ -102,15 +128,15 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         // T44: the tent shape is read once (asset prefabs are loaded before start). A failure
         // is logged by Deployables and the shape will be read again on demand.
         for (Deployables.Kind kind : Deployables.TENTS) {
-            BalloonShape tent = kind.shapeOrNull();
+            StructureShape tent = kind.shapeOrNull();
             if (tent != null) {
-                BalloonShape.Cell anchor = tent.anchor();
+                StructureShape.Cell anchor = tent.anchor();
                 getLogger().at(Level.INFO).log("%s : %d case(s), repère en (%d, %d, %d)",
                         kind == Deployables.TENT ? "Tente" : "Grande tente", tent.cells().size(), anchor.x(), anchor.y(), anchor.z());
             }
         }
         // Airship prototype: the shape is read once and the collision hull computed (logged by AirshipManager).
-        BalloonShape airship = Deployables.AIRSHIP.shapeOrNull();
+        StructureShape airship = Deployables.AIRSHIP.shapeOrNull();
         if (airship != null) {
             getLogger().at(Level.INFO).log("Dirigeable : %d case(s), repère « %s » en (%d, %d, %d)", airship.cells().size(),
                     airship.anchor().baseName(), airship.anchor().x(), airship.anchor().y(), airship.anchor().z());
@@ -118,15 +144,29 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         }
         // T54: balloon types, with their number of seats (limit of passengers).
         for (Deployables.Kind kind : Deployables.BALLOONS) {
-            BalloonShape shape = kind.shapeOrNull();
+            StructureShape shape = kind.shapeOrNull();
             if (shape != null) {
                 getLogger().at(Level.INFO).log("Montgolfière « %s » : %d case(s), %d siège(s)", kind.id, shape.cells().size(), shape.seats().size());
             }
         }
         // Worlds already started when the plugin starts (StartWorldEvent has already passed).
         for (World world : Universe.get().getWorlds().values()) {
-            BalloonManager.get().recoverWorld(world);
-            AirshipManager.get().recoverWorld(world);
+            // One failing resume must never stop the plugin: StartWorldEvent calls them again when the world is ready.
+            try {
+                BalloonManager.get().recoverWorld(world);
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Reprise des montgolfières de %s remise au démarrage du monde", world.getName());
+            }
+            try {
+                CageAnimals.recoverWorld(world);
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Reprise des animaux de %s remise au démarrage du monde", world.getName());
+            }
+            try {
+                AirshipManager.get().recoverWorld(world);
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Reprise des dirigeables de %s remise au démarrage du monde", world.getName());
+            }
         }
     }
 
@@ -134,6 +174,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
     protected void shutdown() {
         BalloonManager.get().landAll();
         AirshipManager.get().landAll();
+        BalloonRegistry.flushCage();
     }
 
     /** Airship: the head-yaw reader (before ProcessPlayerInput) and the flight tick. A failure is logged and the system is skipped. */

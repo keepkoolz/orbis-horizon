@@ -116,26 +116,29 @@ final class AirshipPassengers {
 
     // ------------------------------------------------------------------ seats
 
-    /** Blocks whose every cell is one passenger seat: the stool (1 cell) and the tavern bench (2 cells, 2 seats in the game). */
-    static final java.util.Set<String> SEAT_BLOCKS = java.util.Set.of(BalloonShape.SEAT_BLOCK, "Furniture_Tavern_Bench");
+    /**
+     * Blocks whose every cell is one passenger seat: the collision-free Airship_Stool (T79), the game stool of airships placed
+     * before T79 and the tavern bench (2 cells, 2 seats in the game).
+     */
+    static final java.util.Set<String> SEAT_BLOCKS = java.util.Set.of("Airship_Stool", StructureShape.SEAT_BLOCK, "Furniture_Tavern_Bench");
 
     /**
      * Passenger seats of the ship: every cell (origin and filler) of a seat block, sorted by z then x. A tavern bench gives 2
      * seats, one per cell, like the 2 Seats of its asset (local x 0 and -1, which are its 2 cells).
      */
-    static List<BalloonShape.Cell> seats(BalloonShape s) {
-        List<BalloonShape.Cell> list = new ArrayList<>();
-        for (BalloonShape.Cell c : s.cells()) {
+    static List<StructureShape.Cell> seats(StructureShape s) {
+        List<StructureShape.Cell> list = new ArrayList<>();
+        for (StructureShape.Cell c : s.cells()) {
             if (SEAT_BLOCKS.contains(c.baseName())) {
                 list.add(c);
             }
         }
-        list.sort(Comparator.comparingInt(BalloonShape.Cell::z).thenComparingInt(BalloonShape.Cell::x));
+        list.sort(Comparator.comparingInt(StructureShape.Cell::z).thenComparingInt(StructureShape.Cell::x));
         return list;
     }
 
     /** Seating point of a seat cell, prefab frame: centre of the cell, at the stool's seat height (T21 value, bench too). */
-    static Vector3f seatLocal(BalloonShape.Cell c) {
+    static Vector3f seatLocal(StructureShape.Cell c) {
         return new Vector3f(c.x(), c.y() + BalloonManager.get().seatHeight(), c.z());
     }
 
@@ -143,7 +146,7 @@ final class AirshipPassengers {
      * Where a passenger stands on landing: a horizontal neighbour of the stool with 2 free cells and a floor, preferably the one
      * opposite a block (the bench in front of the stool, so the passenger stands in the aisle). Else on top of the stool.
      */
-    static Vector3f exitLocal(BalloonShape s, BalloonShape.Cell c) {
+    static Vector3f exitLocal(StructureShape s, StructureShape.Cell c) {
         int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
         Vector3f fallback = null;
         for (int[] d : dirs) {
@@ -164,7 +167,7 @@ final class AirshipPassengers {
     }
 
     /** Players inside the ship's box at take-off, other than the pilot. */
-    static List<BalloonManager.Occupant> aboard(Store<EntityStore> store, World world, BalloonShape s, Vector3i origin, Rotation rotation,
+    static List<BalloonManager.Occupant> aboard(Store<EntityStore> store, World world, StructureShape s, Vector3i origin, Rotation rotation,
                                                 UUID pilot) {
         List<BalloonManager.Occupant> list = new ArrayList<>();
         for (PlayerRef other : world.getPlayerRefs()) {
@@ -181,9 +184,9 @@ final class AirshipPassengers {
     }
 
     /** Pairs each player with a stool, closest pairs first. The caller has checked there are enough stools. */
-    List<Rider> assign(Store<EntityStore> store, BalloonShape s, Vector3i origin, Rotation rotation, List<BalloonManager.Occupant> people) {
+    List<Rider> assign(Store<EntityStore> store, StructureShape s, Vector3i origin, Rotation rotation, List<BalloonManager.Occupant> people) {
         List<Rider> result = new ArrayList<>();
-        List<BalloonShape.Cell> seats = seats(s);
+        List<StructureShape.Cell> seats = seats(s);
         if (people.isEmpty() || seats.isEmpty()) {
             return result;
         }
@@ -214,7 +217,7 @@ final class AirshipPassengers {
             if (seatOf[j] < 0) {
                 continue;
             }
-            BalloonShape.Cell c = seats.get(seatOf[j]);
+            StructureShape.Cell c = seats.get(seatOf[j]);
             BalloonManager.Occupant o = people.get(j);
             BalloonFlight.Passenger p = new BalloonFlight.Passenger(o.ref(), o.player().getUuid(), o.player().getUsername(), seatOf[j],
                     new Vector3i(c.x(), c.y(), c.z()), seatLocal(c), false, legacy, BalloonManager.get().pose());
@@ -319,7 +322,7 @@ final class AirshipPassengers {
         }
         if (r.mode == Mode.MOUNT) {
             MountedComponent mc = store.getComponent(p.ref, MountedComponent.getComponentType());
-            if (mc != null && f.shipRef != null && f.shipRef.equals(mc.getMountedToEntity())) {
+            if (mc != null && f.shipRef != null && mountEntity(f).equals(mc.getMountedToEntity())) {
                 return;
             }
             if (now - r.lastActionMs < REMOUNT_INTERVAL_MS) {
@@ -403,7 +406,16 @@ final class AirshipPassengers {
     private void mount(Store<EntityStore> store, AirshipFlight f, Rider r) {
         Vector3f d = new Vector3f(r.p.seatLocal).sub(Deployables.AIRSHIP.airship.pivot);
         store.putComponent(r.p.ref, MountedComponent.getComponentType(),
-                new MountedComponent(f.shipRef, new Vector3f(-d.x, d.y, -d.z), MountController.Minecart));
+                new MountedComponent(mountEntity(f), new Vector3f(-d.x, d.y, -d.z), MountController.Minecart));
+    }
+
+    /**
+     * T82: entity a MOUNT-mode rider is mounted on. With dual rendering the ship entity mounted on the pilot is hidden from everybody
+     * but the pilot, so the riders use the observer entity (the one they see).
+     */
+    private static Ref<EntityStore> mountEntity(AirshipFlight f) {
+        Ref<EntityStore> o = f.observerRef;
+        return f.dual && o != null && o.isValid() ? o : f.shipRef;
     }
 
     /** Forced flight at zero flight speeds (the rider cannot fly away, nor fall), or back to the normal settings. */
@@ -529,6 +541,26 @@ final class AirshipPassengers {
         }
     }
 
+    /**
+     * T75: a rider changed game mode: released, removed from the flight, the new mode's movement settings re-applied, and put on the
+     * ground under their seat if the new mode cannot fly.
+     */
+    void leaveForGameMode(Store<EntityStore> store, AirshipFlight f, Rider r, com.hypixel.hytale.protocol.GameMode mode) {
+        f.riders.remove(r);
+        if (!r.p.ref.isValid()) {
+            return;
+        }
+        Vector3d seat = manager.shipPoint(f, r.p.seatLocal);
+        release(store, r);
+        if (!BalloonManager.reapplyGameMode(store, r.p.ref, mode)) {
+            BalloonManager.putOnGround(store, f.world, r.p.ref, seat);
+        }
+        PlayerRef pr = store.getComponent(r.p.ref, PlayerRef.getComponentType());
+        if (pr != null) {
+            pr.sendMessage(Texts.t("gameMode.left"));
+        }
+    }
+
     /** A rider who died: released without being moved (the respawn moves them). */
     void releaseDead(Store<EntityStore> store, AirshipFlight f, Rider r) {
         release(store, r);
@@ -579,11 +611,11 @@ final class AirshipPassengers {
      * teleported (sitting flag cleared), offline, the spot is noted and applied on their next arrival (same "stranded" files as
      * the balloon, BalloonManager.onPlayerAdded).
      */
-    static void restoreSaved(World world, Store<EntityStore> store, BalloonShape s, List<Saved> saved, Vector3i origin, Rotation q) {
+    static void restoreSaved(World world, Store<EntityStore> store, StructureShape s, List<Saved> saved, Vector3i origin, Rotation q) {
         Vector3d logical = new Vector3d(origin.x + 0.5, origin.y, origin.z + 0.5);
         for (Saved sv : saved) {
             try {
-                BalloonShape.Cell c = s.cellAt(sv.x(), sv.y(), sv.z());
+                StructureShape.Cell c = s.cellAt(sv.x(), sv.y(), sv.z());
                 Vector3f local = c != null ? exitLocal(s, c) : new Vector3f(sv.x(), sv.y() + 0.6f, sv.z());
                 Vector3d spot = BalloonManager.prefabPoint(logical, q, local);
                 Ref<EntityStore> online = null;

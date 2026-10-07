@@ -13,19 +13,19 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 /**
- * Interaction "Airship_LeverLand": the Use interaction of the lever helper entity (AirshipLever) in flight. The acting entity is
+ * Interaction "Airship_HelmLand": the Use interaction of the helm helper entity (AirshipHelm) in flight. The acting entity is
  * the player. If he pilots an airship, the landing starts (same path as /orbishorizon airship land). Anybody else is ignored.
  */
-public class AirshipLeverInteraction extends SimpleInstantInteraction {
+public class AirshipHelmInteraction extends SimpleInstantInteraction {
 
-    public static final String TYPE_ID = "Airship_LeverLand";
+    public static final String TYPE_ID = "Airship_HelmLand";
 
-    public static final BuilderCodec<AirshipLeverInteraction> CODEC = BuilderCodec
-            .builder(AirshipLeverInteraction.class, AirshipLeverInteraction::new, SimpleInstantInteraction.CODEC)
-            .documentation("Starts the landing of the airship the player pilots (lever entity in flight).")
+    public static final BuilderCodec<AirshipHelmInteraction> CODEC = BuilderCodec
+            .builder(AirshipHelmInteraction.class, AirshipHelmInteraction::new, SimpleInstantInteraction.CODEC)
+            .documentation("Starts the landing of the airship the player pilots (helm entity in flight).")
             .build();
 
-    public AirshipLeverInteraction() {
+    public AirshipHelmInteraction() {
     }
 
     @Override

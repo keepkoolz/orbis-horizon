@@ -3,7 +3,7 @@
     "Name": "server.orbis_horizon.items.airship_engine.name",
     "Description": "server.orbis_horizon.items.airship_engine.description"
   },
-  "ItemLevel": 15,
+  "ItemLevel": 5,
   "MaxStack": 100,
   "Icon": "Icons/ItemsGenerated/Metal_Iron_Ornate.png",
   "Categories": [
@@ -85,23 +85,23 @@
     "Input": [
       {
         "ItemId": "Ingredient_Bar_Iron",
-        "Quantity": 24
+        "Quantity": 72
       },
       {
         "ItemId": "Ingredient_Bar_Thorium",
-        "Quantity": 12
+        "Quantity": 36
       },
       {
         "ItemId": "Ingredient_Bar_Adamantite",
-        "Quantity": 8
+        "Quantity": 40
       },
       {
         "ItemId": "Ingredient_Charcoal",
-        "Quantity": 20
+        "Quantity": 60
       },
       {
         "ItemId": "Ingredient_Fire_Essence",
-        "Quantity": 10
+        "Quantity": 30
       }
     ],
     "BenchRequirement": [

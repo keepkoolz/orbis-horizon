@@ -1,0 +1,51 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.cage_gate_lever.name",
+    "Description": "server.orbis_horizon.items.cage_gate_lever.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Deco_Lever.png",
+  "Categories": [
+    "Blocks.Deco"
+  ],
+  "Interactions": {
+    "Secondary": "Block_Secondary"
+  },
+  "BlockType": {
+    "InteractionHint": "server.orbis_horizon.interactionHints.cageGate",
+    "DrawType": "Model",
+    "BlockSoundSetId": "Metal",
+    "PhysicalMaterialId": "Metal",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Tinkering/Lever.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Tinkering/Lever_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "HitboxType": "Plant_Large",
+    "VariantRotation": "NESW",
+    "Flags": {},
+    "Gathering": {
+      "Soft": {}
+    },
+    "BlockParticleSetId": "Grass",
+    "TextureComputedColor": "#4F4D41",
+    "Interactions": {
+      "Use": {
+        "Interactions": [
+          {
+            "Type": "HotairBalloon_CageGate"
+          }
+        ]
+      }
+    }
+  },
+  "PlayerAnimationsId": "Item",
+  "Tags": {
+    "Type": [
+      "Deco"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

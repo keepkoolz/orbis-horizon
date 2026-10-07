@@ -6,6 +6,7 @@
   "Icon": "Icons/ItemsGenerated/Camping_Tent_Crate.png",
   "PlayerAnimationsId": "Block",
   "MaxStack": 1,
+  "ItemLevel": 1,
   "Categories": [
     "Furniture.Containers"
   ],
@@ -16,7 +17,7 @@
         "Quantity": 40
       },
       {
-        "ItemId": "Ingredient_Hide_Light",
+        "ItemId": "Ingredient_Hide_Medium",
         "Quantity": 10
       },
       {

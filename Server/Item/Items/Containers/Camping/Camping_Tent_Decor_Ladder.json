@@ -1,0 +1,64 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.camping_tent_decor_ladder.name",
+    "Description": "server.orbis_horizon.items.camping_tent_decor_ladder.description"
+  },
+  "PlayerAnimationsId": "Block",
+  "Categories": [
+    "Furniture.Doors"
+  ],
+  "Icon": "Icons/ItemsGenerated/Furniture_Kweebec_Ladder.png",
+  "IconProperties": {
+    "Rotation": [
+      22.5,
+      45,
+      22.5
+    ],
+    "Scale": 0.75,
+    "Translation": [
+      10,
+      -20
+    ]
+  },
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": "Block_Secondary"
+  },
+  "BlockType": {
+    "BlockParticleSetId": "Wood",
+    "BlockSoundSetId": "Rope",
+    "PhysicalMaterialId": "Wool",
+    "CustomModel": "Blocks/Decorative_Sets/Kweebec/Ladder.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Decorative_Sets/Kweebec/Ladder_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "DrawType": "Model",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Woods"
+      }
+    },
+    "PlacementSettings": {
+      "RotationMode": "BlockNormal"
+    },
+    "HitboxType": "Camping_Tent_Decor_Ladder",
+    "Material": "Solid",
+    "Opacity": "Transparent",
+    "ParticleColor": "#6e5b29",
+    "VariantRotation": "NESW",
+    "TextureComputedColor": "#785C24"
+  },
+  "Tags": {
+    "Type": [
+      "Furniture"
+    ],
+    "Family": [
+      "Kweebec"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

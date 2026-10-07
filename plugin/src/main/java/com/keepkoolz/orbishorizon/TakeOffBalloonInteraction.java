@@ -31,6 +31,9 @@ public class TakeOffBalloonInteraction extends SimpleInstantInteraction {
     @Override
     protected void firstRun(InteractionType type, InteractionContext context, CooldownHandler cooldownHandler) {
         Ref<EntityStore> ref = context.getEntity();
+        com.hypixel.hytale.protocol.BlockPosition target = context.getTargetBlock();
+        org.joml.Vector3i chain = target != null
+                ? new org.joml.Vector3i(target.x, target.y, target.z) : null;
         World world = ((EntityStore) context.getCommandBuffer().getExternalData()).getWorld();
         // Block and entity changes are made outside the interaction processing.
         world.execute(() -> {
@@ -47,7 +50,7 @@ public class TakeOffBalloonInteraction extends SimpleInstantInteraction {
                 Message error = manager.land(store, player);
                 player.sendMessage(error != null ? error : Texts.t("landed"));
             } else {
-                Message error = manager.takeOff(store, ref, player, world);
+                Message error = manager.takeOff(store, ref, player, world, chain);
                 player.sendMessage(error != null ? error : Texts.t("takeoff.chain"));
             }
         });

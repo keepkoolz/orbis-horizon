@@ -114,7 +114,7 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
             fail(context);
             return;
         }
-        BalloonShape shape;
+        StructureShape shape;
         try {
             shape = kind.shape();
         } catch (IOException e) {
@@ -153,8 +153,16 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
         origin.add(rotatedOffset);
 
         // Room test: no prefab cell may contain a solid block, all chunks must be loaded.
-        for (BalloonShape.Cell c : shape.cells()) {
+        for (StructureShape.Cell c : shape.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
+            if (BalloonManager.outOfHeight(p.y)) {
+                // T76: a cell outside the world's height range would be lost.
+                LOGGER.at(Level.INFO).log("Tente refusée en (%d, %d, %d) : la case (%d, %d, %d) dépasse la limite de hauteur",
+                        origin.x, origin.y, origin.z, p.x, p.y, p.z);
+                playerRef.sendMessage(Texts.t("deploy.heightLimit"));
+                fail(context);
+                return;
+            }
             WorldChunk chunk = world.getChunkIfLoaded(ChunkUtil.indexChunk(ChunkUtil.chunkCoordinate(p.x), ChunkUtil.chunkCoordinate(p.z)));
             BlockType bt = chunk != null ? world.getBlockType(p.x, p.y, p.z) : null;
             if (chunk == null || (bt != null && bt.getMaterial() == BlockMaterial.Solid)) {

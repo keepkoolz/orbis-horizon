@@ -9,6 +9,7 @@ import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractCommandCollection;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
 import com.hypixel.hytale.server.core.permissions.provider.HytalePermissionsProvider;
+import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
@@ -37,6 +38,37 @@ public final class BalloonCommand extends AbstractCommandCollection {
         addSubCommand(new SeatPose());
         addSubCommand(new Light());
         addSubCommand(new Despawn());
+        addSubCommand(new Cage());
+        addSubCommand(new Render());
+    }
+
+    /**
+     * T82: /orbishorizon balloon render dual|single. dual (default): the entity mounted on the pilot is seen by the pilot only and an
+     * observer entity moved by the server is seen by the others. single: the previous behaviour (one entity mounted on the pilot,
+     * seen by everybody). Applies at the next take-off. Without an argument value other than those two, shows the setting.
+     */
+    static final class Render extends AbstractPlayerCommand {
+        private final RequiredArg<String> mode = withRequiredArg("mode", Texts.cmd("render.mode"), ArgTypes.STRING);
+
+        Render() {
+            super("render", Texts.cmd("balloon.render.desc"));
+            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            String m = mode.get(ctx);
+            if (m.equalsIgnoreCase("dual")) {
+                BalloonManager.get().setRenderDual(true);
+            } else if (m.equalsIgnoreCase("single")) {
+                BalloonManager.get().setRenderDual(false);
+            } else if (!m.equalsIgnoreCase("show")) {
+                ctx.sendMessage(Texts.t("cmd.render.usage").param("command", "/orbishorizon balloon render"));
+                return;
+            }
+            ctx.sendMessage(Texts.t("cmd.render.state").param("mode", BalloonManager.get().renderDual() ? "dual" : "single")
+                    .param("filter", ViewFilter.available() ? "ok" : "unavailable"));
+        }
     }
 
     /**
@@ -121,6 +153,8 @@ public final class BalloonCommand extends AbstractCommandCollection {
                 BalloonManager.get().setPassengerMode(BalloonFlight.PassengerMode.MOUNT);
             } else if (m.equalsIgnoreCase("teleport")) {
                 BalloonManager.get().setPassengerMode(BalloonFlight.PassengerMode.TELEPORT);
+            } else if (m.equalsIgnoreCase("follow")) {
+                BalloonManager.get().setPassengerMode(BalloonFlight.PassengerMode.FOLLOW);
             } else {
                 ctx.sendMessage(Texts.t("cmd.passengers.usage"));
                 return;
@@ -188,6 +222,21 @@ public final class BalloonCommand extends AbstractCommandCollection {
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
             BalloonManager.get().setModelOffset(x.get(ctx), y.get(ctx), z.get(ctx));
             ctx.sendMessage(Texts.t("cmd.offset.state").param("offset", String.valueOf(BalloonManager.get().modelOffset())));
+        }
+    }
+
+    /** T73: state of the nearest transport balloon cage (descent, side, movement), diagnostic in English. */
+    static final class Cage extends AbstractPlayerCommand {
+        Cage() {
+            super("cage", Texts.cmd("balloon.cage.desc"));
+            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
+            ctx.sendMessage(Message.raw(t == null ? "Your position is unknown."
+                    : TransportCage.describe(world, new org.joml.Vector3d(t.getPosition()))));
         }
     }
 

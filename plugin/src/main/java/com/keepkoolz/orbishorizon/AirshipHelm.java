@@ -32,10 +32,10 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * The airship's lever in flight (second test of 5 October 2026). In flight the lever is only part of the entity's model, so a small
- * helper entity is placed on the lever cell, mounted on the ship entity like the lights (BalloonLights) but interactable, like the
+ * The airship's helm in flight (lever until 7 October 2026). In flight the helm window is only part of the entity's model, so a small
+ * helper entity is placed on the helm cell, mounted on the ship entity like the lights (BalloonLights) but interactable, like the
  * game's minecart: an Interactable marker (the client may target the entity) and an Interactions component whose Use entry names a
- * root interaction (Server/Item/RootInteractions/Airship/Airship_Lever_Use.json, type Airship_LeverLand). The game's own Use key
+ * root interaction (Server/Item/RootInteractions/Airship/Airship_Helm_Use.json, type Airship_HelmLand). The game's own Use key
  * starts UseBlock then UseEntity: the client sends the targeted entity's network id and the server runs that entity's Use root
  * interaction with the player as the acting entity.
  *
@@ -44,12 +44,14 @@ import java.util.logging.Level;
  *
  * The hot air balloon chain uses the same helper in flight (BalloonLights.spawnChain, root Hotair_Balloon_Chain_Use).
  */
-final class AirshipLever {
+final class AirshipHelm {
 
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 
-    static final String ROOT_INTERACTION_ID = "Airship_Lever_Use";
-    static final String KEY = "airship_lever";
+    static final String ROOT_INTERACTION_ID = "Airship_Helm_Use";
+    static final String KEY = "airship_helm";
+    /** Interaction hint shown by the client when the helper is targeted (both helpers land: helm and balloon chain). */
+    static final String LAND_HINT = "server.orbis_horizon.interactionHints.land";
     /** Existing game model used as a carrier for the hitbox. */
     static final String MODEL_ID = "Rubble_Stone";
     static final float MODEL_SCALE = 0.02f;
@@ -59,13 +61,13 @@ final class AirshipLever {
     /** When true the helper is Intangible (the game skips Intangible entities in its entity spatial structures). Tunable. */
     static volatile boolean intangible = false;
 
-    private AirshipLever() {
+    private AirshipHelm() {
     }
 
     static final class Helper {
         Ref<EntityStore> ref;
         UUID uuid;
-        /** Prefab frame point (centre of the lever cell). */
+        /** Prefab frame point (centre of the helm cell). */
         Vector3f local;
     }
 
@@ -76,7 +78,7 @@ final class AirshipLever {
 
     /**
      * Creates the helper at a prefab point, mounted on the ship entity. Returns null (with a warning) if it cannot be made: the
-     * lever is then only usable through the land command.
+     * helm is then only usable through the land command.
      */
     static Helper spawn(Store<EntityStore> store, UUID shipUuid, Ref<EntityStore> shipRef, Vector3f local, Vector3f pivot, Vector3d position) {
         Vector3f d = new Vector3f(local).sub(pivot);
@@ -92,7 +94,7 @@ final class AirshipLever {
         try {
             ModelAsset asset = ModelAsset.getAssetMap().getAsset(MODEL_ID);
             if (asset == null) {
-                LOGGER.at(Level.WARNING).log("Modèle %s introuvable : pas de levier utilisable en vol", MODEL_ID);
+                LOGGER.at(Level.WARNING).log("Modèle %s introuvable : pas de barre utilisable en vol", MODEL_ID);
                 return null;
             }
             double s = MODEL_SCALE;
@@ -112,7 +114,9 @@ final class AirshipLever {
             holder.ensureComponent(Interactable.getComponentType());
             Map<InteractionType, String> uses = new EnumMap<>(InteractionType.class);
             uses.put(InteractionType.Use, rootInteractionId);
-            holder.addComponent(Interactions.getComponentType(), new Interactions(uses));
+            Interactions interactions = new Interactions(uses);
+            interactions.setInteractionHint(LAND_HINT);
+            holder.addComponent(Interactions.getComponentType(), interactions);
             if (intangible) {
                 holder.ensureComponent(Intangible.getComponentType());
             }
@@ -124,7 +128,7 @@ final class AirshipLever {
                     new MountedComponent(shipRef, new Vector3f(mountOffset), MountController.Minecart));
             return h;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Entité du levier du dirigeable impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Entité de la barre du dirigeable impossible");
             return null;
         }
     }
@@ -134,11 +138,12 @@ final class AirshipLever {
             return;
         }
         try {
+            ViewFilter.clear(h.ref);
             if (h.ref != null && h.ref.isValid()) {
                 store.removeEntity(h.ref, RemoveReason.REMOVE);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Entité du levier non supprimée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Entité de la barre non supprimée");
         }
         h.ref = null;
     }

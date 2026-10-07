@@ -49,7 +49,11 @@ final class BalloonResume {
 
     /** A flight read back from disk. */
     record Record(UUID pilot, String world, Deployables.Kind kind, Vector3i origin, Rotation rotation, UUID balloon,
-                  BurnerFuel burner, BalloonCargo cargo, List<Seated> passengers) {
+                  BurnerFuel burner, BalloonCargo cargo, List<Seated> passengers, List<CageAnimals.Animal> animals) {
+        /** T76: the same record with the origin moved vertically (resume of a pose outside the height range). */
+        Record shiftedBy(int dy) {
+            return new Record(pilot, world, kind, new Vector3i(origin).add(0, dy, 0), rotation, balloon, burner, cargo, passengers, animals);
+        }
     }
 
     /** Position where to put down a player left in the air when the flight was resumed (T21). */
@@ -100,6 +104,10 @@ final class BalloonResume {
                 seated.add(d2);
             }
             doc.put("passengers", seated);
+            // T74: animals captured in the cage of the transport balloon (optional key).
+            if (!f.animals.isEmpty()) {
+                doc.put("animals", CageAnimals.toBson(f.animals));
+            }
             if (f.burner != null) {
                 doc.put("burner", f.burner.toBson());
             }
@@ -190,7 +198,8 @@ final class BalloonResume {
                         doc.containsKey("balloon") ? UUID.fromString(doc.getString("balloon").getValue()) : null,
                         doc.containsKey("burner") ? BurnerFuel.fromBson(doc.getDocument("burner")) : null,
                         doc.containsKey("cargo") ? BalloonCargo.fromBson(doc.getDocument("cargo")) : null,
-                        seated));
+                        seated,
+                        doc.containsKey("animals") ? CageAnimals.fromBson(doc.getArray("animals")) : List.of()));
             } catch (IOException | RuntimeException e) {
                 LOGGER.at(Level.SEVERE).withCause(e).log("Fichier de reprise illisible : %s", p);
                 try {

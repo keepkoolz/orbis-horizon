@@ -1,0 +1,124 @@
+{
+  "RenderMode": "Erosion",
+  "ParticleRotationInfluence": "Billboard",
+  "LinearFiltering": false,
+  "LightInfluence": 0.0,
+  "ParticleRotateWithSpawner": false,
+  "TrailSpawnerPositionMultiplier": 0,
+  "TrailSpawnerRotationMultiplier": 0,
+  "MaxConcurrentParticles": 120,
+  "ParticleLifeSpan": {
+    "Min": 0.35,
+    "Max": 0.4
+  },
+  "SpawnRate": {
+    "Min": 60,
+    "Max": 85
+  },
+  "TotalParticles": {
+    "Min": -1,
+    "Max": -1
+  },
+  "SpawnBurst": false,
+  "UseEmitDirection": false,
+  "InitialVelocity": {
+    "Speed": {
+      "Min": 7,
+      "Max": 8
+    },
+    "Yaw": {
+      "Min": -16,
+      "Max": 16
+    },
+    "Pitch": {
+      "Min": -16,
+      "Max": 16
+    }
+  },
+  "EmitOffset": {
+    "X": {
+      "Min": -0.1,
+      "Max": 0.1
+    },
+    "Y": {
+      "Min": -0.1,
+      "Max": 0.1
+    },
+    "Z": {
+      "Min": 0,
+      "Max": 0.15
+    }
+  },
+  "Particle": {
+    "Texture": "Particles/Textures/Fire/Fire_Small.png",
+    "FrameSize": {
+      "Width": 32,
+      "Height": 32
+    },
+    "ScaleRatioConstraint": "None",
+    "UVOption": "RandomFlipU",
+    "SoftParticles": "Require",
+    "Animation": {
+      "0": {
+        "FrameIndex": {
+          "Min": 0,
+          "Max": 3
+        },
+        "Opacity": 0.9,
+        "Color": "#ffb040",
+        "Scale": {
+          "X": {
+            "Min": 1,
+            "Max": 1
+          },
+          "Y": {
+            "Min": 1,
+            "Max": 1
+          }
+        }
+      },
+      "50": {
+        "Opacity": 1.0,
+        "Color": "#ff7a24"
+      },
+      "100": {
+        "Opacity": 0.0,
+        "Color": "#c8361a",
+        "Scale": {
+          "X": {
+            "Min": 3.0,
+            "Max": 3.6
+          },
+          "Y": {
+            "Min": 3.0,
+            "Max": 3.6
+          }
+        }
+      }
+    },
+    "InitialAnimationFrame": {
+      "Opacity": 0.9,
+      "Color": "#ffb040",
+      "FrameIndex": {
+        "Min": 0,
+        "Max": 3
+      },
+      "Scale": {
+        "X": {
+          "Min": 0.7,
+          "Max": 0.9
+        },
+        "Y": {
+          "Min": 0.7,
+          "Max": 0.9
+        }
+      },
+      "Rotation": {
+        "Z": {
+          "Min": -180.0,
+          "Max": 180.0
+        }
+      }
+    }
+  }
+}

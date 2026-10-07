@@ -4,6 +4,7 @@
     "Description": "server.orbis_horizon.items.hotair_balloon_chain.description"
   },
   "Icon": "Icons/ItemsGenerated/Deco_Iron_Chain_Small.png",
+  "ItemLevel": 2,
   "Categories": [
     "Blocks.Deco"
   ],
@@ -27,6 +28,7 @@
     "TimeSeconds": 1
   },
   "BlockType": {
+    "InteractionHint": "server.orbis_horizon.interactionHints.chainTakeOff",
     "Material": "Empty",
     "DrawType": "Model",
     "Opacity": "Transparent",

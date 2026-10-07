@@ -31,6 +31,32 @@ public final class AirshipCommand extends AbstractCommandCollection {
         addSubCommand(new Tune());
         addSubCommand(new Debug());
         addSubCommand(new Despawn());
+        addSubCommand(new Render());
+    }
+
+    /** T82: /orbishorizon airship render dual|single, same as the balloon's (next take-off). */
+    static final class Render extends AbstractPlayerCommand {
+        private final RequiredArg<String> mode = withRequiredArg("mode", Texts.cmd("render.mode"), ArgTypes.STRING);
+
+        Render() {
+            super("render", Texts.cmd("airship.render.desc"));
+            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            String m = mode.get(ctx);
+            if (m.equalsIgnoreCase("dual")) {
+                AirshipManager.get().renderDual = true;
+            } else if (m.equalsIgnoreCase("single")) {
+                AirshipManager.get().renderDual = false;
+            } else if (!m.equalsIgnoreCase("show")) {
+                ctx.sendMessage(Texts.t("cmd.render.usage").param("command", "/orbishorizon airship render"));
+                return;
+            }
+            ctx.sendMessage(Texts.t("cmd.render.state").param("mode", AirshipManager.get().renderDual ? "dual" : "single")
+                    .param("filter", ViewFilter.available() ? "ok" : "unavailable"));
+        }
     }
 
     static final class TakeOff extends AbstractPlayerCommand {
@@ -76,8 +102,8 @@ public final class AirshipCommand extends AbstractCommandCollection {
             AirshipManager m = AirshipManager.get();
             AirshipManager.Steer s = m.parseSteer(mode.get(ctx));
             if (s == null) {
-                ctx.sendMessage(Message.raw("Steering modes: travel (the ship turns toward the direction you fly, default), look (toward "
-                        + "your head yaw), off (fixed heading). Current: " + m.steer));
+                ctx.sendMessage(Message.raw("Steering modes: travel (the ship turns "
+                        + "toward the direction you fly, default), look (toward your head yaw), off (fixed heading). Current: " + m.steer));
                 return;
             }
             m.steer = s;

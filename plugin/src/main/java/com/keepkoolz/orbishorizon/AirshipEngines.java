@@ -28,7 +28,7 @@ import java.util.logging.Level;
  * kept in a BurnerFuel (same copy, empty, burn and put-back logic as the burner, which is left unchanged). The engines are
  * pooled: the fuel burns from the first engine that has some, then the next.
  *
- * Only the origin cell of a multi-cell engine counts (BalloonShape.Cell.filler is 0): the other cells have no component.
+ * Only the origin cell of a multi-cell engine counts (StructureShape.Cell.filler is 0): the other cells have no component.
  * Position of an engine in the file and in this list: prefab frame, before rotation.
  */
 final class AirshipEngines {
@@ -93,12 +93,12 @@ final class AirshipEngines {
     }
 
     /** True for the cell that holds an engine's bench component (the origin cell of an Airship_Fuel_Tank block). */
-    static boolean isEngineOrigin(BalloonShape.Cell c) {
+    static boolean isEngineOrigin(StructureShape.Cell c) {
         return TANK_BLOCK.equals(c.baseName()) && c.filler() == 0;
     }
 
     /** True for any cell of an engine block (origin or filler). */
-    static boolean isEngineCell(BalloonShape.Cell c) {
+    static boolean isEngineCell(StructureShape.Cell c) {
         return TANK_BLOCK.equals(c.baseName());
     }
 
@@ -106,9 +106,9 @@ final class AirshipEngines {
      * Copies then empties the contents of every engine of the prefab placed at this origin and rotation (the blocks are about
      * to be removed, the game would drop the contents). Engines whose bench component cannot be read are skipped with a warning.
      */
-    static AirshipEngines takeFrom(World world, BalloonShape shape, Vector3i origin, Rotation rotation) {
+    static AirshipEngines takeFrom(World world, StructureShape shape, Vector3i origin, Rotation rotation) {
         AirshipEngines engines = new AirshipEngines();
-        for (BalloonShape.Cell c : shape.cells()) {
+        for (StructureShape.Cell c : shape.cells()) {
             if (!isEngineOrigin(c)) {
                 continue;
             }

@@ -42,9 +42,21 @@ final class BalloonRegistry {
 
     /**
      * A deployed structure (T43). The kind is the Deployables type. The owner (nullable) is the player who
-     * placed it. It does not count in equality: an entry is found by world, origin, rotation and kind.
+     * placed it. Neither the owner nor the cage state (T73: descent in blocks and open gate of the transport
+     * balloon, 0 and closed for every other type) nor the captured animals (T74, at most 3, immutable list) count in equality: an entry is found by world, origin, rotation and kind.
      */
-    record Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner) {
+    record Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
+                 java.util.List<CageAnimals.Animal> animals) {
+        /** An entry without cage state (every type except the transport balloon, T73). */
+        Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner) {
+            this(world, x, y, z, rotation, kind, owner, 0, false, java.util.List.of());
+        }
+
+        /** An entry with cage state and no captured animal (T73). */
+        Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open) {
+            this(world, x, y, z, rotation, kind, owner, descent, open, java.util.List.of());
+        }
+
         @Override
         public boolean equals(Object o) {
             return o instanceof Entry e && world.equals(e.world) && x == e.x && y == e.y && z == e.z
@@ -101,6 +113,86 @@ final class BalloonRegistry {
         return list;
     }
 
+    /** The entry of this structure (equality: world, origin, rotation, kind), null if none (T73). */
+    static Entry get(World world, Vector3i origin, Rotation rotation, String kind) {
+        Entry probe = new Entry(world.getName(), origin.x, origin.y, origin.z, rotation, kind, null);
+        for (Entry e : ENTRIES) {
+            if (e.equals(probe)) {
+                return e;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The shape of a placed structure in its registered state (T73): the prefab shape, except for the transport balloon
+     * whose cage is lowered by descent blocks and whose side may be open (TransportCage.shapeFor). Null if the type or
+     * its prefab is unknown.
+     */
+    static StructureShape shapeOf(Entry e) {
+        Deployables.Kind kind = kindOf(e);
+        StructureShape base = kind == null ? null : kind.shapeOrNull();
+        if (base == null || !TransportCage.isTransport(kind)) {
+            return base;
+        }
+        return TransportCage.shapeFor(base, e.descent(), e.open());
+    }
+
+    private static volatile boolean cageDirty;
+    private static volatile long cageSavedMs;
+
+    /**
+     * Sets the cage state (T73) of a placed transport balloon. The file is written at once if force is true,
+     * otherwise at most once per second (flushIfDue, called by the tick). Returns the new entry, null if not registered.
+     */
+    static synchronized Entry setCage(World world, Vector3i origin, Rotation rotation, String kind, int descent, boolean open, boolean force) {
+        Entry old = get(world, origin, rotation, kind);
+        if (old == null) {
+            return null;
+        }
+        Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, descent, open, old.animals);
+        ENTRIES.remove(old);
+        ENTRIES.add(next);
+        cageDirty = true;
+        if (force || System.currentTimeMillis() - cageSavedMs >= 1000) {
+            flushCage();
+        }
+        return next;
+    }
+
+    /**
+     * Sets the animals captured in the cage (T74) of a placed transport balloon, written at once. Returns the new entry, null if
+     * not registered.
+     */
+    static synchronized Entry setAnimals(World world, Vector3i origin, Rotation rotation, String kind, java.util.List<CageAnimals.Animal> animals) {
+        Entry old = get(world, origin, rotation, kind);
+        if (old == null) {
+            return null;
+        }
+        Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
+                java.util.List.copyOf(animals));
+        ENTRIES.remove(old);
+        ENTRIES.add(next);
+        save();
+        return next;
+    }
+
+    /** Writes the registry if a cage change is waiting for it and the last write is more than one second old (T73). */
+    static synchronized void flushIfDue() {
+        if (cageDirty && System.currentTimeMillis() - cageSavedMs >= 1000) {
+            flushCage();
+        }
+    }
+
+    /** Writes the registry if a cage change is waiting for it (stop of a movement, server shutdown, T73). */
+    static synchronized void flushCage() {
+        if (cageDirty) {
+            cageDirty = false;
+            cageSavedMs = System.currentTimeMillis();
+            save();
+        }
+    }
+
     /** Registers a deployed structure of the given type, with its owner (nullable). No effect if already there. Never throws. */
     static synchronized void add(World world, Vector3i origin, Rotation rotation, String kind, UUID owner) {
         try {
@@ -154,7 +246,7 @@ final class BalloonRegistry {
                 continue;
             }
             Deployables.Kind kind = kindOf(e);
-            BalloonShape shape = kind == null ? null : kind.shapeOrNull();
+            StructureShape shape = shapeOf(e);
             if (shape == null) {
                 continue;
             }
@@ -162,10 +254,11 @@ final class BalloonRegistry {
             if (!shape.inBounds(local.x, local.y, local.z)) {
                 continue;
             }
-            BalloonShape.Cell cell = shape.cellAt(local.x, local.y, local.z);
+            StructureShape.Cell cell = shape.cellAt(local.x, local.y, local.z);
             boolean inside;
             if (placing) {
-                inside = cell != null || kind.inPlaceVolume(local.x, local.y, local.z);
+                inside = cell != null || kind.inPlaceVolume(local.x, local.y, local.z)
+                        || TransportCage.placeForbidden(kind, e, local.x, local.y, local.z);
             } else {
                 inside = cell != null && (broken == null || BalloonManager.sameBlock(broken, cell));
             }
@@ -191,8 +284,7 @@ final class BalloonRegistry {
             if (!e.world.equals(worldName)) {
                 continue;
             }
-            Deployables.Kind kind = kindOf(e);
-            BalloonShape shape = kind == null ? null : kind.shapeOrNull();
+            StructureShape shape = shapeOf(e);
             if (shape == null) {
                 continue;
             }
@@ -221,8 +313,8 @@ final class BalloonRegistry {
     }
 
     /** Is the anchor block in place? An unloaded chunk (unknown block) counts as "yes". */
-    private static boolean stillThere(World world, BalloonShape shape, Entry e) {
-        BalloonShape.Cell anchor = shape.anchor();
+    private static boolean stillThere(World world, StructureShape shape, Entry e) {
+        StructureShape.Cell anchor = shape.anchor();
         Vector3i p = anchor.rotated(e.rotation).add(e.x, e.y, e.z);
         BlockType bt = world.getBlockType(p.x, p.y, p.z);
         return bt == null || BalloonManager.sameBlock(bt, anchor);
@@ -244,7 +336,12 @@ final class BalloonRegistry {
                 UUID owner = d.containsKey("owner") ? UUID.fromString(d.getString("owner").getValue()) : null;
                 ENTRIES.add(new Entry(d.getString("world").getValue(), d.getNumber("x").intValue(),
                         d.getNumber("y").intValue(), d.getNumber("z").intValue(),
-                        Rotation.valueOf(d.getString("rotation").getValue()), kind, owner));
+                        Rotation.valueOf(d.getString("rotation").getValue()), kind, owner,
+                        // T73: cage state of the transport balloon, absent in older files (0, closed).
+                        d.containsKey("descent") ? d.getNumber("descent").intValue() : 0,
+                        d.containsKey("open") && d.getBoolean("open").getValue(),
+                        // T74: captured animals, absent in older files.
+                        d.containsKey("animals") ? CageAnimals.fromBson(d.getArray("animals")) : java.util.List.of()));
             }
             LOGGER.at(Level.INFO).log("Registre de verrouillage : %d structure(s)", ENTRIES.size());
         } catch (IOException | RuntimeException e) {
@@ -276,6 +373,15 @@ final class BalloonRegistry {
                 d.put("kind", new BsonString(e.kind));
                 if (e.owner != null) {
                     d.put("owner", new BsonString(e.owner.toString()));
+                }
+                if (e.descent > 0) {
+                    d.put("descent", new BsonInt32(e.descent));
+                }
+                if (e.open) {
+                    d.put("open", new org.bson.BsonBoolean(true));
+                }
+                if (!e.animals.isEmpty()) {
+                    d.put("animals", CageAnimals.toBson(e.animals));
                 }
                 list.add(d);
             }

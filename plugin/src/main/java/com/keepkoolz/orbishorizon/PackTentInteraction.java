@@ -88,7 +88,7 @@ public class PackTentInteraction extends SimpleInstantInteraction {
             fail(context);
             return;
         }
-        BalloonShape shape;
+        StructureShape shape;
         try {
             shape = kind.shape();
         } catch (IOException e) {

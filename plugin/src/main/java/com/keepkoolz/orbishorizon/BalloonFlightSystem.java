@@ -9,5 +9,9 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
     @Override
     public void tick(float dt, int index, Store<EntityStore> store) {
         BalloonManager.get().tick(store, store.getExternalData().getWorld());
+        // T73: cage of the transport balloons placed in this world (steps due, registry write).
+        TransportCage.tick(store.getExternalData().getWorld());
+        // T74: animals of the cage waiting for their entity after a world load.
+        CageAnimals.tick(store.getExternalData().getWorld());
     }
 }

@@ -6,6 +6,7 @@
   "Icon": "Icons/ItemsGenerated/Hotair_Balloon_Basic_Crate.png",
   "PlayerAnimationsId": "Block",
   "MaxStack": 1,
+  "ItemLevel": 3,
   "Categories": [
     "Items.Vehicles"
   ],
@@ -21,11 +22,11 @@
       },
       {
         "ItemId": "Cloth_Block_Wool_White",
-        "Quantity": 16
+        "Quantity": 37
       },
       {
         "ItemId": "Cloth_Block_Wool_Blue",
-        "Quantity": 12
+        "Quantity": 25
       },
       {
         "ItemId": "Wood_Hardwood_Planks",

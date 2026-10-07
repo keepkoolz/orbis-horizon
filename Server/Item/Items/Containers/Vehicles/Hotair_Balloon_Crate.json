@@ -6,13 +6,14 @@
   "Icon": "Icons/ItemsGenerated/Hotair_Balloon_Crate.png",
   "PlayerAnimationsId": "Block",
   "MaxStack": 1,
+  "ItemLevel": 4,
   "Categories": [
     "Items.Vehicles"
   ],
   "Recipe": {
     "Input": [
       {
-        "ItemId": "Hotair_Balloon_Burner",
+        "ItemId": "Hotair_Balloon_Large_Burner",
         "Quantity": 1
       },
       {
@@ -21,11 +22,11 @@
       },
       {
         "ItemId": "Cloth_Block_Wool_Red",
-        "Quantity": 72
+        "Quantity": 300
       },
       {
         "ItemId": "Cloth_Block_Wool_White",
-        "Quantity": 50
+        "Quantity": 250
       },
       {
         "ItemId": "Wood_Hardwood_Planks",

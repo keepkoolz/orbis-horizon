@@ -6,6 +6,7 @@
   "Icon": "Icons/ItemsGenerated/Airship_Cloudwork_Crate.png",
   "PlayerAnimationsId": "Block",
   "MaxStack": 1,
+  "ItemLevel": 6,
   "Categories": [
     "Items.Vehicles"
   ],
@@ -119,7 +120,7 @@
       },
       {
         "ItemId": "Cloth_Block_Wool_White",
-        "Quantity": 90
+        "Quantity": 750
       },
       {
         "ItemId": "Wood_Softwood_Planks",

@@ -20,7 +20,7 @@ import java.util.List;
  * Shape of the balloon, read once from the prefab: list of blocks with
  * their position relative to the prefab origin.
  */
-public final class BalloonShape {
+public final class StructureShape {
 
     /**
      * Block used as a marker to find a placed balloon: the mod's burner, since
@@ -74,7 +74,7 @@ public final class BalloonShape {
     private final java.util.Map<Long, Cell> byPosition = new java.util.HashMap<>();
     private final int[] bounds = new int[6];
 
-    private BalloonShape(String prefabPath, List<Cell> cells, Cell anchor, Cell burner, List<Cell> seats) {
+    private StructureShape(String prefabPath, List<Cell> cells, Cell anchor, Cell burner, List<Cell> seats) {
         this.prefabPath = prefabPath;
         this.cells = cells;
         // T24: a ladder cell is unfolded if another ladder is just above it.
@@ -116,11 +116,19 @@ public final class BalloonShape {
         System.arraycopy(b, 0, bounds, 0, 6);
     }
 
+    /**
+     * A shape with the same anchor, burner and seats as this one and other cells (T73: the transport balloon with its
+     * cage lowered or its side open, TransportCage.cells). The ladder, flight cells and bounds are recomputed.
+     */
+    StructureShape withCells(List<Cell> newCells) {
+        return new StructureShape(prefabPath, Collections.unmodifiableList(newCells), anchor, burner, seats);
+    }
+
     private static long pack(int x, int y, int z) {
         return ((long) (x + 512) << 40) | ((long) (y + 512) << 20) | (long) (z + 512);
     }
 
-    public static BalloonShape load(String prefabPath) throws IOException {
+    public static StructureShape load(String prefabPath) throws IOException {
         return load(prefabPath, ANCHOR_BLOCK, true);
     }
 
@@ -128,7 +136,7 @@ public final class BalloonShape {
      * Reads a prefab (T43). anchorBlock is the marker block (unique). Without requireBurner (the tent), the prefab
      * does not need a burner and burner() returns null.
      */
-    public static BalloonShape load(String prefabPath, String anchorBlock, boolean requireBurner) throws IOException {
+    public static StructureShape load(String prefabPath, String anchorBlock, boolean requireBurner) throws IOException {
         Path path = PrefabStore.get().findAssetPrefabPath(prefabPath);
         if (path == null) {
             throw new IOException("Prefab not found: " + prefabPath);
@@ -163,7 +171,7 @@ public final class BalloonShape {
         if (requireBurner && burner == null) {
             throw new IOException("The prefab has no burner " + BURNER_BLOCK);
         }
-        return new BalloonShape(prefabPath, Collections.unmodifiableList(cells), anchor, burner,
+        return new StructureShape(prefabPath, Collections.unmodifiableList(cells), anchor, burner,
                 Collections.unmodifiableList(seats));
     }
 

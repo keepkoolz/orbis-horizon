@@ -156,10 +156,10 @@ final class BalloonCargo {
      * Copies then empties the contents of the containers of the prefab placed at this origin and with this rotation
      * (the burner is handled by BurnerFuel). Call before removing the blocks, on the world thread.
      */
-    static BalloonCargo takeFrom(World world, BalloonShape shape, Vector3i origin, Rotation rotation) {
+    static BalloonCargo takeFrom(World world, StructureShape shape, Vector3i origin, Rotation rotation) {
         List<Entry> list = new ArrayList<>();
-        for (BalloonShape.Cell c : shape.cells()) {
-            if (BalloonShape.BURNER_BLOCK.equals(c.baseName())) {
+        for (StructureShape.Cell c : shape.cells()) {
+            if (StructureShape.BURNER_BLOCK.equals(c.baseName())) {
                 continue;
             }
             Vector3i p = c.rotated(rotation).add(origin);

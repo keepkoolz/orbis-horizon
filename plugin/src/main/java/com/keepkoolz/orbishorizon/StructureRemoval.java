@@ -59,18 +59,18 @@ final class StructureRemoval {
     }
 
     /** Removes the structure placed at this origin. The registry, blocks, contents and mounts are handled here. */
-    static Result remove(ComponentAccessor<EntityStore> accessor, World world, Deployables.Kind kind, BalloonShape shape,
+    static Result remove(ComponentAccessor<EntityStore> accessor, World world, Deployables.Kind kind, StructureShape shape,
                          Vector3i origin, Rotation rotation) {
         return remove(accessor, world, kind, shape, origin, rotation, false);
     }
 
     /** Same, broadAttached true removes everything that is not a structural block first (airship prototype). */
-    static Result remove(ComponentAccessor<EntityStore> accessor, World world, Deployables.Kind kind, BalloonShape shape,
+    static Result remove(ComponentAccessor<EntityStore> accessor, World world, Deployables.Kind kind, StructureShape shape,
                          Vector3i origin, Rotation rotation, boolean broadAttached) {
         // Box of the structure, in world cells.
         int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
-        for (BalloonShape.Cell c : shape.cells()) {
+        for (StructureShape.Cell c : shape.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             minX = Math.min(minX, p.x);
             minY = Math.min(minY, p.y);
