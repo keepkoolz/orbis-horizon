@@ -1,0 +1,19 @@
+{
+  "Model": "Items/Vehicles/Airship_Cloudwork_Part1.blockymodel",
+  "Texture": "Items/Vehicles/Airship_Cloudwork_Texture.png",
+  "EyeHeight": 1,
+  "HitBox": {
+    "Max": {
+      "X": 27,
+      "Y": 12,
+      "Z": 27
+    },
+    "Min": {
+      "X": -27,
+      "Y": -7,
+      "Z": -27
+    }
+  },
+  "MinScale": 1,
+  "MaxScale": 1
+}

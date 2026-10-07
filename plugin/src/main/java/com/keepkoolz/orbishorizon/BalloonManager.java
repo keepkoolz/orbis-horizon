@@ -286,7 +286,8 @@ public final class BalloonManager {
         BalloonFlight f = flights.get(player.getUuid());
         if (f == null) {
             return "No flight in progress. Model " + modelId() + ", offset " + modelOffset
-                    + ", rendering setting " + (renderDual ? "dual" : "single") + " (view filter " + (ViewFilter.available() ? "registered" : "NOT registered")
+                    + ", rendering setting " + (renderDual ? "dual" : "single") + ", model parts setting " + partsMode.name().toLowerCase()
+                    + " (view filter " + (ViewFilter.available() ? "registered" : "NOT registered")
                     + ", " + ViewFilter.ruleCount() + " rule(s))"
                     + ", passenger seating " + passengerMode + ", seat pose " + pose.describe()
                     + ", seat height " + seatHeight + ", lights " + BalloonLights.describe(null);
@@ -300,7 +301,7 @@ public final class BalloonManager {
                 ? "dual (pilot entity " + (f.balloonRef != null && f.balloonRef.isValid() ? "present" : "missing") + ", rule " + ViewFilter.ruleOf(f.balloonRef)
                         + "; observer entity " + (ot != null ? fmt(ot.getPosition()) : "missing") + ", rule " + ViewFilter.ruleOf(f.observerRef) + ")"
                 : "single entity (seen by everybody)";
-        return "Type " + f.kind.id + ", rendering " + rendering + ", rotation " + f.rotation + " (" + f.rotation.getDegrees() + " deg)"
+        return "Type " + f.kind.id + ", rendering " + rendering + ", model parts " + VehicleParts.describe(f.parts, partsMode) + ", rotation " + f.rotation + " (" + f.rotation.getDegrees() + " deg)"
                 + ", origin " + f.originCell(f.entityPos)
                 + ", logical position " + fmt(f.entityPos)
                 + ", entity " + (bt != null ? fmt(bt.getPosition()) + " yaw " + bt.getRotation().y : "missing")
@@ -344,6 +345,7 @@ public final class BalloonManager {
     }
     /** Test entities created by /orbishorizon balloon spawnmodel, one per player. */
     private final Map<UUID, Ref<EntityStore>> testEntities = new ConcurrentHashMap<>();
+    private final Map<UUID, List<Ref<EntityStore>>> testParts = new ConcurrentHashMap<>();
 
     /** The forced model, or "default" (each balloon type uses its own model). */
     public String modelId() {
@@ -370,6 +372,14 @@ public final class BalloonManager {
         if (previous != null && previous.isValid()) {
             store.removeEntity(previous, RemoveReason.REMOVE);
         }
+        List<Ref<EntityStore>> previousParts = testParts.remove(player.getUuid());
+        if (previousParts != null) {
+            for (Ref<EntityStore> r : previousParts) {
+                if (r != null && r.isValid()) {
+                    store.removeEntity(r, RemoveReason.REMOVE);
+                }
+            }
+        }
         TransformComponent t = store.getComponent(playerRef, TransformComponent.getComponentType());
         if (t == null) {
             return Texts.t("error.noPosition");
@@ -381,6 +391,8 @@ public final class BalloonManager {
             return Texts.t("error.unknownModel").param("model", id);
         }
         testEntities.put(player.getUuid(), ref);
+        // Parts of the model (same position and yaw, still).
+        testParts.put(player.getUuid(), VehicleParts.spawnStill(store, id, pos, Rotation.None.getRadians() + MODEL_YAW_CORRECTION));
         return null;
     }
 
@@ -587,6 +599,9 @@ public final class BalloonManager {
                 flight.dual = true;
             }
         }
+        // Model parts (entities that carry the nodes beyond the client's limit), on the entity and on the observer entity if any.
+        flight.parts = VehicleParts.spawn(store, partsMode, modelId, balloon, flight.balloonUuid,
+                flight.dual ? flight.observerRef : null, flight.dual ? flightId : null);
         flight.lastCheckedOrigin.set(found.origin);
         flight.takeoffMs = System.currentTimeMillis();
         flight.lastBurnMs = flight.takeoffMs;
@@ -1161,6 +1176,7 @@ public final class BalloonManager {
             flight.entityPos.set(desired);
             balloonTransform.setPosition(displayPosition(flight.kind, desired, flight.rotation));
             VehicleView.sync(store, flight.balloonRef, flight.observerRef); // T82
+            VehicleParts.sync(store, flight.parts, flight.balloonRef, flight.observerRef);
             BalloonLights.follow(store, flight);
             CageAnimals.follow(store, flight);
         }
@@ -1917,6 +1933,8 @@ public final class BalloonManager {
      * helper are removed by the callers (BalloonLights.removeAll, removeChain). Never throws.
      */
     private void removeEntities(Store<EntityStore> store, BalloonFlight flight) {
+        VehicleParts.removeAll(store, flight.parts);
+        flight.parts = null;
         Ref<EntityStore> observer = flight.observerRef;
         flight.observerRef = null;
         flight.dual = false;
@@ -1943,6 +1961,7 @@ public final class BalloonManager {
         Ref<EntityStore> observer = flight.observerRef;
         flight.observerRef = null;
         VehicleView.removeObserver(store, observer);
+        VehicleParts.collapse(store, flight.parts);
         if (flight.balloonRef != null) {
             ViewFilter.clear(flight.balloonRef);
         }
@@ -1957,6 +1976,8 @@ public final class BalloonManager {
     }
 
     private volatile boolean renderDual = true;
+    /** Model parts setting (next take-off). */
+    volatile VehicleParts.Mode partsMode = VehicleParts.Mode.ON;
 
     /** T82: dual rendering (pilot entity for the pilot, observer entity for the others) or the single entity of before. Next take-off. */
     boolean renderDual() {
@@ -2114,6 +2135,7 @@ public final class BalloonManager {
             }
             // T34: auxiliary lights left in a world that survived the plugin (never saved otherwise).
             BalloonLights.removeOrphans(world, store, rec.balloon(), s);
+            VehicleParts.removeOrphans(world, store, rec.balloon());
             // If the world was saved before take-off, the old balloon and its contents are
             // still there: the file is authoritative, the containers are emptied to avoid duplicating items.
             BalloonCargo.takeFrom(world, s, rec.origin(), rec.rotation());
@@ -3055,6 +3077,7 @@ public final class BalloonManager {
         }
         flight.entityPos.y = y;
         balloonTransform.setPosition(displayPosition(flight.kind, flight.entityPos, flight.rotation));
+        VehicleParts.sync(store, flight.parts, flight.balloonRef, flight.observerRef);
         BalloonLights.follow(store, flight);
         CageAnimals.follow(store, flight);
     }

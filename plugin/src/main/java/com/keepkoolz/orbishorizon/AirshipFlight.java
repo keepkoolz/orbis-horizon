@@ -39,6 +39,8 @@ final class AirshipFlight {
     UUID shipUuid;
     /** T82: observer entity (same model, never mounted, moved by the server every tick), seen by everybody but the pilot. Null in single rendering. */
     volatile Ref<EntityStore> observerRef;
+    /** Model parts (nodes beyond the client's per-entity limit), null if there are none or the setting is off. */
+    volatile VehicleParts.Group parts;
     /** T82: dual rendering is active (cleared when the flight has no pilot on board and collapses to one entity). */
     volatile boolean dual;
 

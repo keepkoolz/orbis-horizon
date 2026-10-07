@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.4.1
+
+This is a multiplayer fix. A player who joined someone else's game could see only part of the airship, the large balloon and the animal transport balloon in flight. The envelope, the workbenches and the cage bars were there, but the wooden hull, the ladders and the chains were missing, and you could see right through them. The host saw everything, and the small balloon looked fine to everyone.
+
+### Fixes
+
+- Every player now sees the flying vehicles in full, wood, ladders and chains included.
+- What was going on: in flight, each vehicle is drawn as a single 3D model built from many small pieces. Some graphics cards only draw about the first thousand pieces of a model and silently skip the rest. The small balloon stays under that limit. The bigger vehicles go well past it, and the pieces at the end of the list, mostly the wood, were skipped on those cards. The host's computer allows more pieces, which is why the host never saw the problem.
+- How it was fixed: each flying model is now split into parts of at most 1,000 pieces. The large balloon and the animal transport balloon have two parts, the airship has three. Each extra part is shown by its own invisible carrier that follows the vehicle and turns with it, so no single model goes over the limit any more. Flames, smoke and the glowing engine stay on the first part and behave as before.
+- The airship flight texture now has the size the game expects (a multiple of 32 pixels), which removes a warning from the game log on every player's machine.
+
+### For operators
+
+- `/orbishorizon balloon render parts:on|off|noyaw`, and the same option on `/orbishorizon airship render`, control the extra parts from the next take-off. `on` is the default. `off` goes back to the old single model. `noyaw` keeps the parts but stops copying the vehicle's rotation onto them.
+- `/orbishorizon balloon debug` and `/orbishorizon airship debug` now show the number of parts.
+
+### Known limits
+
+- A graphics card that allows fewer than 1,000 pieces per model could still miss part of a vehicle. None has been reported so far.
+
 ## v1.4
 
 This release is mostly about player feedback. After the airship came out, players sent us what bothered them: vehicles that looked strange to other players, balloons that kept climbing past the top of the world, a game mode switch that trapped the pilot, a bed in the Small Tent that put you outside, ladders you climbed by accident, invisible walls and flickering in the airship cabin. We took each report one at a time, fixed it, tried it in game, and kept only what actually worked. Some ideas were tried and taken back out, and they are listed at the end.

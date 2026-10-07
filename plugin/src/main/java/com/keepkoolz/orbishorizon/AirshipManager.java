@@ -521,6 +521,9 @@ final class AirshipManager {
                 f.dual = true;
             }
         }
+        // Model parts (entities that carry the nodes beyond the client's limit), on the ship entity and on the observer entity if any.
+        f.parts = VehicleParts.spawn(store, partsMode, spec.modelId, ship, f.shipUuid, f.dual ? f.observerRef : null,
+                f.dual ? f.pilotUuid : null);
         long now = System.currentTimeMillis();
         f.teleportUntilMs = now + BalloonManager.COLLISION_PAUSE_MS;
         f.takeoffMs = now;
@@ -547,6 +550,8 @@ final class AirshipManager {
 
     /** T82: dual rendering (pilot entity for the pilot, observer entity for the others) or the single entity of before. Next take-off. */
     volatile boolean renderDual = true;
+    /** Model parts setting (next take-off). */
+    volatile VehicleParts.Mode partsMode = VehicleParts.Mode.ON;
 
     /**
      * T82: the ship has no pilot on board any more (dead, gone, left through a game mode change): one entity seen by everybody is enough.
@@ -561,6 +566,7 @@ final class AirshipManager {
         Ref<EntityStore> observer = f.observerRef;
         f.observerRef = null;
         VehicleView.removeObserver(store, observer);
+        VehicleParts.collapse(store, f.parts);
         if (f.shipRef != null) {
             ViewFilter.clear(f.shipRef);
         }
@@ -575,6 +581,8 @@ final class AirshipManager {
 
     /** T82: removes the ship entity and its observer entity (and their visibility rules). Never throws. */
     private void removeShipEntities(Store<EntityStore> store, AirshipFlight f) {
+        VehicleParts.removeAll(store, f.parts);
+        f.parts = null;
         Ref<EntityStore> observer = f.observerRef;
         f.observerRef = null;
         f.dual = false;
@@ -1750,6 +1758,7 @@ final class AirshipManager {
             bt.setRotation(r);
             double alpha = observerSmoothMs <= 0 || f.lastDt <= 0 ? 1.0 : 1 - Math.exp(-f.lastDt * 1000.0 / observerSmoothMs);
             VehicleView.sync(store, f.shipRef, f.observerRef, alpha); // T82: the observer entity follows the ship's pose
+            VehicleParts.sync(store, f.parts, f.shipRef, f.observerRef); // after the smoothing: the parts copy their host
         }
     }
 
@@ -2244,6 +2253,7 @@ final class AirshipManager {
                 }
             }
             BalloonLights.removeOrphans(world, store, rec.ship(), s);
+            VehicleParts.removeOrphans(world, store, rec.ship());
             if (rec.ship() != null) {
                 Ref<EntityStore> helm = world.getEntityStore().getRefFromUUID(AirshipHelm.uuidFor(rec.ship()));
                 if (helm != null && helm.isValid()) {
@@ -2493,7 +2503,8 @@ final class AirshipManager {
                 carryGain, carryStep, carryPauseMs, AirshipHelm.intangible, fuelFactor, fuelMoveMin, restTurn, restDeadZoneDeg,
                 restHoldMs, restStopDeg, turnFuelMinDeg)
                 + ", " + passengers.tuning();
-        tuning = "rendering setting " + (renderDual ? "dual" : "single") + " (view filter " + (ViewFilter.available() ? "registered" : "NOT registered")
+        tuning = "rendering setting " + (renderDual ? "dual" : "single") + ", model parts setting " + partsMode.name().toLowerCase()
+                + " (view filter " + (ViewFilter.available() ? "registered" : "NOT registered")
                 + ", " + ViewFilter.ruleCount() + " rule(s)), " + tuning;
         if (f == null) {
             for (AirshipFlight g : flights.values()) {
@@ -2511,7 +2522,7 @@ final class AirshipManager {
                 ? store.getComponent(f.pilotRef, TransformComponent.getComponentType()) : null;
         TransformComponent ot = f.observerRef != null && f.observerRef.isValid()
                 ? store.getComponent(f.observerRef, TransformComponent.getComponentType()) : null;
-        tuning = "flight rendering " + (f.dual ? "dual (ship entity rule " + ViewFilter.ruleOf(f.shipRef) + "; observer entity "
+        tuning = "model parts " + VehicleParts.describe(f.parts, partsMode) + ", flight rendering " + (f.dual ? "dual (ship entity rule " + ViewFilter.ruleOf(f.shipRef) + "; observer entity "
                 + (ot != null ? fmt(ot.getPosition()) : "missing") + ", rule " + ViewFilter.ruleOf(f.observerRef) + ")"
                 : "single entity (seen by everybody)") + ", " + tuning;
         double head = headYaw(store, f);

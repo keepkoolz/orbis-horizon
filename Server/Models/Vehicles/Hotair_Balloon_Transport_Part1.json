@@ -1,0 +1,19 @@
+{
+  "Model": "Items/Vehicles/Hotair_Balloon_Transport_Part1.blockymodel",
+  "Texture": "Items/Vehicles/Hotair_Balloon_Transport_Texture.png",
+  "EyeHeight": 1,
+  "HitBox": {
+    "Max": {
+      "X": 21,
+      "Y": 34,
+      "Z": 21
+    },
+    "Min": {
+      "X": -21,
+      "Y": -12,
+      "Z": -21
+    }
+  },
+  "MinScale": 1,
+  "MaxScale": 1
+}

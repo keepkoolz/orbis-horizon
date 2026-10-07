@@ -36,6 +36,8 @@ final class BalloonFlight {
      * whenever the flight has no pilot on board (one entity, seen by everybody).
      */
     volatile Ref<EntityStore> observerRef;
+    /** Model parts (nodes beyond the client's per-entity limit), null if the type has none or the setting is off. */
+    volatile VehicleParts.Group parts;
     /** T82: dual rendering is active for this flight (set at take-off, cleared when the flight collapses to a single entity). */
     volatile boolean dual;
     /** Entity position (centre of the prefab origin block, at the prefab ground level). */

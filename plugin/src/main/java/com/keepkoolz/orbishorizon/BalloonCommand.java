@@ -62,6 +62,18 @@ public final class BalloonCommand extends AbstractCommandCollection {
                 BalloonManager.get().setRenderDual(true);
             } else if (m.equalsIgnoreCase("single")) {
                 BalloonManager.get().setRenderDual(false);
+            } else if (m.toLowerCase().startsWith("parts")) {
+                // Model parts: parts (show), parts:on, parts:off, parts:noyaw (next take-off).
+                if (m.length() > 5) {
+                    VehicleParts.Mode pm = m.charAt(5) == ':' ? VehicleParts.Mode.parse(m.substring(6)) : null;
+                    if (pm == null) {
+                        ctx.sendMessage(Texts.t("cmd.render.usage").param("command", "/orbishorizon balloon render"));
+                        return;
+                    }
+                    BalloonManager.get().partsMode = pm;
+                }
+                ctx.sendMessage(Texts.t("cmd.render.parts").param("mode", BalloonManager.get().partsMode.name().toLowerCase()));
+                return;
             } else if (!m.equalsIgnoreCase("show")) {
                 ctx.sendMessage(Texts.t("cmd.render.usage").param("command", "/orbishorizon balloon render"));
                 return;

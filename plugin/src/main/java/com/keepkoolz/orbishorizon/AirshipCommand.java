@@ -50,6 +50,18 @@ public final class AirshipCommand extends AbstractCommandCollection {
                 AirshipManager.get().renderDual = true;
             } else if (m.equalsIgnoreCase("single")) {
                 AirshipManager.get().renderDual = false;
+            } else if (m.toLowerCase().startsWith("parts")) {
+                // Model parts: parts (show), parts:on, parts:off, parts:noyaw (next take-off).
+                if (m.length() > 5) {
+                    VehicleParts.Mode pm = m.charAt(5) == ':' ? VehicleParts.Mode.parse(m.substring(6)) : null;
+                    if (pm == null) {
+                        ctx.sendMessage(Texts.t("cmd.render.usage").param("command", "/orbishorizon airship render"));
+                        return;
+                    }
+                    AirshipManager.get().partsMode = pm;
+                }
+                ctx.sendMessage(Texts.t("cmd.render.parts").param("mode", AirshipManager.get().partsMode.name().toLowerCase()));
+                return;
             } else if (!m.equalsIgnoreCase("show")) {
                 ctx.sendMessage(Texts.t("cmd.render.usage").param("command", "/orbishorizon airship render"));
                 return;
