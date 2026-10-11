@@ -49,10 +49,16 @@ final class BalloonResume {
 
     /** A flight read back from disk. */
     record Record(UUID pilot, String world, Deployables.Kind kind, Vector3i origin, Rotation rotation, UUID balloon,
-                  BurnerFuel burner, BalloonCargo cargo, List<Seated> passengers, List<CageAnimals.Animal> animals) {
+                  BurnerFuel burner, BalloonCargo cargo, List<Seated> passengers, List<CageAnimals.Animal> animals,
+                  String transitFrom, String transitTo, int cageDescent, int cageHomeY) {
+        /** A transit flight (Task 9): nothing is placed on resume, only the passengers are set down at the destination station. */
+        boolean transit() {
+            return transitFrom != null;
+        }
+
         /** T76: the same record with the origin moved vertically (resume of a pose outside the height range). */
         Record shiftedBy(int dy) {
-            return new Record(pilot, world, kind, new Vector3i(origin).add(0, dy, 0), rotation, balloon, burner, cargo, passengers, animals);
+            return new Record(pilot, world, kind, new Vector3i(origin).add(0, dy, 0), rotation, balloon, burner, cargo, passengers, animals, transitFrom, transitTo, cageDescent, cageHomeY);
         }
     }
 
@@ -78,6 +84,12 @@ final class BalloonResume {
         if (d == null) {
             return;
         }
+        // Transit flights are never resumed as blocks in mid-air: the file only lists the passengers and the destination, so they can be
+        // set down at the arrival station after a crash or a stop. No passenger aboard (approach, after the drop): no file.
+        if (f.transit != null && (f.passengers.isEmpty() || f.transit.phase == TransitFlight.Phase.APPROACH)) {
+            delete(f.pilotUuid);
+            return;
+        }
         try {
             BsonDocument doc = new BsonDocument();
             doc.put("version", new BsonInt32(VERSION));
@@ -91,6 +103,12 @@ final class BalloonResume {
             doc.put("rotation", new BsonString(f.rotation.name()));
             if (f.balloonUuid != null) {
                 doc.put("balloon", new BsonString(f.balloonUuid.toString()));
+            }
+            if (f.transit != null) {
+                doc.put("transitFrom", new BsonString(f.transit.from));
+                if (f.transit.to != null) {
+                    doc.put("transitTo", new BsonString(f.transit.to));
+                }
             }
             doc.put("savedAtMs", new org.bson.BsonInt64(System.currentTimeMillis()));
             // T21: seated passengers (uuid and stool cell), to put them back down if the resume happens.
@@ -107,6 +125,11 @@ final class BalloonResume {
             // T74: animals captured in the cage of the transport balloon (optional key).
             if (!f.animals.isEmpty()) {
                 doc.put("animals", CageAnimals.toBson(f.animals));
+            }
+            // T120: dry descent onto a cage left on the ground (optional keys): descent in blocks and height of the balloon's origin before it left.
+            if (f.groundCage > 0) {
+                doc.put("cageDescent", new BsonInt32(f.groundCage));
+                doc.put("cageHomeY", new BsonInt32(f.cageHome.y));
             }
             if (f.burner != null) {
                 doc.put("burner", f.burner.toBson());
@@ -199,7 +222,11 @@ final class BalloonResume {
                         doc.containsKey("burner") ? BurnerFuel.fromBson(doc.getDocument("burner")) : null,
                         doc.containsKey("cargo") ? BalloonCargo.fromBson(doc.getDocument("cargo")) : null,
                         seated,
-                        doc.containsKey("animals") ? CageAnimals.fromBson(doc.getArray("animals")) : List.of()));
+                        doc.containsKey("animals") ? CageAnimals.fromBson(doc.getArray("animals")) : List.of(),
+                        doc.containsKey("transitFrom") ? doc.getString("transitFrom").getValue() : null,
+                        doc.containsKey("transitTo") ? doc.getString("transitTo").getValue() : null,
+                        doc.containsKey("cageDescent") ? doc.getNumber("cageDescent").intValue() : 0,
+                        doc.containsKey("cageHomeY") ? doc.getNumber("cageHomeY").intValue() : 0));
             } catch (IOException | RuntimeException e) {
                 LOGGER.at(Level.SEVERE).withCause(e).log("Fichier de reprise illisible : %s", p);
                 try {

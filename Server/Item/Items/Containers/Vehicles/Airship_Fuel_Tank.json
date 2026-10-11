@@ -115,36 +115,5 @@
     ]
   },
   "MaxStack": 1,
-  "ItemSoundSetId": "ISS_Items_Metal",
-  "Recipe": {
-    "Input": [
-      {
-        "ItemId": "Ingredient_Bar_Iron",
-        "Quantity": 36
-      },
-      {
-        "ItemId": "Ingredient_Bar_Copper",
-        "Quantity": 16
-      },
-      {
-        "ItemId": "Ingredient_Bar_Cobalt",
-        "Quantity": 12
-      },
-      {
-        "ItemId": "Ingredient_Leather_Heavy",
-        "Quantity": 6
-      }
-    ],
-    "BenchRequirement": [
-      {
-        "Type": "Crafting",
-        "Categories": [
-          "Workbench_Tinkering"
-        ],
-        "Id": "Workbench",
-        "RequiredTierLevel": 3
-      }
-    ],
-    "TimeSeconds": 6
-  }
+  "ItemSoundSetId": "ISS_Items_Metal"
 }

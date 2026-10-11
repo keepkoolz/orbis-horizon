@@ -13,5 +13,11 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
         TransportCage.tick(store.getExternalData().getWorld());
         // T74: animals of the cage waiting for their entity after a world load.
         CageAnimals.tick(store.getExternalData().getWorld());
+        // Transit: station masters waiting for their entity, reservations to release.
+        StationMaster.tickReservations(store, store.getExternalData().getWorld());
+        // Transit: destination queues and quay state machines of the stations of this world.
+        StationQueue.tick(store, store.getExternalData().getWorld());
+        // T121: preview of the structure while a deployment crate is held.
+        HeldCratePreview.tick(store, store.getExternalData().getWorld());
     }
 }

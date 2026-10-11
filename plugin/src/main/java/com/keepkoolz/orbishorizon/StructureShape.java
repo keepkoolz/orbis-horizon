@@ -90,7 +90,9 @@ public final class StructureShape {
         int minFlight = Integer.MAX_VALUE;
         for (Cell c : cells) {
             minAll = Math.min(minAll, c.y());
-            if (LADDER_BLOCK.equals(c.baseName()) && ladders.contains(java.util.List.of(c.x(), c.y() + 1, c.z()))) {
+            // 11 October 2026: the whole ladder is folded in flight, its top cell too (it stuck out of the basket, on the outside of
+            // the nacelle wall, decision of the user). Every ladder cell yields to the terrain at landing like the unfolded ones.
+            if (LADDER_BLOCK.equals(c.baseName())) {
                 unfolded.add(c);
             } else {
                 flight.add(c);
@@ -156,7 +158,8 @@ public final class StructureShape {
             if (anchorBlock.equals(c.baseName())) {
                 anchor = c;
             }
-            if (BURNER_BLOCK.equals(c.baseName())) {
+            // With requireBurner the anchor is the burner (the transit balloon's own burner block is its anchor, not the standard one).
+            if ((requireBurner ? anchorBlock : BURNER_BLOCK).equals(c.baseName())) {
                 burner = c;
             }
             if (SEAT_BLOCK.equals(c.baseName())) {
@@ -169,7 +172,7 @@ public final class StructureShape {
             throw new IOException("The prefab has no anchor block " + anchorBlock);
         }
         if (requireBurner && burner == null) {
-            throw new IOException("The prefab has no burner " + BURNER_BLOCK);
+            throw new IOException("The prefab has no burner " + anchorBlock);
         }
         return new StructureShape(prefabPath, Collections.unmodifiableList(cells), anchor, burner,
                 Collections.unmodifiableList(seats));

@@ -11648,6 +11648,12 @@
             "z": 8,
             "name": "Rock_Calcite_Brick_Smooth_Half",
             "rotation": 5
+        },
+        {
+            "x": 2,
+            "y": 10,
+            "z": 8,
+            "name": "Furniture_Crude_Candle"
         }
     ],
     "fluids": [

@@ -1,0 +1,91 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.hotair_balloon_public_burner.name",
+    "Description": "server.orbis_horizon.items.hotair_balloon_public_burner.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Metal_Iron_Pipe_Large_Mouthpiece.png",
+  "Categories": [
+    "Blocks.Metal"
+  ],
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Model",
+    "CustomModel": "Blocks/Structures/Pillars/Pillar_Base.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Structures/Pillars/Pillar_Base_Textures/Metal_Iron.png",
+        "Weight": 1
+      }
+    ],
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Rocks"
+      }
+    },
+    "VariantRotation": "DoublePipe",
+    "BlockParticleSetId": "Metal",
+    "Supporting": {
+      "Down": [
+        {}
+      ],
+      "Up": [
+        {}
+      ]
+    },
+    "BlockSoundSetId": "Metal",
+    "PhysicalMaterialId": "Metal",
+    "IgnoreSupportWhenPlaced": true,
+    "Group": "Metal",
+    "ParticleColor": "#87928e",
+    "TextureComputedColor": "#7E8684",
+    "State": {
+      "Definitions": {
+        "On": {
+          "Light": {
+            "Color": "#dba"
+          },
+          "Particles": [
+            {
+              "SystemId": "Campfire_New_Cartoon",
+              "Scale": 0.9,
+              "TargetNodeName": "",
+              "PositionOffset": {
+                "Y": 0.5
+              },
+              "RotationOffset": {
+                "Yaw": 0,
+                "Pitch": 180,
+                "Roll": 0
+              }
+            }
+          ],
+          "AmbientSoundEventId": "SFX_Campfire_Default_Loop"
+        }
+      }
+    }
+  },
+  "PlayerAnimationsId": "Block",
+  "IconProperties": {
+    "Scale": 0.58823,
+    "Rotation": [
+      22.5,
+      45.0,
+      22.5
+    ],
+    "Translation": [
+      0.0,
+      -13.5
+    ]
+  },
+  "Tags": {
+    "Family": [
+      "Iron"
+    ],
+    "Type": [
+      "Metal"
+    ]
+  },
+  "MaxStack": 1,
+  "ItemSoundSetId": "ISS_Items_Metal"
+}

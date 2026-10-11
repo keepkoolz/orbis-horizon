@@ -41,10 +41,16 @@ final class ViewFilter {
         /** Visible only to the given player. */
         ONLY,
         /** Visible to everybody except the given player. */
-        HIDE
+        HIDE,
+        /** T118: visible to everybody except the given players. */
+        HIDE_SET
     }
 
-    record Rule(UUID player, Mode mode) {
+    /** player is used by ONLY and HIDE, players by HIDE_SET (null otherwise). */
+    record Rule(UUID player, Mode mode, Set<UUID> players) {
+        Rule(UUID player, Mode mode) {
+            this(player, mode, null);
+        }
     }
 
     private static final Map<Ref<EntityStore>, Rule> RULES = new ConcurrentHashMap<>();
@@ -76,6 +82,13 @@ final class ViewFilter {
         }
     }
 
+    /** T118: the entity is visible to everybody except these players. */
+    static void hideAll(Ref<EntityStore> ref, Set<UUID> players) {
+        if (ref != null && players != null && !players.isEmpty()) {
+            RULES.put(ref, new Rule(null, Mode.HIDE_SET, Set.copyOf(players)));
+        }
+    }
+
     /** Removes the rule of an entity (it is visible to everybody again, or it is about to be removed). */
     static void clear(Ref<EntityStore> ref) {
         if (ref != null) {
@@ -97,8 +110,12 @@ final class ViewFilter {
     }
 
     /** True if this viewer must not receive this entity. */
-    private static boolean hiddenFrom(Rule rule, UUID viewer) {
-        return rule.mode() == Mode.ONLY ? !rule.player().equals(viewer) : rule.player().equals(viewer);
+    static boolean hiddenFrom(Rule rule, UUID viewer) {
+        return switch (rule.mode()) {
+            case ONLY -> !rule.player().equals(viewer);
+            case HIDE -> rule.player().equals(viewer);
+            case HIDE_SET -> rule.players().contains(viewer);
+        };
     }
 
     /**

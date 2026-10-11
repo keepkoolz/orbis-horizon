@@ -140,18 +140,22 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
             return;
         }
 
-        // Same computation as DeployBalloonInteraction. Rotation3f.y is the yaw in radians.
-        Rotation3f bodyRotation = transform.getRotation();
-        Rotation facing = Rotation.closestOfDegrees((float) Math.toDegrees(bodyRotation.y));
-        Rotation rotation = facing.add(rotationOffset);
-
+        // T121: same computation as the held-crate preview (shared helper). Rotation3f.y is the yaw in radians.
         BlockPosition target = context.getTargetBlock();
-        Vector3i origin = target != null
-                ? new Vector3i(target.x, target.y, target.z)
-                : Vector3dUtil.toVector3i(transform.getPosition());
-        Vector3i rotatedOffset = facing.rotateYaw(new Vector3i(offset), new Vector3i());
-        origin.add(rotatedOffset);
+        DeployPlacement.Placement placement = DeployPlacement.compute(
+                target != null ? new Vector3i(target.x, target.y, target.z) : null,
+                transform.getPosition(), transform.getRotation().y, offset, rotationOffset);
+        Rotation rotation = placement.rotation();
+        Vector3i origin = placement.origin();
 
+        // No deployment under water (11 October 2026).
+        Vector3i wet = BalloonManager.underLiquid(world, shape, origin, rotation);
+        if (wet != null) {
+            LOGGER.at(Level.INFO).log("Tente refusée en (%d, %d, %d) : liquide en (%d, %d, %d)", origin.x, origin.y, origin.z, wet.x, wet.y, wet.z);
+            playerRef.sendMessage(Texts.t("deploy.underwater"));
+            fail(context);
+            return;
+        }
         // Room test: no prefab cell may contain a solid block, all chunks must be loaded.
         for (StructureShape.Cell c : shape.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);

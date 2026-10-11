@@ -50,8 +50,6 @@ final class AirshipHelm {
 
     static final String ROOT_INTERACTION_ID = "Airship_Helm_Use";
     static final String KEY = "airship_helm";
-    /** Interaction hint shown by the client when the helper is targeted (both helpers land: helm and balloon chain). */
-    static final String LAND_HINT = "server.orbis_horizon.interactionHints.land";
     /** Existing game model used as a carrier for the hitbox. */
     static final String MODEL_ID = "Rubble_Stone";
     static final float MODEL_SCALE = 0.02f;
@@ -115,7 +113,6 @@ final class AirshipHelm {
             Map<InteractionType, String> uses = new EnumMap<>(InteractionType.class);
             uses.put(InteractionType.Use, rootInteractionId);
             Interactions interactions = new Interactions(uses);
-            interactions.setInteractionHint(LAND_HINT);
             holder.addComponent(Interactions.getComponentType(), interactions);
             if (intangible) {
                 holder.ensureComponent(Intangible.getComponentType());

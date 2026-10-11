@@ -36,6 +36,10 @@ final class BalloonFlight {
      * whenever the flight has no pilot on board (one entity, seen by everybody).
      */
     volatile Ref<EntityStore> observerRef;
+    /** T118: seat views of this flight's passengers, drained at the end of the flight (covers passengers dropped from the list). */
+    final List<PassengerSeatView.State> seatViews = new CopyOnWriteArrayList<>();
+    /** T119: standing mannequin of the pilot (dual rendering only). */
+    volatile PilotMannequin.State pilotMan;
     /** Model parts (nodes beyond the client's per-entity limit), null if the type has none or the setting is off. */
     volatile VehicleParts.Group parts;
     /** T82: dual rendering is active for this flight (set at take-off, cleared when the flight collapses to a single entity). */
@@ -88,6 +92,8 @@ final class BalloonFlight {
     volatile boolean driven;
     /** Speed of the automatic descent, in blocks per second: the pilot's vertical flight speed (after the division by 2). */
     volatile double descentSpeed;
+    /** Horizontal speed of a transit balloon in blocks per second (player horizontal fly speed times the balloon factor). */
+    volatile double cruiseSpeed;
     /** Time of the last automatic descent update (ms). */
     long lastDescentMs;
     /** Boosted flame (T17): the balloon is climbing, the _Boost model is shown. */
@@ -110,11 +116,17 @@ final class BalloonFlight {
      */
     enum PassengerMode {
         /**
-         * T82 default: forced flight at zero flight speed and a ChangeVelocity (Set) sent every tick (seat velocity plus a correction toward the
-         * seat), like the airship passengers (T64, validated in game). No mount: a player mounted on an entity drives it on their own client.
+         * Forced flight at zero flight speed and a ChangeVelocity (Set) sent every tick (seat velocity plus a correction toward the
+         * seat), like the airship passengers (T64). No mount: a player mounted on an entity drives it on their own client. The default before T117.
          */
         FOLLOW,
         MOUNT,
+        /**
+         * T115 and T117 default (and always for transit flights, whatever the global mode): the camera is attached to the entity the client
+         * sees and shows a fixed first-person view from the seat, the body is not mounted and stays parked in forced flight at zero speed
+         * (PassengerCamera).
+         */
+        CAMERA,
         TELEPORT
     }
 
@@ -241,6 +253,15 @@ final class BalloonFlight {
         boolean velActive;
         /** FOLLOW mode: no action until this time (after a correction teleport the reported position is stale). */
         long pauseUntilMs;
+        /** CAMERA mode: the seat camera was sent, and the NetworkId it targets (-1: none). */
+        volatile boolean cameraOn;
+        /** CAMERA mode: random horizontal view yaw (radians) drawn once at boarding. */
+        float camYaw;
+        boolean camYawSet;
+        int cameraTargetId = -1;
+        /** T118: CAMERA mode seat view (camera anchor, mannequins, hidden body), null when not built. */
+        volatile PassengerSeatView.State seatView;
+        boolean noMannequinLogged;
 
         Passenger(Ref<EntityStore> ref, UUID uuid, String name, int seat, Vector3i seatBlock, Vector3f seatLocal,
                   boolean shared, PassengerMode mode, Pose pose) {
@@ -270,6 +291,22 @@ final class BalloonFlight {
     /** Interactable helper on the chain cell: using it in flight lands the balloon, like the airship helm. See BalloonLights.spawnChain. */
     volatile AirshipHelm.Helper chain;
 
+
+    /**
+     * T120: dry descent of a transport balloon onto its lowered cage. The cage blocks stay in the world, only the rest of the balloon flies
+     * (model without cage, cage cells ignored by the collisions). groundCage = cage descent in blocks (0 = ordinary flight), cageHome = origin
+     * of the balloon before it left, so the cage is at cageHome.y - groundCage and the balloon stops there (targetY).
+     */
+    volatile int groundCage;
+    final Vector3i cageHome = new Vector3i();
+
+    /** T120: origin height at which the structure rests on its cage (meaningful when groundCage > 0). */
+    int targetY() {
+        return cageHome.y - groundCage;
+    }
+
+    /** Transit flight data (public transport between stations), null for an ordinary balloon. */
+    volatile TransitFlight transit;
 
     BalloonFlight(UUID pilotUuid, Ref<EntityStore> pilotRef, World world, Rotation rotation, Deployables.Kind kind) {
         this.kind = kind;

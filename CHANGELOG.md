@@ -1,5 +1,66 @@
 # Changelog
 
+## v1.5
+
+This release adds balloon stations, a way to travel between places without piloting anything. Along the way, the way passengers see a flight changed, crates became the only thing you craft for a vehicle, and a few rough edges of the balloons and the airship were smoothed.
+
+### New: balloon stations
+
+A station crate sets up a station: stairs climbing to a raised stone walkway, a landing pad at its end next to the boarding steps, and a hut with the station master. Every station in the world is a destination for every player. Talk to the station master, pick a destination, and a balloon with no pilot comes down onto the pad. It waits thirty seconds, flies the players sitting in its basket to the station you chose, sets them on the boarding platform at the top of the stairs and flies off. There is no fuel to bring and nothing to steer.
+
+- A station needs about 25 x 11 x 17 blocks and must stand at least 64 blocks from another station. The stone path replaces the ground, and grass and flowers are cleared. A real bump in the terrain or a tree in the way refuses the placement, and the message names the block in the way and its position.
+- After placing a station you name it in a window (3 to 24 characters, each name used once). If you close the window, the station is called "Station N".
+- The station master looks like a player, with his own look for each station and a blue cap. He stands in his hut and always faces the foot of the stairs. His window shows the state of the pad, the planned departures, and the destinations sorted by name, each with its direction (eight compass points), its distance in blocks and an estimated flight time.
+- Only one player at a time can talk to the station master. Departures queue up, five at most, and players within 20 blocks are told about each one.
+- The balloon has 12 stools. On arrival, passengers get a welcome message and the name of the station in big letters. The balloon waits five seconds on the pad, then climbs away and disappears. Two balloons on the same pad are kept ten seconds apart so they never cross. If the pad is busy when a balloon arrives, it waits nearby.
+- During a trip you see the world from your seat, looking towards the destination, a little to the outside of your seat. If you were already seated when the balloon left, you keep the direction you were looking at. The view is smooth, you cannot look around, and the normal view comes back when you arrive.
+- Balloons fly high in a straight line and climb over obstacles. If a balloon is stuck for too long, its passengers are set at the destination. If the destination is removed during a trip, the balloon goes to the station it left or to the nearest one.
+- If the server stops or a passenger leaves during a trip, nobody is left in the sky. Players are set on the boarding platform of the destination.
+- The braziers of the station do not burn and cannot be put out. The map in the station no longer gets in the way of the station master.
+- Stations cannot be placed under water. Removing a station gives back the crate and fills the holes left in the ground with the surrounding block.
+- The crate is crafted from the raw materials of the station: a lot of stone (any kind), logs, a little wool, iron and charcoal. Its recipe is turned off by default and an operator turns it on for the whole server.
+
+### New: preview of where the crate will put its structure
+
+While you hold a crate of the mod (tents, balloons, airship, station), you see the structure block by block exactly where it will appear, facing the way it will face, and it follows your aim. Only you see it. It disappears when you put the crate away or place the structure.
+
+### Changed: crafting
+
+- The burner, the large balloon burner, the chain, the airship engine, the airship fuel tank and the burner outlets are no longer crafted. Their materials are now part of the crate recipes, so each vehicle is a single recipe. A recipe never needs more than 40 stacks in your inventory.
+- Parts you already crafted stay in your inventory but have no use (the large balloon burner and the burner outlet in particular).
+
+### Changed: passengers
+
+- Passengers of the balloons with seats, the animal transport balloon and the airship, and the seated pilot of an automatic descent, now see the world from their seat: first person, smooth, in a fixed horizontal direction. It is the direction they were looking at if they were already seated at take-off, otherwise towards the inside of the vehicle. They cannot look around while they fly. In the airship, the view does not turn with the ship.
+- Passengers are shown to the others as seated mannequins with their own skin, and their real body is hidden. Pilots are shown to the others as a standing mannequin, at the helm in the airship and in the basket in the balloons, instead of flying in the creative pose.
+- The previous behaviour is still available to operators with `/orbishorizon balloon passengers follow` and `/orbishorizon airship tune passengers follow`.
+
+### Changed: vehicles
+
+- No crate can be deployed under water any more.
+- In flight, the ladders are fully folded and nothing sticks out of the basket.
+- The large balloon has a candle on one side of the basket. It lights up in flight too.
+- When the animal transport balloon is set down in the air with its cage lowered, it now burns fuel. It did not before.
+- When the animal transport balloon runs out of fuel with its cage resting on the ground, it now comes down onto its cage instead of pulling the cage back up first. The cage and the animals stay where they are. Landing on the spot is refused during that descent.
+- The large balloon and the airship fly more smoothly. The parts of their model used to be mounted on each other, and each one now rides the pilot directly.
+- The airship should no longer burst into breaking particles at take-off. The cause was found (blocks spanning several cells) but this has not been confirmed in game.
+
+### For operators
+
+- `/orbishorizon station list` shows the stations, their position and their queue. `debug` shows the state of the nearest station. `despawn` removes the nearest station within 48 blocks and gives you its crate. `tp <name>` takes you to a station (write spaces as `_`, names are suggested while you type). `recipe on|off|show` turns the crate recipe on or off for the whole server.
+- `/orbishorizon balloon render pilot:on|off` and the same option on `/orbishorizon airship render` control the standing mannequin shown for the pilot.
+- Stations are saved in `stations.json` in the plugin data folder.
+
+### Breaking changes from v1.4.1
+
+- The separate parts (burners, chain, airship engine, fuel tank, burner outlets) can no longer be crafted. Parts already in inventories are unused.
+- Passengers now see the world from their seat by default.
+- Stations placed with a test build of this version must be removed and placed again.
+
+### Known limits
+
+- Passengers cannot look around during a flight. In the airship, their view stays fixed in the world when the ship turns.
+
 ## v1.4.1
 
 This is a multiplayer fix. A player who joined someone else's game could see only part of the airship, the large balloon and the animal transport balloon in flight. The envelope, the workbenches and the cage bars were there, but the wooden hull, the ladders and the chains were missing, and you could see right through them. The host saw everything, and the small balloon looked fine to everyone.

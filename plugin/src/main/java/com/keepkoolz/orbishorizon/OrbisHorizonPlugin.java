@@ -29,6 +29,10 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         getCodecRegistry(Interaction.CODEC)
                 .register(DeployTentInteraction.TYPE_ID, DeployTentInteraction.class, DeployTentInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
+                .register(DeployStationInteraction.TYPE_ID, DeployStationInteraction.class, DeployStationInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
+                .register(StationMasterInteraction.TYPE_ID, StationMasterInteraction.class, StationMasterInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
                 .register(PackTentInteraction.TYPE_ID, PackTentInteraction.class, PackTentInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
                 .register(TakeOffBalloonInteraction.TYPE_ID, TakeOffBalloonInteraction.class, TakeOffBalloonInteraction.CODEC);
@@ -66,6 +70,9 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         AirshipResume.init(getDataDirectory());
         // T27: registry of placed balloons and locking (breaking, break damage and block placement cancelled).
         BalloonRegistry.init(getDataDirectory());
+        // Transit: station network (stations.json).
+        TransitNetwork.get().load(getDataDirectory());
+        TransitSettings.load(getDataDirectory());
         try {
             getEntityStoreRegistry().registerSystem(new BalloonLockSystems.Break());
             getEntityStoreRegistry().registerSystem(new BalloonLockSystems.Damage());
@@ -103,10 +110,20 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 event -> {
                     BalloonManager.get().onPlayerGone(event.getPlayerRef().getUuid());
                     AirshipManager.get().onPlayerGone(event.getPlayerRef().getUuid());
+                    StationNamePage.onPlayerGone(event.getPlayerRef().getUuid());
+                    HeldCratePreview.onPlayerGone(event.getPlayerRef().getUuid());
                 });
         // T21: a passenger left in the air when a flight was resumed is put down on their next arrival.
         getEventRegistry().registerGlobal(AddPlayerToWorldEvent.class,
-                event -> BalloonManager.get().onPlayerAdded(event.getHolder(), event.getWorld()));
+                event -> {
+                    BalloonManager.get().onPlayerAdded(event.getHolder(), event.getWorld());
+                    // Transit: the station crate recipe follows the server setting.
+                    try {
+                        StationCommand.syncOnArrival(event.getHolder());
+                    } catch (RuntimeException e) {
+                        getLogger().at(Level.WARNING).withCause(e).log("Recette de la station non synchronisée à l'arrivée");
+                    }
+                });
         // Before the players are disconnected (-48) and the worlds stopped (-32): the worlds are still running.
         getEventRegistry().register((short) -50, ShutdownEvent.class, event -> {
             BalloonManager.get().landAll();
@@ -116,6 +133,8 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         getEventRegistry().registerGlobal(StartWorldEvent.class, event -> {
             BalloonManager.get().recoverWorld(event.getWorld());
             CageAnimals.recoverWorld(event.getWorld());
+            StationMaster.recoverWorld(event.getWorld());
+            StationQueue.recoverWorld(event.getWorld());
             AirshipManager.get().recoverWorld(event.getWorld());
         });
         getCommandRegistry().registerCommand(new OrbisHorizonCommand());
@@ -149,6 +168,21 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 getLogger().at(Level.INFO).log("Montgolfière « %s » : %d case(s), %d siège(s)", kind.id, shape.cells().size(), shape.seats().size());
             }
         }
+        // Transit network: the transit balloon (not in BALLOONS) and the station, same startup log lines.
+        StructureShape transit = Deployables.BALLOON_PUBLIC.shapeOrNull();
+        if (transit != null) {
+            getLogger().at(Level.INFO).log("Montgolfière « %s » : %d case(s), %d siège(s)", Deployables.BALLOON_PUBLIC.id,
+                    transit.cells().size(), transit.seats().size());
+        } else {
+            getLogger().at(Level.WARNING).log("Montgolfière « %s » : prefab illisible", Deployables.BALLOON_PUBLIC.id);
+        }
+        StructureShape station = Deployables.STATION.shapeOrNull();
+        if (station != null) {
+            getLogger().at(Level.INFO).log("Station : %d case(s), repère en (%d, %d, %d)", station.cells().size(),
+                    station.anchor().x(), station.anchor().y(), station.anchor().z());
+        } else {
+            getLogger().at(Level.WARNING).log("Station : prefab illisible");
+        }
         // Worlds already started when the plugin starts (StartWorldEvent has already passed).
         for (World world : Universe.get().getWorlds().values()) {
             // One failing resume must never stop the plugin: StartWorldEvent calls them again when the world is ready.
@@ -161,6 +195,16 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 CageAnimals.recoverWorld(world);
             } catch (RuntimeException e) {
                 getLogger().at(Level.WARNING).withCause(e).log("Reprise des animaux de %s remise au démarrage du monde", world.getName());
+            }
+            try {
+                StationMaster.recoverWorld(world);
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Reprise des chefs de gare de %s remise au démarrage du monde", world.getName());
+            }
+            try {
+                StationQueue.recoverWorld(world);
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Reprise des quais de %s remise au démarrage du monde", world.getName());
             }
             try {
                 AirshipManager.get().recoverWorld(world);

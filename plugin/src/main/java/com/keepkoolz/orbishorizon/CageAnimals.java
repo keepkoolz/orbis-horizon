@@ -161,6 +161,10 @@ final class CageAnimals {
 
     /** World position of an animal in flight: from the flight's entity position (centre of the origin block). */
     static Vector3d flightPos(Animal a, BalloonFlight flight) {
+        if (flight.groundCage > 0) {
+            // T120: the cage stays on the ground, the animals never left their place in it.
+            return worldPos(a, flight.cageHome, flight.rotation, flight.groundCage);
+        }
         Vector3d p = BalloonManager.prefabPoint(flight.entityPos, flight.rotation, new Vector3f((float) a.x(), (float) a.y(), (float) a.z()));
         return p.add(0, FLOOR_MARGIN, 0);
     }
@@ -318,7 +322,7 @@ final class CageAnimals {
 
     /** Each tick of the flight: the animals are brought back to their place in the cage (teleport if the gap exceeds the threshold). */
     static void follow(Store<EntityStore> store, BalloonFlight flight) {
-        if (flight.animals.isEmpty()) {
+        if (flight.animals.isEmpty() || flight.groundCage > 0) { // T120: with the cage on the ground nothing moves
             return;
         }
         for (Animal a : flight.animals) {

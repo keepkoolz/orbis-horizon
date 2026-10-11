@@ -1,6 +1,6 @@
 ![Orbis Origin](images/orbis-horizon-header-3.jpg)
 
-Orbis Horizon is an adventure mod for Hytale about leaving home behind. You build your gear at the workbench, carry it in a crate, and set it up wherever the road takes you. A tent for the night, a hot air balloon to cross the valley, an airship once the world starts to feel small.
+Orbis Horizon is an adventure mod for Hytale about leaving home behind. You build your gear at the workbench, carry it in a crate, and set it up wherever the road takes you. A tent for the night, a hot air balloon to cross the valley, an airship once the world starts to feel small, and balloon stations that fly you from one place to the next.
 
 When it's time to move on, the camp folds back into its crate and the balloon lands wherever you choose.
 
@@ -26,11 +26,16 @@ Fill the burner with fuel, climb into the basket, pull the chain, and the ground
 
 A flying ship with a whole workshop on board: every workbench you need, beds, chests and seats for a crew. It floats without fuel and only burns fuel while it moves or turns. It goes where you fly and turns to face where you look. Building it is a long road, with rare materials from deep in the world.
 
+### Balloon stations
+
+A station is a stone walkway with a landing pad at its end and a little hut for the station master. Name it when you set it up. Talk to the station master, pick a faraway station, and a balloon floats down onto the pad. Climb in, sit on a stool, and when the countdown ends it carries you across the sky on its own, looking out from your seat towards where you are going. You step off on the boarding platform of the other station, with its name across the screen. No fuel to find, nothing to steer. Every station anyone sets up is a stop for everybody.
+
 ## Before you set off
 
-- Everything is crafted at the basic workbench, in the Tinkering tab. The bigger vehicles need an upgraded workbench.
-- Once set up, a tent, balloon or airship is locked, so nobody breaks it by accident. Beds, chests, burners and seats still work.
-- Friends standing on board when you take off travel with you, seated. Other players see you fly by.
+- Everything is crafted at the basic workbench, in the Tinkering tab. The bigger vehicles need an upgraded workbench. Each vehicle is a single recipe, with no parts to make first.
+- Hold a crate and you see where the structure will go, block by block, before you set it up.
+- Once set up, a tent, balloon, airship or station is locked, so nobody breaks it by accident. Beds, chests, burners and seats still work.
+- Friends standing on board when you take off travel with you, seated, and watch the sky from their seat. Other players see you fly by.
 
 The wiki has the exact recipes, how to fly each vehicle and the operator commands.
 

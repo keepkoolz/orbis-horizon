@@ -56,7 +56,7 @@ final class AirshipPassengers {
 
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 
-    enum Mode { FOLLOW, MOUNT, TELEPORT }
+    enum Mode { FOLLOW, MOUNT, TELEPORT, CAMERA }
 
     /** No action on a passenger during this time after their take-off teleport (the reported position is stale). */
     private static final long GRACE_MS = 400;
@@ -100,7 +100,7 @@ final class AirshipPassengers {
 
     // ------------------------------------------------------------------ tuning (/orbishorizon airship tune)
 
-    volatile Mode mode = Mode.FOLLOW;
+    volatile Mode mode = Mode.CAMERA;
     /** FOLLOW: correction toward the seat, per second of distance (b/s per block). */
     volatile double gain = 2.0;
     /** FOLLOW: the correction is capped to this speed (b/s). */
@@ -212,7 +212,8 @@ final class AirshipPassengers {
             }
         }
         Mode m = mode;
-        BalloonFlight.PassengerMode legacy = m == Mode.MOUNT ? BalloonFlight.PassengerMode.MOUNT : BalloonFlight.PassengerMode.TELEPORT;
+        BalloonFlight.PassengerMode legacy = m == Mode.MOUNT ? BalloonFlight.PassengerMode.MOUNT
+                : m == Mode.CAMERA ? BalloonFlight.PassengerMode.CAMERA : BalloonFlight.PassengerMode.TELEPORT;
         for (int j = 0; j < people.size(); j++) {
             if (seatOf[j] < 0) {
                 continue;
@@ -236,6 +237,7 @@ final class AirshipPassengers {
         for (Rider r : riders) {
             try {
                 if (r.p.ref.isValid()) {
+                    PassengerCamera.keepSeatedLook(store, r.p); // seated on a stool or a bench: his look is kept
                     MountUtil.unseat(store, r.p.ref);
                     setHover(store, r, true);
                 }
@@ -287,6 +289,7 @@ final class AirshipPassengers {
             BalloonFlight.Passenger p = r.p;
             try {
                 if (!p.ref.isValid()) {
+                    PassengerSeatView.remove(store, p);
                     f.riders.remove(r); // disconnected without the event, or another world
                     continue;
                 }
@@ -317,6 +320,24 @@ final class AirshipPassengers {
         }
         r.lastSeat = seat;
         r.lastSeatMs = now;
+        if (r.mode == Mode.CAMERA) {
+            if (!p.camYawSet) {
+                // The view looks toward the middle of the ship (prefab x 0, z 0 at the seat's height), not at a wall or the rail (decision of
+                // the user, 11 October 2026). World yaw fixed at boarding: the camera does not turn with the ship.
+                Vector3d centre = manager.shipPoint(f, new Vector3f(0, p.seatLocal.y, 0));
+                Vector3d ahead = manager.shipPoint(f, new Vector3f(0, p.seatLocal.y, -1));
+                p.camYaw = PassengerCamera.inwardYaw(seat, centre, new Vector3f((float) (ahead.x - centre.x), 0, (float) (ahead.z - centre.z)));
+                p.camYawSet = true;
+            }
+            // First-person fixed view from the seat on the entity the rider sees (the offset turns with the ship like the mount offset), the
+            // body is not mounted and follows by itself, safety teleport beyond PassengerCamera's distance.
+            Vector3f d = new Vector3f(p.seatLocal).sub(Deployables.AIRSHIP.airship.pivot);
+            // T118: camera anchor, mannequins and hidden body (PassengerSeatView), the camera is attached to the anchor.
+            PassengerSeatView.sync(store, p, new PassengerSeatView.Ctx(f.shipUuid, f.shipRef, f.observerRef, f.dual, f.pilotUuid,
+                    new Vector3f(-d.x, d.y, -d.z), seat, f.seatViews, true), now);
+            PassengerCamera.safetyTeleport(store, p, seat);
+            return;
+        }
         if (now < r.pauseUntilMs) {
             return;
         }
@@ -492,7 +513,20 @@ final class AirshipPassengers {
                 if (BalloonManager.isDead(store, r.p.ref)) {
                     continue;
                 }
-                teleport(store, r.p.ref, BalloonManager.prefabPoint(logical, rotation, r.exitLocal));
+                Vector3d spot = BalloonManager.prefabPoint(logical, rotation, r.exitLocal);
+                TransformComponent st = store.getComponent(r.p.ref, TransformComponent.getComponentType());
+                if (st != null) {
+                    st.setPosition(spot); // also now: a deferred teleport can be lost at a server shutdown
+                }
+                if (r.mode == Mode.CAMERA) {
+                    f.world.execute(() -> { // the camera was reset by release, the teleport goes out one tick later
+                        if (r.p.ref.isValid()) {
+                            teleport(store, r.p.ref, spot);
+                        }
+                    });
+                } else {
+                    teleport(store, r.p.ref, spot);
+                }
                 PlayerRef pr = store.getComponent(r.p.ref, PlayerRef.getComponentType());
                 if (pr != null) {
                     pr.sendMessage(Texts.t("airship.passenger.landed"));
@@ -659,6 +693,9 @@ final class AirshipPassengers {
                 sb.append(String.format(Locale.ROOT, " %.2f b from seat", t.getPosition().distance(manager.shipPoint(f, r.p.seatLocal))));
             }
             sb.append(" teleports ").append(r.teleports);
+            if (r.mode == Mode.CAMERA) {
+                sb.append(' ').append(PassengerSeatView.describe(r.p));
+            }
             if (r.mode == Mode.MOUNT) {
                 sb.append(" losses ").append(r.losses);
             }

@@ -261,6 +261,157 @@ final class TransportCage {
         return true;
     }
 
+    // ------------------------------------------------------------------ dry descent onto the cage (T120)
+
+    private static volatile StructureShape noCage;
+
+    /**
+     * T120: the transport balloon without its cage box and its chain column: the cells of the flying part during a dry descent onto a
+     * cage that stays on the ground (collisions and lights ignore the cage, which is made of blocks left in the world).
+     */
+    static StructureShape noCageShape(StructureShape base) {
+        StructureShape s = noCage;
+        if (s == null || base != Deployables.BALLOON_TRANSPORT.shapeOrNull()) {
+            List<StructureShape.Cell> out = new ArrayList<>();
+            for (StructureShape.Cell c : base.cells()) {
+                if (!isChain(c) && !inCage(c.x(), c.y(), c.z())) {
+                    out.add(c);
+                }
+            }
+            s = base.withCells(out);
+            if (base == Deployables.BALLOON_TRANSPORT.shapeOrNull()) {
+                noCage = s;
+            }
+        }
+        return s;
+    }
+
+    /**
+     * T120: start of the dry descent of a transport balloon whose cage is lowered AND rests on the ground: the cage blocks stay, the
+     * balloon will come down to them. A moving cage is stopped. An open side is closed first (refused while a player or an animal
+     * is in the opening, or a block blocks it: the descent starts again at the next try). Returns the cage descent in blocks (above 0),
+     * 0 if this mode does not apply (not a transport, cage up, or lowered but hanging in the air: raiseForDescent), -1 to try again later.
+     */
+    static int groundDescent(World world, Deployables.Kind kind, Vector3i origin, Rotation rotation) {
+        if (!isTransport(kind)) {
+            return 0;
+        }
+        BalloonRegistry.Entry e = BalloonRegistry.get(world, origin, rotation, kind.id);
+        if (e == null || e.descent() == 0 || !groundUnder(world, e)) {
+            return 0;
+        }
+        if (MOVES.remove(key(world, origin, rotation)) != null) {
+            BalloonRegistry.flushCage();
+        }
+        if (e.open()) {
+            if (occupied(world, e)) {
+                return -1;
+            }
+            Outcome o = apply(world, e, e.descent(), true, e.descent(), false, null);
+            if (o != Outcome.OK) {
+                LOGGER.at(Level.WARNING).log("Cage de la montgolfière de transport en %s : pan non refermé avant la descente à sec sur la cage (%s)", origin, o);
+                return -1;
+            }
+            BalloonRegistry.Entry closed = BalloonRegistry.setCage(world, origin, rotation, kind.id, e.descent(), false, true);
+            if (closed != null) {
+                listener.onClosed(world, closed);
+                e = closed;
+            }
+        }
+        return e.descent();
+    }
+
+    /**
+     * T120: cage descent that is left when the balloon stops at originY after a dry descent onto a cage lowered by descent blocks from a balloon
+     * that was at homeY: 0 at the target (homeY - descent), more above it, never below 0 or above the maximum. Pure.
+     */
+    static int remainingDescent(int originY, int homeY, int descent) {
+        return Math.max(0, Math.min(MAX, originY - (homeY - descent)));
+    }
+
+    /** T120: removes the chain column (lengthened by d) of a cage left on the ground when the balloon leaves, no particles, no drops. */
+    static void removeChain(World world, Vector3i origin, Rotation rotation, int d) {
+        int[] col = Deployables.TRANSPORT_CHAIN_COLUMN;
+        for (int y = col[1] - d; y <= Deployables.TRANSPORT_CHAIN_TOP_Y; y++) {
+            Vector3i p = wp(rotation, origin, col[0], y, col[2]);
+            BlockType bt = chunkAt(world, p.x, p.z) == null ? null : world.getBlockType(p.x, p.y, p.z);
+            if (bt != null && bt.getId() != null && bt.getId().replace("*", "").startsWith(CHAIN_BLOCK)) {
+                world.setBlock(p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES);
+            }
+        }
+    }
+
+    /** T120: removes the cage blocks left on the ground (cage lowered by d), used when an administrator removes the flight. */
+    static void removeCage(World world, Vector3i origin, Rotation rotation, int d) {
+        StructureShape base = Deployables.BALLOON_TRANSPORT.shapeOrNull();
+        if (base == null) {
+            return;
+        }
+        for (StructureShape.Cell c : base.cells()) {
+            if (isChain(c) || !inCage(c.x(), c.y(), c.z())) {
+                continue;
+            }
+            Vector3i p = wp(rotation, origin, c.x(), c.y() - d, c.z());
+            if (capture(world, p, c.baseName()) != null) {
+                world.setBlock(p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES);
+            }
+        }
+        removeChain(world, origin, rotation, d);
+    }
+
+    /**
+     * T120: places the transport balloon at this origin (paste = the prefab paste) over a cage left on the ground, r blocks below its raised
+     * position (r = 0: the balloon is at the cage, the paste simply rewrites the same blocks). For r above 0 the cage blocks are read before the
+     * paste, the cage cells the paste put in the air are cleared, the cage blocks are written back where they stand and the chain column is
+     * lengthened down to the roof. The registry entry then has descent r and the side closed, so the cage and the chain stay consistent.
+     * A cage block missing from the world (destroyed meanwhile) is simply not written back.
+     */
+    static void pasteOverCage(World world, Vector3i origin, Rotation rotation, int r, Runnable paste) {
+        StructureShape base = Deployables.BALLOON_TRANSPORT.shapeOrNull();
+        if (r <= 0 || base == null) {
+            paste.run();
+            return;
+        }
+        Map<Vector3i, Blk> real = new LinkedHashMap<>();
+        for (StructureShape.Cell c : base.cells()) {
+            if (isChain(c) || !inCage(c.x(), c.y(), c.z())) {
+                continue;
+            }
+            Vector3i p = wp(rotation, origin, c.x(), c.y() - r, c.z());
+            Blk b = capture(world, p, c.baseName());
+            if (b != null) {
+                real.put(p, b);
+            }
+        }
+        paste.run();
+        int[] col = Deployables.TRANSPORT_CHAIN_COLUMN;
+        Blk chain = capture(world, wp(rotation, origin, col[0], Deployables.TRANSPORT_CHAIN_TOP_Y, col[2]), CHAIN_BLOCK);
+        for (StructureShape.Cell c : base.cells()) {
+            if (isChain(c) || inCage(c.x(), c.y(), c.z())) {
+                Vector3i p = wp(rotation, origin, c.x(), c.y(), c.z());
+                world.setBlock(p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES);
+            }
+        }
+        for (Map.Entry<Vector3i, Blk> me : real.entrySet()) {
+            Vector3i p = me.getKey();
+            Blk d = me.getValue();
+            WorldChunk chunk = chunkAt(world, p.x, p.z);
+            if (chunk != null) {
+                chunk.setBlock(p.x, p.y, p.z, d.id(), d.type(), d.rotation(), d.filler(), SET_BLOCK_NO_PARTICLES);
+            }
+        }
+        if (chain != null) {
+            for (int y = col[1] - r; y <= Deployables.TRANSPORT_CHAIN_TOP_Y; y++) {
+                Vector3i p = wp(rotation, origin, col[0], y, col[2]);
+                WorldChunk chunk = chunkAt(world, p.x, p.z);
+                if (chunk != null) {
+                    chunk.setBlock(p.x, p.y, p.z, chain.id(), chain.type(), chain.rotation(), chain.filler(), SET_BLOCK_NO_PARTICLES);
+                }
+            }
+        }
+        BalloonRegistry.setCage(world, origin, rotation, Deployables.TRANSPORT_KIND, r, false, true);
+    }
+
     // ------------------------------------------------------------------ levers
 
     /**

@@ -13,12 +13,20 @@
   "Recipe": {
     "Input": [
       {
-        "ItemId": "Hotair_Balloon_Large_Burner",
-        "Quantity": 1
+        "ItemId": "Ingredient_Bar_Iron",
+        "Quantity": 26
       },
       {
-        "ItemId": "Hotair_Balloon_Chain",
-        "Quantity": 1
+        "ItemId": "Ingredient_Bar_Cobalt",
+        "Quantity": 6
+      },
+      {
+        "ItemId": "Ingredient_Bar_Thorium",
+        "Quantity": 4
+      },
+      {
+        "ItemId": "Ingredient_Fire_Essence",
+        "Quantity": 4
       },
       {
         "ItemId": "Cloth_Block_Wool_Red",
@@ -31,10 +39,6 @@
       {
         "ItemId": "Wood_Hardwood_Planks",
         "Quantity": 48
-      },
-      {
-        "ItemId": "Ingredient_Bar_Iron",
-        "Quantity": 12
       }
     ],
     "BenchRequirement": [

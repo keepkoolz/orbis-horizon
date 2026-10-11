@@ -14,5 +14,7 @@ public final class OrbisHorizonCommand extends AbstractCommandCollection {
         setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
         addSubCommand(new BalloonCommand());
         addSubCommand(new AirshipCommand());
+        addSubCommand(new StationCommand());
+        addSubCommand(new PreviewCommand());
     }
 }

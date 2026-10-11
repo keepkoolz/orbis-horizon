@@ -62,6 +62,16 @@ public final class AirshipCommand extends AbstractCommandCollection {
                 }
                 ctx.sendMessage(Texts.t("cmd.render.parts").param("mode", AirshipManager.get().partsMode.name().toLowerCase()));
                 return;
+            } else if (m.equalsIgnoreCase("pilot:on") || m.equalsIgnoreCase("pilot:off")) {
+                // T119: standing mannequin of the pilot for the others (next take-off), shared by the balloons and the airship.
+                PilotMannequin.enabled = m.equalsIgnoreCase("pilot:on");
+                ctx.sendMessage(Texts.t("cmd.render.pilot").param("mode", PilotMannequin.enabled ? "on" : "off"));
+                return;
+            } else if (m.equalsIgnoreCase("camyaw:relative") || m.equalsIgnoreCase("camyaw:world")) {
+                // T119: passenger camera yaw relative to the vehicle or fixed in the world (next camera send), shared setting.
+                PassengerCamera.relativeYaw = m.equalsIgnoreCase("camyaw:relative");
+                ctx.sendMessage(Texts.t("cmd.render.camyaw").param("mode", PassengerCamera.relativeYaw ? "relative" : "world"));
+                return;
             } else if (!m.equalsIgnoreCase("show")) {
                 ctx.sendMessage(Texts.t("cmd.render.usage").param("command", "/orbishorizon airship render"));
                 return;

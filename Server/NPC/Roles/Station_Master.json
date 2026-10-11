@@ -1,0 +1,17 @@
+{
+  "Type": "Generic",
+  "DefaultNPCAttitude": "Ignore",
+  "DefaultPlayerAttitude": "Neutral",
+  "Appearance": "Player",
+  "MaxHealth": 50,
+  "Invulnerable": true,
+  "DisableDamageGroups": [ "Self" ],
+  "MotionControllerList": [
+    { "Type": "Walk", "MaxWalkSpeed": 5, "Gravity": 10, "RunThreshold": 0.3,
+      "MaxFallSpeed": 15, "MaxRotationSpeed": 360, "Acceleration": 10 }
+  ],
+  "Instructions": [
+    { "Sensor": { "Type": "Any" }, "BodyMotion": { "Type": "Nothing" } }
+  ],
+  "NameTranslationKey": "server.orbis_horizon.chat.transit.master.name"
+}

@@ -80,40 +80,5 @@
       0,
       -13.5
     ]
-  },
-  "Recipe": {
-    "Input": [
-      {
-        "ItemId": "Ingredient_Bar_Iron",
-        "Quantity": 72
-      },
-      {
-        "ItemId": "Ingredient_Bar_Thorium",
-        "Quantity": 36
-      },
-      {
-        "ItemId": "Ingredient_Bar_Adamantite",
-        "Quantity": 40
-      },
-      {
-        "ItemId": "Ingredient_Charcoal",
-        "Quantity": 60
-      },
-      {
-        "ItemId": "Ingredient_Fire_Essence",
-        "Quantity": 30
-      }
-    ],
-    "BenchRequirement": [
-      {
-        "Type": "Crafting",
-        "Categories": [
-          "Workbench_Tinkering"
-        ],
-        "Id": "Workbench",
-        "RequiredTierLevel": 3
-      }
-    ],
-    "TimeSeconds": 8
   }
 }

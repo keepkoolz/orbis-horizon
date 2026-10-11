@@ -96,20 +96,13 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             return;
         }
 
-        // Rotation3f.y is the yaw in radians.
-        Rotation3f bodyRotation = transform.getRotation();
-        Rotation facing = Rotation.closestOfDegrees((float) Math.toDegrees(bodyRotation.y));
-        Rotation rotation = facing.add(rotationOffset);
-
-        // Origin: the targeted block, otherwise the player's position.
+        // T121: same computation as the held-crate preview (shared helper). Rotation3f.y is the yaw in radians.
         BlockPosition target = context.getTargetBlock();
-        Vector3i origin = target != null
-                ? new Vector3i(target.x, target.y, target.z)
-                : Vector3dUtil.toVector3i(transform.getPosition());
-
-        // The offset only follows the player's direction (Z = in front of them, to be calibrated in game).
-        Vector3i rotatedOffset = facing.rotateYaw(new Vector3i(offset), new Vector3i());
-        origin.add(rotatedOffset);
+        DeployPlacement.Placement placement = DeployPlacement.compute(
+                target != null ? new Vector3i(target.x, target.y, target.z) : null,
+                transform.getPosition(), transform.getRotation().y, offset, rotationOffset);
+        Rotation rotation = placement.rotation();
+        Vector3i origin = placement.origin();
 
         int flags = (force ? 1 : 0) | 8; // same options as SpawnPrefab
         // T24: the unfolded ladder does not replace the terrain (a slope, a wall). T54: the balloon type is found by the
@@ -134,6 +127,17 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
                 playerRef.sendMessage(Texts.t("deploy.heightLimit"));
             }
             LOGGER.at(Level.INFO).log("Caisse %s refusée en (%d, %d, %d) : la structure dépasse la limite de hauteur", kind.id, origin.x, origin.y, origin.z);
+            context.getState().state = InteractionState.Failed;
+            return;
+        }
+        Vector3i wet = shape != null ? BalloonManager.underLiquid(world, shape, origin, rotation) : null;
+        if (wet != null) {
+            PlayerRef playerRef = commandBuffer.getComponent(player, PlayerRef.getComponentType());
+            if (playerRef != null) {
+                playerRef.sendMessage(Texts.t("deploy.underwater"));
+            }
+            LOGGER.at(Level.INFO).log("Caisse %s refusée en (%d, %d, %d) : liquide en (%d, %d, %d)", kind.id, origin.x, origin.y, origin.z,
+                    wet.x, wet.y, wet.z);
             context.getState().state = InteractionState.Failed;
             return;
         }

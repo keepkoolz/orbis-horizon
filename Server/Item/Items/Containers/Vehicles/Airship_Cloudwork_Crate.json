@@ -59,16 +59,36 @@
   "Recipe": {
     "Input": [
       {
-        "ItemId": "Airship_Engine",
-        "Quantity": 1
+        "ItemId": "Ingredient_Bar_Iron",
+        "Quantity": 200
       },
       {
-        "ItemId": "Airship_Fuel_Tank",
-        "Quantity": 1
+        "ItemId": "Ingredient_Bar_Thorium",
+        "Quantity": 60
       },
       {
-        "ItemId": "Airship_Burner_Outlet",
-        "Quantity": 2
+        "ItemId": "Ingredient_Bar_Adamantite",
+        "Quantity": 40
+      },
+      {
+        "ItemId": "Ingredient_Charcoal",
+        "Quantity": 60
+      },
+      {
+        "ItemId": "Ingredient_Fire_Essence",
+        "Quantity": 54
+      },
+      {
+        "ItemId": "Ingredient_Bar_Copper",
+        "Quantity": 16
+      },
+      {
+        "ItemId": "Ingredient_Bar_Cobalt",
+        "Quantity": 48
+      },
+      {
+        "ItemId": "Ingredient_Leather_Heavy",
+        "Quantity": 6
       },
       {
         "ItemId": "Bench_WorkBench",
@@ -125,10 +145,6 @@
       {
         "ItemId": "Wood_Softwood_Planks",
         "Quantity": 90
-      },
-      {
-        "ItemId": "Ingredient_Bar_Iron",
-        "Quantity": 20
       }
     ],
     "BenchRequirement": [

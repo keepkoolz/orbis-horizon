@@ -519,6 +519,8 @@ final class AirshipManager {
             if (observer != null) {
                 f.observerRef = observer;
                 f.dual = true;
+                // T119: standing mannequin of the pilot on the observer entity.
+                f.pilotMan = PilotMannequin.create(store, f.shipUuid, observer, pilotRef, f.pilotUuid, System.currentTimeMillis());
             }
         }
         // Model parts (entities that carry the nodes beyond the client's limit), on the ship entity and on the observer entity if any.
@@ -562,6 +564,8 @@ final class AirshipManager {
         if (!f.dual) {
             return;
         }
+        PilotMannequin.remove(store, f.pilotMan, false); // T119: the mannequin lives with the dual rendering
+        f.pilotMan = null;
         f.dual = false;
         Ref<EntityStore> observer = f.observerRef;
         f.observerRef = null;
@@ -581,6 +585,12 @@ final class AirshipManager {
 
     /** T82: removes the ship entity and its observer entity (and their visibility rules). Never throws. */
     private void removeShipEntities(Store<EntityStore> store, AirshipFlight f) {
+        PilotMannequin.remove(store, f.pilotMan, false); // T119
+        f.pilotMan = null;
+        for (AirshipPassengers.Rider r : f.riders) {
+            PassengerSeatView.remove(store, r.p); // T118
+        }
+        PassengerSeatView.drain(store, f.seatViews);
         VehicleParts.removeAll(store, f.parts);
         f.parts = null;
         Ref<EntityStore> observer = f.observerRef;
@@ -1759,6 +1769,8 @@ final class AirshipManager {
             double alpha = observerSmoothMs <= 0 || f.lastDt <= 0 ? 1.0 : 1 - Math.exp(-f.lastDt * 1000.0 / observerSmoothMs);
             VehicleView.sync(store, f.shipRef, f.observerRef, alpha); // T82: the observer entity follows the ship's pose
             VehicleParts.sync(store, f.parts, f.shipRef, f.observerRef); // after the smoothing: the parts copy their host
+            // T119: the pilot faces the bow, which points to (-sin theta, -cos theta): the entity yaw of a model faces the same way at yaw theta.
+            PilotMannequin.sync(store, f.pilotMan, f.observerRef, (float) (yawSign * f.theta), null, System.currentTimeMillis());
         }
     }
 
@@ -2254,6 +2266,10 @@ final class AirshipManager {
             }
             BalloonLights.removeOrphans(world, store, rec.ship(), s);
             VehicleParts.removeOrphans(world, store, rec.ship());
+            PilotMannequin.removeOrphan(world, store, rec.ship()); // T119
+            if (rec.riders() != null) {
+                PassengerSeatView.removeOrphans(world, store, rec.ship(), rec.riders().stream().map(AirshipPassengers.Saved::uuid).toList());
+            }
             if (rec.ship() != null) {
                 Ref<EntityStore> helm = world.getEntityStore().getRefFromUUID(AirshipHelm.uuidFor(rec.ship()));
                 if (helm != null && helm.isValid()) {
@@ -2522,7 +2538,8 @@ final class AirshipManager {
                 ? store.getComponent(f.pilotRef, TransformComponent.getComponentType()) : null;
         TransformComponent ot = f.observerRef != null && f.observerRef.isValid()
                 ? store.getComponent(f.observerRef, TransformComponent.getComponentType()) : null;
-        tuning = "model parts " + VehicleParts.describe(f.parts, partsMode) + ", flight rendering " + (f.dual ? "dual (ship entity rule " + ViewFilter.ruleOf(f.shipRef) + "; observer entity "
+        tuning = PilotMannequin.describe(f.pilotMan) + ", camera yaw " + (PassengerCamera.relativeYaw ? "relative" : "world")
+                + ", model parts " + VehicleParts.describe(f.parts, partsMode) + ", flight rendering " + (f.dual ? "dual (ship entity rule " + ViewFilter.ruleOf(f.shipRef) + "; observer entity "
                 + (ot != null ? fmt(ot.getPosition()) : "missing") + ", rule " + ViewFilter.ruleOf(f.observerRef) + ")"
                 : "single entity (seen by everybody)") + ", " + tuning;
         double head = headYaw(store, f);
@@ -2610,7 +2627,7 @@ final class AirshipManager {
                     return "passengers = " + m + " (next take-off)";
                 }
             }
-            return "passengers takes follow, mount or teleport. Current: " + passengers.mode;
+            return "passengers takes follow, mount, teleport or camera. Current: " + passengers.mode;
         }
         double value;
         try {

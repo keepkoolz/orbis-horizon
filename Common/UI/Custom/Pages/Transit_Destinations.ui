@@ -1,0 +1,17 @@
+$C = "../Common.ui";
+
+$C.@PageOverlay {}
+$C.@Container {
+  Anchor: (Width: 600, Height: 520);
+  #Title { Label #TitleText { Style: (RenderBold: true, FontSize: 20, TextColor: #ffffff); Anchor: (Left: 20); Text: ""; } }
+  #Content {
+    LayoutMode: Top;
+    Label #Status { Style: (RenderBold: true); Anchor: (Bottom: 14); }
+    Label #DepHeader { Style: (RenderBold: true, RenderUppercase: true, TextColor: #94a7bb); Anchor: (Bottom: 6); }
+    Label #Queue { Style: (TextColor: #ffffff(0.6), RenderItalics: true); Anchor: (Left: 8, Bottom: 22); }
+    Label #Header { Style: (RenderBold: true, RenderUppercase: true, TextColor: #94a7bb); Anchor: (Bottom: 6); }
+    Group #List { FlexWeight: 1; LayoutMode: TopScrolling; ScrollbarStyle: $C.@DefaultScrollbarStyle; }
+    $C.@TextButton #CloseButton { Text: ""; Anchor: (Top: 8, Height: 44); }
+  }
+}
+$C.@BackButton {}

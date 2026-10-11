@@ -109,7 +109,7 @@ final class Deployables {
             TRANSPORT_PLACE_MIN, TRANSPORT_PLACE_MAX,
             "lock.balloon.break", "lock.balloon.place",
             new BalloonSpec("Hotair_Balloon_Transport", "Hotair_Balloon_Transport_Crate", TRANSPORT_PIVOT, TRANSPORT_NACELLE_MIN, TRANSPORT_NACELLE_MAX,
-                    "Hotair_Balloon_Basic_Flame", "Hotair_Balloon_Basic_Flamethrower"));
+                    "Hotair_Balloon_Basic_Flame", "Hotair_Balloon_Basic_Flamethrower", "Hotair_Balloon_Transport_NoCage"));
 
     static final String TENT_KIND = "tent";
 
@@ -156,7 +156,77 @@ final class Deployables {
             "lock.airship.break", "lock.airship.place", null, null,
             new AirshipSpec("Airship_Cloudwork", "Airship_Cloudwork_Idle", "Airship_Cloudwork_Off", "Airship_Cloudwork_Crate", AIRSHIP_PIVOT));
 
-    private static final List<Kind> ALL = List.of(BALLOON, BALLOON_BASIC, BALLOON_TRANSPORT, TENT, TENT_BIG, AIRSHIP);
+    static final String PUBLIC_KIND = "balloon_public";
+
+    /**
+     * Transit balloon (public transport between stations): a driverless balloon the size of the large one with a 5 x 5 gondola
+     * and 12 stools, no chain and no crate. Prefab frame (recentred on the gondola: x -2..2, z -2..2), before rotation.
+     * Same names as the other balloons with the PUBLIC_ prefix: scripts/prefab_to_model.py reads them. The pivot is the
+     * walking cell above the gondola floor (floor y = -2), burner row y = 3. The forbidden placement volume covers the
+     * gondola from the pivot up to the burner row.
+     */
+    private static final int[] PUBLIC_PIVOT = {0, -1, 0};
+    private static final float[] PUBLIC_NACELLE_MIN = {-2.0f, -1.5f, -2.0f};
+    private static final float[] PUBLIC_NACELLE_MAX = {2.0f, 2.0f, 2.0f};
+    private static final int[] PUBLIC_PLACE_MIN = {-2, -1, -2};
+    private static final int[] PUBLIC_PLACE_MAX = {2, 3, 2};
+
+    /**
+     * The transit balloon. The anchor is its own burner block (no bench, no interaction), not the chain: it is in ALL but
+     * deliberately NOT in BALLOONS, so that the take-off recognition by the chain can never pick it. No crate (crateItemId null).
+     * Flame systems: the small balloon's copies (they follow the moving model, this balloon flies all the time).
+     */
+    static final Kind BALLOON_PUBLIC = new Kind(PUBLIC_KIND, "Balloon_Public_Transport.prefab.json", "Hotair_Balloon_Public_Burner", true,
+            PUBLIC_PLACE_MIN, PUBLIC_PLACE_MAX,
+            "lock.balloon.break", "lock.balloon.place",
+            new BalloonSpec("Hotair_Balloon_Public", null, PUBLIC_PIVOT, PUBLIC_NACELLE_MIN, PUBLIC_NACELLE_MAX,
+                    "Hotair_Balloon_Basic_Flame", "Hotair_Balloon_Basic_Flamethrower"));
+
+    static final String STATION_KIND = "station";
+
+    /**
+     * Balloon station (transit network). All positions are in the frame of Balloon_Landing_zone.prefab.json as stored in the file
+     * (it is NOT recentred: x starts at 2), whole cells, before rotation. Measured on the prefab; if the prefab changes, update
+     * them. The station is placed by its prefab origin, like the other structures.
+     *
+     * Landing pad (prefab of 11 October 2026): the 5 x 5 Rock_Stone_Brick blocks of the raised walkway, top layer y = 6
+     * (STATION_PAD_MIN to STATION_PAD_MAX, bounds included), in the room the user left between the boarding steps (walls at x = 15)
+     * and the statues (x = 24): the gondola rim (y = -1 of its prefab, one cell wider than the floor on each side) fits from x = 16 to
+     * 22 without touching any station block. The cells above the pad (y = 7) are free. Dock: the gondola floor (y = -2 in its prefab)
+     * sits on the cells above the pad (y = 7), centred on the pad: origin = (19, 9, 0).
+     */
+    static final int[] STATION_PAD_MIN = {17, 6, -2};
+    static final int[] STATION_PAD_MAX = {21, 6, 2};
+    static final int[] STATION_DOCK_ORIGIN = {19, 9, 0};
+    /**
+     * Drop points of the arriving passengers at the top of the stair ramp, before the boarding steps: the Rock_Stone_Brick row
+     * x = 13 (top y = 6) and the last stair row x = 12 (Rock_Stone_Brick_Stairs at y = 6), z -2..2, prefab frame, feet height
+     * (cell y = 7 plus 0.1, cell centres at integers), plus two on the first boarding step (x = 14, Rock_Stone_Brick_Stairs at y = 7,
+     * z = -1 and 1, feet y = 8.1). Each is a standable cell: solid block below, two free cells above. One point per seat (12).
+     */
+    static final float[][] STATION_BOARDING_POINTS = {
+            {13f, 7.1f, -2f}, {13f, 7.1f, -1f}, {13f, 7.1f, 0f}, {13f, 7.1f, 1f}, {13f, 7.1f, 2f},
+            {12f, 7.1f, -2f}, {12f, 7.1f, -1f}, {12f, 7.1f, 0f}, {12f, 7.1f, 1f}, {12f, 7.1f, 2f},
+            {14f, 8.1f, -1f}, {14f, 8.1f, 1f}};
+    /**
+     * Cell of the station master (NPC) inside the hut (counter x 2..5, z 6..9), behind its front counter, basalt floor y = -1: free
+     * cell (the Lobby_Wall_Poster01 that was there is removed from the prefab), two free cells above.
+     */
+    static final int[] STATION_MASTER_POS = {4, 0, 7};
+    /** y of the Soil_Grass / Soil_Dirt base layer: not tested when checking free space for a station. */
+    static final int STATION_GRASS_Y = -1;
+
+    /** Bounding box of the whole prefab (x 1..25, y -1..9, z -6..10): nothing can be placed inside the station. */
+    private static final int[] STATION_PLACE_MIN = {1, -1, -6};
+    private static final int[] STATION_PLACE_MAX = {25, 9, 10};
+
+    /** The balloon station: marker = a brazier of the mod (one of the 6 braziers of the prefab), no burner, locked like the tents. */
+    static final Kind STATION = new Kind(STATION_KIND, "Balloon_Landing_zone.prefab.json", "Balloon_Station_Marker", false,
+            STATION_PLACE_MIN, STATION_PLACE_MAX,
+            "lock.station.break", "lock.station.place");
+
+    private static final List<Kind> ALL = List.of(BALLOON, BALLOON_BASIC, BALLOON_TRANSPORT, TENT, TENT_BIG, AIRSHIP,
+            BALLOON_PUBLIC, STATION);
 
     /** Tent types, in the order they are logged at startup. */
     static final List<Kind> TENTS = List.of(TENT, TENT_BIG);
@@ -200,9 +270,20 @@ final class Deployables {
          * named in CancelParticleSystems. The small balloon has its own copies that follow the model (T54). */
         final String flameSystem;
         final String boostSystem;
+        /**
+         * T120: flight model without the cage and the chain column (transport balloon only, else null), used by the dry descent onto a
+         * cage that rests on the ground. Its _Off variant is shown. Generated by the transport_nocage profile of prefab_to_model.py.
+         */
+        final String groundModelId;
 
         BalloonSpec(String modelId, String crateItemId, int[] pivot, float[] nacelleMin, float[] nacelleMax,
                     String flameSystem, String boostSystem) {
+            this(modelId, crateItemId, pivot, nacelleMin, nacelleMax, flameSystem, boostSystem, null);
+        }
+
+        BalloonSpec(String modelId, String crateItemId, int[] pivot, float[] nacelleMin, float[] nacelleMax,
+                    String flameSystem, String boostSystem, String groundModelId) {
+            this.groundModelId = groundModelId;
             this.flameSystem = flameSystem;
             this.boostSystem = boostSystem;
             this.modelId = modelId;
