@@ -220,13 +220,36 @@ final class StationMaster {
 
     // ------------------------------------------------------------------ world load
 
-    /** Station waiting for its master entity after a world load. */
-    private record Pending(World world, TransitNetwork.Station station, long deadlineMs) {
+    /** Station waiting for its master entity after a world load. readyMs: when its entities were first seen loaded (0: not yet). */
+    private static final class Pending {
+        final World world;
+        final TransitNetwork.Station station;
+        long readyMs;
+
+        Pending(World world, TransitNetwork.Station station) {
+            this.world = world;
+            this.station = station;
+        }
+
+        World world() {
+            return world;
+        }
+
+        TransitNetwork.Station station() {
+            return station;
+        }
     }
 
     private static final Queue<Pending> PENDING = new ConcurrentLinkedQueue<>();
-    /** Time given to the world to load the entity before a master not found by UUID is recreated (avoids duplicates). */
-    private static final long RECOVER_WAIT_MS = 10_000;
+    /**
+     * Time left after the entities of the master's section are loaded (a player came near) before a master not found by UUID is
+     * replaced: an orphan master standing there is adopted, otherwise one is created. Nothing is decided while the section does not
+     * tick, because its entities are not in the world then (0.7, SectionBlocks.entitiesLoaded): deciding then gave a new master at
+     * every restart, stored away with the section, and they all came back stacked under the real one.
+     */
+    private static final long ENTITY_GRACE_MS = 2_000;
+    /** Half size of the box around the master point where masters of the station are looked for (stacked duplicates, orphans). */
+    private static final double MASTER_BOX = 1.5;
 
     /** World load and plugin start: every station of the world gets its master back (found by UUID, else recreated). */
     static void recoverWorld(World world) {
@@ -237,18 +260,19 @@ final class StationMaster {
     }
 
     /**
-     * Loads the chunk of the master, then waits up to RECOVER_WAIT_MS for the entity to be found by UUID (tickReservations
-     * resolves it). A station without a master (never created, or lost) gets one at once.
+     * Loads the section of the master, then hands the station to resolvePending (tickReservations), which waits for the entities of
+     * that section to be in the world before finding, adopting or creating the master.
      */
     static void ensure(World world, TransitNetwork.Station s) {
         try {
             Vector3d p = masterPoint(s);
-            int cx = ChunkUtil.chunkCoordinate((int) Math.floor(p.x));
-            int cz = ChunkUtil.chunkCoordinate((int) Math.floor(p.z));
-            world.getChunkAsync(ChunkUtil.indexChunk(cx, cz)).whenComplete((c, t) -> {
+            int bx = (int) Math.floor(p.x), by = (int) Math.floor(p.y), bz = (int) Math.floor(p.z);
+            SectionBlocks.loadSections(world.getChunkStore(), bx, by - 2, bz, bx, by + 2, bz).whenComplete((c, t) -> {
                 try {
-                    world.execute(() -> PENDING.add(new Pending(world, s,
-                            s.masterUuid == null ? 0 : System.currentTimeMillis() + RECOVER_WAIT_MS)));
+                    world.execute(() -> {
+                        PENDING.removeIf(q -> q.station() == s);
+                        PENDING.add(new Pending(world, s));
+                    });
                 } catch (RuntimeException ex) {
                     LOGGER.at(Level.WARNING).withCause(ex).log("Monde %s arrêté : chef de gare de « %s » non retrouvé", world.getName(), s.name);
                 }
@@ -269,20 +293,84 @@ final class StationMaster {
             if (p.world() != world) {
                 continue;
             }
-            Ref<EntityStore> ref = refOf(world, p.station());
-            if (ref != null) {
+            TransitNetwork.Station s = p.station();
+            if (!TransitNetwork.get().stations(world.getName()).contains(s)) {
                 PENDING.remove(p);
-                try {
-                    wire(store, ref, p.station());
-                } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Chef de gare de « %s » non remis en état", p.station().name);
-                }
-            } else if (now >= p.deadlineMs()) {
-                PENDING.remove(p);
-                if (TransitNetwork.get().stations(world.getName()).contains(p.station())) {
-                    spawn(store, world, p.station());
-                }
+                continue;
             }
+            try {
+                Ref<EntityStore> ref = refOf(world, s);
+                if (ref != null) {
+                    PENDING.remove(p);
+                    wire(store, ref, s);
+                    removeDuplicates(store, s, ref);
+                    continue;
+                }
+                Vector3d mp = masterPoint(s);
+                if (!SectionBlocks.entitiesLoaded(world.getChunkStore(), (int) Math.floor(mp.x), (int) Math.floor(mp.y), (int) Math.floor(mp.z))) {
+                    p.readyMs = 0; // nobody near: the entities of the section are stored away, nothing can be decided
+                    continue;
+                }
+                if (p.readyMs == 0) {
+                    p.readyMs = now;
+                }
+                if (now - p.readyMs < ENTITY_GRACE_MS) {
+                    continue;
+                }
+                PENDING.remove(p);
+                Ref<EntityStore> orphan = mastersAt(store, s).stream().findFirst().orElse(null);
+                if (orphan != null) {
+                    UUIDComponent id = store.getComponent(orphan, UUIDComponent.getComponentType());
+                    if (id != null) {
+                        TransitNetwork.get().setMaster(s, id.getUuid());
+                        wire(store, orphan, s);
+                        LOGGER.at(Level.INFO).log("Chef de gare de « %s » repris sur place (%s)", s.name, id.getUuid());
+                        removeDuplicates(store, s, orphan);
+                        continue;
+                    }
+                }
+                spawn(store, world, s);
+            } catch (RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Chef de gare de « %s » non remis en état", s.name);
+            }
+        }
+    }
+
+    /** Station master NPCs (role ROLE) standing at the master point of a station. On the world thread. */
+    private static List<Ref<EntityStore>> mastersAt(Store<EntityStore> store, TransitNetwork.Station s) {
+        Vector3d mp = masterPoint(s);
+        Vector3d min = new Vector3d(mp.x - MASTER_BOX, mp.y - 0.5, mp.z - MASTER_BOX);
+        Vector3d max = new Vector3d(mp.x + MASTER_BOX, mp.y + 2.5, mp.z + MASTER_BOX);
+        List<Ref<EntityStore>> out = new ArrayList<>();
+        for (Ref<EntityStore> ref : com.hypixel.hytale.server.core.util.TargetUtil.getAllEntitiesInBox(min, max, store)) {
+            if (ref == null || !ref.isValid()) {
+                continue;
+            }
+            com.hypixel.hytale.server.npc.entities.NPCEntity npc =
+                    store.getComponent(ref, com.hypixel.hytale.server.npc.entities.NPCEntity.getComponentType());
+            if (npc != null && ROLE.equals(npc.getRoleName())) {
+                out.add(ref);
+            }
+        }
+        return out;
+    }
+
+    /** Removes the other station masters stacked at the master point (left by older versions). On the world thread. */
+    private static void removeDuplicates(Store<EntityStore> store, TransitNetwork.Station s, Ref<EntityStore> keep) {
+        UUIDComponent keepId = store.getComponent(keep, UUIDComponent.getComponentType());
+        if (keepId == null) {
+            return;
+        }
+        int removed = 0;
+        for (Ref<EntityStore> ref : mastersAt(store, s)) {
+            UUIDComponent id = store.getComponent(ref, UUIDComponent.getComponentType());
+            if (id != null && !keepId.getUuid().equals(id.getUuid())) {
+                store.removeEntity(ref, RemoveReason.REMOVE);
+                removed++;
+            }
+        }
+        if (removed > 0) {
+            LOGGER.at(Level.INFO).log("Chef de gare de « %s » : %d doublon(s) retiré(s)", s.name, removed);
         }
     }
 
@@ -315,6 +403,8 @@ final class StationMaster {
                 if (i == null || !ROOT_INTERACTION_ID.equals(i.getInteractionId(InteractionType.Use))) {
                     wire(store, ref, s);
                 }
+                removeDuplicates(store, s, ref); // a stacked master coming back with its section later
+
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Câblage du chef de gare de « %s » non vérifié", s.name);
             }

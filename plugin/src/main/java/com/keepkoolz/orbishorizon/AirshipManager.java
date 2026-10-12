@@ -41,6 +41,7 @@ import com.hypixel.hytale.server.core.modules.physics.component.Velocity;
 import com.hypixel.hytale.server.core.modules.entity.tracker.NetworkId;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import org.joml.Vector3d;
@@ -331,19 +332,20 @@ final class AirshipManager {
             coz[i] = -ox * s + oz * c;
         }
         LongOpenHashSet seen = new LongOpenHashSet(4096);
+        SectionReader reader = new SectionReader(world.getChunkStore());
         int count = 0;
         for (int k = 0; k < h.size(); k++) {
             double ccx = px + h.dx[k] * c + h.dz[k] * s;
             double ccz = pz - h.dx[k] * s + h.dz[k] * c;
             double ccy = py + 0.5 + h.dy[k];
-            if (testPoint(world, seen, ccx, ccy, ccz)) {
+            if (testPoint(reader, seen, ccx, ccy, ccz)) {
                 if (++count > limit) {
                     return count;
                 }
             }
             for (int i = 0; i < 4; i++) {
                 for (int level = -1; level <= 1; level += 2) {
-                    if (testPoint(world, seen, ccx + cox[i], ccy + level * HALF, ccz + coz[i])) {
+                    if (testPoint(reader, seen, ccx + cox[i], ccy + level * HALF, ccz + coz[i])) {
                         if (++count > limit) {
                             return count;
                         }
@@ -365,7 +367,7 @@ final class AirshipManager {
         return false;
     }
 
-    private static boolean testPoint(World world, LongOpenHashSet seen, double x, double y, double z) {
+    private static boolean testPoint(SectionReader reader, LongOpenHashSet seen, double x, double y, double z) {
         int bx = (int) Math.floor(x);
         int by = (int) Math.floor(y);
         int bz = (int) Math.floor(z);
@@ -373,7 +375,7 @@ final class AirshipManager {
         if (!seen.add(key)) {
             return false;
         }
-        return BalloonManager.blocksBalloon(world, bx, by, bz);
+        return BalloonManager.blocksBalloon(reader, bx, by, bz);
     }
 
     /** Computes the collision hull of the shape now (logged), instead of at the first take-off. */
@@ -878,10 +880,11 @@ final class AirshipManager {
 
     private List<Fx> collectParticles(World world, StructureShape s, Vector3i origin, Rotation rotation) {
         List<Fx> list = new ArrayList<>();
+        SectionReader reader = new SectionReader(world.getChunkStore());
         for (StructureShape.Cell c : s.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             Set<String> ids = new java.util.HashSet<>(particleIds(c.baseName()));
-            BlockType actual = world.getBlockType(p.x, p.y, p.z);
+            BlockType actual = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
             if (actual != null) {
                 addParticles(ids, actual);
             }
@@ -2206,15 +2209,24 @@ final class AirshipManager {
                 continue;
             }
             try {
-                List<CompletableFuture<?>> loads = new ArrayList<>();
-                for (int cx = ChunkUtil.chunkCoordinate(rec.pivotX() - 16); cx <= ChunkUtil.chunkCoordinate(rec.pivotX() + 16); cx++) {
-                    for (int cz = ChunkUtil.chunkCoordinate(rec.pivotZ() - 16); cz <= ChunkUtil.chunkCoordinate(rec.pivotZ() + 16); cz++) {
-                        loads.add(world.getChunkAsync(ChunkUtil.indexChunk(cx, cz)));
-                    }
+                // Vertical span of the ship around the pivot (the landing search can go up to 8 blocks higher).
+                StructureShape ship = Deployables.AIRSHIP.shape();
+                Vector3f pv = pivot();
+                int dyMin = Integer.MAX_VALUE, dyMax = Integer.MIN_VALUE;
+                for (StructureShape.Cell c : ship.cells()) {
+                    dyMin = Math.min(dyMin, c.y() - Math.round(pv.y));
+                    dyMax = Math.max(dyMax, c.y() - Math.round(pv.y));
                 }
-                LOGGER.at(Level.INFO).log("Reprise du vol de dirigeable %s dans %s : pivot (%d, %d, %d), %d chunks à charger",
-                        rec.id(), world.getName(), rec.pivotX(), rec.pivotY(), rec.pivotZ(), loads.size());
-                CompletableFuture.allOf(loads.toArray(new CompletableFuture[0])).whenComplete((v, t) -> {
+                // T76: recoverOne may shift the pose to fit the height range (down near the top of the world): the sections of the
+                // shifted pose are loaded too. A ship that cannot fit at all is refused by recoverOne, its pose is loaded as it is.
+                int shift = resumeHeightShift(rec, ship);
+                if (shift == Integer.MIN_VALUE) {
+                    shift = 0;
+                }
+                LOGGER.at(Level.INFO).log("Reprise du vol de dirigeable %s dans %s : pivot (%d, %d, %d), sections à charger",
+                        rec.id(), world.getName(), rec.pivotX(), rec.pivotY(), rec.pivotZ());
+                SectionBlocks.loadSections(world.getChunkStore(), rec.pivotX() - 16, rec.pivotY() + dyMin + Math.min(0, shift), rec.pivotZ() - 16,
+                        rec.pivotX() + 16, rec.pivotY() + dyMax + Math.max(0, shift) + 8, rec.pivotZ() + 16).whenComplete((v, t) -> {
                     if (t != null) {
                         LOGGER.at(Level.WARNING).withCause(t).log("Chargement des chunks de la reprise impossible pour %s", rec.id());
                     }
@@ -2226,11 +2238,20 @@ final class AirshipManager {
                                 world.getName(), rec.id());
                     }
                 });
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | java.io.IOException e) {
                 recovering.remove(rec.id());
                 LOGGER.at(Level.SEVERE).withCause(e).log("Reprise du vol de dirigeable %s impossible : fichier gardé", rec.id());
             }
         }
+    }
+
+    /** T76: vertical shift that brings the resumed pose (nearest quarter turn) back into the height range, as BalloonManager.heightShift. */
+    private static int resumeHeightShift(AirshipResume.Record rec, StructureShape s) {
+        Rotation q0 = nearestQuarter(rec.heading());
+        Vector3f pv0 = pivot();
+        Vector3i base0 = new Vector3i(rec.pivotX(), rec.pivotY(), rec.pivotZ())
+                .sub(q0.rotateYaw(new Vector3i(Math.round(pv0.x), Math.round(pv0.y), Math.round(pv0.z)), new Vector3i()));
+        return BalloonManager.heightShift(s, base0, q0);
     }
 
     private void recoverOne(World world, AirshipResume.Record rec) {
@@ -2244,11 +2265,7 @@ final class AirshipManager {
             // ship cannot fit at all, the file is kept untouched with a warning, before anything is emptied or placed.
             int heightDy = 0;
             {
-                Rotation q0 = nearestQuarter(rec.heading());
-                Vector3f pv0 = pivot();
-                Vector3i base0 = new Vector3i(rec.pivotX(), rec.pivotY(), rec.pivotZ())
-                        .sub(q0.rotateYaw(new Vector3i(Math.round(pv0.x), Math.round(pv0.y), Math.round(pv0.z)), new Vector3i()));
-                heightDy = BalloonManager.heightShift(s, base0, q0);
+                heightDy = resumeHeightShift(rec, s);
                 if (heightDy == Integer.MIN_VALUE) {
                     LOGGER.at(Level.WARNING).log("Reprise du dirigeable %s impossible : il dépasse la hauteur du monde, fichier gardé", rec.id());
                     return;
@@ -2324,7 +2341,7 @@ final class AirshipManager {
         Vector3i o = rec.takeoffOrigin();
         Rotation r = rec.takeoffRotation();
         Vector3i anchor = s.anchor().rotated(r).add(o);
-        BlockType bt = world.getBlockType(anchor.x, anchor.y, anchor.z);
+        BlockType bt = SectionBlocks.typeAt(new SectionReader(world.getChunkStore()), anchor.x, anchor.y, anchor.z);
         if (bt != null && BalloonManager.sameBlock(bt, s.anchor())) {
             BalloonCargo.takeFrom(world, s, o, r);
             AirshipEngines.takeFrom(world, s, o, r); // emptied: the engine contents of the file are authoritative (T57)
@@ -2383,10 +2400,11 @@ final class AirshipManager {
         Vector3i posedOrigin = null;
         Rotation posedRotation = null;
         double posedDist = Double.MAX_VALUE;
+        SectionReader reader = new SectionReader(world.getChunkStore());
         for (BalloonRegistry.Entry e : BalloonRegistry.entriesOfKind(world, Deployables.AIRSHIP_KIND)) {
             Vector3i origin = new Vector3i(e.x(), e.y(), e.z());
             Vector3i anchor = s.anchor().rotated(e.rotation()).add(origin);
-            BlockType bt = world.getBlockType(anchor.x, anchor.y, anchor.z);
+            BlockType bt = SectionBlocks.typeAt(reader, anchor.x, anchor.y, anchor.z);
             if (bt == null || !BalloonManager.sameBlock(bt, s.anchor())) {
                 continue;
             }

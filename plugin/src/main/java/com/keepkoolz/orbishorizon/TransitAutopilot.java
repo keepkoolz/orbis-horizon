@@ -351,34 +351,28 @@ final class TransitAutopilot {
         t.aheadUnloaded = unloaded;
     }
 
-    /** Horizontal extent of the flight cells, rotated (minX, maxX, minZ, maxZ), cached in the flight. */
+    /** Extent of the flight cells, rotated (minX, maxX, minZ, maxZ, minY, maxY), cached in the flight. */
     private static int[] extent(StructureShape s, BalloonFlight f, TransitFlight t) {
         if (t.extent == null) {
-            int[] e = {Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE};
+            int[] e = {Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE};
             for (StructureShape.Cell c : s.flightCells()) {
                 Vector3i r = c.rotated(f.rotation);
                 e[0] = Math.min(e[0], r.x);
                 e[1] = Math.max(e[1], r.x);
                 e[2] = Math.min(e[2], r.z);
                 e[3] = Math.max(e[3], r.z);
+                e[4] = Math.min(e[4], r.y);
+                e[5] = Math.max(e[5], r.y);
             }
             t.extent = e;
         }
         return t.extent;
     }
 
-    /** True if the chunks under the four corners of the flight footprint at this origin are loaded (the footprint is narrower than a chunk pair). */
+    /** True if every chunk section crossed by the flight cells at this origin is loaded (0.7: sections, not columns). */
     private static boolean areaLoaded(World world, Vector3i origin, int[] ext) {
-        int[] xs = {origin.x + ext[0], origin.x + ext[1]};
-        int[] zs = {origin.z + ext[2], origin.z + ext[3]};
-        for (int x : xs) {
-            for (int z : zs) {
-                if (world.getChunkIfLoaded(ChunkUtil.indexChunk(ChunkUtil.chunkCoordinate(x), ChunkUtil.chunkCoordinate(z))) == null) {
-                    return false;
-                }
-            }
-        }
-        return true;
+        return SectionBlocks.sectionsLoaded(world.getChunkStore(), origin.x + ext[0], origin.y + ext[4], origin.z + ext[2],
+                origin.x + ext[1], origin.y + ext[5], origin.z + ext[3]);
     }
 
     // ------------------------------------------------------------------ movement
@@ -468,7 +462,8 @@ final class TransitAutopilot {
         try {
             pr.sendMessage(Texts.t("transit.arrival.welcome").param("name", dest.name));
             // The station name is a proper noun chosen by a player, not translatable text.
-            EventTitleUtil.showEventTitleToPlayer(pr, Message.raw(dest.name), Message.raw("Orbis Horizon"), true);
+            EventTitleUtil.showEventTitleToPlayer(pr, Message.raw(dest.name), Message.raw("Orbis Horizon"),
+                    com.hypixel.hytale.protocol.packets.interface_.EventTitleStyle.Major);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Titre d'arrivée non affiché");
         }

@@ -1,5 +1,6 @@
 package com.keepkoolz.orbishorizon;
 
+import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
@@ -157,6 +158,7 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
             return;
         }
         // Room test: no prefab cell may contain a solid block, all chunks must be loaded.
+        SectionReader reader = new SectionReader(world.getChunkStore());
         for (StructureShape.Cell c : shape.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             if (BalloonManager.outOfHeight(p.y)) {
@@ -167,11 +169,11 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
                 fail(context);
                 return;
             }
-            WorldChunk chunk = world.getChunkIfLoaded(ChunkUtil.indexChunk(ChunkUtil.chunkCoordinate(p.x), ChunkUtil.chunkCoordinate(p.z)));
-            BlockType bt = chunk != null ? world.getBlockType(p.x, p.y, p.z) : null;
-            if (chunk == null || (bt != null && bt.getMaterial() == BlockMaterial.Solid)) {
+            boolean unloaded = !reader.hasStorageInMemory(p.x, p.y, p.z);
+            BlockType bt = unloaded ? null : SectionBlocks.typeAt(reader, p.x, p.y, p.z);
+            if (unloaded || (bt != null && bt.getMaterial() == BlockMaterial.Solid)) {
                 LOGGER.at(Level.INFO).log("Tente refusée en (%d, %d, %d) : %s bloquée en (%d, %d, %d)",
-                        origin.x, origin.y, origin.z, chunk == null ? "chunk non chargé" : bt.getId(), p.x, p.y, p.z);
+                        origin.x, origin.y, origin.z, unloaded ? "chunk non chargé" : bt.getId(), p.x, p.y, p.z);
                 playerRef.sendMessage(Texts.t("tent.noRoom"));
                 fail(context);
                 return;

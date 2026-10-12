@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.6
+
+This release moves Orbis Horizon to Hytale 0.7. It needs Hytale 0.7 and no longer loads in Hytale 0.6.8. If you stay on 0.6.8, keep v1.5.
+
+### Changed: animal transport balloon
+
+- The cage lever no longer moves the cage while its gate is open, neither down nor up. Close the gate first.
+- If part of the cage is in an area of the world that is not loaded yet, the lever now asks you to come closer instead of saying the cage is damaged.
+
+### Fixed
+
+- Station masters no longer pile up. With Hytale 0.7, every restart of the game left one more station master standing inside the real one. The extra ones are removed the next time you come near the station.
+- Animals caught in the cage of the animal transport balloon are no longer doubled when the game starts again far from the balloon.
+
+### Breaking changes from v1.5
+
+- Hytale 0.7 is required. Version 1.5 is the last one for Hytale 0.6.8.
+
 ## v1.5
 
 This release adds balloon stations, a way to travel between places without piloting anything. Along the way, the way passengers see a flight changed, crates became the only thing you craft for a vehicle, and a few rough edges of the balloons and the airship were smoothed.

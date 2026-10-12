@@ -55,6 +55,7 @@ import com.hypixel.hytale.server.core.prefab.PrefabStore;
 import com.hypixel.hytale.server.core.prefab.selection.buffer.PrefabBufferUtil;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
 import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
@@ -694,20 +695,21 @@ public final class BalloonManager {
         // Attached blocks first (passes 0 and 1), then the structure (2 and 3), and in each group the filler cells before the origin cells. Removing the
         // origin cell of a multi-cell block first made the game remove its filler cells itself (FillerBlockUtil.removeFillerBlocksAt,
         // called by WorldChunk.setBlock), with break particles: the airship burst into particles at takeoff (11 October 2026).
+        SectionReader reader = new SectionReader(world.getChunkStore());
         for (int pass = 0; pass < 4; pass++) {
             for (StructureShape.Cell c : s.cells()) {
                 if ((broadAttached ? isAttachedBroad(c) : isAttached(c)) != (pass < 2) || (c.filler() != 0) != (pass % 2 == 0)) {
                     continue;
                 }
                 Vector3i p = c.rotated(rotation).add(origin);
-                BlockType bt = world.getBlockType(p.x, p.y, p.z);
+                BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
                 if (bt != null && sameBlock(bt, c)) {
                     // The anchor block (the burner, formerly the brazier, or the tent's campfire, T46) is removed without the "no particles" option: with it, the flame
                     // stayed displayed in the sky (test of 3 October 2026, suspected cause). The airship (broadAttached) is excluded: its
                     // anchor is the wooden helm (T67), which burst into break particles, and its block particles are cancelled apart.
                     boolean flameAnchor = !broadAttached && s.anchor().baseName().equals(c.baseName());
                     int settings = flameAnchor ? 0 : SET_BLOCK_NO_PARTICLES;
-                    world.setBlock(p.x, p.y, p.z, BlockType.EMPTY_KEY, settings);
+                    SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, BlockType.EMPTY_KEY, settings);
                     removed++;
                     if (settings == 0) {
                         cancelBlockFlame(world, p);
@@ -756,10 +758,11 @@ public final class BalloonManager {
         int y1 = anchorHint != null ? anchorHint.y : cy + SEARCH_RADIUS;
         int z0 = anchorHint != null ? anchorHint.z : cz - SEARCH_RADIUS;
         int z1 = anchorHint != null ? anchorHint.z : cz + SEARCH_RADIUS;
+        SectionReader reader = new SectionReader(world.getChunkStore());
         for (int x = x0; x <= x1; x++) {
             for (int y = y0; y <= y1; y++) {
                 for (int z = z0; z <= z1; z++) {
-                    BlockType bt = world.getBlockType(x, y, z);
+                    BlockType bt = SectionBlocks.typeAt(reader, x, y, z);
                     if (bt == null) {
                         continue;
                     }
@@ -843,10 +846,11 @@ public final class BalloonManager {
 
     private int countMatches(World world, StructureShape s, Vector3i origin, Rotation r) {
         int m = 0;
+        SectionReader reader = new SectionReader(world.getChunkStore());
         // T24: only flight cells count, the unfolded ladder may be missing (terrain) without being a problem.
         for (StructureShape.Cell c : s.flightCells()) {
             Vector3i p = c.rotated(r).add(origin);
-            BlockType bt = world.getBlockType(p.x, p.y, p.z);
+            BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
             if (bt != null && sameBlock(bt, c)) {
                 m++;
             }
@@ -976,7 +980,7 @@ public final class BalloonManager {
     }
 
     /** A terrain block kept before placement (T24). */
-    private record Terrain(int x, int y, int z, int id, BlockType type, int rotation, int filler, WorldChunk chunk) {
+    private record Terrain(int x, int y, int z, int id, BlockType type, int rotation, int filler) {
     }
 
     /**
@@ -1024,12 +1028,13 @@ public final class BalloonManager {
                                     com.hypixel.hytale.component.ComponentAccessor<EntityStore> accessor,
                                     String kind, UUID owner, int keepLayerY) {
         List<Terrain> kept = new ArrayList<>();
+        SectionReader reader = new SectionReader(world.getChunkStore());
         List<StructureShape.Cell> protectedCells = new ArrayList<>(s.unfoldedLadder());
         if (keepLayerY != Integer.MIN_VALUE) {
             for (StructureShape.Cell c : s.cells()) {
                 if (c.y() == keepLayerY) {
                     Vector3i q = c.rotated(rotation).add(origin);
-                    BlockType existing = world.getBlockType(q.x, q.y, q.z);
+                    BlockType existing = SectionBlocks.typeAt(reader, q.x, q.y, q.z);
                     if (keepTerrainAt(c.baseName(), c.y(), existing != null ? existing.getMaterial() : null, keepLayerY)) {
                         protectedCells.add(c);
                     }
@@ -1038,18 +1043,19 @@ public final class BalloonManager {
         }
         for (StructureShape.Cell c : protectedCells) {
             Vector3i p = c.rotated(rotation).add(origin);
-            BlockType bt = world.getBlockType(p.x, p.y, p.z);
-            if (bt != null && blocksBalloon(world, p.x, p.y, p.z)) {
-                WorldChunk chunk = world.getChunkIfLoaded(ChunkUtil.indexChunk(ChunkUtil.chunkCoordinate(p.x), ChunkUtil.chunkCoordinate(p.z)));
-                if (chunk != null) {
-                    kept.add(new Terrain(p.x, p.y, p.z, chunk.getBlock(p.x, p.y, p.z), bt,
-                            chunk.getRotationIndex(p.x, p.y, p.z), chunk.getFiller(p.x, p.y, p.z), chunk));
-                }
+            BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
+            // typeAt is null when the section is not in memory, so the reads below are reliable.
+            if (bt != null && blocksBalloon(reader, p.x, p.y, p.z)) {
+                kept.add(new Terrain(p.x, p.y, p.z, reader.getBlock(p.x, p.y, p.z), bt,
+                        reader.getRotationIndex(p.x, p.y, p.z), reader.getFiller(p.x, p.y, p.z)));
             }
         }
         PrefabUtil.paste(buffer, world, new Vector3i(origin), rotation, new FastRandom(), flags, 0, accessor);
         for (Terrain t : kept) {
-            t.chunk.setBlock(t.x, t.y, t.z, t.id, t.type, t.rotation, t.filler, SET_BLOCK_NO_PARTICLES);
+            if (!SectionBlocks.setAt(world.getChunkStore(), t.x, t.y, t.z, t.id, t.type, t.rotation, t.filler,
+                    SET_BLOCK_NO_PARTICLES)) {
+                LOGGER.at(Level.WARNING).log("Terrain non remis en (%d, %d, %d) : section non chargée", t.x, t.y, t.z);
+            }
         }
         if (!kept.isEmpty()) {
             LOGGER.at(Level.INFO).log("Pose : %d case(s) d'échelle laissée(s) au terrain", kept.size());
@@ -1634,6 +1640,11 @@ public final class BalloonManager {
     }
 
     /** T76: marker of the collision description when the contact is the height limit (not a block). */
+    /**
+     * Highest block row of a world (0.7: WORLD_MAX_Y is deprecated because of cubic sections, but a normal world keeps
+     * rows 0 to 319, see SectionReader.canHoldY; only the test generator CubicTestWorldGenProvider makes unbounded worlds).
+     */
+    static final int WORLD_MAX_Y = 319;
     static final String HEIGHT_HIT = "limite de hauteur de construction";
     /** T76: minimum delay between two "height limit reached" messages to the pilot. */
     static final long HEIGHT_MSG_INTERVAL_MS = 3000;
@@ -1649,19 +1660,20 @@ public final class BalloonManager {
     }
 
     private static String collision0(World world, StructureShape s, Vector3i origin, Rotation rotation, boolean ignoreHeight) {
+        SectionReader reader = new SectionReader(world.getChunkStore());
         for (StructureShape.Cell c : s.flightCells()) {
             Vector3i p = c.rotated(rotation).add(origin);
-            if (ignoreHeight && p.y > ChunkUtil.HEIGHT_MINUS_1) {
+            if (ignoreHeight && p.y > WORLD_MAX_Y) {
                 continue;
             }
             if (outOfHeight(p.y)) {
                 return c.baseName() + " de la montgolfière dépasse la " + HEIGHT_HIT + " en " + p.x + " " + p.y + " " + p.z;
             }
-            BlockType bt = world.getBlockType(p.x, p.y, p.z);
+            BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
             if (bt != null && bt.getMaterial() == BlockMaterial.Solid) {
                 return c.baseName() + " de la montgolfière touche " + bt.getId() + " en " + p.x + " " + p.y + " " + p.z;
             }
-            String liquid = liquidAt(world, p.x, p.y, p.z);
+            String liquid = liquidAt(reader, p.x, p.y, p.z);
             if (liquid != null) {
                 return c.baseName() + " de la montgolfière touche le liquide " + liquid + " en " + p.x + " " + p.y + " " + p.z;
             }
@@ -1671,36 +1683,33 @@ public final class BalloonManager {
 
     /**
      * Identifier of the liquid in this cell (water, lava, poison, slime, tar), or null if there is none. Fluids
-     * are stored apart from blocks (FluidSection): world.getBlockType gives an empty block in water.
-     * WorldChunk.getFluidId takes world coordinates and returns Fluid.EMPTY_ID (0) without fluid. Fire is
-     * also a fluid in the game (Fire.json, FireFluidTicker) but not a liquid: it is ignored. An unloaded
-     * chunk counts as without liquid, like getBlockType which returns null.
+     * are stored apart from blocks (fluid sections): the block read in water is an empty block.
+     * SectionReader.getFluidId takes world coordinates and returns Fluid.EMPTY_ID (0) without fluid. Fire is
+     * also a fluid in the game (Fire.json, FireFluidTicker) but not a liquid: it is ignored. A section that is
+     * not in memory counts as without liquid, like SectionBlocks.typeAt which returns null.
      */
     /**
      * First cell of a structure (placed at origin with rotation) that holds a liquid, null if none: no crate may be deployed under
      * water (decision of the user, 11 October 2026). The unfolded ladder cells of a balloon are skipped (they stop at the surface, T51).
      */
     static Vector3i underLiquid(World world, StructureShape s, Vector3i origin, Rotation rotation) {
+        SectionReader reader = new SectionReader(world.getChunkStore());
         java.util.Set<StructureShape.Cell> ladder = new HashSet<>(s.unfoldedLadder());
         for (StructureShape.Cell c : s.cells()) {
             if (ladder.contains(c)) {
                 continue;
             }
             Vector3i p = c.rotated(rotation).add(origin);
-            if (!outOfHeight(p.y) && liquidAt(world, p.x, p.y, p.z) != null) {
+            if (!outOfHeight(p.y) && liquidAt(reader, p.x, p.y, p.z) != null) {
                 return p;
             }
         }
         return null;
     }
 
-    static String liquidAt(World world, int x, int y, int z) {
+    static String liquidAt(SectionReader reader, int x, int y, int z) {
         try {
-            WorldChunk chunk = world.getChunkIfLoaded(ChunkUtil.indexChunk(ChunkUtil.chunkCoordinate(x), ChunkUtil.chunkCoordinate(z)));
-            if (chunk == null) {
-                return null;
-            }
-            int id = chunk.getFluidId(x, y, z);
+            int id = reader.getFluidId(x, y, z);
             if (id == Fluid.EMPTY_ID) {
                 return null;
             }
@@ -1713,11 +1722,11 @@ public final class BalloonManager {
     }
 
     /**
-     * T76: true if the cell is outside the world's height range (ChunkUtil.MIN_Y = 0 to HEIGHT_MINUS_1 = 319). Blocks
+     * T76: true if the cell is outside the world's height range (ChunkUtil.MIN_Y = 0 to WORLD_MAX_Y = 319). Blocks
      * placed above the limit are lost, so a vehicle must never reach such a cell.
      */
     static boolean outOfHeight(int y) {
-        return y < ChunkUtil.MIN_Y || y > ChunkUtil.HEIGHT_MINUS_1;
+        return y < ChunkUtil.MIN_Y || y > WORLD_MAX_Y;
     }
 
     /** T76: true if one cell of the structure (all cells, folded ladder included) is outside the height range at this origin. */
@@ -1742,30 +1751,30 @@ public final class BalloonManager {
             min = Math.min(min, y);
             max = Math.max(max, y);
         }
-        if (max - min > ChunkUtil.HEIGHT_MINUS_1 - ChunkUtil.MIN_Y) {
+        if (max - min > WORLD_MAX_Y - ChunkUtil.MIN_Y) {
             return Integer.MIN_VALUE;
         }
-        if (max > ChunkUtil.HEIGHT_MINUS_1) {
-            return ChunkUtil.HEIGHT_MINUS_1 - max;
+        if (max > WORLD_MAX_Y) {
+            return WORLD_MAX_Y - max;
         }
         return min < ChunkUtil.MIN_Y ? ChunkUtil.MIN_Y - min : 0;
     }
 
     /** True if the cell stops the balloon: solid block, liquid, or outside the world's height range (T76). */
-    static boolean blocksBalloon(World world, int x, int y, int z) {
-        return blocksBalloon(world, x, y, z, false);
+    static boolean blocksBalloon(SectionReader reader, int x, int y, int z) {
+        return blocksBalloon(reader, x, y, z, false);
     }
 
     /** Same; ignoreHeight (transit flights): a cell above the construction limit is free. */
-    static boolean blocksBalloon(World world, int x, int y, int z, boolean ignoreHeight) {
-        if (ignoreHeight && y > ChunkUtil.HEIGHT_MINUS_1) {
+    static boolean blocksBalloon(SectionReader reader, int x, int y, int z, boolean ignoreHeight) {
+        if (ignoreHeight && y > WORLD_MAX_Y) {
             return false;
         }
         if (outOfHeight(y)) {
             return true;
         }
-        BlockType bt = world.getBlockType(x, y, z);
-        return (bt != null && bt.getMaterial() == BlockMaterial.Solid) || liquidAt(world, x, y, z) != null;
+        BlockType bt = SectionBlocks.typeAt(reader, x, y, z);
+        return (bt != null && bt.getMaterial() == BlockMaterial.Solid) || liquidAt(reader, x, y, z) != null;
     }
 
     static boolean collides(World world, StructureShape s, Vector3i origin, Rotation rotation) {
@@ -1778,12 +1787,13 @@ public final class BalloonManager {
             return true;
         }
         // T24: folded ladder in flight, only the flight cells hit the scenery.
+        SectionReader reader = new SectionReader(world.getChunkStore());
         for (StructureShape.Cell c : s.flightCells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             if (ignore.contains(p)) {
                 continue;
             }
-            if (blocksBalloon(world, p.x, p.y, p.z)) {
+            if (blocksBalloon(reader, p.x, p.y, p.z)) {
                 return true;
             }
         }
@@ -2129,6 +2139,7 @@ public final class BalloonManager {
         // which also finds a balloon placed before T27 (absent from the registry).
         Found posed = null;
         double posedDist = Double.MAX_VALUE;
+        SectionReader reader = new SectionReader(world.getChunkStore());
         for (BalloonRegistry.Entry e : BalloonRegistry.entriesIn(world)) {
             Deployables.Kind entryKind = Deployables.get(e.kind());
             StructureShape s = entryKind != null ? entryKind.shapeOrNull() : null;
@@ -2138,7 +2149,7 @@ public final class BalloonManager {
             // T73: the removal takes the cage as it is (lowered, open), the burner and anchor are those of the prefab.
             Vector3i origin = new Vector3i(e.x(), e.y(), e.z());
             Vector3i burner = s.burner().rotated(e.rotation()).add(origin);
-            BlockType bt = world.getBlockType(burner.x, burner.y, burner.z);
+            BlockType bt = SectionBlocks.typeAt(reader, burner.x, burner.y, burner.z);
             if (bt == null || !sameBlock(bt, s.anchor())) {
                 continue; // chunk not loaded or balloon already destroyed
             }
@@ -2579,32 +2590,31 @@ public final class BalloonManager {
                 StructureShape s = rec.kind().shape();
                 // Chunks covered by the balloon: they must be loaded before placing the blocks.
                 int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+                int minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
                 for (StructureShape.Cell c : s.cells()) {
                     Vector3i p = c.rotated(rec.rotation()).add(rec.origin());
                     minX = Math.min(minX, p.x);
                     maxX = Math.max(maxX, p.x);
+                    minY = Math.min(minY, p.y);
+                    maxY = Math.max(maxY, p.y);
                     minZ = Math.min(minZ, p.z);
                     maxZ = Math.max(maxZ, p.z);
                 }
                 List<CompletableFuture<?>> loads = new ArrayList<>();
-                for (int cx = ChunkUtil.chunkCoordinate(minX); cx <= ChunkUtil.chunkCoordinate(maxX); cx++) {
-                    for (int cz = ChunkUtil.chunkCoordinate(minZ); cz <= ChunkUtil.chunkCoordinate(maxZ); cz++) {
-                        loads.add(world.getChunkAsync(ChunkUtil.indexChunk(cx, cz)));
-                    }
-                }
+                loads.add(SectionBlocks.loadSections(world.getChunkStore(), minX, minY, minZ, maxX, maxY, maxZ));
                 if (rec.transit()) {
-                    // Passengers are set down at the destination: its chunk must be loaded too.
+                    // Passengers are set down at the destination: its sections must be loaded too.
                     TransitNetwork.Station dest = rec.transitTo() != null ? TransitNetwork.get().byName(world.getName(), rec.transitTo()) : null;
                     if (dest == null && rec.transitFrom() != null) {
                         dest = TransitNetwork.get().byName(world.getName(), rec.transitFrom());
                     }
                     if (dest != null) {
-                        loads.add(world.getChunkAsync(ChunkUtil.indexChunk(ChunkUtil.chunkCoordinate(dest.origin.x),
-                                ChunkUtil.chunkCoordinate(dest.origin.z))));
+                        loads.add(SectionBlocks.loadSections(world.getChunkStore(), dest.origin.x, dest.origin.y - 16, dest.origin.z,
+                                dest.origin.x, dest.origin.y + 32, dest.origin.z));
                     }
                 }
-                LOGGER.at(Level.INFO).log("Reprise du vol de %s dans %s : origine %s, %d chunks à charger",
-                        rec.pilot(), world.getName(), rec.origin(), loads.size());
+                LOGGER.at(Level.INFO).log("Reprise du vol de %s dans %s : origine %s, sections à charger",
+                        rec.pilot(), world.getName(), rec.origin());
                 CompletableFuture.allOf(loads.toArray(new CompletableFuture[0])).whenComplete((v, t) -> {
                     if (t != null) {
                         LOGGER.at(Level.WARNING).withCause(t).log("Chargement des chunks de la reprise impossible pour %s", rec.pilot());
@@ -3124,7 +3134,7 @@ public final class BalloonManager {
             return;
         }
         float want = (float) (flight.rotation.getRadians() + MODEL_YAW_CORRECTION);
-        for (Ref<EntityStore> entity : new Ref[]{flight.balloonRef, flight.observerRef}) { // T82: the observer entity too
+        for (Ref<EntityStore> entity : java.util.Arrays.asList(flight.balloonRef, flight.observerRef)) { // T82: the observer entity too
             TransformComponent bt = entity != null && entity.isValid()
                     ? store.getComponent(entity, TransformComponent.getComponentType()) : null;
             if (bt != null) {
@@ -3372,10 +3382,11 @@ public final class BalloonManager {
     static Vector3d groundBelow(World world, Vector3d from) {
         int x = (int) Math.floor(from.x);
         int z = (int) Math.floor(from.z);
-        int top = Math.min((int) Math.floor(from.y), ChunkUtil.HEIGHT_MINUS_1);
+        int top = Math.min((int) Math.floor(from.y), WORLD_MAX_Y);
+        SectionReader reader = new SectionReader(world.getChunkStore());
         // T76: stays inside the height range (below it, blocksBalloon is true everywhere): without ground, the point itself.
         for (int y = top; y > top - 512 && y >= ChunkUtil.MIN_Y; y--) {
-            if (blocksBalloon(world, x, y, z)) {
+            if (blocksBalloon(reader, x, y, z)) {
                 return new Vector3d(from.x, y + 1.05, from.z);
             }
         }
@@ -3578,9 +3589,10 @@ public final class BalloonManager {
         return best;
     }
 
-    /** True if all the chunks covered by the balloon (around the burner, all rotations) are loaded. */
+    /** True if all the chunk sections covered by the balloon (around the burner, all rotations) are loaded. */
     private static boolean allChunksLoaded(World world, StructureShape s, Vector3i burnerPos) {
         int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+        int minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
         for (StructureShape.Cell c : s.cells()) {
             int dx = c.x() - s.burner().x();
             int dz = c.z() - s.burner().z();
@@ -3589,15 +3601,11 @@ public final class BalloonManager {
             maxX = Math.max(maxX, burnerPos.x + r);
             minZ = Math.min(minZ, burnerPos.z - r);
             maxZ = Math.max(maxZ, burnerPos.z + r);
+            int y = burnerPos.y + (c.y() - s.burner().y());
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
         }
-        for (int cx = ChunkUtil.chunkCoordinate(minX); cx <= ChunkUtil.chunkCoordinate(maxX); cx++) {
-            for (int cz = ChunkUtil.chunkCoordinate(minZ); cz <= ChunkUtil.chunkCoordinate(maxZ); cz++) {
-                if (world.getChunkIfLoaded(ChunkUtil.indexChunk(cx, cz)) == null) {
-                    return false;
-                }
-            }
-        }
-        return true;
+        return SectionBlocks.sectionsLoaded(world.getChunkStore(), minX, minY, minZ, maxX, maxY, maxZ);
     }
 
     /**
@@ -3635,7 +3643,8 @@ public final class BalloonManager {
 
     private static void markChunkDirty(World world, Vector3i p) {
         try {
-            WorldChunk chunk = world.getChunkIfLoaded(ChunkUtil.indexChunk(ChunkUtil.chunkCoordinate(p.x), ChunkUtil.chunkCoordinate(p.z)));
+            WorldChunk chunk = world.getChunkStore().getChunkComponent(
+                    ChunkUtil.indexChunk(ChunkUtil.chunkCoordinate(p.x), ChunkUtil.chunkCoordinate(p.z)), WorldChunk.getComponentType());
             if (chunk != null) {
                 chunk.markNeedsSaving();
             }
@@ -4190,7 +4199,7 @@ public final class BalloonManager {
      * world thread.
      */
     static void setBurnerLit(World world, Vector3i pos, boolean lit) {
-        BlockType bt = world.getBlockType(pos.x, pos.y, pos.z);
+        BlockType bt = SectionBlocks.typeAt(new SectionReader(world.getChunkStore()), pos.x, pos.y, pos.z);
         if (bt == null || bt.getId() == null) {
             return;
         }
@@ -4203,7 +4212,7 @@ public final class BalloonManager {
         if (on == lit) {
             return;
         }
-        world.setBlockInteractionState(new Vector3i(pos), bt, lit ? BURNER_ON_STATE : "default");
+        SectionBlocks.setStateAt(world.getChunkStore(), pos.x, pos.y, pos.z, bt, lit ? BURNER_ON_STATE : "default");
         if (!lit) {
             // Same precaution as at take-off: the client could keep the flame displayed.
             cancelBlockFlame(world, pos);

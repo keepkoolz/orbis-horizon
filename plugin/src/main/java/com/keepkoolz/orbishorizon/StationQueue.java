@@ -478,17 +478,17 @@ final class StationQueue {
 
     // ------------------------------------------------------------------ helpers
 
+    /** Sections of the dock and of the balloon that comes down onto it (0.7: sections, not columns). */
     private static boolean dockLoaded(World world, TransitNetwork.Station s) {
         Vector3i d = dockOrigin(s);
-        for (int dx = -2; dx <= 2; dx += 4) {
-            for (int dz = -2; dz <= 2; dz += 4) {
-                if (world.getChunkIfLoaded(ChunkUtil.indexChunk(ChunkUtil.chunkCoordinate(d.x + dx),
-                        ChunkUtil.chunkCoordinate(d.z + dz))) == null) {
-                    return false;
-                }
+        StructureShape shape = Deployables.BALLOON_PUBLIC.shapeOrNull();
+        int top = shape == null ? 48 : 0; // 48: above any balloon of the mod if the shape cannot be read
+        if (shape != null) {
+            for (StructureShape.Cell c : shape.cells()) {
+                top = Math.max(top, c.y());
             }
         }
-        return true;
+        return SectionBlocks.sectionsLoaded(world.getChunkStore(), d.x - 2, d.y - 2, d.z - 2, d.x + 2, d.y + top, d.z + 2);
     }
 
     /** Sends the message to the players within TransitConstants.MESSAGE_RADIUS of the pad centre. */

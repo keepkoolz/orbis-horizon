@@ -1,5 +1,6 @@
 package com.keepkoolz.orbishorizon;
 
+import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
 import com.hypixel.hytale.builtin.mounts.BlockMountComponent;
 import com.hypixel.hytale.builtin.mounts.MountedComponent;
 import com.hypixel.hytale.component.CommandBuffer;
@@ -139,7 +140,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
         if (cell == null || !cell.baseName().startsWith("Furniture_Crude_Bed")) {
             return null;
         }
-        BlockType bt = world.getBlockType(pos.x, pos.y, pos.z);
+        BlockType bt = SectionBlocks.typeAt(new SectionReader(world.getChunkStore()), pos.x, pos.y, pos.z);
         return bt != null && BalloonManager.sameBlock(bt, cell) ? e : null;
     }
 

@@ -37,7 +37,7 @@ final class TransitFlight {
     volatile boolean aheadUnloaded;
     /** Start of the wait for unloaded chunks ahead (ms), 0 when not waiting. */
     volatile long chunkWaitSinceMs;
-    /** Horizontal extent of the flight shape around the origin cell (minX, maxX, minZ, maxZ, rotated), null until computed. */
+    /** Extent of the flight shape around the origin cell (minX, maxX, minZ, maxZ, minY, maxY, rotated), null until computed. */
     int[] extent;
 
     TransitFlight(String from, String to, Phase phase, long now) {

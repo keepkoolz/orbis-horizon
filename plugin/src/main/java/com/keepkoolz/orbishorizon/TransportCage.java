@@ -3,14 +3,14 @@ package com.keepkoolz.orbishorizon;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
-import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
+import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
+import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.util.TargetUtil;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
@@ -332,11 +332,12 @@ final class TransportCage {
     /** T120: removes the chain column (lengthened by d) of a cage left on the ground when the balloon leaves, no particles, no drops. */
     static void removeChain(World world, Vector3i origin, Rotation rotation, int d) {
         int[] col = Deployables.TRANSPORT_CHAIN_COLUMN;
+        SectionReader reader = new SectionReader(world.getChunkStore());
         for (int y = col[1] - d; y <= Deployables.TRANSPORT_CHAIN_TOP_Y; y++) {
             Vector3i p = wp(rotation, origin, col[0], y, col[2]);
-            BlockType bt = chunkAt(world, p.x, p.z) == null ? null : world.getBlockType(p.x, p.y, p.z);
+            BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
             if (bt != null && bt.getId() != null && bt.getId().replace("*", "").startsWith(CHAIN_BLOCK)) {
-                world.setBlock(p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES);
+                SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES);
             }
         }
     }
@@ -347,13 +348,14 @@ final class TransportCage {
         if (base == null) {
             return;
         }
+        SectionReader reader = new SectionReader(world.getChunkStore());
         for (StructureShape.Cell c : base.cells()) {
             if (isChain(c) || !inCage(c.x(), c.y(), c.z())) {
                 continue;
             }
             Vector3i p = wp(rotation, origin, c.x(), c.y() - d, c.z());
-            if (capture(world, p, c.baseName()) != null) {
-                world.setBlock(p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES);
+            if (capture(reader, p, c.baseName()) != null) {
+                SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES);
             }
         }
         removeChain(world, origin, rotation, d);
@@ -373,40 +375,37 @@ final class TransportCage {
             return;
         }
         Map<Vector3i, Blk> real = new LinkedHashMap<>();
+        SectionReader before = new SectionReader(world.getChunkStore());
         for (StructureShape.Cell c : base.cells()) {
             if (isChain(c) || !inCage(c.x(), c.y(), c.z())) {
                 continue;
             }
             Vector3i p = wp(rotation, origin, c.x(), c.y() - r, c.z());
-            Blk b = capture(world, p, c.baseName());
+            Blk b = capture(before, p, c.baseName());
             if (b != null) {
                 real.put(p, b);
             }
         }
         paste.run();
+        ChunkStore cs = world.getChunkStore();
+        SectionReader after = new SectionReader(cs);
         int[] col = Deployables.TRANSPORT_CHAIN_COLUMN;
-        Blk chain = capture(world, wp(rotation, origin, col[0], Deployables.TRANSPORT_CHAIN_TOP_Y, col[2]), CHAIN_BLOCK);
+        Blk chain = capture(after, wp(rotation, origin, col[0], Deployables.TRANSPORT_CHAIN_TOP_Y, col[2]), CHAIN_BLOCK);
         for (StructureShape.Cell c : base.cells()) {
             if (isChain(c) || inCage(c.x(), c.y(), c.z())) {
                 Vector3i p = wp(rotation, origin, c.x(), c.y(), c.z());
-                world.setBlock(p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES);
+                SectionBlocks.setAt(cs, p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES);
             }
         }
         for (Map.Entry<Vector3i, Blk> me : real.entrySet()) {
             Vector3i p = me.getKey();
             Blk d = me.getValue();
-            WorldChunk chunk = chunkAt(world, p.x, p.z);
-            if (chunk != null) {
-                chunk.setBlock(p.x, p.y, p.z, d.id(), d.type(), d.rotation(), d.filler(), SET_BLOCK_NO_PARTICLES);
-            }
+            SectionBlocks.setAt(cs, p.x, p.y, p.z, d.id(), d.type(), d.rotation(), d.filler(), SET_BLOCK_NO_PARTICLES);
         }
         if (chain != null) {
             for (int y = col[1] - r; y <= Deployables.TRANSPORT_CHAIN_TOP_Y; y++) {
                 Vector3i p = wp(rotation, origin, col[0], y, col[2]);
-                WorldChunk chunk = chunkAt(world, p.x, p.z);
-                if (chunk != null) {
-                    chunk.setBlock(p.x, p.y, p.z, chain.id(), chain.type(), chain.rotation(), chain.filler(), SET_BLOCK_NO_PARTICLES);
-                }
+                SectionBlocks.setAt(cs, p.x, p.y, p.z, chain.id(), chain.type(), chain.rotation(), chain.filler(), SET_BLOCK_NO_PARTICLES);
             }
         }
         BalloonRegistry.setCage(world, origin, rotation, Deployables.TRANSPORT_KIND, r, false, true);
@@ -415,7 +414,7 @@ final class TransportCage {
     // ------------------------------------------------------------------ levers
 
     /**
-     * Cage lever. Cage immobile and up: lowers it (refused if the side is open or if the balloon is not in the air). Cage
+     * Cage lever. Refused while the side is open. Cage immobile and up: lowers it (refused if the balloon is not in the air). Cage
      * immobile and down: raises it. Cage moving: stops it where it is. Returns the message for the pilot.
      */
     static Message pullCageLever(World world, BalloonRegistry.Entry e, PlayerRef who) {
@@ -430,11 +429,12 @@ final class TransportCage {
             BalloonRegistry.flushCage();
             return Texts.t("cage.stopped");
         }
+        // The side must be closed to move the cage, down or up (decision of the user, 12 October 2026): an open cage stays where it is.
+        if (e.open()) {
+            return Texts.t("cage.closeFirst");
+        }
         int dir;
         if (e.descent() == 0) {
-            if (e.open()) {
-                return Texts.t("cage.closeFirst");
-            }
             if (!BalloonManager.isInAir(world, base, origin, e.rotation())) {
                 return Texts.t("cage.needAir");
             }
@@ -515,10 +515,11 @@ final class TransportCage {
         int[] a = Deployables.TRANSPORT_CAGE_MIN;
         int[] b = Deployables.TRANSPORT_CAGE_MAX;
         Vector3i origin = new Vector3i(e.x(), e.y(), e.z());
+        SectionReader reader = new SectionReader(world.getChunkStore());
         for (int x = a[0]; x <= b[0]; x++) {
             for (int z = a[2]; z <= b[2]; z++) {
                 Vector3i p = wp(e.rotation(), origin, x, a[1] - e.descent() - 1, z);
-                if (chunkAt(world, p.x, p.z) != null && BalloonManager.blocksBalloon(world, p.x, p.y, p.z)) {
+                if (BalloonManager.blocksBalloon(reader, p.x, p.y, p.z)) {
                     return true;
                 }
             }
@@ -618,22 +619,17 @@ final class TransportCage {
         return rotation.rotateYaw(new Vector3i(x, y, z), new Vector3i()).add(origin);
     }
 
-    private static WorldChunk chunkAt(World world, int x, int z) {
-        return world.getChunkIfLoaded(ChunkUtil.indexChunk(ChunkUtil.chunkCoordinate(x), ChunkUtil.chunkCoordinate(z)));
-    }
-
     /** The block of the world at this position if it is the expected one, null otherwise (chunk not loaded or other block). */
-    private static Blk capture(World world, Vector3i p, String blockName) {
-        WorldChunk chunk = chunkAt(world, p.x, p.z);
-        BlockType bt = world.getBlockType(p.x, p.y, p.z);
-        if (chunk == null || bt == null || bt.getId() == null) {
+    private static Blk capture(SectionReader reader, Vector3i p, String blockName) {
+        BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
+        if (bt == null || bt.getId() == null) {
             return null;
         }
         String id = bt.getId().startsWith("*") ? bt.getId().substring(1) : bt.getId();
         if (!id.startsWith(blockName)) {
             return null;
         }
-        return new Blk(chunk.getBlock(p.x, p.y, p.z), bt, chunk.getRotationIndex(p.x, p.y, p.z), chunk.getFiller(p.x, p.y, p.z));
+        return new Blk(reader.getBlock(p.x, p.y, p.z), bt, reader.getRotationIndex(p.x, p.y, p.z), reader.getFiller(p.x, p.y, p.z));
     }
 
     /**
@@ -652,16 +648,19 @@ final class TransportCage {
         Rotation rot = e.rotation();
         Vector3i origin = new Vector3i(e.x(), e.y(), e.z());
 
-        // Chunks of the cage and its chain (the cage always stays in the same columns).
+        // One reader per step, created before any write. Never kept in a field.
+        SectionReader reader = new SectionReader(world.getChunkStore());
+
+        // Every section the step reads or writes: the cage box at its old and new height, and the chain column up to the basket floor
+        // (the cage always stays in the same columns). Testing the floor corners only gave DAMAGED instead of UNLOADED when a section
+        // higher up was not loaded.
         int[] a = Deployables.TRANSPORT_CAGE_MIN;
         int[] b = Deployables.TRANSPORT_CAGE_MAX;
-        for (int x : new int[]{a[0], b[0]}) {
-            for (int z : new int[]{a[2], b[2]}) {
-                Vector3i p = wp(rot, origin, x, 0, z);
-                if (chunkAt(world, p.x, p.z) == null) {
-                    return Outcome.UNLOADED;
-                }
-            }
+        Vector3i c1 = wp(rot, origin, a[0], a[1] - Math.max(dOld, dNew), a[2]);
+        Vector3i c2 = wp(rot, origin, b[0], Deployables.TRANSPORT_CHAIN_TOP_Y, b[2]);
+        if (!SectionBlocks.sectionsLoaded(world.getChunkStore(), Math.min(c1.x, c2.x), Math.min(c1.y, c2.y), Math.min(c1.z, c2.z),
+                Math.max(c1.x, c2.x), Math.max(c1.y, c2.y), Math.max(c1.z, c2.z))) {
+            return Outcome.UNLOADED;
         }
 
         Set<Vector3i> oldSet = new HashSet<>();
@@ -677,7 +676,7 @@ final class TransportCage {
             Vector3i pn = wp(rot, origin, c.x(), c.y() - dNew, c.z());
             Blk data = null;
             if (!(gate && openOld)) {
-                data = capture(world, po, c.baseName());
+                data = capture(reader, po, c.baseName());
                 if (data == null) {
                     return Outcome.DAMAGED;
                 }
@@ -688,7 +687,7 @@ final class TransportCage {
             }
             if (data == null) {
                 if (gateTemplate == null) {
-                    gateTemplate = capture(world, wp(rot, origin, GATE_TEMPLATE[0], GATE_TEMPLATE[1] - dOld, GATE_TEMPLATE[2]), BARS_BLOCK);
+                    gateTemplate = capture(reader, wp(rot, origin, GATE_TEMPLATE[0], GATE_TEMPLATE[1] - dOld, GATE_TEMPLATE[2]), BARS_BLOCK);
                     if (gateTemplate == null) {
                         return Outcome.DAMAGED;
                     }
@@ -703,7 +702,7 @@ final class TransportCage {
         }
         // Chain column: from y = 5 - d to the basket floor. The cells already there stay.
         int[] col = Deployables.TRANSPORT_CHAIN_COLUMN;
-        Blk chain = capture(world, wp(rot, origin, col[0], Deployables.TRANSPORT_CHAIN_TOP_Y, col[2]), CHAIN_BLOCK);
+        Blk chain = capture(reader, wp(rot, origin, col[0], Deployables.TRANSPORT_CHAIN_TOP_Y, col[2]), CHAIN_BLOCK);
         if (chain == null) {
             return Outcome.DAMAGED;
         }
@@ -724,10 +723,10 @@ final class TransportCage {
             if (oldSet.contains(p) || keep.contains(p)) {
                 continue;
             }
-            if (chunkAt(world, p.x, p.z) == null) {
+            if (!reader.hasStorageInMemory(p.x, p.y, p.z)) {
                 return Outcome.UNLOADED;
             }
-            if (BalloonManager.blocksBalloon(world, p.x, p.y, p.z)) {
+            if (BalloonManager.blocksBalloon(reader, p.x, p.y, p.z)) {
                 if (blockedAt != null) {
                     blockedAt.set(p);
                 }
@@ -737,14 +736,20 @@ final class TransportCage {
 
         for (Vector3i p : oldSet) {
             if (!newMap.containsKey(p) && !keep.contains(p)) {
-                world.setBlock(p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES);
+                if (!SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES)) {
+                    LOGGER.at(Level.WARNING).log("Cage : retrait impossible en (%d, %d, %d), mouvement arrêté", p.x, p.y, p.z);
+                    return Outcome.DAMAGED;
+                }
             }
         }
         for (Map.Entry<Vector3i, Blk> me : newMap.entrySet()) {
             Vector3i p = me.getKey();
             Blk d = me.getValue();
-            WorldChunk chunk = chunkAt(world, p.x, p.z);
-            chunk.setBlock(p.x, p.y, p.z, d.id(), d.type(), d.rotation(), d.filler(), SET_BLOCK_NO_PARTICLES);
+            if (!SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, d.id(), d.type(), d.rotation(), d.filler(),
+                    SET_BLOCK_NO_PARTICLES)) {
+                LOGGER.at(Level.WARNING).log("Cage : pose impossible en (%d, %d, %d), mouvement arrêté", p.x, p.y, p.z);
+                return Outcome.DAMAGED;
+            }
         }
         return Outcome.OK;
     }

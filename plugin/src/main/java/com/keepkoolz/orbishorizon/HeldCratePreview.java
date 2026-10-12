@@ -12,6 +12,7 @@ import com.hypixel.hytale.protocol.packets.player.HideTriggerVolumePastePrefabPr
 import com.hypixel.hytale.protocol.packets.player.ShowTriggerVolumePastePrefabPreview;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.DeathComponent;
@@ -141,8 +142,9 @@ final class HeldCratePreview {
     }
 
     private static ItemStack heldItem(Store<EntityStore> store, Ref<EntityStore> ref) {
-        Player player = store.getComponent(ref, Player.getComponentType());
-        return player == null || player.getInventory() == null ? null : player.getInventory().getActiveHotbarItem();
+        // 0.7: the hotbar is its own component (Player.getInventory() is deprecated for removal).
+        InventoryComponent.Hotbar hotbar = store.getComponent(ref, InventoryComponent.Hotbar.getComponentType());
+        return hotbar == null ? null : hotbar.getActiveItem();
     }
 
     private static DeployPlacement.Crate heldCrate(Store<EntityStore> store, Ref<EntityStore> ref) {

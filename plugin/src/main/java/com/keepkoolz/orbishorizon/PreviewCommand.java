@@ -41,7 +41,7 @@ final class PreviewCommand extends AbstractCommandCollection {
 
     PreviewCommand() {
         super("preview", Texts.cmd("preview.desc"));
-        setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+        setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         addSubCommand(new Show("prefab", true));
         addSubCommand(new Show("box", false));
         addSubCommand(new Clear());
@@ -54,7 +54,7 @@ final class PreviewCommand extends AbstractCommandCollection {
         Show(String name, boolean prefab) {
             super(name, Texts.cmd("preview." + name));
             this.prefab = prefab;
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -127,7 +127,7 @@ final class PreviewCommand extends AbstractCommandCollection {
     private static final class Clear extends AbstractPlayerCommand {
         Clear() {
             super("clear", Texts.cmd("preview.clear"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override

@@ -28,6 +28,7 @@ import com.hypixel.hytale.server.core.prefab.selection.buffer.PrefabBufferUtil;
 import com.hypixel.hytale.server.core.prefab.selection.buffer.impl.IPrefabBuffer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.joml.Vector3i;
 
@@ -152,6 +153,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
             fail(context);
             return;
         }
+        SectionReader reader = new SectionReader(world.getChunkStore());
         for (Vector3i p : cells) {
             if (BalloonManager.outOfHeight(p.y)) {
                 LOGGER.at(Level.INFO).log("Station refusée en (%d, %d, %d) : la case (%d, %d, %d) dépasse la limite de hauteur",
@@ -160,8 +162,8 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
                 fail(context);
                 return;
             }
-            boolean loaded = world.getChunkIfLoaded(ChunkUtil.indexChunk(ChunkUtil.chunkCoordinate(p.x), ChunkUtil.chunkCoordinate(p.z))) != null;
-            BlockType bt = loaded ? world.getBlockType(p.x, p.y, p.z) : null;
+            boolean loaded = reader.hasStorageInMemory(p.x, p.y, p.z);
+            BlockType bt = loaded ? SectionBlocks.typeAt(reader, p.x, p.y, p.z) : null;
             if (!loaded || (bt != null && bt.getMaterial() == BlockMaterial.Solid)) {
                 LOGGER.at(Level.INFO).log("Station refusée en (%d, %d, %d) : %s en (%d, %d, %d)",
                         origin.x, origin.y, origin.z, loaded ? bt.getId() : "chunk non chargé", p.x, p.y, p.z);

@@ -289,7 +289,7 @@ final class PassengerSeatView {
         s.anims++;
         s.lastAnimMs = now;
         BalloonFlight.Pose pose = BalloonFlight.Pose.DEFAULT;
-        for (Ref<EntityStore> m : new Ref[]{s.mannequin, s.twin}) {
+        for (Ref<EntityStore> m : java.util.Arrays.asList(s.mannequin, s.twin)) {
             if (valid(m)) {
                 try {
                     AnimationUtils.playAnimation(m, pose.slot(), pose.animId(), true, store);
@@ -327,7 +327,7 @@ final class PassengerSeatView {
             if (!keepBody && s.bodyRef != null) {
                 ViewFilter.clear(s.bodyRef);
             }
-            for (Ref<EntityStore> r : new Ref[]{s.anchor, s.mannequin, s.twin}) {
+            for (Ref<EntityStore> r : java.util.Arrays.asList(s.anchor, s.mannequin, s.twin)) {
                 if (r != null) {
                     ViewFilter.clear(r);
                     if (r.isValid()) {

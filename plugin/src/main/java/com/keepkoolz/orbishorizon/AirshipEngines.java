@@ -1,5 +1,6 @@
 package com.keepkoolz.orbishorizon;
 
+import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
 import com.hypixel.hytale.builtin.crafting.component.ProcessingBenchBlock;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.protocol.packets.world.CancelParticleSystems;
@@ -64,7 +65,7 @@ final class AirshipEngines {
      */
     static void setFireboxLit(World world, Vector3i enginePos, boolean lit) {
         int x = enginePos.x, y = enginePos.y - 1, z = enginePos.z;
-        BlockType bt = world.getBlockType(x, y, z);
+        BlockType bt = SectionBlocks.typeAt(new SectionReader(world.getChunkStore()), x, y, z);
         if (bt == null || bt.getId() == null) {
             return;
         }
@@ -76,7 +77,7 @@ final class AirshipEngines {
         if (on == lit) {
             return;
         }
-        world.setBlockInteractionState(new Vector3i(x, y, z), bt, lit ? FIREBOX_ON_STATE : "default");
+        SectionBlocks.setStateAt(world.getChunkStore(), x, y, z, bt, lit ? FIREBOX_ON_STATE : "default");
         if (!lit) {
             // Same precaution as for the burner flame: the client could keep the ember particles displayed.
             cancelEmbers(world.getPlayerRefs(), x + 0.5, y + 0.5, z + 0.5);

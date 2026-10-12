@@ -25,7 +25,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
     public BalloonCommand() {
         super("balloon", Texts.cmd("balloon.desc"));
         // The /orbishorizon balloon group and each sub-command are restricted to ops (hytale:Admin group).
-        setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+        setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         addSubCommand(new TakeOff());
         addSubCommand(new Land());
         addSubCommand(new SetModel());
@@ -52,7 +52,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
 
         Render() {
             super("render", Texts.cmd("balloon.render.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -99,14 +99,14 @@ public final class BalloonCommand extends AbstractCommandCollection {
      *
      * Permissions (HytaleServer-v65.jar bytecode, AbstractCommand): without any setting, a sub-command gets the node
      * "keepkoolz.orbis_horizon.command.orbishorizon.balloon.<name>" and the player must also hold the one of /orbishorizon balloon: only
-     * members of the hytale:Admin group (permission "*", the ops) have them. setPermissionGroups(OP_GROUP) makes this
+     * members of the hytale:Admin group (permission "*", the ops) have them. setPermissionGroups(GROUP_ADMIN) makes this
      * explicit and adds the node to the ops' virtual group, like the game's PlayerResetCommand.
      */
     static final class Despawn extends AbstractPlayerCommand {
         Despawn() {
             super("despawn", Texts.cmd("balloon.despawn.desc"));
             addAliases("remove");
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -126,7 +126,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
 
         Light() {
             super("light", Texts.cmd("balloon.light.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -165,7 +165,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
 
         Passengers() {
             super("passengers", Texts.cmd("balloon.passengers.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -197,7 +197,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
 
         SeatPose() {
             super("seatpose", Texts.cmd("balloon.seatpose.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -222,7 +222,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
 
         SeatHeight() {
             super("seatheight", Texts.cmd("balloon.seatheight.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -239,7 +239,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
 
         Offset() {
             super("offset", Texts.cmd("balloon.offset.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -253,7 +253,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
     static final class Cage extends AbstractPlayerCommand {
         Cage() {
             super("cage", Texts.cmd("balloon.cage.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -267,7 +267,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
     static final class Debug extends AbstractPlayerCommand {
         Debug() {
             super("debug", Texts.cmd("balloon.debug.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -281,7 +281,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
 
         Attach() {
             super("attach", Texts.cmd("balloon.attach.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -301,7 +301,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
 
         SetModel() {
             super("model", Texts.cmd("balloon.model.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -316,7 +316,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
 
         SpawnModel() {
             super("spawnmodel", Texts.cmd("balloon.spawnmodel.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -329,7 +329,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
     static final class TakeOff extends AbstractPlayerCommand {
         TakeOff() {
             super("takeoff", Texts.cmd("balloon.takeoff.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -342,7 +342,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
     static final class Land extends AbstractPlayerCommand {
         Land() {
             super("land", Texts.cmd("balloon.land.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override

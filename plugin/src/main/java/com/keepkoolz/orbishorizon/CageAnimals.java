@@ -396,20 +396,49 @@ final class CageAnimals {
 
     // ------------------------------------------------------------------ world load
 
-    /** Placed transport balloon whose animals must be found again after a world load. */
-    private record Pending(World world, Vector3i origin, Rotation rotation, String kind, long deadlineMs) {
+    /** Placed transport balloon whose animals must be found again after a world load. readyMs: entities of every animal seen loaded (0: not yet). */
+    private static final class Pending {
+        final World world;
+        final Vector3i origin;
+        final Rotation rotation;
+        final String kind;
+        long readyMs;
+
+        Pending(World world, Vector3i origin, Rotation rotation, String kind) {
+            this.world = world;
+            this.origin = origin;
+            this.rotation = rotation;
+            this.kind = kind;
+        }
+
+        World world() {
+            return world;
+        }
+
+        Vector3i origin() {
+            return origin;
+        }
+
+        Rotation rotation() {
+            return rotation;
+        }
+
+        String kind() {
+            return kind;
+        }
     }
 
     private static final java.util.Queue<Pending> PENDING = new java.util.concurrent.ConcurrentLinkedQueue<>();
     /**
-     * Time left to the world to load the entities of the cage chunks before an animal not found by UUID is recreated (ms). Without
-     * this wait, a restart could recreate an animal that is still being loaded and duplicate it.
+     * Time left after the entities of the sections of every animal are in the world (a player came near) before an animal not found by
+     * UUID is recreated (ms). Nothing is recreated while a section does not tick: 0.7 keeps its entities stored away
+     * (SectionBlocks.entitiesLoaded), so the animal would be found later and doubled.
      */
-    private static final long RECOVER_WAIT_MS = 10_000;
+    private static final long ENTITY_GRACE_MS = 2_000;
 
     /**
      * World load (StartWorldEvent, plugin start): for each placed transport balloon of the registry that holds animals, the chunks of
-     * the cage are loaded, then the animals are looked up by UUID for up to RECOVER_WAIT_MS (tick): found, they are frozen again and
+     * the cage are loaded, then the animals are looked up by UUID (tick), and those still missing ENTITY_GRACE_MS after their sections tick: found, they are frozen again and
      * put back in the cage, not found after the wait, they are recreated from their role.
      */
     static void recoverWorld(World world) {
@@ -418,18 +447,12 @@ final class CageAnimals {
                 continue;
             }
             try {
-                List<java.util.concurrent.CompletableFuture<?>> loads = new ArrayList<>();
-                for (int cx = com.hypixel.hytale.math.util.ChunkUtil.chunkCoordinate(e.x() - 10);
-                     cx <= com.hypixel.hytale.math.util.ChunkUtil.chunkCoordinate(e.x() + 10); cx++) {
-                    for (int cz = com.hypixel.hytale.math.util.ChunkUtil.chunkCoordinate(e.z() - 10);
-                         cz <= com.hypixel.hytale.math.util.ChunkUtil.chunkCoordinate(e.z() + 10); cz++) {
-                        loads.add(world.getChunkAsync(com.hypixel.hytale.math.util.ChunkUtil.indexChunk(cx, cz)));
-                    }
-                }
-                java.util.concurrent.CompletableFuture.allOf(loads.toArray(new java.util.concurrent.CompletableFuture[0])).whenComplete((v, t) -> {
+                // Vertical margin: the cage can hang up to TRANSPORT_MAX_DESCENT (20) blocks below its raised place (prefab y 0 to 4), and
+                // 10 blocks more are kept for an animal standing on the floor or just under it. +10 covers the raised cage and the basket.
+                int below = Deployables.TRANSPORT_MAX_DESCENT + 10;
+                SectionBlocks.loadSections(world.getChunkStore(), e.x() - 10, e.y() - below, e.z() - 10, e.x() + 10, e.y() + 10, e.z() + 10).whenComplete((v, t) -> {
                     try {
-                        world.execute(() -> PENDING.add(new Pending(world, new Vector3i(e.x(), e.y(), e.z()), e.rotation(), e.kind(),
-                                System.currentTimeMillis() + RECOVER_WAIT_MS)));
+                        world.execute(() -> PENDING.add(new Pending(world, new Vector3i(e.x(), e.y(), e.z()), e.rotation(), e.kind())));
                     } catch (RuntimeException ex) {
                         LOGGER.at(Level.WARNING).withCause(ex).log("Monde %s arrêté : animaux de la cage en (%d, %d, %d) non retrouvés", world.getName(), e.x(), e.y(), e.z());
                     }
@@ -459,10 +482,22 @@ final class CageAnimals {
                 continue;
             }
             boolean all = true;
+            boolean loaded = true;
             for (Animal a : e.animals()) {
                 all &= refOf(world, a.uuid()) != null;
+                Vector3d pos = worldPos(a, p.origin(), p.rotation(), e.descent());
+                loaded &= SectionBlocks.entitiesLoaded(world.getChunkStore(), (int) Math.floor(pos.x), (int) Math.floor(pos.y), (int) Math.floor(pos.z));
             }
-            if (all || now >= p.deadlineMs()) {
+            if (!all) {
+                if (!loaded) {
+                    p.readyMs = 0; // nobody near: the animals are stored away with their section, nothing is recreated
+                    continue;
+                }
+                if (p.readyMs == 0) {
+                    p.readyMs = now;
+                }
+            }
+            if (all || now - p.readyMs >= ENTITY_GRACE_MS) {
                 PENDING.remove(p);
                 try {
                     place(world, p.origin(), p.rotation(), p.kind(), e.animals(), e.descent());

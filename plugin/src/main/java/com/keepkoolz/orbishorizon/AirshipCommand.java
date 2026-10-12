@@ -22,7 +22,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
 
     public AirshipCommand() {
         super("airship", Texts.cmd("airship.desc"));
-        setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+        setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         addSubCommand(new TakeOff());
         addSubCommand(new Land());
         addSubCommand(new Steer());
@@ -40,7 +40,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
 
         Render() {
             super("render", Texts.cmd("airship.render.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -84,7 +84,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
     static final class TakeOff extends AbstractPlayerCommand {
         TakeOff() {
             super("takeoff", Texts.cmd("airship.takeoff.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -99,7 +99,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
     static final class Land extends AbstractPlayerCommand {
         Land() {
             super("land", Texts.cmd("airship.land.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -116,7 +116,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
 
         Steer() {
             super("steer", Texts.cmd("airship.steer.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -136,7 +136,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
     static final class YawSign extends AbstractPlayerCommand {
         YawSign() {
             super("yawsign", Texts.cmd("airship.yawsign.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -149,7 +149,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
     static final class Input extends AbstractPlayerCommand {
         Input() {
             super("input", Texts.cmd("airship.input.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -166,7 +166,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
 
         Tune() {
             super("tune", Texts.cmd("airship.tune.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -178,7 +178,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
     static final class Debug extends AbstractPlayerCommand {
         Debug() {
             super("debug", Texts.cmd("airship.debug.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -191,7 +191,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
         Despawn() {
             super("despawn", Texts.cmd("airship.despawn.desc"));
             addAliases("remove");
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override

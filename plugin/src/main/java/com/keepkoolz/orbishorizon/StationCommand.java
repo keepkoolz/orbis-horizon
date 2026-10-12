@@ -38,7 +38,7 @@ public final class StationCommand extends AbstractCommandCollection {
 
     public StationCommand() {
         super("station", Texts.cmd("station.desc"));
-        setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+        setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         addSubCommand(new Recipe());
         addSubCommand(new ListStations());
         addSubCommand(new Debug());
@@ -70,7 +70,7 @@ public final class StationCommand extends AbstractCommandCollection {
     static final class ListStations extends AbstractPlayerCommand {
         ListStations() {
             super("list", Texts.cmd("station.list.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -86,7 +86,7 @@ public final class StationCommand extends AbstractCommandCollection {
     static final class Debug extends AbstractPlayerCommand {
         Debug() {
             super("debug", Texts.cmd("station.debug.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -104,7 +104,7 @@ public final class StationCommand extends AbstractCommandCollection {
         Despawn() {
             super("despawn", Texts.cmd("station.despawn.desc"));
             addAliases("remove");
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -191,7 +191,7 @@ public final class StationCommand extends AbstractCommandCollection {
 
         Tp() {
             super("tp", Texts.cmd("station.tp.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override
@@ -206,10 +206,8 @@ public final class StationCommand extends AbstractCommandCollection {
                 return;
             }
             org.joml.Vector3d target = TransitAutopilot.dropPoints(s.origin, s.rotation, 1).get(0);
-            long index = com.hypixel.hytale.math.util.ChunkUtil.indexChunk(
-                    com.hypixel.hytale.math.util.ChunkUtil.chunkCoordinate((int) Math.floor(target.x)),
-                    com.hypixel.hytale.math.util.ChunkUtil.chunkCoordinate((int) Math.floor(target.z)));
-            world.getChunkAsync(index).whenComplete((c, t) -> {
+            int bx = (int) Math.floor(target.x), by = (int) Math.floor(target.y), bz = (int) Math.floor(target.z);
+            SectionBlocks.loadSections(world.getChunkStore(), bx, by - 2, bz, bx, by + 2, bz).whenComplete((c, t) -> {
                 try {
                     world.execute(() -> {
                         if (!ref.isValid()) return;
@@ -271,7 +269,7 @@ public final class StationCommand extends AbstractCommandCollection {
                 }
                 for (java.util.Map.Entry<org.joml.Vector3i, String> e : fills.entrySet()) {
                     org.joml.Vector3i p = e.getKey();
-                    world.setBlock(p.x, p.y, p.z, e.getValue(), 4); // 4: without particles
+                    SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, e.getValue(), 4); // 4: without particles
                     filled++;
                 }
                 holes = left;
@@ -284,11 +282,12 @@ public final class StationCommand extends AbstractCommandCollection {
 
     /** Id of the solid block at a cell (state prefix "*" removed), null if the cell is not solid or its chunk is not loaded. */
     private static String solidId(World world, int x, int y, int z) {
-        if (world.getChunkIfLoaded(com.hypixel.hytale.math.util.ChunkUtil.indexChunk(com.hypixel.hytale.math.util.ChunkUtil.chunkCoordinate(x),
-                com.hypixel.hytale.math.util.ChunkUtil.chunkCoordinate(z))) == null) {
+        com.hypixel.hytale.server.core.universe.world.accessor.SectionReader reader =
+                new com.hypixel.hytale.server.core.universe.world.accessor.SectionReader(world.getChunkStore());
+        if (!reader.hasStorageInMemory(x, y, z)) {
             return null;
         }
-        com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType bt = world.getBlockType(x, y, z);
+        com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType bt = SectionBlocks.typeAt(reader, x, y, z);
         if (bt == null || bt.getMaterial() != com.hypixel.hytale.protocol.BlockMaterial.Solid || bt.getId() == null) {
             return null;
         }
@@ -370,7 +369,7 @@ public final class StationCommand extends AbstractCommandCollection {
 
         Recipe() {
             super("recipe", Texts.cmd("station.recipe.desc"));
-            setPermissionGroups(HytalePermissionsProvider.OP_GROUP);
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         }
 
         @Override

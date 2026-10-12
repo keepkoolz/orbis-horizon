@@ -1,5 +1,6 @@
 package com.keepkoolz.orbishorizon;
 
+import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
@@ -316,7 +317,12 @@ final class BalloonRegistry {
     private static boolean stillThere(World world, StructureShape shape, Entry e) {
         StructureShape.Cell anchor = shape.anchor();
         Vector3i p = anchor.rotated(e.rotation).add(e.x, e.y, e.z);
-        BlockType bt = world.getBlockType(p.x, p.y, p.z);
+        SectionReader reader = new SectionReader(world.getChunkStore());
+        // Section not in memory: unknown block counts as "still there", the entry must never be dropped for that.
+        if (!reader.hasStorageInMemory(p.x, p.y, p.z)) {
+            return true;
+        }
+        BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
         return bt == null || BalloonManager.sameBlock(bt, anchor);
     }
 

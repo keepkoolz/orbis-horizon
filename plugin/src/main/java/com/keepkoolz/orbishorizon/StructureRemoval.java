@@ -44,14 +44,14 @@ final class StructureRemoval {
     }
 
     /**
-     * True if the player is an op. Test chosen: membership of the OP_GROUP ("hytale:Admin") group of
+     * True if the player is an op. Test chosen: membership of the GROUP_ADMIN ("hytale:Admin") group of
      * HytalePermissionsProvider, read by PermissionsModule.getGroupsForUser. It is the group that /op add
      * and /op self give, and the one /orbishorizon balloon despawn requires (T40). hasPermission(uuid, "*") would give the same result
      * for this group (its only permission is "*"), but would also test a "*" right given to a single player.
      */
     static boolean isOp(UUID uuid) {
         try {
-            return PermissionsModule.get().getGroupsForUser(uuid).contains(HytalePermissionsProvider.OP_GROUP);
+            return PermissionsModule.get().getGroupsForUser(uuid).contains(HytalePermissionsProvider.GROUP_ADMIN);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Droits de %s non lus : traité comme non op", uuid);
             return false;
@@ -80,12 +80,8 @@ final class StructureRemoval {
             maxZ = Math.max(maxZ, p.z);
         }
         // a. All the structure's chunks must be loaded (nothing is removed halfway).
-        for (int cx = ChunkUtil.chunkCoordinate(minX); cx <= ChunkUtil.chunkCoordinate(maxX); cx++) {
-            for (int cz = ChunkUtil.chunkCoordinate(minZ); cz <= ChunkUtil.chunkCoordinate(maxZ); cz++) {
-                if (world.getChunkIfLoaded(ChunkUtil.indexChunk(cx, cz)) == null) {
-                    return Result.failure(Texts.t(kind.isAirship() ? "airship.approach" : "tent.approach"));
-                }
-            }
+        if (!SectionBlocks.sectionsLoaded(world.getChunkStore(), minX, minY, minZ, maxX, maxY, maxZ)) {
+            return Result.failure(Texts.t(kind.isAirship() ? "airship.approach" : "tent.approach"));
         }
         // b. Players mounted on a block (stool, bed) near the structure are dismounted. The game does this too
         // when the block disappears (MountSystems$RemoveBlockSeat), this leaves no mount on a removed block.

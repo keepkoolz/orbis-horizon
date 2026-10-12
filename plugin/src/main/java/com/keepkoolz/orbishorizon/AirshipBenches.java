@@ -1,5 +1,6 @@
 package com.keepkoolz.orbishorizon;
 
+import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
 import com.hypixel.hytale.builtin.crafting.component.BenchBlock;
 import com.hypixel.hytale.builtin.crafting.component.ProcessingBenchBlock;
 import com.hypixel.hytale.codec.ExtraInfo;
@@ -213,7 +214,8 @@ final class AirshipBenches {
         if (bench == null) {
             return false;
         }
-        BlockType placed = world.getBlockType(p.x, p.y, p.z);
+        SectionReader reader = new SectionReader(world.getChunkStore());
+        BlockType placed = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
         if (placed != null && !"?".equals(e.block)) {
             BlockType placedBase = BenchBlock.getBaseBlockType(placed);
             String placedName = placedBase != null ? placedBase.getId() : null;
@@ -227,7 +229,7 @@ final class AirshipBenches {
         bench.setTierLevel(e.tier);
         bench.setUpgradeItems(copy(e.upgradeItems));
         BlockModule.BlockStateInfo info = BlockModule.getComponent(BlockModule.BlockStateInfo.getComponentType(), world, p.x, p.y, p.z);
-        BlockType bt = world.getBlockType(p.x, p.y, p.z);
+        BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
         if (info == null || bt == null) {
             LOGGER.at(Level.WARNING).log("Établi %s du dirigeable en %s : état du bloc illisible, niveau %d mis sans changer l'apparence",
                     e.block, p, e.tier);

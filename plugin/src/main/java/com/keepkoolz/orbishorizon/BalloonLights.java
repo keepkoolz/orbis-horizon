@@ -416,7 +416,7 @@ final class BalloonLights {
 
     /** Sets the world position of a light and of its twin. */
     static void positionBoth(Store<EntityStore> store, Light l, Vector3d position) {
-        for (Ref<EntityStore> ref : new Ref[]{l.ref, l.twinRef}) {
+        for (Ref<EntityStore> ref : java.util.Arrays.asList(l.ref, l.twinRef)) {
             if (ref == null || !ref.isValid()) {
                 continue;
             }
