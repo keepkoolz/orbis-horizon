@@ -37,7 +37,7 @@ final class AirshipResume {
     /** A flight read back from disk. pivotX/Y/Z: last valid pivot cell (integers), heading in radians. */
     record Record(UUID id, UUID pilot, String world, int pivotX, int pivotY, int pivotZ, double heading, UUID ship,
                   BalloonCargo cargo, AirshipEngines engines, org.joml.Vector3i takeoffOrigin, com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation takeoffRotation,
-                  AirshipBenches benches, List<AirshipPassengers.Saved> riders) {
+                  AirshipBenches benches, List<AirshipPassengers.Saved> riders, Ownership ownership) {
     }
 
     private AirshipResume() {
@@ -95,6 +95,7 @@ final class AirshipResume {
             if (!f.riders.isEmpty()) {
                 doc.put("passengers", AirshipPassengers.toBson(f)); // T64: uuid and stool of each passenger
             }
+            f.ownership.writeTo(doc); // keys absent in older files: read back as NONE
             byte[] bytes = doc.toJson().getBytes(StandardCharsets.UTF_8);
             Files.createDirectories(d);
             Path tmp = d.resolve(f.id + ".json.tmp");
@@ -169,7 +170,8 @@ final class AirshipResume {
                         // T63: absent in files written before the bench levels were kept: no level to put back.
                         doc.containsKey("benches") ? AirshipBenches.fromBson(doc.getDocument("benches")) : null,
                         // T64: absent without passengers or in older files.
-                        doc.containsKey("passengers") ? AirshipPassengers.fromBson(doc.getArray("passengers")) : null));
+                        doc.containsKey("passengers") ? AirshipPassengers.fromBson(doc.getArray("passengers")) : null,
+                        Ownership.readFrom(doc)));
             } catch (IOException | RuntimeException e) {
                 LOGGER.at(Level.SEVERE).withCause(e).log("Fichier de reprise de dirigeable illisible : %s", p);
                 try {

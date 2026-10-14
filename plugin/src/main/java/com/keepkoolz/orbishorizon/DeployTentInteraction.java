@@ -182,7 +182,7 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
 
         int flags = (force ? 1 : 0) | 8; // same options as SpawnPrefab
         PrefabUtil.paste(buffer, world, new Vector3i(origin), rotation, new FastRandom(), flags, 0, commandBuffer);
-        BalloonRegistry.add(world, origin, rotation, kind.id, playerRef.getUuid());
+        BalloonRegistry.add(world, origin, rotation, kind.id, Ownership.of(playerRef.getUuid(), playerRef.getUsername()));
 
         // The full crate becomes the empty crate, in the same slot.
         ItemStack empty = new ItemStack(kind.tent.emptyCrateId, 1);

@@ -23,6 +23,8 @@ final class BalloonFlight {
      * identifier (the respawned player can fly another balloon without overwriting this flight).
      */
     volatile UUID pilotUuid;
+    /** Ownership of the structure, copied from the registry at take-off (NONE if it had no entry), registered again at landing. */
+    volatile Ownership ownership = Ownership.NONE;
     /** Pilot, or null for a pilotless flight (T20, or pilot dead in flight, T39). */
     volatile Ref<EntityStore> pilotRef;
     final World world;
@@ -90,6 +92,8 @@ final class BalloonFlight {
      * is no longer mounted on them and the server lowers it every tick (tickDriven), as for a pilotless flight.
      */
     volatile boolean driven;
+    /** The pilot died and the balloon lands in place so a passenger can take over: changes the passengers' landing message. */
+    volatile boolean takeOver;
     /** Speed of the automatic descent, in blocks per second: the pilot's vertical flight speed (after the division by 2). */
     volatile double descentSpeed;
     /** Horizontal speed of a transit balloon in blocks per second (player horizontal fly speed times the balloon factor). */
@@ -259,6 +263,9 @@ final class BalloonFlight {
         float camYaw;
         boolean camYawSet;
         int cameraTargetId = -1;
+        /** T124 external view (balloons): horizontal direction from the balloon to the camera, set at the first send, and the position of the last direction sample. */
+        double camDirX, camDirZ, camLastX, camLastZ;
+        boolean camDirSet;
         /** T118: CAMERA mode seat view (camera anchor, mannequins, hidden body), null when not built. */
         volatile PassengerSeatView.State seatView;
         boolean noMannequinLogged;

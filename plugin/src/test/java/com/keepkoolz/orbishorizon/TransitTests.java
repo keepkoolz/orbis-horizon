@@ -31,6 +31,14 @@ public class TransitTests {
         run("transitViewYaw", TransitTests::transitViewYaw);
         run("groundCageRemaining", TransitTests::groundCageRemaining);
         run("deployPlacement", TransitTests::deployPlacement);
+        run("externalView", TransitTests::externalView);
+        run("protectionRules", TransitTests::protectionRules);
+        run("protectedFileRoundTrip", TransitTests::protectedFileRoundTrip);
+        run("registryOwnershipRoundTrip", TransitTests::registryOwnershipRoundTrip);
+        run("stationMarkerPoint", TransitTests::stationMarkerPoint);
+        run("ownershipRules", TransitTests::ownershipRules);
+        run("ownedMarkerRules", TransitTests::ownedMarkerRules);
+        run("mapShareRules", TransitTests::mapShareRules);
         System.out.println("TransitTests: " + passed + " OK");
     }
 
@@ -84,6 +92,18 @@ public class TransitTests {
     }
 
     /** T120: cage left on the ground, balloon home at y 100 with the cage lowered by 12 (target 88). */
+    /** T124: external view framing, camera opposite to the given direction, above the aim point, looking down at it. */
+    static void externalView() {
+        PassengerCamera.ExternalView v = PassengerCamera.externalView(0, 3, 40, 1.2, 0.25);
+        check(Math.abs(v.x()) < 1e-4 && Math.abs(v.z() - 48f) < 1e-3, "camera on the direction side at factor * size");
+        check(Math.abs(v.y() - 12f) < 1e-3, "height = heightFactor * distance");
+        check(Math.abs(v.yaw()) < 1e-4, "yaw looks from +z toward the target (atan2(wx, wz))");
+        check(v.pitch() < 0 && Math.abs(v.pitch() - (float) Math.atan2(-12.0, 48.0)) < 1e-4, "pitch looks down");
+        PassengerCamera.ExternalView w = PassengerCamera.externalView(-1, -1, 10, 2, 0);
+        check(Math.abs(Math.hypot(w.x(), w.z()) - 20) < 1e-3, "horizontal distance = factor * size");
+        check(w.x() < 0 && w.z() < 0 && Math.abs(w.pitch()) < 1e-6, "same side as the direction, level at height 0");
+    }
+
     static void groundCageRemaining() {
         eq(0, TransportCage.remainingDescent(88, 100, 12));
         eq(5, TransportCage.remainingDescent(93, 100, 12));
@@ -248,6 +268,64 @@ public class TransitTests {
         StationMaster.release(s, b);
     }
 
+    static void protectedFileRoundTrip() throws Exception {
+        Path dir = Files.createTempDirectory("passenger-protection");
+        try {
+            java.util.UUID a = java.util.UUID.randomUUID();
+            java.util.UUID b = java.util.UUID.randomUUID();
+            PassengerProtection.load(dir);
+            eq(false, PassengerProtection.isMarked(a));
+            PassengerProtection.mark(a);
+            PassengerProtection.mark(b);
+            PassengerProtection.unmark(a);
+            PassengerProtection.load(dir);
+            eq(false, PassengerProtection.isMarked(a));
+            eq(true, PassengerProtection.isMarked(b));
+            Files.writeString(dir.resolve("protected.json"), "{garbage");
+            PassengerProtection.load(dir);
+            eq(false, PassengerProtection.isMarked(b));
+            eq("{garbage", Files.readString(dir.resolve("protected.json.bad")));
+        } finally {
+            deleteAll(dir);
+        }
+    }
+
+    static void registryOwnershipRoundTrip() throws Exception {
+        Path dir = Files.createTempDirectory("registry-ownership");
+        try {
+            java.util.UUID a = java.util.UUID.randomUUID();
+            BalloonRegistry.init(dir);
+            org.joml.Vector3i o = new org.joml.Vector3i(1, 2, 3);
+            com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation rot =
+                    com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None;
+            BalloonRegistry.addNamed("w", o, rot, Deployables.BALLOON_KIND, Ownership.of(a, "Paul"));
+            java.util.UUID id = null;
+            for (BalloonRegistry.Entry e : BalloonRegistry.entriesOfNameForTest("w")) {
+                id = e.id();
+            }
+            eq(true, id != null);
+            BalloonRegistry.setShared(id, true);
+            BalloonRegistry.init(dir);
+            BalloonRegistry.Entry e = BalloonRegistry.byId(id);
+            eq(a, e.owner());
+            eq("Paul", e.ownerName());
+            eq(true, e.shared());
+            eq(id, e.id());
+            // Older file: version 2 without structureId or ownerName.
+            Files.writeString(dir.resolve("deployed.json"),
+                    "{\"version\":2,\"balloons\":[{\"world\":\"w\",\"x\":1,\"y\":2,\"z\":3,\"rotation\":\"None\",\"kind\":\"balloon\"}]}");
+            BalloonRegistry.init(dir);
+            BalloonRegistry.Entry old = BalloonRegistry.entriesOfNameForTest("w").get(0);
+            eq(true, old.id() != null);
+            eq(null, old.ownerName());
+            eq(false, old.shared());
+            BalloonRegistry.init(dir);
+            eq(old.id(), BalloonRegistry.entriesOfNameForTest("w").get(0).id());
+        } finally {
+            deleteAll(dir);
+        }
+    }
+
     static void settingsRoundTrip() throws Exception {
         Path dir = Files.createTempDirectory("transit-settings");
         try {
@@ -380,5 +458,89 @@ public class TransitTests {
         if (!ok) {
             throw new AssertionError(what);
         }
+    }
+
+    static void protectionRules() {
+        eq(true, PassengerProtection.shouldAdd(false, PassengerProtection.Mode.FULL));
+        eq(false, PassengerProtection.shouldAdd(true, PassengerProtection.Mode.FULL));
+        eq(false, PassengerProtection.shouldAdd(false, PassengerProtection.Mode.DAMAGE));
+        eq(false, PassengerProtection.shouldAdd(false, PassengerProtection.Mode.OFF));
+        eq(true, PassengerProtection.shouldRemove(true, false));
+        eq(false, PassengerProtection.shouldRemove(false, false));
+        eq(false, PassengerProtection.shouldRemove(true, true));
+        eq(PassengerProtection.Mode.FULL, PassengerProtection.mode());
+    }
+
+    /** Map marker of a station: centre of the landing pad, on top of it, rotated with the station. */
+    static void ownershipRules() {
+        java.util.UUID a = java.util.UUID.randomUUID();
+        java.util.UUID p = java.util.UUID.randomUUID();
+        Ownership l = Ownership.landingOwner(Ownership.NONE, p, "Ann");
+        eq(p, l.owner());
+        eq("Ann", l.ownerName());
+        if (l.id() == null) throw new AssertionError("id expected");
+        Ownership shared = Ownership.of(a, "Paul").withShared(true);
+        Ownership k = Ownership.landingOwner(shared, p, "Ann");
+        eq(a, k.owner());
+        eq("Paul", k.ownerName());
+        eq(true, k.shared());
+        eq(shared.id(), k.id());
+        Ownership n = Ownership.landingOwner(Ownership.NONE, null, null);
+        eq(null, n.owner());
+        if (n.id() == null) throw new AssertionError("id expected");
+        org.bson.BsonDocument d = new org.bson.BsonDocument();
+        shared.writeTo(d);
+        eq(shared, Ownership.readFrom(d));
+        eq(Ownership.NONE, Ownership.readFrom(new org.bson.BsonDocument()));
+    }
+
+    static void ownedMarkerRules() {
+        java.util.UUID a = java.util.UUID.randomUUID(), b = java.util.UUID.randomUUID();
+        Ownership own = Ownership.of(a, "A");
+        check(OwnedMarkerProvider.visibleTo(own, a), "owner sees it");
+        check(!OwnedMarkerProvider.visibleTo(own, b), "other does not see unshared");
+        check(OwnedMarkerProvider.visibleTo(own.withShared(true), b), "other sees shared");
+        check(!OwnedMarkerProvider.visibleTo(Ownership.NONE, a), "NONE hidden");
+        check(!OwnedMarkerProvider.visibleTo(Ownership.NONE.withShared(true), a), "NONE shared hidden");
+        String[][] table = {{"balloon", "Owned_Balloon.png"}, {"balloon_basic", "Owned_Balloon_Basic.png"},
+                {"balloon_transport", "Owned_Balloon_Transport.png"}, {"airship", "Owned_Airship.png"},
+                {"tent", "Owned_Tent.png"}, {"tent_big", "Owned_Tent_Big.png"}};
+        String en, fr;
+        try {
+            en = Files.readString(Path.of("Server/Languages/en-US/server.lang"));
+            fr = Files.readString(Path.of("Server/Languages/fr-FR/server.lang"));
+        } catch (java.io.IOException ex) {
+            throw new AssertionError(ex);
+        }
+        for (String[] row : table) {
+            eq(row[1], OwnedMarkerProvider.icon(row[0]));
+            for (boolean other : new boolean[]{false, true}) {
+                String key = OwnedMarkerProvider.nameKey(row[0], other).substring("server.".length());
+                check(en.contains("\n" + key + " = "), "en " + key);
+                check(fr.contains("\n" + key + " = "), "fr " + key);
+            }
+        }
+        check(OwnedMarkerProvider.icon("balloon_public") == null, "public");
+        check(OwnedMarkerProvider.icon("station") == null, "station");
+        check(OwnedMarkerProvider.markerId(a).startsWith("orbis_horizon_owned:"), "marker id");
+    }
+
+    static void mapShareRules() {
+        java.util.UUID a = java.util.UUID.randomUUID(), b = java.util.UUID.randomUUID();
+        check(MapCommand.parseId("abc") == null, "bad id");
+        eq(a, MapCommand.parseId(a.toString()));
+        check(MapCommand.canToggle(Ownership.of(a, "P"), a, false), "owner");
+        check(!MapCommand.canToggle(Ownership.of(a, "P"), b, false), "other");
+        check(MapCommand.canToggle(Ownership.of(a, "P"), b, true), "op");
+        check(!MapCommand.canToggle(Ownership.NONE, b, false), "none");
+        check(Ownership.NONE.owner() == null, "no owner is refused by the command even for an op");
+    }
+
+    static void stationMarkerPoint() {
+        org.joml.Vector3d p = StationMarkerProvider.markerPoint(new Vector3i(100, 64, 200), Rotation.None);
+        eq(new org.joml.Vector3d(119.5, 71, 200.5), p);
+        // Ninety sends the cell (19, 7, 0) to (0, 7, -19), centre (0.5, 7, -18.5)
+        org.joml.Vector3d q = StationMarkerProvider.markerPoint(new Vector3i(100, 64, 200), Rotation.Ninety);
+        eq(new org.joml.Vector3d(100.5, 71, 181.5), q);
     }
 }

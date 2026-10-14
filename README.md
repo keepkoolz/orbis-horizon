@@ -37,7 +37,7 @@ A station is a stone walkway with a landing pad at its end and a little hut for 
 - Once set up, a tent, balloon, airship or station is locked, so nobody breaks it by accident. Beds, chests, burners and seats still work.
 - Friends standing on board when you take off travel with you, seated, and watch the sky from their seat. Other players see you fly by.
 
-Orbis Horizon 1.6 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8.
+Orbis Horizon 1.7 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8.
 
 The wiki has the exact recipes, how to fly each vehicle and the operator commands.
 

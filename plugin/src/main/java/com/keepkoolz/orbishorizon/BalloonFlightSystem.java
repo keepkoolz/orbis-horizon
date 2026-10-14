@@ -19,5 +19,9 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
         StationQueue.tick(store, store.getExternalData().getWorld());
         // T121: preview of the structure while a deployment crate is held.
         HeldCratePreview.tick(store, store.getExternalData().getWorld());
+        // Passenger protection: players no longer aboard any flight lose their marker (safety net, at most once a second).
+        BalloonManager.get().sweepProtection(store, store.getExternalData().getWorld());
+        // T125: second teleport of a player who got up from a tent bed.
+        TentBedSystem.tick(store, store.getExternalData().getWorld());
     }
 }

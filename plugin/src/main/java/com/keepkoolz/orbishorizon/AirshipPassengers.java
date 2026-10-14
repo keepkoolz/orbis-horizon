@@ -237,6 +237,7 @@ final class AirshipPassengers {
         for (Rider r : riders) {
             try {
                 if (r.p.ref.isValid()) {
+                    PassengerProtection.protect(store, r.p.ref);
                     PassengerCamera.keepSeatedLook(store, r.p); // seated on a stool or a bench: his look is kept
                     MountUtil.unseat(store, r.p.ref);
                     setHover(store, r, true);
@@ -334,7 +335,7 @@ final class AirshipPassengers {
             Vector3f d = new Vector3f(p.seatLocal).sub(Deployables.AIRSHIP.airship.pivot);
             // T118: camera anchor, mannequins and hidden body (PassengerSeatView), the camera is attached to the anchor.
             PassengerSeatView.sync(store, p, new PassengerSeatView.Ctx(f.shipUuid, f.shipRef, f.observerRef, f.dual, f.pilotUuid,
-                    new Vector3f(-d.x, d.y, -d.z), seat, f.seatViews, true), now);
+                    new Vector3f(-d.x, d.y, -d.z), seat, f.seatViews, true, null), now);
             PassengerCamera.safetyTeleport(store, p, seat);
             return;
         }
@@ -529,7 +530,7 @@ final class AirshipPassengers {
                 }
                 PlayerRef pr = store.getComponent(r.p.ref, PlayerRef.getComponentType());
                 if (pr != null) {
-                    pr.sendMessage(Texts.t("airship.passenger.landed"));
+                    pr.sendMessage(Texts.t(f.takeOver ? "airship.passenger.pilotDiedTakeOver" : "airship.passenger.landed"));
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Passager du dirigeable %s non reposé proprement", r.p.name);
@@ -661,6 +662,7 @@ final class AirshipPassengers {
                 if (online != null) {
                     MountUtil.unseat(store, online);
                     BalloonManager.clearSittingFlag(store, online);
+                    PassengerProtection.clearStale(store, online); // the registry did not survive the restart
                     MovementManager mm = store.getComponent(online, MovementManager.getComponentType());
                     if (mm != null) {
                         mm.resetDefaultsAndUpdate(online, store);
@@ -693,6 +695,8 @@ final class AirshipPassengers {
                 sb.append(String.format(Locale.ROOT, " %.2f b from seat", t.getPosition().distance(manager.shipPoint(f, r.p.seatLocal))));
             }
             sb.append(" teleports ").append(r.teleports);
+            sb.append(" protected ").append(PassengerProtection.isProtected(r.p.ref) ? "yes" : "no")
+                    .append(", intangible by mod ").append(PassengerProtection.addedByMod(r.p.ref) ? "yes" : "no");
             if (r.mode == Mode.CAMERA) {
                 sb.append(' ').append(PassengerSeatView.describe(r.p));
             }

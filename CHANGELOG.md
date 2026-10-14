@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.7
+
+### Added
+
+- Your hot air balloons, airships and tents now appear on your world map, each with its own icon and the name of its model (for example "Small hot air balloon" or "Large tent"). The icon follows the vehicle in flight. Other players do not see them unless you choose Share in the menu of the icon (Stop sharing hides them again). Once shared, other players see "<model> of <your name>". The player who sets up the crate owns the vehicle. A balloon set up before this version gets its owner the next time it lands.
+- Balloon stations now appear on the in-game world map, with a balloon icon and their name. Stations in parts of the map you have not explored stay hidden by the fog. Select one on the map to follow it with the compass.
+- Passengers of balloons and of the airship are now safe while they travel. They take no damage and monsters no longer notice them. The pilot stays exposed. Operators can change this with `/orbishorizon passengers protect full|damage|off`.
+- If the pilot of a balloon or of the airship dies, the vehicle is set down where it is and the passengers are freed with a message, so that one of them can take the pilot's place. If there is no room to set it down, it still comes down by itself as before.
+
+### Changed
+
+- Passengers of balloons (large, animal transport and public transport) now see the balloon from the outside, from behind and a little above, instead of from their seat. They can see themselves seated. The airship keeps the seat view.
+- `/orbishorizon map share` and `unshare` can be used by any player for their own vehicles. All the other `/orbishorizon` commands stay reserved to operators.
+
+### Fixed
+
+- Getting up from the bed of the small tent, or waking up, puts you in front of the entrance again instead of leaving you stuck in the canvas.
+
 ## v1.6
 
 This release moves Orbis Horizon to Hytale 0.7. It needs Hytale 0.7 and no longer loads in Hytale 0.6.8. If you stay on 0.6.8, keep v1.5.

@@ -50,7 +50,7 @@ final class BalloonResume {
     /** A flight read back from disk. */
     record Record(UUID pilot, String world, Deployables.Kind kind, Vector3i origin, Rotation rotation, UUID balloon,
                   BurnerFuel burner, BalloonCargo cargo, List<Seated> passengers, List<CageAnimals.Animal> animals,
-                  String transitFrom, String transitTo, int cageDescent, int cageHomeY) {
+                  String transitFrom, String transitTo, int cageDescent, int cageHomeY, Ownership ownership) {
         /** A transit flight (Task 9): nothing is placed on resume, only the passengers are set down at the destination station. */
         boolean transit() {
             return transitFrom != null;
@@ -58,7 +58,7 @@ final class BalloonResume {
 
         /** T76: the same record with the origin moved vertically (resume of a pose outside the height range). */
         Record shiftedBy(int dy) {
-            return new Record(pilot, world, kind, new Vector3i(origin).add(0, dy, 0), rotation, balloon, burner, cargo, passengers, animals, transitFrom, transitTo, cageDescent, cageHomeY);
+            return new Record(pilot, world, kind, new Vector3i(origin).add(0, dy, 0), rotation, balloon, burner, cargo, passengers, animals, transitFrom, transitTo, cageDescent, cageHomeY, ownership);
         }
     }
 
@@ -131,6 +131,7 @@ final class BalloonResume {
                 doc.put("cageDescent", new BsonInt32(f.groundCage));
                 doc.put("cageHomeY", new BsonInt32(f.cageHome.y));
             }
+            f.ownership.writeTo(doc); // keys absent in older files: read back as NONE
             if (f.burner != null) {
                 doc.put("burner", f.burner.toBson());
             }
@@ -226,7 +227,8 @@ final class BalloonResume {
                         doc.containsKey("transitFrom") ? doc.getString("transitFrom").getValue() : null,
                         doc.containsKey("transitTo") ? doc.getString("transitTo").getValue() : null,
                         doc.containsKey("cageDescent") ? doc.getNumber("cageDescent").intValue() : 0,
-                        doc.containsKey("cageHomeY") ? doc.getNumber("cageHomeY").intValue() : 0));
+                        doc.containsKey("cageHomeY") ? doc.getNumber("cageHomeY").intValue() : 0,
+                        Ownership.readFrom(doc)));
             } catch (IOException | RuntimeException e) {
                 LOGGER.at(Level.SEVERE).withCause(e).log("Fichier de reprise illisible : %s", p);
                 try {

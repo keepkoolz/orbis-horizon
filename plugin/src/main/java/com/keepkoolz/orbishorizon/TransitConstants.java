@@ -10,6 +10,14 @@ final class TransitConstants {
     static final int COUNTDOWN_SECONDS = 30;
     /** Interval between countdown messages. */
     static final int MESSAGE_INTERVAL_SECONDS = 10;
+    /** T124 external view of balloon passengers: horizontal move (blocks) after which the travel direction is sampled again. */
+    static final double VIEW_DIRECTION_MIN_MOVE = 2.0;
+    /** T124 external view: change of travel direction (degrees) that re-sends the camera. */
+    static final double VIEW_DIRECTION_CHANGE_DEGREES = 10.0;
+    /** T124 external view: default camera distance, in times the size of the balloon. */
+    static final double VIEW_DISTANCE_FACTOR = 1.2;
+    /** T124 external view: default camera height above the target, in times the camera distance. */
+    static final double VIEW_HEIGHT_FACTOR = 0.25;
     /** View of the passengers: eye height above the seat point (prefab seat points are about 0.5 above the cell floor), in blocks. */
     static final float VIEW_EYE_HEIGHT_ABOVE_SEAT = 1.2f;
     /** Passenger body parked in forced flight: beyond this distance (blocks) from the seat it is teleported back, so its chunks stay loaded. */

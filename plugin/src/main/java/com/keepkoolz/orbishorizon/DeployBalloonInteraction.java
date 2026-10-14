@@ -142,7 +142,9 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             return;
         }
         if (shape != null) {
-            BalloonManager.pasteKeepingTerrain(buffer, world, shape, origin, rotation, flags, commandBuffer, kind.id, null);
+            PlayerRef placer = commandBuffer.getComponent(player, PlayerRef.getComponentType());
+            Ownership own = placer != null ? Ownership.of(placer.getUuid(), placer.getUsername()) : Ownership.NONE;
+            BalloonManager.pasteKeepingTerrain(buffer, world, shape, origin, rotation, flags, commandBuffer, kind.id, own);
         } else {
             // Unreadable shape: placed without terrain protection and without registry entry (logged by shapeOrNull).
             PrefabUtil.paste(buffer, world, origin, rotation, new FastRandom(), flags, 0, commandBuffer);

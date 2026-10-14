@@ -188,7 +188,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
 
         int flags = (force ? 1 : 0) | 8; // same options as SpawnPrefab
         BalloonManager.pasteKeepingTerrain(buffer, world, station, origin, rotation, flags, commandBuffer, kind.id,
-                playerRef.getUuid(), Deployables.STATION_GRASS_Y);
+                Ownership.of(playerRef.getUuid(), null), Deployables.STATION_GRASS_Y); // station: owner kept as before, no map marker (out of scope)
         // The station is locked from the paste (registry). It joins the network when its name is chosen: the name window opens
         // here, deferred like the other entity-side work started from an interaction.
         final Vector3i placedOrigin = new Vector3i(origin);

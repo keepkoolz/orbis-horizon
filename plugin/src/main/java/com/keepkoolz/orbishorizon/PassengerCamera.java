@@ -23,6 +23,8 @@ import org.joml.Vector3d;
 import java.util.logging.Level;
 
 /**
+ * T124: balloons (all types) give their passengers an external view (attachExternal, behind the travel direction, looking at the balloon);
+ * the airship keeps the seat view below.
  * Passenger view of a flight (transit balloons, piloted balloons, airship, shared by BalloonManager and AirshipPassengers): a first-person camera attached to the balloon entity the client sees (SetServerCamera, attachedToType
  * EntityId, like SpectatorSystems.applyFollowCamera but not locked and without Spectating), at the seat's eye point, with a fixed random horizontal
  * rotation drawn once per passenger at boarding. The camera cannot look around (an entity-attached camera gives no client look). The body is not mounted: it stays parked in
@@ -88,6 +90,134 @@ final class PassengerCamera {
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Caméra du passager %s non envoyée", p.name);
         }
+    }
+
+    /** T124: camera distance (times the balloon size) and height (times the distance) of the external view, op setting, not saved. */
+    static volatile double distanceFactor = TransitConstants.VIEW_DISTANCE_FACTOR;
+    static volatile double heightFactor = TransitConstants.VIEW_HEIGHT_FACTOR;
+
+    /** External view result: camera offset from the target point (world frame) and look yaw and pitch (radians). */
+    record ExternalView(float x, float y, float z, float yaw, float pitch) {
+    }
+
+    /**
+     * T124: pure framing of the external view. (dirX, dirZ) is the horizontal direction from the target to the camera (any length),
+     * size the largest dimension of the balloon: the camera sits distanceFactor * size away horizontally and heightFactor times that
+     * above the target. Rotation convention of the T115 external view (validated): yaw = atan2(wx, wz), pitch = atan2(-dy, horizontal).
+     * Pinned by TransitTests.externalView.
+     */
+    static ExternalView externalView(double dirX, double dirZ, double size, double distanceFactor, double heightFactor) {
+        double len = Math.max(1e-6, Math.hypot(dirX, dirZ));
+        double back = distanceFactor * size;
+        double wx = dirX / len * back;
+        double wz = dirZ / len * back;
+        double dy = heightFactor * back;
+        return new ExternalView((float) wx, (float) dy, (float) wz, (float) Math.atan2(wx, wz), (float) Math.atan2(-dy, Math.hypot(wx, wz)));
+    }
+
+    /** Aim point (vertical middle of the flight cells relative to the pivot) and size (largest of height, width x, width z) of a balloon type. */
+    record Framing(double centreY, double size) {
+    }
+
+    private static final java.util.Map<Deployables.Kind, Framing> FRAMING = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Framing of a type from its flight cells, computed once per type. */
+    static Framing framing(Deployables.Kind kind) {
+        return FRAMING.computeIfAbsent(kind, k -> {
+            int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
+            int minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+            java.util.List<StructureShape.Cell> cells;
+            try {
+                cells = k.shape().flightCells();
+            } catch (java.io.IOException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Forme de %s illisible pour la vue extérieure", k);
+                return new Framing(0, 10);
+            }
+            for (StructureShape.Cell c : cells) {
+                minX = Math.min(minX, c.x());
+                maxX = Math.max(maxX, c.x());
+                minY = Math.min(minY, c.y());
+                maxY = Math.max(maxY, c.y());
+                minZ = Math.min(minZ, c.z());
+                maxZ = Math.max(maxZ, c.z());
+            }
+            if (minX > maxX) {
+                return new Framing(0, 10);
+            }
+            double h = maxY - minY + 1;
+            double size = Math.max(h, Math.max(maxX - minX + 1, maxZ - minZ + 1));
+            return new Framing((minY + maxY + 1) / 2.0 - BalloonManager.pivot(k).y, size);
+        });
+    }
+
+    /**
+     * T124: sends the external view of a balloon passenger: camera attached to the entity the client sees, behind the travel direction
+     * and above, looking at the middle of the balloon. The position offset is in the world frame (not turned by the client). Direction:
+     * opposite to the horizontal move of the entity (before the first move: behind the flight orientation, forward is the prefab -z axis).
+     * Re-sent by directionChanged. Never throws.
+     */
+    static void attachExternal(Store<EntityStore> store, BalloonFlight flight, BalloonFlight.Passenger p, Ref<EntityStore> target) {
+        try {
+            PlayerRef pr = store.getComponent(p.ref, PlayerRef.getComponentType());
+            NetworkId nid = target != null && target.isValid() ? store.getComponent(target, NetworkId.getComponentType()) : null;
+            if (pr == null || nid == null) {
+                return;
+            }
+            if (!p.camDirSet) {
+                org.joml.Vector3f fwd = flight.rotation.rotateYaw(new org.joml.Vector3f(0, 0, -1), new org.joml.Vector3f());
+                p.camDirX = -fwd.x;
+                p.camDirZ = -fwd.z;
+                p.camDirSet = true;
+                p.camLastX = flight.entityPos.x;
+                p.camLastZ = flight.entityPos.z;
+            }
+            Framing f = framing(flight.kind);
+            ExternalView v = externalView(p.camDirX, p.camDirZ, f.size(), distanceFactor, heightFactor);
+            ServerCameraSettings s = new ServerCameraSettings();
+            s.attachedToType = AttachedToType.EntityId;
+            s.attachedToEntityId = nid.getId();
+            s.followAttachedEntity = true;
+            s.eyeOffset = false;
+            s.isFirstPerson = false;
+            s.positionType = PositionType.AttachedToPlusOffset;
+            // The entity sits at the pivot: the aim point is (0, centreY, 0) from it, the camera is the view offset from the aim point.
+            s.positionOffset = new Position(v.x(), f.centreY() + v.y(), v.z());
+            s.positionLerpSpeed = 1f;
+            s.rotationType = RotationType.Custom;
+            s.applyLookType = ApplyLookType.LocalPlayerLookOrientation;
+            s.allowPitchControls = false;
+            s.displayReticle = false;
+            s.skipCharacterPhysics = true;
+            s.rotation = new Direction(v.yaw(), v.pitch(), 0f);
+            pr.getPacketHandler().writeNoCache(new SetServerCamera(ClientCameraView.Custom, false, s));
+            p.cameraOn = true;
+            p.cameraTargetId = nid.getId();
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Vue extérieure du passager %s non envoyée", p.name);
+        }
+    }
+
+    /** True when the balloon's travel direction changed enough (after enough horizontal move) to re-send the external view. */
+    static boolean directionChanged(BalloonFlight flight, BalloonFlight.Passenger p) {
+        if (!p.camDirSet) {
+            return false;
+        }
+        double mx = flight.entityPos.x - p.camLastX;
+        double mz = flight.entityPos.z - p.camLastZ;
+        if (Math.hypot(mx, mz) < TransitConstants.VIEW_DIRECTION_MIN_MOVE) {
+            return false;
+        }
+        p.camLastX = flight.entityPos.x;
+        p.camLastZ = flight.entityPos.z;
+        double nx = -mx;
+        double nz = -mz;
+        double cos = (nx * p.camDirX + nz * p.camDirZ) / (Math.hypot(nx, nz) * Math.max(1e-6, Math.hypot(p.camDirX, p.camDirZ)));
+        if (Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, cos)))) > TransitConstants.VIEW_DIRECTION_CHANGE_DEGREES) {
+            p.camDirX = nx;
+            p.camDirZ = nz;
+            return true;
+        }
+        return false;
     }
 
     /** Largest turn of a transit passenger's view away from the travel direction, toward the outside of his seat. */

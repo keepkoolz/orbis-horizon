@@ -40,6 +40,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
         addSubCommand(new Despawn());
         addSubCommand(new Cage());
         addSubCommand(new Render());
+        addSubCommand(new View());
     }
 
     /**
@@ -217,6 +218,53 @@ public final class BalloonCommand extends AbstractCommandCollection {
     }
 
     /** T21: height of the seat point, to calibrate passengers in game. */
+    /**
+     * T124: /orbishorizon balloon view show, /orbishorizon balloon view set <distanceFactor> <heightFactor>: external view of balloon passengers
+     * (camera distance in times the balloon size, 0.3 to 5, and height in times that distance, 0 to 2). Not saved, applies at the next camera send.
+     */
+    static final class View extends AbstractCommandCollection {
+        View() {
+            super("view", Texts.cmd("balloon.view.desc"));
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+            addSubCommand(new ViewShow());
+            addSubCommand(new ViewSet());
+        }
+    }
+
+    private static Message viewState() {
+        return Texts.t("cmd.view.state").param("distance", String.valueOf(PassengerCamera.distanceFactor))
+                .param("height", String.valueOf(PassengerCamera.heightFactor));
+    }
+
+    static final class ViewShow extends AbstractPlayerCommand {
+        ViewShow() {
+            super("show", Texts.cmd("balloon.view.show.desc"));
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            ctx.sendMessage(viewState());
+        }
+    }
+
+    static final class ViewSet extends AbstractPlayerCommand {
+        private final RequiredArg<Float> distance = withRequiredArg("distanceFactor", Texts.cmd("balloon.view.distance"), ArgTypes.FLOAT);
+        private final RequiredArg<Float> height = withRequiredArg("heightFactor", Texts.cmd("balloon.view.height"), ArgTypes.FLOAT);
+
+        ViewSet() {
+            super("set", Texts.cmd("balloon.view.set.desc"));
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            PassengerCamera.distanceFactor = Math.max(0.3, Math.min(5.0, distance.get(ctx)));
+            PassengerCamera.heightFactor = Math.max(0.0, Math.min(2.0, height.get(ctx)));
+            ctx.sendMessage(viewState());
+        }
+    }
+
     static final class SeatHeight extends AbstractPlayerCommand {
         private final RequiredArg<Float> y = withRequiredArg("y", Texts.cmd("balloon.seatheight.y"), ArgTypes.FLOAT);
 

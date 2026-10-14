@@ -42,6 +42,19 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
     /** Height added to the exit spot (the feet are put a little above the floor, like BalloonManager.LANDING_LIFT). */
     private static final float EXIT_LIFT = 0.1f;
 
+    /** Delay before the second teleport, in ms. */
+    private static final long SECOND_TELEPORT_MS = 300L;
+    /** A pending teleport older than this is dropped, in ms. */
+    private static final long STALE_MS = 5000L;
+    /** The second teleport is only sent if the player is still this close to the bed, in blocks. */
+    private static final double MAX_BED_DISTANCE = 3.0;
+
+    /** Second teleport waiting for its due time. */
+    private record Pending(World world, Vector3i bed, Vector3d target, float yaw, long due, long created) {
+    }
+
+    private static final Map<Ref<EntityStore>, Pending> PENDING = new ConcurrentHashMap<>();
+
     /** Bed block of each player currently in a bed, memorised on mount (the block's component can be gone at removal). */
     private static final Map<Ref<EntityStore>, Vector3i> BEDS = new ConcurrentHashMap<>();
 
@@ -87,11 +100,14 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
         }
         try {
             Vector3i bed = bedPosition(mount);
+            String source = "composant";
             Vector3i remembered = BEDS.remove(ref);
             if (bed == null) {
                 bed = remembered;
+                source = "mémorisée";
             }
             if (bed == null) {
+                source = "position du joueur";
                 // Last resort: the player's own block (they lay on the bed).
                 TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
                 if (t != null) {
@@ -103,9 +119,10 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
                 return;
             }
             Vector3i bedPos = bed;
+            String bedSource = source;
             World world = store.getExternalData().getWorld();
             // Deferred: after the dismount, and after a tent packing of the same tick (which removes the registry entry).
-            world.execute(() -> getUp(store, ref, world, bedPos));
+            world.execute(() -> getUp(store, ref, world, bedPos, bedSource));
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Lit de tente : démontage non traité");
         }
@@ -121,27 +138,39 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
         return c != null ? c.getBlockPos() : null;
     }
 
+    /** Result of a tent lookup: the entry, or null with the reason why there is none. */
+    private record Lookup(BalloonRegistry.Entry entry, String why) {
+    }
+
     /** The registry entry of the tent whose bed is at this cell, if its type has an exit spot. Null otherwise. */
     private static BalloonRegistry.Entry tentOfBed(World world, Vector3i pos) {
+        return lookup(world, pos).entry();
+    }
+
+    /** Same as tentOfBed, with the reason when there is no tent (for the log). */
+    private static Lookup lookup(World world, Vector3i pos) {
         BalloonRegistry.Entry e = BalloonRegistry.find(world, pos);
         if (e == null) {
-            return null;
+            return new Lookup(null, "pas d'entrée au registre");
         }
         Deployables.Kind kind = Deployables.get(e.kind());
         if (kind == null || kind.tent == null || kind.tent.exitPoint == null) {
-            return null;
+            return new Lookup(null, "type sans point de sortie (" + e.kind() + ")");
         }
         StructureShape shape = BalloonRegistry.shapeOf(e);
         if (shape == null) {
-            return null;
+            return new Lookup(null, "forme introuvable");
         }
         Vector3i local = e.rotation().toInverse().rotateYaw(new Vector3i(pos.x - e.x(), pos.y - e.y(), pos.z - e.z()), new Vector3i());
         StructureShape.Cell cell = shape.inBounds(local.x, local.y, local.z) ? shape.cellAt(local.x, local.y, local.z) : null;
         if (cell == null || !cell.baseName().startsWith("Furniture_Crude_Bed")) {
-            return null;
+            return new Lookup(null, "la case du prefab n'est pas un lit");
         }
         BlockType bt = SectionBlocks.typeAt(new SectionReader(world.getChunkStore()), pos.x, pos.y, pos.z);
-        return bt != null && BalloonManager.sameBlock(bt, cell) ? e : null;
+        if (bt == null || !BalloonManager.sameBlock(bt, cell)) {
+            return new Lookup(null, "bloc différent dans le monde");
+        }
+        return new Lookup(e, null);
     }
 
     /** World exit spot of a tent (feet), after the entry's rotation. */
@@ -158,28 +187,107 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
     }
 
     /** The player got up or woke up: puts them at the exit of the tent, if the bed belongs to a tent that has one. */
-    private static void getUp(Store<EntityStore> store, Ref<EntityStore> ref, World world, Vector3i bedPos) {
+    private static void getUp(Store<EntityStore> store, Ref<EntityStore> ref, World world, Vector3i bedPos, String source) {
+        String bedText = bedPos.x + ", " + bedPos.y + ", " + bedPos.z + " (" + source + ")";
         try {
             if (!ref.isValid()) {
+                LOGGER.at(Level.INFO).log("Lit de tente : lit en %s, abandon : joueur invalide", bedText);
                 return;
             }
             // Dead, or already on another mount (bed, seat, vehicle): not our business.
-            if (store.getComponent(ref, DeathComponent.getComponentType()) != null
-                    || store.getComponent(ref, MountedComponent.getComponentType()) != null) {
+            if (store.getComponent(ref, DeathComponent.getComponentType()) != null) {
+                LOGGER.at(Level.INFO).log("Lit de tente : lit en %s, abandon : joueur mort", bedText);
                 return;
             }
-            BalloonRegistry.Entry e = tentOfBed(world, bedPos);
+            if (store.getComponent(ref, MountedComponent.getComponentType()) != null) {
+                LOGGER.at(Level.INFO).log("Lit de tente : lit en %s, abandon : joueur remonté", bedText);
+                return;
+            }
+            Lookup found = lookup(world, bedPos);
+            BalloonRegistry.Entry e = found.entry();
             if (e == null) {
+                LOGGER.at(Level.INFO).log("Lit de tente : lit en %s, abandon : %s", bedText, found.why());
                 return;
             }
             Deployables.TentSpec spec = Deployables.get(e.kind()).tent;
             Vector3d pos = exitPosition(e, spec);
+            float yaw = exitYaw(e, spec);
             Rotation3f look = new Rotation3f();
-            look.setYaw(exitYaw(e, spec));
+            look.setYaw(yaw);
             store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(pos, look));
+            LOGGER.at(Level.INFO).log("Lit de tente : lit en %s, téléportation vers %.2f, %.2f, %.2f (lacet %.2f)",
+                    bedText, pos.x, pos.y, pos.z, yaw);
+            PENDING.put(ref, new Pending(world, bedPos, pos, yaw, System.currentTimeMillis() + SECOND_TELEPORT_MS,
+                    System.currentTimeMillis()));
             patchRespawnPoints(store, ref, world);
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Lit de tente : sortie non traitée");
+        }
+    }
+
+    /**
+     * Second teleport, sent shortly after the first one: the client may still be handling the end of the mount when the first
+     * teleport arrives, then puts the player back next to the bed. Called on every tick of each world. Never throws.
+     */
+    static void tick(Store<EntityStore> store, World world) {
+        if (PENDING.isEmpty()) {
+            return;
+        }
+        try {
+            long now = System.currentTimeMillis();
+            for (Map.Entry<Ref<EntityStore>, Pending> entry : PENDING.entrySet()) {
+                Ref<EntityStore> ref = entry.getKey();
+                Pending p = entry.getValue();
+                if (!ref.isValid() || now - p.created > STALE_MS) {
+                    PENDING.remove(ref, p);
+                    continue;
+                }
+                if (p.world != world || now < p.due) {
+                    continue;
+                }
+                PENDING.remove(ref, p);
+                world.execute(() -> secondTeleport(store, ref, p));
+            }
+        } catch (RuntimeException ex) {
+            LOGGER.at(Level.WARNING).withCause(ex).log("Lit de tente : seconde téléportation non traitée");
+        }
+    }
+
+    private static void secondTeleport(Store<EntityStore> store, Ref<EntityStore> ref, Pending p) {
+        try {
+            if (!ref.isValid()) {
+                LOGGER.at(Level.INFO).log("Lit de tente : seconde téléportation abandonnée : joueur invalide");
+                return;
+            }
+            if (store.getComponent(ref, DeathComponent.getComponentType()) != null) {
+                LOGGER.at(Level.INFO).log("Lit de tente : seconde téléportation abandonnée : joueur mort");
+                return;
+            }
+            if (store.getComponent(ref, MountedComponent.getComponentType()) != null) {
+                LOGGER.at(Level.INFO).log("Lit de tente : seconde téléportation abandonnée : joueur remonté");
+                return;
+            }
+            TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
+            if (t == null) {
+                LOGGER.at(Level.INFO).log("Lit de tente : seconde téléportation abandonnée : pas de position");
+                return;
+            }
+            Vector3d cur = t.getPosition();
+            double dx = cur.x - (p.bed.x + 0.5);
+            double dy = cur.y - p.bed.y;
+            double dz = cur.z - (p.bed.z + 0.5);
+            double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist > MAX_BED_DISTANCE) {
+                LOGGER.at(Level.INFO).log("Lit de tente : seconde téléportation abandonnée : joueur à %.2f bloc(s) du lit", dist);
+                return;
+            }
+            Rotation3f look = new Rotation3f();
+            look.setYaw(p.yaw);
+            store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(p.target, look));
+            LOGGER.at(Level.INFO).log("Lit de tente : seconde téléportation envoyée vers %.2f, %.2f, %.2f (joueur à %.2f bloc(s) du lit)",
+                    p.target.x, p.target.y, p.target.z, dist);
+        } catch (RuntimeException ex) {
+            LOGGER.at(Level.WARNING).withCause(ex).log("Lit de tente : seconde téléportation non traitée");
         }
     }
 

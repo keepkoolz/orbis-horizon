@@ -564,6 +564,9 @@ public final class BalloonManager {
         // puts the balloon and its contents back. T20: also valid for a flight without a pilot.
         // T74: animals captured in the cage of a transport balloon travel with the flight (also written in the resume file).
         flight.animals.addAll(CageAnimals.takeFromEntry(world, found.origin, found.rotation, kind.id));
+        // Ownership copied from the registry entry before it is removed (landing registers it again).
+        BalloonRegistry.Entry registered = BalloonRegistry.get(world, found.origin, found.rotation, kind.id);
+        flight.ownership = registered != null ? registered.ownership() : Ownership.NONE;
         BalloonResume.write(flight, found.origin, true);
 
         // T27: the blocks are going to disappear, the balloon is no longer locked during the flight (landing
@@ -589,7 +592,7 @@ public final class BalloonManager {
         if (balloon == null) {
             // Failure: the blocks are put back and normal walking is restored.
             TransportCage.pasteOverCage(world, found.origin, found.rotation, groundCage,
-                    () -> pastePrefab(kind, world, store, found.origin, found.rotation));
+                    () -> pastePrefab(kind, world, store, found.origin, found.rotation, landingOwnership(store, flight)));
             restoreBurner(kind, world, store, flight.burner, found.origin, found.rotation);
             restoreCargo(world, store, flight.cargo, found.origin, found.rotation);
             CageAnimals.place(world, found.origin, found.rotation, kind.id, flight.animals, groundCage);
@@ -959,19 +962,37 @@ public final class BalloonManager {
         mm.update(player.getPacketHandler());
     }
 
-    private void pastePrefab(Deployables.Kind kind, World world, Store<EntityStore> store, Vector3i origin, Rotation rotation) {
-        pastePrefab(kind, world, store, origin, rotation, null);
+    /**
+     * Ownership to register when a flight is put back down: Ownership.NONE for a transit balloon, otherwise
+     * Ownership.landingOwner with the pilot still aboard (valid ref) as fallback owner.
+     */
+    Ownership landingOwnership(Store<EntityStore> store, BalloonFlight flight) {
+        if (flight.transit != null) {
+            return Ownership.NONE;
+        }
+        Ref<EntityStore> ref = flight.pilotRef;
+        if (ref == null || !ref.isValid() || flight.pilotUuid == null) {
+            return Ownership.landingOwner(flight.ownership, null, null);
+        }
+        String name = null;
+        try {
+            PlayerRef pr = store.getComponent(ref, PlayerRef.getComponentType());
+            name = pr != null ? pr.getUsername() : null;
+        } catch (RuntimeException e) {
+            // The name stays unknown.
+        }
+        return Ownership.landingOwner(flight.ownership, flight.pilotUuid, name);
     }
 
-    /** Same with the owner registered for the placed structure (airship: the pilot). */
-    void pastePrefab(Deployables.Kind kind, World world, Store<EntityStore> store, Vector3i origin, Rotation rotation, UUID owner) {
+    /** Places the prefab of the given type and registers the structure with this ownership. */
+    void pastePrefab(Deployables.Kind kind, World world, Store<EntityStore> store, Vector3i origin, Rotation rotation, Ownership own) {
         Path path = PrefabStore.get().findAssetPrefabPath(kind.prefabPath);
         if (path == null) {
             LOGGER.at(Level.WARNING).log("Prefab %s introuvable pour l'atterrissage", kind.prefabPath);
             return;
         }
         try {
-            pasteKeepingTerrain(PrefabBufferUtil.getCached(path), world, kind.shape(), origin, rotation, 1 | 8, store, kind.id, owner);
+            pasteKeepingTerrain(PrefabBufferUtil.getCached(path), world, kind.shape(), origin, rotation, 1 | 8, store, kind.id, own);
         } catch (IOException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Prefab illisible, pose sans protection du terrain");
             PrefabUtil.paste(PrefabBufferUtil.getCached(path), world, new Vector3i(origin), rotation,
@@ -996,8 +1017,8 @@ public final class BalloonManager {
     static void pasteKeepingTerrain(com.hypixel.hytale.server.core.prefab.selection.buffer.impl.IPrefabBuffer buffer,
                                     World world, StructureShape s, Vector3i origin, Rotation rotation, int flags,
                                     com.hypixel.hytale.component.ComponentAccessor<EntityStore> accessor,
-                                    String kind, UUID owner) {
-        pasteKeepingTerrain(buffer, world, s, origin, rotation, flags, accessor, kind, owner, Integer.MIN_VALUE);
+                                    String kind, Ownership own) {
+        pasteKeepingTerrain(buffer, world, s, origin, rotation, flags, accessor, kind, own, Integer.MIN_VALUE);
     }
 
     /** True for the soil blocks of the station's grass layer (base names Soil_Grass and Soil_Dirt). */
@@ -1026,7 +1047,7 @@ public final class BalloonManager {
     static void pasteKeepingTerrain(com.hypixel.hytale.server.core.prefab.selection.buffer.impl.IPrefabBuffer buffer,
                                     World world, StructureShape s, Vector3i origin, Rotation rotation, int flags,
                                     com.hypixel.hytale.component.ComponentAccessor<EntityStore> accessor,
-                                    String kind, UUID owner, int keepLayerY) {
+                                    String kind, Ownership own, int keepLayerY) {
         List<Terrain> kept = new ArrayList<>();
         SectionReader reader = new SectionReader(world.getChunkStore());
         List<StructureShape.Cell> protectedCells = new ArrayList<>(s.unfoldedLadder());
@@ -1061,7 +1082,7 @@ public final class BalloonManager {
             LOGGER.at(Level.INFO).log("Pose : %d case(s) d'échelle laissée(s) au terrain", kept.size());
         }
         // T27: the placed balloon is locked (block breaking and placing cancelled, BalloonLockSystems).
-        BalloonRegistry.add(world, origin, rotation, kind, owner);
+        BalloonRegistry.add(world, origin, rotation, kind, own);
     }
 
     /** Balloon type of a crate's prefab (T54), null if the given prefab is not a balloon's. */
@@ -1161,9 +1182,9 @@ public final class BalloonManager {
         int cageRemaining = flight.groundCage > 0 ? TransportCage.remainingDescent(origin.y, flight.cageHome.y, flight.groundCage) : 0;
         if (flight.groundCage > 0) {
             TransportCage.pasteOverCage(flight.world, origin, rotation, cageRemaining,
-                    () -> pastePrefab(flight.kind, flight.world, store, origin, rotation));
+                    () -> pastePrefab(flight.kind, flight.world, store, origin, rotation, landingOwnership(store, flight)));
         } else {
-            pastePrefab(flight.kind, flight.world, store, origin, rotation);
+            pastePrefab(flight.kind, flight.world, store, origin, rotation, landingOwnership(store, flight));
         }
         if (flight.transit != null) {
             // Transit balloon: no burner bench, the flame stays lit while it rests at the dock.
@@ -1325,7 +1346,7 @@ public final class BalloonManager {
         Ref<EntityStore> balloon = spawnModelEntity(store, displayPosition(kind, flight.entityPos, rotation), rotation, modelId);
         if (balloon == null) {
             if (fromBlocks) {
-                pastePrefab(kind, world, store, origin, rotation);
+                pastePrefab(kind, world, store, origin, rotation, Ownership.NONE); // transit: no ownership
                 try {
                     setBurnerLit(world, s.burner().rotated(rotation).add(origin), true);
                 } catch (RuntimeException e) {
@@ -2006,6 +2027,35 @@ public final class BalloonManager {
         }
         PlayerRef player = ref.isValid() ? store.getComponent(ref, PlayerRef.getComponentType()) : null;
         String name = player != null ? player.getUsername() : String.valueOf(flight.pilotUuid);
+        if (dead && !flight.driven && ref.isValid()) {
+            // Take-over landing: a free-flying pilot died, the balloon lands in place with its own orientation and the
+            // passengers are freed (and unprotected by clearPose) so one of them can fly it again. Fallback: T39 below.
+            TransformComponent pilotPos = store.getComponent(ref, TransformComponent.getComponentType());
+            if (pilotPos != null) {
+                int count = flight.passengers.size();
+                flight.takeOver = true;
+                Message error = null;
+                try {
+                    error = landWith(store, flight, pilotPos, flight.rotation);
+                } catch (RuntimeException e) {
+                    LOGGER.at(Level.WARNING).withCause(e).log("Pose sur place après la mort du pilote %s en échec", name);
+                    error = Texts.t("error.noRoom");
+                }
+                if (error == null) {
+                    // finishFlight removed the entities and restored the pilot's movement settings; make sure of it.
+                    if (player != null) {
+                        try {
+                            setPilotFlying(store, ref, player, false);
+                        } catch (RuntimeException e) {
+                            LOGGER.at(Level.WARNING).withCause(e).log("Réglages de déplacement de %s non remis à la normale", name);
+                        }
+                    }
+                    LOGGER.at(Level.INFO).log("Pilote %s mort en vol : montgolfière posée sur place, %d passager(s) libéré(s)", name, count);
+                    return;
+                }
+                flight.takeOver = false;
+            }
+        }
         for (BalloonFlight.Passenger p : flight.passengers) {
             if (ref.equals(p.ref)) {
                 releaseDeadPassenger(store, flight, p);
@@ -2681,7 +2731,9 @@ public final class BalloonManager {
             final BalloonResume.Record placed = rec;
             int cageRemaining = rec.cageDescent() > 0 ? TransportCage.remainingDescent(rec.origin().y, rec.cageHomeY(), rec.cageDescent()) : 0;
             TransportCage.pasteOverCage(world, rec.origin(), rec.rotation(), cageRemaining,
-                    () -> pastePrefab(placed.kind(), world, store, placed.origin(), placed.rotation()));
+                    () -> pastePrefab(placed.kind(), world, store, placed.origin(), placed.rotation(),
+                            // The file keeps no pilot name and, for a pilotless flight, only a random id: no fallback owner.
+                            Ownership.landingOwner(placed.ownership(), null, null)));
             restoreBurner(rec.kind(), world, store, rec.burner(), rec.origin(), rec.rotation());
             restoreCargo(world, store, rec.cargo(), rec.origin(), rec.rotation());
             // T74: animals of the cage found again by UUID, or recreated from their role.
@@ -2731,6 +2783,7 @@ public final class BalloonManager {
                 if (online != null) {
                     MountUtil.unseat(store, online);
                     clearSittingFlag(store, online);
+                    PassengerProtection.clearStale(store, online); // the registry did not survive the restart
                     TransformComponent pt = store.getComponent(online, TransformComponent.getComponentType());
                     Rotation3f look = pt != null ? new Rotation3f(pt.getRotation()) : new Rotation3f();
                     store.putComponent(online, Teleport.getComponentType(), Teleport.createForPlayer(spot, look));
@@ -2893,6 +2946,7 @@ public final class BalloonManager {
             }
             p.boardedMs = now;
             flight.passengers.add(p);
+            PassengerProtection.protect(store, p.ref); // Store accessor: the marker is visible at once
             try {
                 if (p.mode == BalloonFlight.PassengerMode.MOUNT) {
                     mountPassenger(store, flight, p);
@@ -2965,6 +3019,7 @@ public final class BalloonManager {
 
     /** T25: undoes a passenger's seated pose (landing, departure). Never throws. */
     static void clearPose(Store<EntityStore> store, BalloonFlight.Passenger p) {
+        PassengerProtection.release(store, p.ref); // every exit path of a passenger goes through here
         PassengerCamera.reset(store, p); // before any teleport to a drop point
         try {
             if (p.poseStatesOn) {
@@ -3164,7 +3219,7 @@ public final class BalloonManager {
                 }
                 // T118: camera anchor, mannequins and hidden body (PassengerSeatView), the camera is attached to the anchor.
                 PassengerSeatView.sync(store, p, new PassengerSeatView.Ctx(flight.balloonUuid, flight.balloonRef, flight.observerRef,
-                        flight.dual, flight.pilotUuid, attachOffset(flight.kind, p.seatLocal), seatWorld, flight.seatViews, false), now);
+                        flight.dual, flight.pilotUuid, attachOffset(flight.kind, p.seatLocal), seatWorld, flight.seatViews, false, flight), now);
                 PassengerCamera.safetyTeleport(store, p, seatWorld);
                 continue;
             }
@@ -3260,13 +3315,48 @@ public final class BalloonManager {
                 }
                 PlayerRef pr = store.getComponent(p.ref, PlayerRef.getComponentType());
                 if (pr != null) {
-                    pr.sendMessage(Texts.t("landedStandUp"));
+                    pr.sendMessage(Texts.t(flight.takeOver ? "pilotDiedTakeOver" : "landedStandUp"));
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Passager %s non démonté proprement", p.name);
             }
         }
         flight.passengers.clear();
+    }
+
+    private final Map<String, Long> nextProtectionSweep = new ConcurrentHashMap<>();
+
+    /**
+     * Safety net of the passenger protection, at most once a second per world: every protected player of this world who is
+     * aboard no flight (balloon passengers, seated dry-descent pilots, airship riders) is released. Never throws.
+     */
+    void sweepProtection(Store<EntityStore> store, World world) {
+        try {
+            long now = System.currentTimeMillis();
+            Long next = nextProtectionSweep.get(world.getName());
+            if (next != null && now < next) {
+                return;
+            }
+            nextProtectionSweep.put(world.getName(), now + 1000);
+            Set<Ref<EntityStore>> aboard = new HashSet<>();
+            for (BalloonFlight f : flights.values()) {
+                if (f.world == world) {
+                    for (BalloonFlight.Passenger p : f.passengers) {
+                        aboard.add(p.ref);
+                    }
+                }
+            }
+            for (AirshipFlight f : AirshipManager.get().flights()) {
+                if (f.world == world) {
+                    for (AirshipPassengers.Rider r : f.riders) {
+                        aboard.add(r.p.ref);
+                    }
+                }
+            }
+            PassengerProtection.sweep(store, world, aboard);
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Balayage de la protection des passagers impossible");
+        }
     }
 
     /** Diagnostic text about the passengers of a flight. */
@@ -3285,7 +3375,9 @@ public final class BalloonManager {
                     .append(p.mode == BalloonFlight.PassengerMode.MOUNT ? (mc != null && f.balloonRef != null
                             && mountEntity(f).equals(mc.getMountedToEntity()) ? " mounted" : " NOT mounted") : "")
                     .append(" losses ").append(p.losses).append(" pose ").append(p.pose.describe())
-                    .append(p.mode == BalloonFlight.PassengerMode.CAMERA ? " " + PassengerSeatView.describe(p) : "");
+                    .append(p.mode == BalloonFlight.PassengerMode.CAMERA ? " " + PassengerSeatView.describe(p) : "")
+                    .append(" protected ").append(PassengerProtection.isProtected(p.ref) ? "yes" : "no")
+                    .append(", intangible by mod ").append(PassengerProtection.addedByMod(p.ref) ? "yes" : "no");
             MovementStatesComponent msc = p.ref.isValid()
                     ? store.getComponent(p.ref, MovementStatesComponent.getComponentType()) : null;
             if (msc != null && msc.getMovementStates() != null) {
@@ -3410,6 +3502,7 @@ public final class BalloonManager {
                 if (online != null) {
                     MountUtil.unseat(store, online);
                     clearSittingFlag(store, online);
+                    PassengerProtection.clearStale(store, online); // the registry did not survive the restart
                     TransformComponent pt = store.getComponent(online, TransformComponent.getComponentType());
                     Rotation3f look = pt != null ? new Rotation3f(pt.getRotation()) : new Rotation3f();
                     store.putComponent(online, Teleport.getComponentType(), Teleport.createForPlayer(spot, look));
@@ -3429,6 +3522,8 @@ public final class BalloonManager {
             if (pr == null) {
                 return;
             }
+            // T126: a marker the mod placed and could not remove (world change, crash) is removed on every arrival.
+            PassengerProtection.clearOnArrival(holder, pr.getUuid());
             BalloonResume.Stranded st = BalloonResume.takeStranded(pr.getUuid(), world.getName());
             if (st == null) {
                 return;
@@ -3667,8 +3762,8 @@ public final class BalloonManager {
         List<Occupant> list = new ArrayList<>();
         for (PlayerRef p : world.getPlayerRefs()) {
             Ref<EntityStore> ref = p.getReference();
-            if (ref == null || !ref.isValid()) {
-                continue;
+            if (ref == null || !ref.isValid() || isDead(store, ref)) {
+                continue; // a dead player (body left in the gondola) is neither pilot nor passenger
             }
             TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
             if (t == null) {

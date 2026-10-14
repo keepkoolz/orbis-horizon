@@ -33,6 +33,8 @@ final class AirshipFlight {
     volatile UUID pilotUuid;
     volatile Ref<EntityStore> pilotRef;
     volatile String pilotName = "?";
+    /** Ownership of the structure, copied from the registry at take-off (NONE if it had no entry), registered again at landing. */
+    volatile Ownership ownership = Ownership.NONE;
     final World world;
     final Deployables.Kind kind;
     Ref<EntityStore> shipRef;
@@ -200,6 +202,8 @@ final class AirshipFlight {
     long nextLandingRetryMs;
     /** The end of the flight is being processed (no more ticks). */
     volatile boolean finishing;
+    /** The pilot died and the ship lands in place so a rider can take over: changes the riders' landing message. */
+    volatile boolean takeOver;
 
     /** Diagnostic: last collision description and the number of rejected moves. */
     volatile String lastCollision = "none";

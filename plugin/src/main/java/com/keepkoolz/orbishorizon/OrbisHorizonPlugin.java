@@ -5,6 +5,7 @@ import com.hypixel.hytale.server.core.event.events.player.AddPlayerToWorldEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.events.AddWorldEvent;
 import com.hypixel.hytale.server.core.universe.world.events.StartWorldEvent;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
@@ -73,6 +74,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         // Transit: station network (stations.json).
         TransitNetwork.get().load(getDataDirectory());
         TransitSettings.load(getDataDirectory());
+        PassengerProtection.load(getDataDirectory());
         try {
             getEntityStoreRegistry().registerSystem(new BalloonLockSystems.Break());
             getEntityStoreRegistry().registerSystem(new BalloonLockSystems.Damage());
@@ -97,6 +99,12 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             getEntityStoreRegistry().registerSystem(new GameModeSystem());
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Sortie du véhicule au changement de mode de jeu : système désactivé");
+        }
+        // Passengers aboard cannot be damaged (the Intangible marker is handled by PassengerProtection.protect).
+        try {
+            getEntityStoreRegistry().registerSystem(new PassengerProtection.DamageFilter());
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Protection des passagers contre les dégâts désactivée");
         }
         // T82: dual rendering of the vehicles in flight needs the per-viewer visibility filter. Without it every flight keeps the single entity.
         try {
@@ -129,6 +137,19 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             BalloonManager.get().landAll();
             AirshipManager.get().landAll();
             BalloonRegistry.flushCage();
+        });
+        // World map markers of the stations, registered on every world like the game's warps.
+        getEventRegistry().registerGlobal(AddWorldEvent.class, event -> {
+            try {
+                StationMarkerProvider.register(event.getWorld());
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des stations non enregistrés");
+            }
+            try {
+                OwnedMarkerProvider.register(event.getWorld());
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des véhicules non enregistrés");
+            }
         });
         getEventRegistry().registerGlobal(StartWorldEvent.class, event -> {
             BalloonManager.get().recoverWorld(event.getWorld());
@@ -185,6 +206,16 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         }
         // Worlds already started when the plugin starts (StartWorldEvent has already passed).
         for (World world : Universe.get().getWorlds().values()) {
+            try {
+                StationMarkerProvider.register(world);
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des stations non enregistrés pour %s", world.getName());
+            }
+            try {
+                OwnedMarkerProvider.register(world);
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des véhicules non enregistrés pour %s", world.getName());
+            }
             // One failing resume must never stop the plugin: StartWorldEvent calls them again when the world is ready.
             try {
                 BalloonManager.get().recoverWorld(world);

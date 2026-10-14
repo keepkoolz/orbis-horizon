@@ -490,6 +490,9 @@ final class AirshipManager {
         // T63: the level and the upgrade items of the upgraded benches are kept (the game would drop the items as a refund).
         f.benches = AirshipBenches.takeFrom(world, s, origin, rotation);
         // The resume file is written (fsync) before the blocks are removed: from now on the contents only exist in memory.
+        // Ownership copied from the registry entry before it is removed (landing registers it again).
+        BalloonRegistry.Entry registered = BalloonRegistry.get(world, origin, rotation, kind.id);
+        f.ownership = registered != null ? registered.ownership() : Ownership.NONE;
         AirshipResume.write(f, true);
         BalloonRegistry.remove(world, origin, rotation, kind.id);
         int removed = BalloonManager.removeBlocks(world, s, origin, rotation, true);
@@ -497,7 +500,8 @@ final class AirshipManager {
 
         Ref<EntityStore> ship = BalloonManager.get().spawnModelEntity(store, new Vector3d(f.pos), visualYaw(f.theta), spec.idleModelId);
         if (ship == null) {
-            BalloonManager.get().pastePrefab(kind, world, store, origin, rotation, player.getUuid());
+            BalloonManager.get().pastePrefab(kind, world, store, origin, rotation,
+                    Ownership.landingOwner(f.ownership, player.getUuid(), player.getUsername()));
             BalloonManager.get().restoreCargo(world, store, f.cargo, origin, rotation);
             f.engines.restore(world, store, origin, rotation);
             f.benches.restore(world, store, origin, rotation);
@@ -1931,7 +1935,8 @@ final class AirshipManager {
         stopCarry(store, f);
         removeLights(store, f);
         cancelSmoke(f);
-        BalloonManager.get().pastePrefab(f.kind, f.world, store, origin, rotation, f.pilotUuid);
+        BalloonManager.get().pastePrefab(f.kind, f.world, store, origin, rotation,
+                Ownership.landingOwner(f.ownership, f.pilotRef != null ? f.pilotUuid : null, f.pilotRef != null ? f.pilotName : null));
         BalloonManager.get().restoreCargo(f.world, store, f.cargo, origin, rotation);
         if (f.engines != null) {
             f.engines.restore(f.world, store, origin, rotation); // T57: fuel left and charcoal go back into the engines
@@ -2120,6 +2125,18 @@ final class AirshipManager {
         detachShip(store, f);
         collapseView(store, f); // T82
         restorePilotMovement(store, ref);
+        if (dead) {
+            // Take-over landing: pilotRef is nulled first so releasePilot neither teleports nor messages the dead pilot.
+            f.takeOver = true;
+            f.pilotRef = null;
+            f.yawRate = 0; f.yawAcc = 0;
+            f.hasTarget = false;
+            if (landImmediately(f)) {
+                LOGGER.at(Level.INFO).log("Pilote %s mort en vol : dirigeable posé sur place", f.pilotName);
+                return;
+            }
+            f.takeOver = false;
+        }
         UUID oldId = f.id;
         flights.remove(oldId);
         f.id = UUID.randomUUID();
@@ -2308,7 +2325,8 @@ final class AirshipManager {
                     break;
                 }
             }
-            BalloonManager.get().pastePrefab(Deployables.AIRSHIP, world, store, origin, q, rec.pilot());
+            BalloonManager.get().pastePrefab(Deployables.AIRSHIP, world, store, origin, q,
+                    Ownership.landingOwner(rec.ownership(), rec.pilot(), null));
             BalloonManager.get().restoreCargo(world, store, rec.cargo(), origin, q);
             if (rec.engines() != null) {
                 rec.engines().restore(world, store, origin, q); // T57: absent in older resume files

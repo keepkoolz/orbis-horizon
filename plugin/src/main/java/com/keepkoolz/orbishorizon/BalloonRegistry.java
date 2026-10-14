@@ -47,7 +47,18 @@ final class BalloonRegistry {
      * balloon, 0 and closed for every other type) nor the captured animals (T74, at most 3, immutable list) count in equality: an entry is found by world, origin, rotation and kind.
      */
     record Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
-                 java.util.List<CageAnimals.Animal> animals) {
+                 java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared) {
+        /** The ownership data of the entry (id, owner, owner name, sharing). */
+        Ownership ownership() {
+            return new Ownership(id, owner, ownerName, shared);
+        }
+
+        /** An entry with cage state and animals but no ownership data beyond the owner. */
+        Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
+              java.util.List<CageAnimals.Animal> animals) {
+            this(world, x, y, z, rotation, kind, owner, descent, open, animals, null, null, false);
+        }
+
         /** An entry without cage state (every type except the transport balloon, T73). */
         Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner) {
             this(world, x, y, z, rotation, kind, owner, 0, false, java.util.List.of());
@@ -79,6 +90,7 @@ final class BalloonRegistry {
 
     static void init(Path dataDirectory) {
         file = dataDirectory.resolve("deployed.json");
+        ENTRIES.clear();
         load();
     }
 
@@ -96,6 +108,18 @@ final class BalloonRegistry {
                 if (k == null || !k.isBalloon()) {
                     continue;
                 }
+                list.add(e);
+            }
+        }
+        return list;
+    }
+
+    /** Every deployed structure registered for this world, whatever its type (world map markers). */
+    static java.util.List<Entry> allIn(World world) {
+        java.util.List<Entry> list = new java.util.ArrayList<>();
+        String name = world.getName();
+        for (Entry e : ENTRIES) {
+            if (e.world.equals(name)) {
                 list.add(e);
             }
         }
@@ -151,7 +175,8 @@ final class BalloonRegistry {
         if (old == null) {
             return null;
         }
-        Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, descent, open, old.animals);
+        Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, descent, open, old.animals,
+                old.id, old.ownerName, old.shared);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         cageDirty = true;
@@ -171,7 +196,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                java.util.List.copyOf(animals));
+                java.util.List.copyOf(animals), old.id, old.ownerName, old.shared);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -196,13 +221,63 @@ final class BalloonRegistry {
 
     /** Registers a deployed structure of the given type, with its owner (nullable). No effect if already there. Never throws. */
     static synchronized void add(World world, Vector3i origin, Rotation rotation, String kind, UUID owner) {
+        add(world, origin, rotation, kind, Ownership.of(owner, null));
+    }
+
+    /** Registers a deployed structure with its ownership data (the id is created if absent). No effect if already there. Never throws. */
+    static synchronized void add(World world, Vector3i origin, Rotation rotation, String kind, Ownership own) {
         try {
-            if (ENTRIES.add(new Entry(world.getName(), origin.x, origin.y, origin.z, rotation, kind, owner))) {
-                save();
-            }
+            addNamed(world.getName(), origin, rotation, kind, own);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Structure « %s » non enregistrée dans le registre de verrouillage", kind);
         }
+    }
+
+    /** Same as add with the world name (also used by tests, a World cannot be built outside the game). */
+    static synchronized void addNamed(String worldName, Vector3i origin, Rotation rotation, String kind, Ownership own) {
+        Ownership o = own.withId();
+        if (ENTRIES.add(new Entry(worldName, origin.x, origin.y, origin.z, rotation, kind, o.owner(), 0, false,
+                java.util.List.of(), o.id(), o.ownerName(), o.shared()))) {
+            save();
+        }
+    }
+
+    /** Test hook: the entries of a world by name. */
+    static java.util.List<Entry> entriesOfNameForTest(String worldName) {
+        java.util.List<Entry> list = new java.util.ArrayList<>();
+        for (Entry e : ENTRIES) {
+            if (e.world.equals(worldName)) {
+                list.add(e);
+            }
+        }
+        return list;
+    }
+
+    /** The entry with this structure id, in any world, or null. */
+    static Entry byId(UUID id) {
+        if (id == null) {
+            return null;
+        }
+        for (Entry e : ENTRIES) {
+            if (id.equals(e.id)) {
+                return e;
+            }
+        }
+        return null;
+    }
+
+    /** Sets the sharing of the entry with this id, written at once. Returns the new entry, null if unknown. */
+    static synchronized Entry setShared(UUID id, boolean shared) {
+        Entry old = byId(id);
+        if (old == null) {
+            return null;
+        }
+        Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
+                old.animals, old.id, old.ownerName, shared);
+        ENTRIES.remove(old);
+        ENTRIES.add(next);
+        save();
+        return next;
     }
 
     /** Removes a structure from the registry, whatever its owner. Never throws. */
@@ -335,11 +410,17 @@ final class BalloonRegistry {
         }
         try {
             BsonDocument doc = BsonDocument.parse(Files.readString(f, StandardCharsets.UTF_8));
+            boolean idCreated = false;
             for (org.bson.BsonValue v : doc.getArray("balloons")) {
                 BsonDocument d = v.asDocument();
                 // Version 1: no kind, it is a balloon. Version 2: kind and owner (absent if null).
                 String kind = d.containsKey("kind") ? d.getString("kind").getValue() : Deployables.BALLOON_KIND;
-                UUID owner = d.containsKey("owner") ? UUID.fromString(d.getString("owner").getValue()) : null;
+                Ownership read = Ownership.readFrom(d);
+                Ownership own = read.withId();
+                if (read.id() == null) {
+                    idCreated = true;
+                }
+                UUID owner = own.owner();
                 ENTRIES.add(new Entry(d.getString("world").getValue(), d.getNumber("x").intValue(),
                         d.getNumber("y").intValue(), d.getNumber("z").intValue(),
                         Rotation.valueOf(d.getString("rotation").getValue()), kind, owner,
@@ -347,7 +428,12 @@ final class BalloonRegistry {
                         d.containsKey("descent") ? d.getNumber("descent").intValue() : 0,
                         d.containsKey("open") && d.getBoolean("open").getValue(),
                         // T74: captured animals, absent in older files.
-                        d.containsKey("animals") ? CageAnimals.fromBson(d.getArray("animals")) : java.util.List.of()));
+                        d.containsKey("animals") ? CageAnimals.fromBson(d.getArray("animals")) : java.util.List.of(),
+                        own.id(), own.ownerName(), own.shared()));
+            }
+            if (idCreated) {
+                // Persist the created ids so they stay stable across restarts.
+                save();
             }
             LOGGER.at(Level.INFO).log("Registre de verrouillage : %d structure(s)", ENTRIES.size());
         } catch (IOException | RuntimeException e) {
@@ -377,9 +463,7 @@ final class BalloonRegistry {
                 d.put("z", new BsonInt32(e.z));
                 d.put("rotation", new BsonString(e.rotation.name()));
                 d.put("kind", new BsonString(e.kind));
-                if (e.owner != null) {
-                    d.put("owner", new BsonString(e.owner.toString()));
-                }
+                e.ownership().writeTo(d);
                 if (e.descent > 0) {
                     d.put("descent", new BsonInt32(e.descent));
                 }
