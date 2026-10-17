@@ -86,6 +86,9 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
                     .param("time", BalloonManager.durationText(secs)));
             events.addEventBinding(CustomUIEventBindingType.Activating, sel, EventData.of("Dest", o.name));
         }
+        events.addEventBinding(CustomUIEventBindingType.Activating, "#HireButton", EventData.of("Action", "Hire"));
+        cmd.set("#RecallButton.Visible", AirshipRecall.canOffer(world, playerRef.getUuid()));
+        events.addEventBinding(CustomUIEventBindingType.Activating, "#RecallButton", EventData.of("Action", "Recall"));
         events.addEventBinding(CustomUIEventBindingType.Activating, "#CloseButton", EventData.of("Action", "Close"));
     }
 
@@ -128,11 +131,42 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
             case DOCKED -> Message.translation(base + "docked").param("seconds", StationQueue.secondsLeft(station));
             case DEPARTING -> Message.translation(base + "departing");
             case ARRIVING -> Message.translation(base + "arriving");
+            case RECALL -> Message.translation(base + "recall");
         };
     }
 
     @Override
     public void handleDataEvent(Ref<EntityStore> ref, Store<EntityStore> store, Data data) {
+        if ("Hire".equals(data.action)) {
+            if (!StationMaster.holds(station, playerRef.getUuid())) {
+                playerRef.sendMessage(Texts.t("transit.master.expired"));
+                finished = true;
+                close();
+                return;
+            }
+            Message error = PilotContract.buy(store, ref, playerRef);
+            if (error != null) {
+                playerRef.sendMessage(error);
+            }
+            finish();
+            close();
+            return;
+        }
+        if ("Recall".equals(data.action)) {
+            if (!StationMaster.holds(station, playerRef.getUuid())) {
+                playerRef.sendMessage(Texts.t("transit.master.expired"));
+                finished = true;
+                close();
+                return;
+            }
+            Message refusal = AirshipRecall.start(store, store.getExternalData().getWorld(), playerRef, station);
+            if (refusal != null) {
+                playerRef.sendMessage(refusal);
+            }
+            finish();
+            close();
+            return;
+        }
         if (data.dest != null && !data.dest.isEmpty()) {
             if (!StationMaster.holds(station, playerRef.getUuid())) {
                 // Reservation lost (8 blocks, 60 s, or taken by another player): the click is ignored.

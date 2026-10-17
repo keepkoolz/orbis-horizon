@@ -17,11 +17,24 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
         StationMaster.tickReservations(store, store.getExternalData().getWorld());
         // Transit: destination queues and quay state machines of the stations of this world.
         StationQueue.tick(store, store.getExternalData().getWorld());
+        // Lot 2: NPC pilots of landed airships waiting for their entity, outfit and wiring checks.
+        try {
+            AirshipCrew.tick(store, store.getExternalData().getWorld());
+        } catch (RuntimeException e) {
+            com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(e).log("Pilote : tick en échec");
+        }
         // T121: preview of the structure while a deployment crate is held.
         HeldCratePreview.tick(store, store.getExternalData().getWorld());
         // Passenger protection: players no longer aboard any flight lose their marker (safety net, at most once a second).
         BalloonManager.get().sweepProtection(store, store.getExternalData().getWorld());
         // T125: second teleport of a player who got up from a tent bed.
         TentBedSystem.tick(store, store.getExternalData().getWorld());
+        CaptainMap.tick(store, store.getExternalData().getWorld()); // T141: never throws
+        // Glider jump: passengers taking a glider in hand.
+        try {
+            GliderJump.tick(store, store.getExternalData().getWorld());
+        } catch (RuntimeException e) {
+            com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(e).log("Saut en glider : tick en échec");
+        }
     }
 }

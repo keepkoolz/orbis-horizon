@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.8
+
+This release brings your own pilot. Hire one, let them fly you to your markers or to a station, call your airship to a station when you need it, and jump off with a glider. Tents now keep their contents in the crate.
+
+### Added
+
+- The small tent now has a small chest outside, on the right side as you face the entrance.
+- Packing a tent keeps the contents of its chests and campfire inside the full crate instead of dropping them on the ground. Set the crate up again, anywhere, even after storing it, dropping it or handing it to another player, and everything goes back into the same chest or campfire, in the same slot. A crate that you craft starts with an empty tent.
+- You can call your airship to a balloon station. Talk to the stationmaster and pick Recall my airship (you need an airship with a pilot, parked in the same world). The ship comes in without using fuel and settles above the station with a ladder down to the boarding platform. You have a minute to climb aboard, and anyone still on the ladder at take-off is lifted onto the deck. Give the pilot an order or take the helm to leave early. At the end the pilot asks where to go, or moves the ship about 70 blocks away so the quay is free. A server restart or a removed station never leaves the airship above the station.
+- The workbenches and furnaces on the airship keep what is inside them during the flight, like the chests and the fuel tank. Take-off is no longer refused when a workbench is not empty.
+- You can hire a pilot for your airship. Buy a pilot contract from a stationmaster (30 gold bars, 20 silver bars and 10 concentrated life essences) and use it on the helm of your landed airship. Talk to the pilot: "I take the helm" sends them to sit on the stool so you can fly, "Take the helm back" sends them back to the helm. They walk through the cabin door between the two. The helm refuses to take off while the pilot holds it or has not sat down yet. The pilot's stool is no passenger seat (14 passengers instead of 15). In flight the pilot appears as a seated mannequin on the stool and sits back down when you land. The pilot is found again after a restart and goes away with the airship when an admin removes it.
+- Your pilot can now fly you somewhere. Talk to the pilot and pick Take us to..., then one of your map markers (including the ones shared with the whole world) or a balloon station that is at least 32 blocks away. You sit in the captain's chair, the pilot flies the airship alone (climbing over obstacles, burning fuel as when you fly) and sets it down in the air above the destination, or 70 blocks from a station's pad. You get a captain's map for the trip: select it and, after a 3, 2, 1 countdown, the pilot stops and lands where the airship is. Change item to cancel. The map disappears at the end of every trip. The pilot also stops if the fuel runs out, if the way is blocked, or if you die, leave the game or change game mode.
+- Balloon stations now keep a protected area around their landing pad (32 blocks around it, up to 40 blocks above it). You cannot set up a balloon, an airship or a tent crate close to a station, and you cannot choose to land a balloon or the airship there. The message names the station. If something forces a landing there (the fuel runs out, the pilot dies, you leave the game), the vehicle is still set down safely.
+- You can only own one airship at a time. A second airship crate is refused while you already have one, on the ground or in flight, in any world. Crafting several crates is still allowed.
+- The chart on the desk of the airship cabin is now a captain's chart. Use it to pick a destination without talking to the pilot. If the pilot is at the helm, the airship leaves right away. If the pilot is sitting on the stool, they walk to the helm first, then you are off. You need a pilot, and only the captain can use it.
+- Passengers of balloons and of the airship can now jump with a glider. Take a glider in hand while you fly as a passenger, wait a moment and a countdown appears. At the end you drop out under the vehicle, glider in hand, and you click to open it. Switch items during the countdown to cancel. The pilot cannot jump.
+
+### Changed
+
+- The smoke from the airship burners now rises at the tip of the flames and is thinner and paler, so it no longer fills the screen.
+- The outside view of the airship is steadier. It no longer re-centres while the ship turns, only when it moves in a new direction, and the camera sits further back.
+- The protected area around a station is smaller, 32 blocks around the landing pad and 40 blocks above it.
+
+### Fixed
+
+- Your pilot no longer gets stuck against the counter in the cabin when walking between the helm and the stool. If they ever do, they put themselves back at their post, or you can type `/orbishorizon airship pilot reset`.
+- Calling an airship that was parked far from any player no longer loses what was inside its chests, furnaces and fuel tank, nor the level of its upgraded workbenches. If something cannot be read, the airship (or the tent being packed) stays put and you are asked to come closer.
+
 ## v1.7
 
 ### Added
@@ -11,7 +39,7 @@
 
 ### Changed
 
-- Passengers of balloons (large, animal transport and public transport) now see the balloon from the outside, from behind and a little above, instead of from their seat. They can see themselves seated. The airship keeps the seat view.
+- Passengers of balloons (large, animal transport and public transport) now see the balloon from the outside, from behind and a little above, instead of from their seat. They can see themselves seated. Airship passengers (and the captain in the chair during a voyage) get the same outside view, from behind the ship.
 - `/orbishorizon map share` and `unshare` can be used by any player for their own vehicles. All the other `/orbishorizon` commands stay reserved to operators.
 
 ### Fixed

@@ -47,7 +47,13 @@ final class BalloonRegistry {
      * balloon, 0 and closed for every other type) nor the captured animals (T74, at most 3, immutable list) count in equality: an entry is found by world, origin, rotation and kind.
      */
     record Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
-                 java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared) {
+                 java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall) {
+        /** An entry without a recall mark. */
+        Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
+              java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew) {
+            this(world, x, y, z, rotation, kind, owner, descent, open, animals, id, ownerName, shared, crew, null);
+        }
+
         /** The ownership data of the entry (id, owner, owner name, sharing). */
         Ownership ownership() {
             return new Ownership(id, owner, ownerName, shared);
@@ -56,7 +62,7 @@ final class BalloonRegistry {
         /** An entry with cage state and animals but no ownership data beyond the owner. */
         Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
               java.util.List<CageAnimals.Animal> animals) {
-            this(world, x, y, z, rotation, kind, owner, descent, open, animals, null, null, false);
+            this(world, x, y, z, rotation, kind, owner, descent, open, animals, null, null, false, null);
         }
 
         /** An entry without cage state (every type except the transport balloon, T73). */
@@ -138,6 +144,17 @@ final class BalloonRegistry {
         return list;
     }
 
+    /** The deployed structures of exactly this type, all worlds together (one airship per player). */
+    static java.util.List<Entry> entriesOfKindAllWorlds(String kindId) {
+        java.util.List<Entry> list = new java.util.ArrayList<>();
+        for (Entry e : ENTRIES) {
+            if (e.kind.equals(kindId)) {
+                list.add(e);
+            }
+        }
+        return list;
+    }
+
     /** The entry of this structure (equality: world, origin, rotation, kind), null if none (T73). */
     static Entry get(World world, Vector3i origin, Rotation rotation, String kind) {
         Entry probe = new Entry(world.getName(), origin.x, origin.y, origin.z, rotation, kind, null);
@@ -163,6 +180,55 @@ final class BalloonRegistry {
         return TransportCage.shapeFor(base, e.descent(), e.open());
     }
 
+    /**
+     * Mark of an airship waiting above a station for a recall (T145): the quay it holds (flight id), the station (origin and rotation),
+     * where the ship appeared and the temporary ladder cells (flat triples x, y, z). Removed with the entry when the ship takes off.
+     */
+    record Recall(UUID quayId, int stationX, int stationY, int stationZ, Rotation stationRotation, double spawnX, double spawnZ,
+                  int[] ladders) {
+        BsonDocument toBson() {
+            BsonDocument d = new BsonDocument();
+            d.put("quay", new BsonString(quayId.toString()));
+            d.put("sx", new BsonInt32(stationX));
+            d.put("sy", new BsonInt32(stationY));
+            d.put("sz", new BsonInt32(stationZ));
+            d.put("srot", new BsonString(stationRotation.name()));
+            d.put("spawnX", new org.bson.BsonDouble(spawnX));
+            d.put("spawnZ", new org.bson.BsonDouble(spawnZ));
+            org.bson.BsonArray a = new org.bson.BsonArray();
+            for (int v : ladders) {
+                a.add(new BsonInt32(v));
+            }
+            d.put("ladders", a);
+            return d;
+        }
+
+        static Recall fromBson(BsonDocument d) {
+            org.bson.BsonArray a = d.getArray("ladders");
+            int[] l = new int[a.size()];
+            for (int i = 0; i < l.length; i++) {
+                l[i] = a.get(i).asNumber().intValue();
+            }
+            return new Recall(UUID.fromString(d.getString("quay").getValue()), d.getNumber("sx").intValue(), d.getNumber("sy").intValue(),
+                    d.getNumber("sz").intValue(), Rotation.valueOf(d.getString("srot").getValue()), d.getNumber("spawnX").doubleValue(),
+                    d.getNumber("spawnZ").doubleValue(), l);
+        }
+    }
+
+    /** Sets or clears the recall mark of a placed airship, written at once. Null if not registered. */
+    static synchronized Entry setRecall(World world, Vector3i origin, Rotation rotation, Recall recall) {
+        Entry old = get(world, origin, rotation, Deployables.AIRSHIP_KIND);
+        if (old == null) {
+            return null;
+        }
+        Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
+                old.animals, old.id, old.ownerName, old.shared, old.crew, recall);
+        ENTRIES.remove(old);
+        ENTRIES.add(next);
+        save();
+        return next;
+    }
+
     private static volatile boolean cageDirty;
     private static volatile long cageSavedMs;
 
@@ -176,7 +242,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, descent, open, old.animals,
-                old.id, old.ownerName, old.shared);
+                old.id, old.ownerName, old.shared, old.crew, old.recall);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         cageDirty = true;
@@ -196,7 +262,24 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                java.util.List.copyOf(animals), old.id, old.ownerName, old.shared);
+                java.util.List.copyOf(animals), old.id, old.ownerName, old.shared, old.crew, old.recall);
+        ENTRIES.remove(old);
+        ENTRIES.add(next);
+        save();
+        return next;
+    }
+
+    /**
+     * Sets the NPC pilot (T133) of a placed airship, written at once. A null crew removes the pilot. Returns the new
+     * entry, null if not registered.
+     */
+    static synchronized Entry setCrew(World world, Vector3i origin, Rotation rotation, CrewRecord crew) {
+        Entry old = get(world, origin, rotation, Deployables.AIRSHIP_KIND);
+        if (old == null) {
+            return null;
+        }
+        Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
+                old.animals, old.id, old.ownerName, old.shared, crew, old.recall);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -237,7 +320,7 @@ final class BalloonRegistry {
     static synchronized void addNamed(String worldName, Vector3i origin, Rotation rotation, String kind, Ownership own) {
         Ownership o = own.withId();
         if (ENTRIES.add(new Entry(worldName, origin.x, origin.y, origin.z, rotation, kind, o.owner(), 0, false,
-                java.util.List.of(), o.id(), o.ownerName(), o.shared()))) {
+                java.util.List.of(), o.id(), o.ownerName(), o.shared(), null))) {
             save();
         }
     }
@@ -273,7 +356,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, shared);
+                old.animals, old.id, old.ownerName, shared, old.crew, old.recall);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -388,6 +471,36 @@ final class BalloonRegistry {
         return kind;
     }
 
+    /**
+     * True only when the entry is provably gone: its world is loaded, its anchor section is in memory and the block there
+     * is not the anchor. Unknown (world not loaded, section not in memory, any error) counts as present. A gone entry is
+     * removed from the registry, like find and lockingEntry do.
+     */
+    static boolean removeIfGone(Entry e) {
+        try {
+            com.hypixel.hytale.server.core.universe.Universe universe = com.hypixel.hytale.server.core.universe.Universe.get();
+            if (universe == null) {
+                return false;
+            }
+            World world = null;
+            for (World w : universe.getWorlds().values()) {
+                if (w.getName().equals(e.world)) {
+                    world = w;
+                    break;
+                }
+            }
+            StructureShape shape = shapeOf(e);
+            if (world == null || shape == null || stillThere(world, shape, e)) {
+                return false;
+            }
+            remove(e);
+            return true;
+        } catch (RuntimeException ex) {
+            LOGGER.at(Level.WARNING).withCause(ex).log("Vérification de l'entrée du registre en échec : gardée");
+            return false;
+        }
+    }
+
     /** Is the anchor block in place? An unloaded chunk (unknown block) counts as "yes". */
     private static boolean stillThere(World world, StructureShape shape, Entry e) {
         StructureShape.Cell anchor = shape.anchor();
@@ -403,6 +516,54 @@ final class BalloonRegistry {
 
     // ------------------------------------------------------------------ file
 
+    /** One registry entry as a BSON document (the on-disk format; "crew" only when there is an NPC pilot). */
+    static BsonDocument entryToBson(Entry e) {
+        BsonDocument d = new BsonDocument();
+        d.put("world", new BsonString(e.world));
+        d.put("x", new BsonInt32(e.x));
+        d.put("y", new BsonInt32(e.y));
+        d.put("z", new BsonInt32(e.z));
+        d.put("rotation", new BsonString(e.rotation.name()));
+        d.put("kind", new BsonString(e.kind));
+        e.ownership().writeTo(d);
+        if (e.descent > 0) {
+            d.put("descent", new BsonInt32(e.descent));
+        }
+        if (e.open) {
+            d.put("open", new org.bson.BsonBoolean(true));
+        }
+        if (!e.animals.isEmpty()) {
+            d.put("animals", CageAnimals.toBson(e.animals));
+        }
+        if (e.crew != null) {
+            d.put("crew", e.crew.toBson());
+        }
+        if (e.recall != null) {
+            d.put("recall", e.recall.toBson());
+        }
+        return d;
+    }
+
+    /** Reads one registry entry, tolerating files written by older versions. */
+    static Entry entryFromBson(BsonDocument d) {
+        // Version 1: no kind, it is a balloon. Version 2: kind and owner (absent if null).
+        String kind = d.containsKey("kind") ? d.getString("kind").getValue() : Deployables.BALLOON_KIND;
+        Ownership own = Ownership.readFrom(d).withId();
+        return new Entry(d.getString("world").getValue(), d.getNumber("x").intValue(),
+                d.getNumber("y").intValue(), d.getNumber("z").intValue(),
+                Rotation.valueOf(d.getString("rotation").getValue()), kind, own.owner(),
+                // T73: cage state of the transport balloon, absent in older files (0, closed).
+                d.containsKey("descent") ? d.getNumber("descent").intValue() : 0,
+                d.containsKey("open") && d.getBoolean("open").getValue(),
+                // T74: captured animals, absent in older files.
+                d.containsKey("animals") ? CageAnimals.fromBson(d.getArray("animals")) : java.util.List.of(),
+                own.id(), own.ownerName(), own.shared(),
+                // T133: NPC pilot, absent in older files.
+                d.containsKey("crew") ? CrewRecord.fromBson(d.getDocument("crew")) : null,
+                // T145: recall mark of an airship waiting above a station, absent otherwise.
+                d.containsKey("recall") ? Recall.fromBson(d.getDocument("recall")) : null);
+    }
+
     private static void load() {
         Path f = file;
         if (f == null || !Files.exists(f)) {
@@ -413,23 +574,10 @@ final class BalloonRegistry {
             boolean idCreated = false;
             for (org.bson.BsonValue v : doc.getArray("balloons")) {
                 BsonDocument d = v.asDocument();
-                // Version 1: no kind, it is a balloon. Version 2: kind and owner (absent if null).
-                String kind = d.containsKey("kind") ? d.getString("kind").getValue() : Deployables.BALLOON_KIND;
-                Ownership read = Ownership.readFrom(d);
-                Ownership own = read.withId();
-                if (read.id() == null) {
+                if (Ownership.readFrom(d).id() == null) {
                     idCreated = true;
                 }
-                UUID owner = own.owner();
-                ENTRIES.add(new Entry(d.getString("world").getValue(), d.getNumber("x").intValue(),
-                        d.getNumber("y").intValue(), d.getNumber("z").intValue(),
-                        Rotation.valueOf(d.getString("rotation").getValue()), kind, owner,
-                        // T73: cage state of the transport balloon, absent in older files (0, closed).
-                        d.containsKey("descent") ? d.getNumber("descent").intValue() : 0,
-                        d.containsKey("open") && d.getBoolean("open").getValue(),
-                        // T74: captured animals, absent in older files.
-                        d.containsKey("animals") ? CageAnimals.fromBson(d.getArray("animals")) : java.util.List.of(),
-                        own.id(), own.ownerName(), own.shared()));
+                ENTRIES.add(entryFromBson(d));
             }
             if (idCreated) {
                 // Persist the created ids so they stay stable across restarts.
@@ -456,23 +604,7 @@ final class BalloonRegistry {
         try {
             BsonArray list = new BsonArray();
             for (Entry e : ENTRIES) {
-                BsonDocument d = new BsonDocument();
-                d.put("world", new BsonString(e.world));
-                d.put("x", new BsonInt32(e.x));
-                d.put("y", new BsonInt32(e.y));
-                d.put("z", new BsonInt32(e.z));
-                d.put("rotation", new BsonString(e.rotation.name()));
-                d.put("kind", new BsonString(e.kind));
-                e.ownership().writeTo(d);
-                if (e.descent > 0) {
-                    d.put("descent", new BsonInt32(e.descent));
-                }
-                if (e.open) {
-                    d.put("open", new org.bson.BsonBoolean(true));
-                }
-                if (!e.animals.isEmpty()) {
-                    d.put("animals", CageAnimals.toBson(e.animals));
-                }
+                BsonDocument d = entryToBson(e);
                 list.add(d);
             }
             BsonDocument doc = new BsonDocument();

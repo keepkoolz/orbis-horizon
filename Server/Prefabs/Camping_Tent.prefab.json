@@ -13,6 +13,12 @@
       "rotation": 3
     },
     {
+      "x": 1,
+      "y": 0,
+      "z": 3,
+      "name": "Furniture_Kweebec_Chest_Small"
+    },
+    {
       "x": -3,
       "y": 0,
       "z": 1,
@@ -407,6 +413,13 @@
       "x": 3,
       "y": 0,
       "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 3,
       "name": "Empty",
       "level": 0
     }

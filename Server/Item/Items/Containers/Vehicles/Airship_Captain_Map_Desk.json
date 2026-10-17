@@ -1,0 +1,78 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.airship_captain_map_desk.name",
+    "Description": "server.orbis_horizon.items.airship_captain_map_desk.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Deco_Map.png",
+  "Categories": [
+    "Blocks.Deco"
+  ],
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": "Block_Secondary"
+  },
+  "BlockType": {
+    "InteractionHint": "server.orbis_horizon.interactionHints.deskMap",
+    "Material": "Solid",
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Miscellaneous/Map.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Miscellaneous/Map_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "Group": "Wood",
+    "HitboxType": "Window",
+    "VariantRotation": "Wall",
+    "Flags": {},
+    "Gathering": {
+      "Soft": {
+        "IsWeaponBreakable": false
+      }
+    },
+    "BlockParticleSetId": "Stone",
+    "Support": {
+      "Down": [
+        {
+          "FaceType": "Full"
+        }
+      ],
+      "Up": [
+        {
+          "FaceType": "Full"
+        }
+      ]
+    },
+    "TextureComputedColor": "#D4CB9C",
+    "Interactions": {
+      "Use": {
+        "Interactions": [
+          {
+            "Type": "Airship_DeskMap"
+          }
+        ]
+      }
+    }
+  },
+  "PlayerAnimationsId": "Item",
+  "IconProperties": {
+    "Scale": 0.695,
+    "Translation": [
+      -0.895,
+      -3.895
+    ],
+    "Rotation": [
+      30.945,
+      51.195,
+      22.5
+    ]
+  },
+  "Tags": {
+    "Type": [
+      "Deco"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

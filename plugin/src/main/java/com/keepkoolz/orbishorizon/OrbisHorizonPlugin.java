@@ -48,7 +48,13 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         getCodecRegistry(Interaction.CODEC)
                 .register(AirshipTakeOffInteraction.TYPE_ID, AirshipTakeOffInteraction.class, AirshipTakeOffInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
+                .register(AirshipCrewTalkInteraction.TYPE_ID, AirshipCrewTalkInteraction.class, AirshipCrewTalkInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
+                .register(AirshipDeskInteraction.TYPE_ID, AirshipDeskInteraction.class, AirshipDeskInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
                 .register(AirshipHelmInteraction.TYPE_ID, AirshipHelmInteraction.class, AirshipHelmInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
+                .register(AirshipHireInteraction.TYPE_ID, AirshipHireInteraction.class, AirshipHireInteraction.CODEC);
         registerAirshipSystems();
         try {
             // Burner flame on the ground according to the burner's fuel (T13). Needs the game's
@@ -156,6 +162,11 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             CageAnimals.recoverWorld(event.getWorld());
             StationMaster.recoverWorld(event.getWorld());
             StationQueue.recoverWorld(event.getWorld());
+            try {
+                AirshipCrew.recoverWorld(event.getWorld());
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Reprise des pilotes de %s en échec", event.getWorld().getName());
+            }
             AirshipManager.get().recoverWorld(event.getWorld());
         });
         getCommandRegistry().registerCommand(new OrbisHorizonCommand());
@@ -233,6 +244,11 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 getLogger().at(Level.WARNING).withCause(e).log("Reprise des chefs de gare de %s remise au démarrage du monde", world.getName());
             }
             try {
+                AirshipCrew.recoverWorld(world);
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Reprise des pilotes de %s remise au démarrage du monde", world.getName());
+            }
+            try {
                 StationQueue.recoverWorld(world);
             } catch (RuntimeException e) {
                 getLogger().at(Level.WARNING).withCause(e).log("Reprise des quais de %s remise au démarrage du monde", world.getName());
@@ -263,6 +279,11 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             getEntityStoreRegistry().registerSystem(new AirshipFlightSystem());
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Dirigeable : tick de vol désactivé");
+        }
+        try {
+            getEntityStoreRegistry().registerSystem(new CrewSeatSystem());
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Pilote : montage sur le tabouret désactivé");
         }
     }
 }

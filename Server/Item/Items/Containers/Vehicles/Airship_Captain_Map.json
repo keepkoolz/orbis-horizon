@@ -1,0 +1,24 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.airship_captain_map.name",
+    "Description": "server.orbis_horizon.items.airship_captain_map.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Deco_Map.png",
+  "Model": "Blocks/Miscellaneous/Map.blockymodel",
+  "Texture": "Blocks/Miscellaneous/Map_Texture.png",
+  "PlayerAnimationsId": "Item",
+  "MaxStack": 1,
+  "IconProperties": {
+    "Scale": 0.695,
+    "Translation": [
+      -0.895,
+      -3.895
+    ],
+    "Rotation": [
+      30.945,
+      51.195,
+      22.5
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

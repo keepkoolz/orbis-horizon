@@ -107,7 +107,7 @@ final class BurnerFuel {
     static ProcessingBenchBlock live(World world, Vector3i p) {
         // world.getBlockComponentHolder returns a copy (Store.copyEntity): BlockModule.getComponent
         // goes through the block entity's reference and returns the live component.
-        return BlockModule.getComponent(ProcessingBenchBlock.getComponentType(), world, p.x, p.y, p.z);
+        return SectionBlocks.blockComponent(world.getChunkStore(), ProcessingBenchBlock.getComponentType(), p.x, p.y, p.z);
     }
 
     /** True if the bench has fuel (items or burning in progress). */
@@ -241,7 +241,7 @@ final class BurnerFuel {
         input = merged;
     }
 
-    private static BsonValue containerToBson(ItemContainer c) {
+    static BsonValue containerToBson(ItemContainer c) {
         if (c == null) {
             return BsonNull.VALUE;
         }
@@ -262,7 +262,7 @@ final class BurnerFuel {
         return d;
     }
 
-    private static ItemContainer containerFromBson(BsonValue v) {
+    static ItemContainer containerFromBson(BsonValue v) {
         if (v == null || v.isNull()) {
             return null;
         }
@@ -284,11 +284,11 @@ final class BurnerFuel {
         return c;
     }
 
-    private static ItemContainer copy(ItemContainer c) {
+    static ItemContainer copy(ItemContainer c) {
         return c != null ? c.clone() : null;
     }
 
-    private static void clear(ItemContainer c) {
+    static void clear(ItemContainer c) {
         if (c != null) {
             c.clear();
         }

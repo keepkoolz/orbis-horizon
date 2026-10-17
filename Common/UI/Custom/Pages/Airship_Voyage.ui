@@ -1,0 +1,17 @@
+$C = "../Common.ui";
+
+$C.@PageOverlay {}
+$C.@Container {
+  Anchor: (Width: 560, Height: 480);
+  #Title { Label #TitleText { Style: (RenderBold: true, FontSize: 20, TextColor: #ffffff); Anchor: (Left: 20); Text: ""; } }
+  #Content {
+    LayoutMode: Top;
+    $C.@TextButton #VoyageButton { Text: ""; Anchor: (Bottom: 8, Height: 44); }
+    $C.@TextButton #TakeHelmButton { Text: ""; Anchor: (Bottom: 8, Height: 44); }
+    $C.@TextButton #ReturnHelmButton { Text: ""; Anchor: (Bottom: 8, Height: 44); }
+    Group #List { FlexWeight: 1; LayoutMode: TopScrolling; ScrollbarStyle: $C.@DefaultScrollbarStyle; }
+    Label #Empty { Style: (TextColor: #ffffff(0.6), RenderItalics: true); Anchor: (Left: 8, Top: 8); Text: ""; }
+    $C.@TextButton #CloseButton { Text: ""; Anchor: (Top: 8, Height: 44); }
+  }
+}
+$C.@BackButton {}

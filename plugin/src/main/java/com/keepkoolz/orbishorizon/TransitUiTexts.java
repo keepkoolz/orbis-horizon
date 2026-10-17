@@ -20,6 +20,12 @@ final class TransitUiTexts {
     static void destinations(UICommandBuilder cmd) {
         cmd.set("#TitleText.Text", m("dest.title"));
         cmd.set("#CloseButton.Text", m("close"));
+        cmd.set("#HireButton.Text", m("crew.hire"));
+        cmd.set("#RecallButton.Text", m("crew.recall"));
+        cmd.set("#HirePrice.Text", m("crew.hirePrice")
+                .param("gold", PilotContract.PRICE.get(PilotContract.GOLD))
+                .param("silver", PilotContract.PRICE.get(PilotContract.SILVER))
+                .param("essence", PilotContract.PRICE.get(PilotContract.ESSENCE)));
     }
 
     static void stationName(UICommandBuilder cmd) {

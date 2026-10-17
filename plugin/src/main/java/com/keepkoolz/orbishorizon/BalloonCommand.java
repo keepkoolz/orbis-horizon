@@ -80,11 +80,6 @@ public final class BalloonCommand extends AbstractCommandCollection {
                 PilotMannequin.enabled = m.equalsIgnoreCase("pilot:on");
                 ctx.sendMessage(Texts.t("cmd.render.pilot").param("mode", PilotMannequin.enabled ? "on" : "off"));
                 return;
-            } else if (m.equalsIgnoreCase("camyaw:relative") || m.equalsIgnoreCase("camyaw:world")) {
-                // T119: passenger camera yaw relative to the vehicle or fixed in the world (next camera send), shared setting.
-                PassengerCamera.relativeYaw = m.equalsIgnoreCase("camyaw:relative");
-                ctx.sendMessage(Texts.t("cmd.render.camyaw").param("mode", PassengerCamera.relativeYaw ? "relative" : "world"));
-                return;
             } else if (!m.equalsIgnoreCase("show")) {
                 ctx.sendMessage(Texts.t("cmd.render.usage").param("command", "/orbishorizon balloon render"));
                 return;
@@ -395,7 +390,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
 
         @Override
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
-            Message error = BalloonManager.get().land(store, player);
+            Message error = BalloonManager.get().land(store, player, true);
             ctx.sendMessage(error != null ? error : Texts.t("landed"));
         }
     }

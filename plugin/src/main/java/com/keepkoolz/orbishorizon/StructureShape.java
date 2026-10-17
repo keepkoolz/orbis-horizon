@@ -122,6 +122,11 @@ public final class StructureShape {
      * A shape with the same anchor, burner and seats as this one and other cells (T73: the transport balloon with its
      * cage lowered or its side open, TransportCage.cells). The ladder, flight cells and bounds are recomputed.
      */
+    /** Shape made of the given cells only, without anchor or burner (test hook). */
+    static StructureShape ofCells(List<Cell> cells) {
+        return new StructureShape("", Collections.unmodifiableList(cells), null, null, List.of());
+    }
+
     StructureShape withCells(List<Cell> newCells) {
         return new StructureShape(prefabPath, Collections.unmodifiableList(newCells), anchor, burner, seats);
     }

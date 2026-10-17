@@ -32,12 +32,9 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * T118: seat view of a CAMERA-mode passenger (balloons with seats, dry-descent pilot, transit balloons, airship). Three things, all
+ * T118: seat view of a CAMERA-mode passenger (balloons with seats, dry-descent pilot, transit balloons, airship). Two things (the camera anchor and the relative camera yaw of the airship seat view were removed on 16 October 2026: every vehicle now uses the T124 external view, see PassengerCamera), all
  * built from the same few lines and removed together (PassengerCamera.reset, the single exit point of the pose):
  *
- * - a camera anchor: an invisible entity (like a light) mounted on the entity the passenger sees, at the seat's eye point, visible to
- *   this passenger only. The camera is attached to it with a zero offset. A fixed attach offset sent in the camera packet is NOT rotated by the
- *   client with the entity yaw (the airship's view drifted when it turned), whereas the mount offset of an entity is (validated for the airship lights).
  * - a mannequin: an entity with a copy of the passenger's model and skin, mounted on the vehicle at the seat point and playing Sit, so the
  *   others see the passenger seated as part of the vehicle. With dual rendering (T82) there is one on the pilot's entity (seen by the
  *   pilot) and a twin on the observer entity (seen by everybody but the pilot and the passenger), otherwise one seen by everybody but the passenger.
@@ -58,14 +55,13 @@ final class PassengerSeatView {
     private PassengerSeatView() {
     }
 
-    /** What the caller knows about the vehicle and the seat, for one tick. airship: only the airship turns, so only it gets the relative camera yaw (T119). flight: T124, the balloon flight (null for the airship), balloons get the external view. */
+    /** What the caller knows about the vehicle and the seat, for one tick. view: the vehicle as the external view sees it (T124, balloons and airship). */
     record Ctx(UUID vehicleUuid, Ref<EntityStore> main, Ref<EntityStore> observer, boolean dual, UUID pilot, Vector3f seatOffset,
-               Vector3d seatWorld, List<State> registry, boolean airship, BalloonFlight flight) {
+               Vector3d seatWorld, List<State> registry, PassengerCamera.Source view) {
     }
 
     /** Entities of one passenger's seat view. */
     static final class State {
-        Ref<EntityStore> anchor;
         Ref<EntityStore> mannequin;
         Ref<EntityStore> twin;
         /** Entity the anchor is mounted on and rendering mode it was built for: a change means a rebuild. */
@@ -80,28 +76,7 @@ final class PassengerSeatView {
         List<State> registry;
     }
 
-    /** Anchor point of the camera for a seat offset (entity frame): the seat offset plus the eye height. Pure. */
-    static Vector3f eyeOffset(Vector3f seatOffset) {
-        return new Vector3f(seatOffset.x, seatOffset.y + TransitConstants.VIEW_EYE_HEIGHT_ABOVE_SEAT, seatOffset.z);
-    }
-
-    /**
-     * Camera position offset when the camera is attached to the vehicle entity itself (balloons, airship fallback): the client adds
-     * positionOffset in the world frame, without turning it with the entity yaw. So the world offset from the entity to the seat is
-     * used, plus the eye height. The mount offset (entity frame, x and z inverted for the balloon's yaw of rotation + pi) put the
-     * camera on the opposite seat of the ring: a passenger found himself inside the mannequin of the passenger seated there
-     * (11 October 2026, two passengers on seats 2 and 7 of a transit balloon). Falls back to the mount offset if the entity has no transform.
-     */
-    static Vector3f worldEyeOffset(Store<EntityStore> store, Ref<EntityStore> entity, Vector3d seatWorld, Vector3f seatOffset) {
-        TransformComponent t = valid(entity) ? store.getComponent(entity, TransformComponent.getComponentType()) : null;
-        if (t == null) {
-            return eyeOffset(seatOffset);
-        }
-        Vector3d e = t.getPosition();
-        return new Vector3f((float) (seatWorld.x - e.x), (float) (seatWorld.y - e.y) + TransitConstants.VIEW_EYE_HEIGHT_ABOVE_SEAT,
-                (float) (seatWorld.z - e.z));
-    }
-
+    /** Camera anchor of the former airship seat view (removed 16 October 2026), kept to clean up entities an older version left in a world. */
     private static UUID anchorUuid(UUID vehicle, UUID player) {
         return BalloonLights.uuidFor(vehicle, "cam:" + player);
     }
@@ -112,7 +87,7 @@ final class PassengerSeatView {
 
     /**
      * Every tick of a CAMERA passenger: builds or rebuilds the view when needed, keeps the entities on their world point, replays Sit on the
-     * mannequins and sends the camera once the anchor is known to the client.
+     * mannequins and sends the external camera once the target is known to the client.
      */
     static void sync(Store<EntityStore> store, BalloonFlight.Passenger p, Ctx c, long now) {
         try {
@@ -122,45 +97,28 @@ final class PassengerSeatView {
                 return;
             }
             State s = p.seatView;
-            if (s != null && (s.target != target || s.builtDual != dual || gone(s.anchor) || gone(s.mannequin) || gone(s.twin))) {
+            if (s != null && (s.target != target || s.builtDual != dual || gone(s.mannequin) || gone(s.twin))) {
                 // I2: the replacement is built before the old one is deleted, the body stays hidden, and the camera goes to the entity
-                // the client sees right away (fixed offset) until the new anchor is known to it.
+                // the client sees right away (fixed offset) until the new target is known to it.
                 State old = s;
                 s = build(store, p, c, target, dual, now);
                 p.seatView = s;
                 dispose(store, old, true);
-                if (c.flight() != null && !c.airship()) {
-                    PassengerCamera.attachExternal(store, c.flight(), p, target);
-                } else {
-                    PassengerCamera.attach(store, p, target, worldEyeOffset(store, target, c.seatWorld(), c.seatOffset()), false);
-                }
+                PassengerCamera.attachExternal(store, c.view(), p, target);
             } else if (s == null) {
                 s = build(store, p, c, target, dual, now);
                 p.seatView = s;
             }
-            Vector3d eye = new Vector3d(c.seatWorld()).add(0, TransitConstants.VIEW_EYE_HEIGHT_ABOVE_SEAT, 0);
-            place(store, s.anchor, eye);
-            copyYaw(store, s.anchor, target); // T119: the anchor turns with the entity the passenger sees (camera yaw relative to the vehicle)
             place(store, s.mannequin, c.seatWorld());
             place(store, s.twin, c.seatWorld());
             replayAnimation(store, p, s, now);
-            if (c.flight() != null && !c.airship()) {
-                // T124: external view for balloons, re-sent when the travel direction changes or the entity the client sees changes.
-                NetworkId tn = store.getComponent(target, NetworkId.getComponentType());
-                if (tn != null && p.cameraOn && PassengerCamera.directionChanged(c.flight(), p)) {
-                    PassengerCamera.attachExternal(store, c.flight(), p, target);
-                }
-                if (tn != null && now - s.createdMs >= CAMERA_DELAY_MS && (!p.cameraOn || tn.getId() != p.cameraTargetId)) {
-                    PassengerCamera.attachExternal(store, c.flight(), p, target);
-                }
-                return;
+            // T124: external view, re-sent when the travel direction changes or the entity the client sees changes.
+            NetworkId tn = store.getComponent(target, NetworkId.getComponentType());
+            if (tn != null && p.cameraOn && PassengerCamera.directionChanged(c.view(), p)) {
+                PassengerCamera.attachExternal(store, c.view(), p, target);
             }
-            // Without an anchor (airship creation failed) the camera goes to the vehicle entity with the eye offset (fixed, drifts in airship turns).
-            Ref<EntityStore> camRef = valid(s.anchor) ? s.anchor : target;
-            NetworkId an = store.getComponent(camRef, NetworkId.getComponentType());
-            if (an != null && now - s.createdMs >= CAMERA_DELAY_MS && (!p.cameraOn || an.getId() != p.cameraTargetId)) {
-                PassengerCamera.attach(store, p, camRef, valid(s.anchor) ? new Vector3f() : worldEyeOffset(store, camRef, c.seatWorld(), c.seatOffset()),
-                        valid(s.anchor) && c.airship());
+            if (tn != null && now - s.createdMs >= CAMERA_DELAY_MS && (!p.cameraOn || tn.getId() != p.cameraTargetId)) {
+                PassengerCamera.attachExternal(store, c.view(), p, target);
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Vue du siège du passager %s en échec", p.name);
@@ -213,14 +171,6 @@ final class PassengerSeatView {
         }
         // The real body is hidden from the others whatever happens next.
         ViewFilter.only(p.ref, p.uuid);
-        Vector3d eye = new Vector3d(c.seatWorld()).add(0, TransitConstants.VIEW_EYE_HEIGHT_ABOVE_SEAT, 0);
-        // Balloons keep a fixed yaw: their camera goes straight to the vehicle entity with the eye offset (T117, validated smooth). A camera
-        // on a mounted anchor made the transit balloon shake for its passengers (same cause as the chain-mount shake of T115). Only the
-        // airship, which turns, needs the anchor.
-        s.anchor = c.airship() ? spawn(store, null, anchorUuid(c.vehicleUuid(), p.uuid), eye, target, eyeOffset(c.seatOffset()), null) : null;
-        if (s.anchor != null) {
-            ViewFilter.only(s.anchor, p.uuid);
-        }
         ModelComponent mc = valid(p.ref) ? store.getComponent(p.ref, ModelComponent.getComponentType()) : null;
         PlayerSkinComponent skin = valid(p.ref) ? store.getComponent(p.ref, PlayerSkinComponent.getComponentType()) : null;
         if (mc == null || mc.getModel() == null || skin == null) {
@@ -238,17 +188,12 @@ final class PassengerSeatView {
             if (s.mannequin != null) {
                 if (c.pilot() != null) {
                     ViewFilter.only(s.mannequin, c.pilot());
-                } else if (c.airship()) {
-                    ViewFilter.hide(s.mannequin, p.uuid);
-                } // T124: balloons, no pilot: the passenger sees his own mannequin from outside
+                } // T124: no pilot: the passenger sees his own mannequin from outside
 
             }
             s.twin = spawn(store, model, mannequinUuid(c.vehicleUuid(), p.uuid, true), c.seatWorld(), c.observer(), c.seatOffset(), skin);
             if (s.twin != null) {
                 Set<UUID> hidden = new HashSet<>();
-                if (c.airship()) {
-                    hidden.add(p.uuid); // T124: a balloon passenger sees his twin (he sees the observer entity from outside)
-                }
                 if (c.pilot() != null) {
                     hidden.add(c.pilot());
                 }
@@ -258,9 +203,6 @@ final class PassengerSeatView {
             }
         } else {
             s.mannequin = spawn(store, model, mannequinUuid(c.vehicleUuid(), p.uuid, false), c.seatWorld(), target, c.seatOffset(), skin);
-            if (s.mannequin != null && c.airship()) {
-                ViewFilter.hide(s.mannequin, p.uuid); // T124: balloon passengers see their own mannequin
-            }
         }
         if (s.mannequin == null) {
             s.noMannequin = true; // creation failed (logged), not retried every tick
@@ -347,7 +289,7 @@ final class PassengerSeatView {
             if (!keepBody && s.bodyRef != null) {
                 ViewFilter.clear(s.bodyRef);
             }
-            for (Ref<EntityStore> r : java.util.Arrays.asList(s.anchor, s.mannequin, s.twin)) {
+            for (Ref<EntityStore> r : java.util.Arrays.asList(s.mannequin, s.twin)) {
                 if (r != null) {
                     ViewFilter.clear(r);
                     if (r.isValid()) {
@@ -403,7 +345,7 @@ final class PassengerSeatView {
         if (s == null) {
             return "seat view none";
         }
-        return "seat view anchor " + (valid(s.anchor) ? "ok" : s.anchor == null ? "none" : "MISSING") + ", mannequin "
+        return "seat view mannequin "
                 + (s.noMannequin ? "skipped (no model or skin)" : (valid(s.mannequin) ? "ok" : "MISSING") + (s.builtDual ? ", twin " + (valid(s.twin) ? "ok" : "MISSING") : ""))
                 + ", body hidden " + (ViewFilter.ruleOf(p.ref) != null);
     }

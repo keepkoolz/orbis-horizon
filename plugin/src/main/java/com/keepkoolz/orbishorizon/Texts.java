@@ -22,6 +22,11 @@ final class Texts {
         return Message.translation(CHAT + key);
     }
 
+    /** Chat line spoken by the pilot of an airship: the {pilot} parameter is his first name. */
+    static Message pilot(String key, CrewRecord crew) {
+        return t(key).param("pilot", PilotLook.nameOf(crew));
+    }
+
     /** Full key of a command or argument description, relative to COMMANDS. */
     static String cmd(String key) {
         return COMMANDS + key;

@@ -35,6 +35,20 @@ final class AirshipFlight {
     volatile String pilotName = "?";
     /** Ownership of the structure, copied from the registry at take-off (NONE if it had no entry), registered again at landing. */
     volatile Ownership ownership = Ownership.NONE;
+    /** NPC pilot of the airship (T133), copied from the registry at take-off, null without pilot. */
+    volatile CrewRecord crew;
+    /** Server-driven voyage to a destination (T139), null for a flight piloted by a player. */
+    volatile VoyageState voyage;
+    /** Recall to a station in progress (T143), null otherwise. A recall flight also has a (fuel-free) voyage for its approach. */
+    volatile RecallState recall;
+    /** Station whose quay this flight holds for a recall (T143), until the ship leaves the zone or lands. */
+    volatile TransitNetwork.Station quayStation;
+    /** Id under which the quay is held (the recall flight id, kept when the ship takes off from blocks), null = this flight id. */
+    volatile java.util.UUID quayId;
+    /** The recall state kept after the captain chose a destination, to send the ship away if it must stop near the station (T144). */
+    volatile RecallState recallInfo;
+    /** Seated mannequin that stands for the pilot NPC during the flight (T137), null without pilot. */
+    volatile AirshipCrew.Mannequin crewMan;
     final World world;
     final Deployables.Kind kind;
     Ref<EntityStore> shipRef;
@@ -137,6 +151,8 @@ final class AirshipFlight {
     /** Origin and rotation of the prefab at take-off (resume file: removes the old ship if the world was saved before take-off). */
     final Vector3i takeoffOrigin = new Vector3i();
     Rotation takeoffRotation;
+    /** Temporary rungs {x, y, z} the ship had right before its take-off from a station's waiting place (resume key "takeoffRungs"). */
+    volatile int[] takeoffRungs;
 
     BalloonCargo cargo;
     BsonDocument cargoBson;
@@ -146,6 +162,8 @@ final class AirshipFlight {
     AirshipEngines engines;
     /** Level and upgrade items of the upgraded benches aboard, put back at landing (T63, null for an older resume file). */
     AirshipBenches benches;
+    /** Contents of the other processing benches aboard (furnaces, tannery...), frozen during the flight and put back at landing. */
+    AirshipBenchContents benchContents;
     /** No fuel left (or none at take-off): the pilot's horizontal speed is 0 and the off model is shown. */
     volatile boolean dry;
     /** The ship moved horizontally in the last travel sample, so fuel was burned (diagnostic). */

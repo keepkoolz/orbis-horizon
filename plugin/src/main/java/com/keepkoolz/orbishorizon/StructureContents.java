@@ -41,7 +41,7 @@ final class StructureContents {
                 }
             }
             // Container (like BalloonCargo.takeFrom): live component, not a copy.
-            ItemContainerBlock block = BlockModule.getComponent(ItemContainerBlock.getComponentType(), world, p.x, p.y, p.z);
+            ItemContainerBlock block = SectionBlocks.blockComponent(world.getChunkStore(), ItemContainerBlock.getComponentType(), p.x, p.y, p.z);
             ItemContainer container = block != null ? block.getItemContainer() : null;
             if (container == null || container.isEmpty()) {
                 continue;

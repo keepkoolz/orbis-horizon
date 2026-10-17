@@ -1,0 +1,138 @@
+package com.keepkoolz.orbishorizon;
+
+import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.universe.world.World;
+import org.joml.Vector3d;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
+/** Destinations of an NPC-piloted airship voyage and the pure calculations around them. */
+final class VoyagePlanner {
+    private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
+
+    /** Destinations closer than this (horizontal) are not offered. */
+    static final double MIN_DISTANCE = 32;
+    /** Distance of the arrival point from a station pad centre. */
+    static final double ARRIVAL_DISTANCE = 70;
+    static final int CRUISE_MARGIN = 40;
+    static final int CEILING_MARGIN = 10;
+    static final double ALIGN_SECONDS = 5;
+
+    enum Kind { MARKER, STATION }
+
+    /** groundY is Integer.MIN_VALUE when unknown. */
+    record Destination(String name, Kind kind, double x, double z, int groundY) {}
+
+    private VoyagePlanner() {}
+
+    static List<Destination> list(List<Destination> all, double fromX, double fromZ) {
+        List<Destination> out = new ArrayList<>();
+        for (Destination d : all) {
+            if (Math.hypot(d.x() - fromX, d.z() - fromZ) >= MIN_DISTANCE) {
+                out.add(d);
+            }
+        }
+        out.sort(Comparator.comparingInt((Destination d) -> d.kind().ordinal())
+                .thenComparingDouble(d -> Math.hypot(d.x() - fromX, d.z() - fromZ)));
+        return out;
+    }
+
+    static double[] stationArrival(double padX, double padZ, double fromX, double fromZ, List<double[]> otherPads) {
+        double base = Math.atan2(fromZ - padZ, fromX - padX);
+        double[] first = null;
+        for (int i = 0; i < 24; i++) {
+            int steps = i == 0 ? 0 : (i % 2 == 1 ? (i + 1) / 2 : -(i / 2));
+            double a = base + Math.toRadians(15.0 * steps);
+            double[] p = {padX + ARRIVAL_DISTANCE * Math.cos(a), padZ + ARRIVAL_DISTANCE * Math.sin(a)};
+            if (first == null) {
+                first = p;
+            }
+            boolean free = true;
+            for (double[] o : otherPads) {
+                if (Math.hypot(p[0] - o[0], p[1] - o[1]) < ARRIVAL_DISTANCE) {
+                    free = false;
+                    break;
+                }
+            }
+            if (free) {
+                return p;
+            }
+        }
+        return first;
+    }
+
+    static int cruiseY(int departureY, int arrivalGroundY, int worldMaxY) {
+        int high = arrivalGroundY == Integer.MIN_VALUE ? departureY : Math.max(departureY, arrivalGroundY);
+        int y = Math.min(high + CRUISE_MARGIN, worldMaxY - CEILING_MARGIN);
+        return Math.max(y, departureY);
+    }
+
+    static double tripSeconds(double horizontal, int departureY, int cruiseY, double hSpeed, double vSpeed) {
+        return (cruiseY - departureY) / vSpeed + horizontal / hSpeed + ALIGN_SECONDS;
+    }
+
+    /** Personal and world-shared map markers and stations of the world, filtered and sorted by {@link #list}. Never throws. */
+    static List<Destination> collect(Player player, World world, double fromX, double fromZ) {
+        return list(collectAll(player, world, fromX, fromZ), fromX, fromZ);
+    }
+
+    /** Every destination of the world, unfiltered and unsorted (the caller can tell "none exist" from "all too close"). Never throws. */
+    static List<Destination> collectAll(Player player, World world, double fromX, double fromZ) {
+        List<Destination> all = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        try { // personal markers of the player
+            var data = player.getPlayerConfigData().getPerWorldData(world.getName());
+            var markers = data != null ? data.getUserMapMarkers() : null;
+            if (markers != null) {
+                for (var m : markers) {
+                    if (m != null && m.getName() != null) {
+                        if (m.getId() != null) {
+                            seen.add(m.getId());
+                        }
+                        all.add(new Destination(m.getName(), Kind.MARKER, m.getX(), m.getZ(), Integer.MIN_VALUE));
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            LOGGER.atWarning().log("Voyage : lecture des marqueurs impossible : " + t);
+        }
+        try { // markers shared with the whole world (0.7: world resource SharedUserMapMarkers, like the game's SharedMarkersProvider; world thread)
+            var shared = world.getChunkStore().getStore().getResource(
+                    com.hypixel.hytale.server.core.universe.world.worldmap.markers.worldstore.WorldMarkersResource.getResourceType());
+            var markers = shared != null ? shared.getUserMapMarkers() : null;
+            if (markers != null) {
+                for (var m : markers) {
+                    if (m != null && m.getName() != null && (m.getId() == null || seen.add(m.getId()))) {
+                        all.add(new Destination(m.getName(), Kind.MARKER, m.getX(), m.getZ(), Integer.MIN_VALUE));
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            LOGGER.atWarning().log("Voyage : lecture des marqueurs partagés impossible : " + t);
+        }
+        try {
+            List<TransitNetwork.Station> stations = TransitNetwork.get().stations(world.getName());
+            List<Vector3d> pads = new ArrayList<>();
+            for (TransitNetwork.Station s : stations) {
+                pads.add(StationMarkerProvider.markerPoint(s.origin, s.rotation));
+            }
+            for (int i = 0; i < stations.size(); i++) {
+                Vector3d pad = pads.get(i);
+                List<double[]> others = new ArrayList<>();
+                for (int j = 0; j < pads.size(); j++) {
+                    if (j != i) {
+                        others.add(new double[]{pads.get(j).x, pads.get(j).z});
+                    }
+                }
+                double[] a = stationArrival(pad.x, pad.z, fromX, fromZ, others);
+                all.add(new Destination(stations.get(i).name, Kind.STATION, a[0], a[1], (int) Math.round(pad.y)));
+            }
+        } catch (Throwable t) {
+            LOGGER.atWarning().log("Voyage : lecture des stations impossible : " + t);
+        }
+        return all;
+    }
+}

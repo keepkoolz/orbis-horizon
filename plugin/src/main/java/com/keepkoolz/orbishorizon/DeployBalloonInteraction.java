@@ -141,6 +141,25 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             context.getState().state = InteractionState.Failed;
             return;
         }
+        String zoneStation = StationZone.blockingStation(world, kind.id, shape, origin, rotation);
+        if (zoneStation != null) {
+            PlayerRef playerRef = commandBuffer.getComponent(player, PlayerRef.getComponentType());
+            if (playerRef != null) {
+                playerRef.sendMessage(Texts.t("deploy.stationZone").param("station", zoneStation));
+            }
+            LOGGER.at(Level.INFO).log("Caisse %s refusée en (%d, %d, %d) : zone de la station %s", kind.id, origin.x, origin.y, origin.z, zoneStation);
+            context.getState().state = InteractionState.Failed;
+            return;
+        }
+        if (kind.isAirship()) {
+            PlayerRef owner = commandBuffer.getComponent(player, PlayerRef.getComponentType());
+            if (owner != null && AirshipLimit.ownsAirship(owner.getUuid())) {
+                owner.sendMessage(Texts.t("airship.error.alreadyOwned"));
+                LOGGER.at(Level.INFO).log("Caisse %s refusée en (%d, %d, %d) : %s possède déjà un dirigeable", kind.id, origin.x, origin.y, origin.z, owner.getUsername());
+                context.getState().state = InteractionState.Failed;
+                return;
+            }
+        }
         if (shape != null) {
             PlayerRef placer = commandBuffer.getComponent(player, PlayerRef.getComponentType());
             Ownership own = placer != null ? Ownership.of(placer.getUuid(), placer.getUsername()) : Ownership.NONE;

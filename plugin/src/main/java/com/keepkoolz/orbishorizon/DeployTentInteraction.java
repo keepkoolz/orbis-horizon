@@ -157,6 +157,13 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
             fail(context);
             return;
         }
+        String zoneStation = StationZone.blockingStation(world, kind.id, shape, origin, rotation);
+        if (zoneStation != null) {
+            LOGGER.at(Level.INFO).log("Tente refusée en (%d, %d, %d) : zone de la station %s", origin.x, origin.y, origin.z, zoneStation);
+            playerRef.sendMessage(Texts.t("deploy.stationZone").param("station", zoneStation));
+            fail(context);
+            return;
+        }
         // Room test: no prefab cell may contain a solid block, all chunks must be loaded.
         SectionReader reader = new SectionReader(world.getChunkStore());
         for (StructureShape.Cell c : shape.cells()) {
@@ -184,12 +191,41 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
         PrefabUtil.paste(buffer, world, new Vector3i(origin), rotation, new FastRandom(), flags, 0, commandBuffer);
         BalloonRegistry.add(world, origin, rotation, kind.id, Ownership.of(playerRef.getUuid(), playerRef.getUsername()));
 
-        // The full crate becomes the empty crate, in the same slot.
+        // The full crate becomes the empty crate, in the same slot. Done first: the kept contents are put back
+        // only if the swap succeeded, otherwise the player would keep the crate with its metadata and duplicate them.
         ItemStack empty = new ItemStack(kind.tent.emptyCrateId, 1);
-        if (heldContainer.setItemStackForSlot((short) context.getHeldItemSlot(), empty).succeeded()) {
+        boolean swapped = heldContainer.setItemStackForSlot((short) context.getHeldItemSlot(), empty).succeeded();
+        if (swapped) {
             context.setHeldItem(empty);
         } else {
             LOGGER.at(Level.WARNING).log("Camping_DeployTent: la caisse n'a pas pu être remplacée par la caisse vide");
+        }
+
+        // The crate may carry the contents kept when the tent was packed: put them back (deferred out of the
+        // interaction; the benches and chests retry for 10 s if their components are not created yet).
+        try {
+            org.bson.BsonDocument meta = held.getMetadata();
+            if (meta != null && meta.containsKey(TentContents.METADATA_KEY) && meta.get(TentContents.METADATA_KEY).isDocument()) {
+                if (!swapped) {
+                    LOGGER.at(Level.WARNING).log("Tente : caisse non remplacée, le contenu reste dans la caisse pleine et la tente est posée vide");
+                } else {
+                    TentContents contents = TentContents.fromBson(meta.getDocument(TentContents.METADATA_KEY), kind.id);
+                    if (contents != null) {
+                        final Vector3i at = new Vector3i(origin);
+                        final int count = contents.itemCount();
+                        world.execute(() -> {
+                            try {
+                                contents.restore(world, world.getEntityStore().getStore(), at, rotation);
+                                LOGGER.at(Level.INFO).log("Tente : %d objet(s) remis depuis la caisse", count);
+                            } catch (RuntimeException e) {
+                                LOGGER.at(Level.WARNING).withCause(e).log("Tente : contenu de la caisse non remis");
+                            }
+                        });
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Tente : contenu de la caisse illisible");
         }
         LOGGER.at(Level.INFO).log("Tente « %s » posée en (%d, %d, %d) rotation %s par %s", kind.id, origin.x, origin.y, origin.z, rotation, playerRef.getUsername());
     }

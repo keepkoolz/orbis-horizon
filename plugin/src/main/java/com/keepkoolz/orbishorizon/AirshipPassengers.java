@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -127,9 +128,14 @@ final class AirshipPassengers {
      * seats, one per cell, like the 2 Seats of its asset (local x 0 and -1, which are its 2 cells).
      */
     static List<StructureShape.Cell> seats(StructureShape s) {
+        return seats(s, Set.of());
+    }
+
+    /** Same, without the cells in the excluded set (the stool of the pilot NPC, T137: 14 places while a pilot exists). */
+    static List<StructureShape.Cell> seats(StructureShape s, Set<Vector3i> excluded) {
         List<StructureShape.Cell> list = new ArrayList<>();
         for (StructureShape.Cell c : s.cells()) {
-            if (SEAT_BLOCKS.contains(c.baseName())) {
+            if (SEAT_BLOCKS.contains(c.baseName()) && !excluded.contains(new Vector3i(c.x(), c.y(), c.z()))) {
                 list.add(c);
             }
         }
@@ -183,14 +189,40 @@ final class AirshipPassengers {
         return list;
     }
 
+    /** Cell of the captain's chair in the prefab (its filler cell (0, 9, 9) is never a seat). */
+    static final int[] CHAIR = {0, 8, 9};
+
+    /** Rider for the captain on the chair during a voyage: built by hand, the chair is not one of the passenger seats. */
+    Rider chairRider(StructureShape s, BalloonManager.Occupant o) {
+        StructureShape.Cell c = new StructureShape.Cell(CHAIR[0], CHAIR[1], CHAIR[2], "Airship_Chair", 0);
+        Mode m = mode;
+        BalloonFlight.PassengerMode legacy = m == Mode.MOUNT ? BalloonFlight.PassengerMode.MOUNT
+                : m == Mode.CAMERA ? BalloonFlight.PassengerMode.CAMERA : BalloonFlight.PassengerMode.TELEPORT;
+        BalloonFlight.Passenger p = new BalloonFlight.Passenger(o.ref(), o.player().getUuid(), o.player().getUsername(), -1,
+                new Vector3i(c.x(), c.y(), c.z()), seatLocal(c), false, legacy, BalloonManager.get().pose());
+        return new Rider(p, exitLocal(s, c), m);
+    }
+
     /** Pairs each player with a stool, closest pairs first. The caller has checked there are enough stools. */
     List<Rider> assign(Store<EntityStore> store, StructureShape s, Vector3i origin, Rotation rotation, List<BalloonManager.Occupant> people) {
+        return assign(store, s, origin, rotation, people, Set.of());
+    }
+
+    List<Rider> assign(Store<EntityStore> store, StructureShape s, Vector3i origin, Rotation rotation, List<BalloonManager.Occupant> people,
+                       Set<Vector3i> excluded) {
+        Vector3d logical = new Vector3d(origin.x + 0.5, origin.y, origin.z + 0.5);
+        return assign(store, s, people, excluded, local -> BalloonManager.prefabPoint(logical, rotation, local));
+    }
+
+    /** Same, with the seat points given by a function (a ship in flight has no placed origin). */
+    List<Rider> assign(Store<EntityStore> store, StructureShape s, List<BalloonManager.Occupant> people, Set<Vector3i> excluded,
+                       java.util.function.Function<Vector3f, Vector3d> seatWorld) {
         List<Rider> result = new ArrayList<>();
-        List<StructureShape.Cell> seats = seats(s);
+        List<StructureShape.Cell> seats = seats(s, excluded);
         if (people.isEmpty() || seats.isEmpty()) {
             return result;
         }
-        Vector3d logical = new Vector3d(origin.x + 0.5, origin.y, origin.z + 0.5);
+        Vector3d logical = seatWorld.apply(new Vector3f(0, 0, 0));
         record Pair(double distance, int person, int seat) {
         }
         List<Pair> pairs = new ArrayList<>();
@@ -198,7 +230,7 @@ final class AirshipPassengers {
             TransformComponent t = store.getComponent(people.get(j).ref(), TransformComponent.getComponentType());
             Vector3d pos = t != null ? t.getPosition() : logical;
             for (int i = 0; i < seats.size(); i++) {
-                pairs.add(new Pair(pos.distance(BalloonManager.prefabPoint(logical, rotation, seatLocal(seats.get(i)))), j, i));
+                pairs.add(new Pair(pos.distance(seatWorld.apply(seatLocal(seats.get(i)))), j, i));
             }
         }
         pairs.sort(Comparator.comparingDouble(Pair::distance));
@@ -250,34 +282,40 @@ final class AirshipPassengers {
 
     /** Seats the riders of the flight once the ship entity exists: teleported to the stool (or mounted), seated pose, message. */
     void board(Store<EntityStore> store, AirshipFlight f) {
-        long now = System.currentTimeMillis();
         for (Rider r : f.riders) {
-            BalloonFlight.Passenger p = r.p;
-            if (!p.ref.isValid()) {
-                f.riders.remove(r);
-                continue;
+            boardOne(store, f, r);
+        }
+    }
+
+    /** Seats one rider of the flight: teleported to the seat (or mounted), seated pose, message. A rider whose entity is gone is dropped. */
+    void boardOne(Store<EntityStore> store, AirshipFlight f, Rider r) {
+        long now = System.currentTimeMillis();
+        BalloonFlight.Passenger p = r.p;
+        if (!p.ref.isValid()) {
+            f.riders.remove(r);
+            return;
+        }
+        try {
+            Vector3d seat = manager.shipPoint(f, p.seatLocal);
+            if (r.mode == Mode.MOUNT) {
+                setHover(store, r, false);
+                mount(store, f, r);
+            } else {
+                teleport(store, p.ref, seat);
             }
-            try {
-                Vector3d seat = manager.shipPoint(f, p.seatLocal);
-                if (r.mode == Mode.MOUNT) {
-                    setHover(store, r, false);
-                    mount(store, f, r);
-                } else {
-                    teleport(store, p.ref, seat);
-                }
-                r.lastSeat = seat;
-                r.lastSeatMs = now;
-                r.pauseUntilMs = now + GRACE_MS;
-                p.boardedMs = now;
-                BalloonManager.get().applyPose(store, p, now);
-                PlayerRef pr = store.getComponent(p.ref, PlayerRef.getComponentType());
-                if (pr != null) {
-                    pr.sendMessage(Texts.t("airship.passenger.seated"));
-                }
-                LOGGER.at(Level.INFO).log("Passager du dirigeable %s : tabouret %s, %s", p.name, p.seatBlock, r.mode);
-            } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager du dirigeable %s non installé", p.name);
+            r.lastSeat = seat;
+            r.lastSeatMs = now;
+            r.pauseUntilMs = now + GRACE_MS;
+            p.boardedMs = now;
+            BalloonManager.get().applyPose(store, p, now);
+            PlayerRef pr = store.getComponent(p.ref, PlayerRef.getComponentType());
+            if (pr != null) {
+                boolean chair = p.seatBlock != null && p.seatBlock.x == CHAIR[0] && p.seatBlock.y == CHAIR[1] && p.seatBlock.z == CHAIR[2];
+                pr.sendMessage(Texts.t(chair ? "crew.voyage.seatedChair" : "airship.passenger.seated"));
             }
+            LOGGER.at(Level.INFO).log("Passager du dirigeable %s : tabouret %s, %s", p.name, p.seatBlock, r.mode);
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Passager du dirigeable %s non installé", p.name);
         }
     }
 
@@ -330,12 +368,13 @@ final class AirshipPassengers {
                 p.camYaw = PassengerCamera.inwardYaw(seat, centre, new Vector3f((float) (ahead.x - centre.x), 0, (float) (ahead.z - centre.z)));
                 p.camYawSet = true;
             }
-            // First-person fixed view from the seat on the entity the rider sees (the offset turns with the ship like the mount offset), the
-            // body is not mounted and follows by itself, safety teleport beyond PassengerCamera's distance.
+            // External view (T124, since 16 October 2026 also for the airship): behind the ship's movement, the body is not mounted and
+            // follows by itself, safety teleport beyond PassengerCamera's distance.
             Vector3f d = new Vector3f(p.seatLocal).sub(Deployables.AIRSHIP.airship.pivot);
-            // T118: camera anchor, mannequins and hidden body (PassengerSeatView), the camera is attached to the anchor.
+            // T118: mannequins and hidden body (PassengerSeatView), the external camera is attached to the entity the rider sees.
             PassengerSeatView.sync(store, p, new PassengerSeatView.Ctx(f.shipUuid, f.shipRef, f.observerRef, f.dual, f.pilotUuid,
-                    new Vector3f(-d.x, d.y, -d.z), seat, f.seatViews, true, null), now);
+                    new Vector3f(-d.x, d.y, -d.z), seat, f.seatViews,
+                    new PassengerCamera.Source(Deployables.AIRSHIP, f.pos, PassengerCamera.behindHeading(f.theta)[0], PassengerCamera.behindHeading(f.theta)[1], Math.abs(f.yawRate) > PassengerCamera.TURNING_YAW_RATE)), now);
             PassengerCamera.safetyTeleport(store, p, seat);
             return;
         }
@@ -418,7 +457,7 @@ final class AirshipPassengers {
         });
     }
 
-    private static void teleport(Store<EntityStore> store, Ref<EntityStore> ref, Vector3d to) {
+    static void teleport(Store<EntityStore> store, Ref<EntityStore> ref, Vector3d to) {
         TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
         Rotation3f look = t != null ? new Rotation3f(t.getRotation()) : new Rotation3f();
         store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(new Vector3d(to), look));
@@ -596,10 +635,42 @@ final class AirshipPassengers {
         }
     }
 
+    /** Glider jump: a rider released and moved to the exit point below the ship; the ship keeps flying. */
+    boolean eject(Store<EntityStore> store, AirshipFlight f, Rider r, Vector3d exit) {
+        if (!r.p.ref.isValid()) {
+            return false;
+        }
+        f.riders.remove(r);
+        final Ref<EntityStore> ref = r.p.ref;
+        TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
+        Rotation3f look = t != null ? new Rotation3f(t.getRotation()) : new Rotation3f();
+        release(store, r);
+        if (t != null) {
+            t.setPosition(exit);
+        }
+        // Mount and camera are removed by release: the teleport goes out on the next tick.
+        f.world.execute(() -> {
+            if (ref.isValid()) {
+                store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(exit, look));
+            }
+        });
+        return true;
+    }
+
     /** A rider who died: released without being moved (the respawn moves them). */
     void releaseDead(Store<EntityStore> store, AirshipFlight f, Rider r) {
         release(store, r);
         f.riders.remove(r);
+    }
+
+    /** Sends a pilot line with the {dest} parameter to every rider. */
+    static void tell(Store<EntityStore> store, AirshipFlight f, String key, String dest) {
+        for (Rider r : f.riders) {
+            PlayerRef pr = r.p.ref.isValid() ? store.getComponent(r.p.ref, PlayerRef.getComponentType()) : null;
+            if (pr != null) {
+                pr.sendMessage(Texts.pilot(key, f.crew).param("dest", dest));
+            }
+        }
     }
 
     /** Sends a message to every rider. */
@@ -607,7 +678,7 @@ final class AirshipPassengers {
         for (Rider r : f.riders) {
             PlayerRef pr = r.p.ref.isValid() ? store.getComponent(r.p.ref, PlayerRef.getComponentType()) : null;
             if (pr != null) {
-                pr.sendMessage(Texts.t(key));
+                pr.sendMessage(Texts.pilot(key, f.crew));
             }
         }
     }
@@ -663,6 +734,7 @@ final class AirshipPassengers {
                     MountUtil.unseat(store, online);
                     BalloonManager.clearSittingFlag(store, online);
                     PassengerProtection.clearStale(store, online); // the registry did not survive the restart
+                    CaptainMap.removeAll(store, online); // T141: a voyage map left by the crash
                     MovementManager mm = store.getComponent(online, MovementManager.getComponentType());
                     if (mm != null) {
                         mm.resetDefaultsAndUpdate(online, store);

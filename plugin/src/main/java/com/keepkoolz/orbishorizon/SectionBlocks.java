@@ -1,9 +1,15 @@
 package com.keepkoolz.orbishorizon;
 
+import com.hypixel.hytale.component.Component;
+import com.hypixel.hytale.component.ComponentType;
+import com.hypixel.hytale.component.Holder;
 import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
+import com.hypixel.hytale.server.core.modules.block.BlockModule;
 import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
+import com.hypixel.hytale.server.core.universe.world.chunk.section.BlockComponentSection;
 import com.hypixel.hytale.server.core.universe.world.chunk.BlockOperations;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 
@@ -72,6 +78,44 @@ final class SectionBlocks {
             return false;
         }
         return store.getStore().getComponent(ref, ChunkStore.REGISTRY.getNonTickingComponentType()) == null;
+    }
+
+    private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
+    private static volatile boolean componentFailureLogged;
+
+    /**
+     * Block component at a position, also in a section without players near. 0.7 removes the block entities of a NonTicking section
+     * from the store (BlockComponentSection$BlockComponentSectionLoadingSystem, reason UNLOAD) and keeps their Holder in the section:
+     * BlockModule.getComponent then returns null. The component of that holder is the one put back when the section ticks again, so
+     * reading or emptying it here is the same as on a live entity (hypothesis: changes are kept and saved). Null if there is none.
+     * Never throws.
+     */
+    static <T extends Component<ChunkStore>> T blockComponent(ChunkStore cs, ComponentType<ChunkStore, T> type, int x, int y, int z) {
+        try {
+            Ref<ChunkStore> section = cs.getChunkSectionReferenceAtBlock(x, y, z);
+            if (section == null || !section.isValid()) {
+                return null;
+            }
+            Ref<ChunkStore> entity = BlockModule.getBlockEntity(cs.getStore(), section, x, y, z);
+            if (entity != null && entity.isValid()) {
+                T live = cs.getStore().getComponent(entity, type);
+                if (live != null) {
+                    return live;
+                }
+            }
+            BlockComponentSection bcs = cs.getStore().getComponent(section, BlockComponentSection.getComponentType());
+            if (bcs == null) {
+                return null;
+            }
+            Holder<ChunkStore> holder = bcs.getBlockHolder(ChunkUtil.indexBlock(x, y, z));
+            return holder != null ? holder.getComponent(type) : null;
+        } catch (RuntimeException e) {
+            if (!componentFailureLogged) {
+                componentFailureLogged = true;
+                LOGGER.at(java.util.logging.Level.WARNING).withCause(e).log("Lecture d'un composant de bloc impossible");
+            }
+            return null;
+        }
     }
 
     /** Changes the interaction state of a block (same call and last argument as the bench upgrade in AirshipBenches). */

@@ -255,6 +255,12 @@ public final class BalloonManager {
         return kind.balloon.pivot;
     }
 
+    /** T124: the flight as the passenger external view sees it (behind the flight orientation before the first move, forward is the prefab -z axis). */
+    private static PassengerCamera.Source balloonView(BalloonFlight flight) {
+        Vector3f fwd = flight.rotation.rotateYaw(new Vector3f(0, 0, -1), new Vector3f());
+        return new PassengerCamera.Source(flight.kind, flight.entityPos, -fwd.x, -fwd.z);
+    }
+
     /** Model used by a flight of this type: the forced one (test) or the type's own. */
     private String modelFor(Deployables.Kind kind) {
         String o = modelOverride;
@@ -416,7 +422,7 @@ public final class BalloonManager {
         return flights.containsKey(pilot);
     }
 
-    Iterable<BalloonFlight> flights() {
+    Iterable<BalloonFlight> flights() { // all worlds: callers filter on flight.world
         return flights.values();
     }
 
@@ -525,6 +531,9 @@ public final class BalloonManager {
                           Ref<EntityStore> pilotRef, PlayerRef player, boolean dry, List<Occupant> passengers, int groundCage) {
         StructureShape s = groundCage > 0 ? TransportCage.noCageShape(prefabShape) : prefabShape;
         boolean pilotless = pilotRef == null;
+        if (!StructureComponents.unreadable(world, s, found.origin, found.rotation).isEmpty()) {
+            return Texts.t("structure.componentsMissing"); // nothing is read or removed yet
+        }
         TransformComponent pilotTransform = pilotless ? null
                 : store.getComponent(pilotRef, TransformComponent.getComponentType());
         if (!pilotless && pilotTransform == null) {
@@ -879,7 +888,11 @@ public final class BalloonManager {
             return false;
         }
         String n = id.startsWith("*") ? id.substring(1) : id;
-        return n.startsWith(c.baseName());
+        if (n.startsWith(c.baseName())) {
+            return true;
+        }
+        // T148: ships posed before the captain's desk still hold the game's Deco_Map in that cell.
+        return "Airship_Captain_Map_Desk".equals(c.baseName()) && n.startsWith("Deco_Map");
     }
 
     private Ref<EntityStore> spawnModelEntity(Store<EntityStore> store, Vector3d position, Rotation rotation, String id) {
@@ -1093,7 +1106,7 @@ public final class BalloonManager {
 
     // ------------------------------------------------------------------ landing
 
-    public Message land(Store<EntityStore> store, PlayerRef player) {
+    public Message land(Store<EntityStore> store, PlayerRef player, boolean voluntary) {
         BalloonFlight flight = flights.get(player.getUuid());
         if (flight == null) {
             return Texts.t("error.notPiloting");
@@ -1113,6 +1126,10 @@ public final class BalloonManager {
                 if (collides(flight.world, flight.kind.shape(), here, flight.rotation)) {
                     return Texts.t("error.noRoom");
                 }
+                Message zone = stationZoneCheck(flight, here, flight.rotation, voluntary);
+                if (zone != null) {
+                    return zone;
+                }
             } catch (IOException e) {
                 return Texts.t("error.prefabUnreadable").param("error", String.valueOf(e.getMessage()));
             }
@@ -1125,15 +1142,16 @@ public final class BalloonManager {
         }
         // New orientation: that of the pilot's look direction, as at deployment.
         Rotation facing = Rotation.closestOfDegrees((float) Math.toDegrees(pilot.getRotation().y));
-        Message error = landWith(store, flight, pilot, facing.add(LANDING_ROTATION_OFFSET));
+        Message error = landWith(store, flight, pilot, facing.add(LANDING_ROTATION_OFFSET), voluntary);
         if (error != null && flight.rotation != facing.add(LANDING_ROTATION_OFFSET)) {
             // No room in the look direction: keep the flight's orientation.
-            error = landWith(store, flight, pilot, flight.rotation);
+            error = landWith(store, flight, pilot, flight.rotation, voluntary);
         }
         return error;
     }
 
-    private Message landWith(Store<EntityStore> store, BalloonFlight flight, TransformComponent pilot, Rotation newRotation) {
+    private Message landWith(Store<EntityStore> store, BalloonFlight flight, TransformComponent pilot, Rotation newRotation,
+                             boolean voluntary) {
         // Pilot position in the prefab frame (measured at take-off), then the origin
         // that keeps the pilot at the same spot in the gondola with the new orientation.
         Vector3f local = Rotation.None.subtract(flight.rotation)
@@ -1149,10 +1167,37 @@ public final class BalloonManager {
             if (collides(flight.world, flight.kind.shape(), origin, newRotation)) {
                 return Texts.t("error.noRoom");
             }
+            Message zone = stationZoneCheck(flight, origin, newRotation, voluntary);
+            if (zone != null) {
+                return zone;
+            }
         } catch (IOException e) {
             return Texts.t("error.prefabUnreadable").param("error", String.valueOf(e.getMessage()));
         }
         finishFlight(store, flight, origin, newRotation);
+        return null;
+    }
+
+    /**
+     * Protected station zone: a voluntary landing inside it is refused (message returned); a forced one is logged and goes
+     * ahead (null returned).
+     */
+    private Message stationZoneCheck(BalloonFlight flight, Vector3i origin, Rotation rotation, boolean voluntary) throws IOException {
+        String station;
+        try {
+            station = StationZone.blockingStation(flight.world, flight.kind.id, flight.kind.shape(), origin, rotation);
+        } catch (RuntimeException e) {
+            // A failing lookup must never break a pose, forced or voluntary: treated as "no zone".
+            LOGGER.at(Level.WARNING).withCause(e).log("Zone des stations non vérifiée (%s) : traitée comme absente", flight.kind.id);
+            return null;
+        }
+        if (station == null) {
+            return null;
+        }
+        if (voluntary) {
+            return Texts.t("deploy.stationZone").param("station", station);
+        }
+        LOGGER.at(Level.INFO).log("Pose forcée dans la zone de la station %s (%s, origine %s)", station, flight.kind.id, origin);
         return null;
     }
 
@@ -1637,7 +1682,7 @@ public final class BalloonManager {
         if (flight == null || flight.stopping) {
             return;
         }
-        Message error = land(store, player);
+        Message error = land(store, player, true);
         player.sendMessage(error == null ? Texts.t("stopped") : Texts.t("landFailedContinue").param("error", error));
     }
 
@@ -1905,7 +1950,7 @@ public final class BalloonManager {
                 Vector3d pilotPos = pt != null ? new Vector3d(pt.getPosition()) : null;
                 boolean landed = false;
                 if (player != null && !flight.driven) {
-                    landed = land(store, player) == null;
+                    landed = land(store, player, false) == null;
                 }
                 if (!landed) {
                     pilotDied(store, world, flight, false);
@@ -2036,7 +2081,7 @@ public final class BalloonManager {
                 flight.takeOver = true;
                 Message error = null;
                 try {
-                    error = landWith(store, flight, pilotPos, flight.rotation);
+                    error = landWith(store, flight, pilotPos, flight.rotation, false);
                 } catch (RuntimeException e) {
                     LOGGER.at(Level.WARNING).withCause(e).log("Pose sur place après la mort du pilote %s en échec", name);
                     error = Texts.t("error.noRoom");
@@ -2116,6 +2161,54 @@ public final class BalloonManager {
         }
         releaseDeadPassenger(store, flight, p);
         LOGGER.at(Level.INFO).log("Passager %s mort en vol : démonté, le vol continue", p.name);
+    }
+
+    /**
+     * Glider jump: the passenger leaves the vehicle at a point below it and falls from there. The vehicle keeps flying.
+     * Returns false (nothing changed) if the player is not a passenger of this flight. Never throws.
+     */
+    GliderJump.Result ejectPassenger(Store<EntityStore> store, BalloonFlight flight, UUID uuid) {
+        try {
+            BalloonFlight.Passenger p = null;
+            for (BalloonFlight.Passenger q : flight.passengers) {
+                if (q.uuid.equals(uuid)) {
+                    p = q;
+                    break;
+                }
+            }
+            if (p == null || !p.ref.isValid()) {
+                return GliderJump.Result.FAILED;
+            }
+            StructureShape shape = flight.groundCage > 0 ? TransportCage.noCageShape(flight.kind.shape()) : flight.kind.shape();
+            final Vector3d dest = prefabPoint(flight.entityPos, flight.rotation,
+                    GliderJump.exitLocal(p.seatLocal, GliderJump.lowestFlightY(shape)));
+            if (GliderJump.exitBlocked(flight.world, dest)) {
+                return GliderJump.Result.TOO_LOW;
+            }
+            final Ref<EntityStore> ref = p.ref;
+            TransformComponent pt = store.getComponent(ref, TransformComponent.getComponentType());
+            Rotation3f look = pt != null ? new Rotation3f(pt.getRotation()) : new Rotation3f();
+            if (ref.equals(flight.pilotRef)) {
+                // The seated pilot of a dry descent: same path as T75 (pilot left), the flight becomes pilotless with a new id.
+                pilotDied(store, flight.world, flight, false);
+            } else {
+                releaseDeadPassenger(store, flight, p);
+            }
+            if (pt != null) {
+                pt.setPosition(dest);
+            }
+            // The mount and camera are removed above: the teleport goes out on the next tick (it could be lost on a mounted entity).
+            flight.world.execute(() -> {
+                if (ref.isValid()) {
+                    store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(dest, look));
+                }
+            });
+            LOGGER.at(Level.INFO).log("Saut en glider : passager %s éjecté en (%.1f, %.1f, %.1f)", p.name, dest.x, dest.y, dest.z);
+            return GliderJump.Result.DONE;
+        } catch (RuntimeException | java.io.IOException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Saut en glider : éjection du passager en échec");
+            return GliderJump.Result.FAILED;
+        }
     }
 
     /** Dismounts a dead player without teleporting them: mount removed, seated pose undone, flight settings restored. Never throws. */
@@ -3219,7 +3312,8 @@ public final class BalloonManager {
                 }
                 // T118: camera anchor, mannequins and hidden body (PassengerSeatView), the camera is attached to the anchor.
                 PassengerSeatView.sync(store, p, new PassengerSeatView.Ctx(flight.balloonUuid, flight.balloonRef, flight.observerRef,
-                        flight.dual, flight.pilotUuid, attachOffset(flight.kind, p.seatLocal), seatWorld, flight.seatViews, false, flight), now);
+                        flight.dual, flight.pilotUuid, attachOffset(flight.kind, p.seatLocal), seatWorld, flight.seatViews,
+                        balloonView(flight)), now);
                 PassengerCamera.safetyTeleport(store, p, seatWorld);
                 continue;
             }
@@ -3524,6 +3618,7 @@ public final class BalloonManager {
             }
             // T126: a marker the mod placed and could not remove (world change, crash) is removed on every arrival.
             PassengerProtection.clearOnArrival(holder, pr.getUuid());
+            CaptainMap.removeAll(holder); // T141: a captain's map left by a crash
             BalloonResume.Stranded st = BalloonResume.takeStranded(pr.getUuid(), world.getName());
             if (st == null) {
                 return;

@@ -33,10 +33,15 @@ record Ownership(UUID id, UUID owner, String ownerName, boolean shared) {
      * otherwise the pilot becomes the owner (a balloon placed before this feature has none). Never without an id.
      */
     static Ownership landingOwner(Ownership flight, UUID pilot, String pilotName) {
+        return landingOwner(flight, pilot, pilotName, true);
+    }
+
+    /** Same, but the pilot does not become the owner when pilotMayOwn is false (airship limit). */
+    static Ownership landingOwner(Ownership flight, UUID pilot, String pilotName, boolean pilotMayOwn) {
         if (flight.owner() != null) {
             return flight.withId();
         }
-        if (pilot != null) {
+        if (pilot != null && pilotMayOwn) {
             return flight.withOwner(pilot, pilotName).withId();
         }
         return flight.withId();

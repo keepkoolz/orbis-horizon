@@ -1,0 +1,21 @@
+{
+  "Type": "Generic",
+  "DefaultNPCAttitude": "Ignore",
+  "DefaultPlayerAttitude": "Neutral",
+  "Appearance": "Player",
+  "MaxHealth": 50,
+  "Invulnerable": true,
+  "DisableDamageGroups": [ "Self" ],
+  "MotionControllerList": [
+    { "Type": "Walk", "MaxWalkSpeed": 3, "Gravity": 10, "RunThreshold": 0.7,
+      "MaxFallSpeed": 15, "MaxRotationSpeed": 360, "Acceleration": 10, "MaxClimbHeight": 1.2 }
+  ],
+  "Instructions": [
+    {
+      "Sensor": { "Type": "Leash", "Range": 0.35 },
+      "BodyMotion": { "Type": "Seek", "StopDistance": 0.15, "SlowDownDistance": 1.0, "AbortDistance": 200, "RelativeSpeed": 0.55 }
+    },
+    { "Sensor": { "Type": "Any" }, "BodyMotion": { "Type": "Nothing" } }
+  ],
+  "NameTranslationKey": "server.orbis_horizon.chat.crew.pilot.role"
+}

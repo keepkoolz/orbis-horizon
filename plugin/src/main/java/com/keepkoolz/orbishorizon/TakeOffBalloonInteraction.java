@@ -47,7 +47,7 @@ public class TakeOffBalloonInteraction extends SimpleInstantInteraction {
             }
             BalloonManager manager = BalloonManager.get();
             if (manager.isFlying(player.getUuid())) {
-                Message error = manager.land(store, player);
+                Message error = manager.land(store, player, true);
                 player.sendMessage(error != null ? error : Texts.t("landed"));
             } else {
                 Message error = manager.takeOff(store, ref, player, world, chain);

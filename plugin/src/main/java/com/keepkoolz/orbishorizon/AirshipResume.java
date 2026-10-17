@@ -37,7 +37,30 @@ final class AirshipResume {
     /** A flight read back from disk. pivotX/Y/Z: last valid pivot cell (integers), heading in radians. */
     record Record(UUID id, UUID pilot, String world, int pivotX, int pivotY, int pivotZ, double heading, UUID ship,
                   BalloonCargo cargo, AirshipEngines engines, org.joml.Vector3i takeoffOrigin, com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation takeoffRotation,
-                  AirshipBenches benches, List<AirshipPassengers.Saved> riders, Ownership ownership) {
+                  AirshipBenches benches, List<AirshipPassengers.Saved> riders, Ownership ownership, CrewRecord crew, VoyageState voyage,
+                  AirshipBenchContents benchContents, RecallState.Saved recall, int[] takeoffRungs) {
+    }
+
+    /** Rung cells {x, y, z} as a flat BSON array of ints. */
+    static org.bson.BsonArray rungsToBson(int[] flat) {
+        org.bson.BsonArray a = new org.bson.BsonArray();
+        for (int v : flat) {
+            a.add(new BsonInt32(v));
+        }
+        return a;
+    }
+
+    /** Reads the key "takeoffRungs" (absent in older files: null). */
+    static int[] rungsFromBson(BsonDocument doc) {
+        if (doc == null || !doc.containsKey("takeoffRungs")) {
+            return null;
+        }
+        org.bson.BsonArray a = doc.getArray("takeoffRungs");
+        int[] flat = new int[a.size()];
+        for (int i = 0; i < flat.length; i++) {
+            flat[i] = a.get(i).asNumber().intValue();
+        }
+        return flat;
     }
 
     private AirshipResume() {
@@ -96,6 +119,24 @@ final class AirshipResume {
                 doc.put("passengers", AirshipPassengers.toBson(f)); // T64: uuid and stool of each passenger
             }
             f.ownership.writeTo(doc); // keys absent in older files: read back as NONE
+            if (f.crew != null) {
+                doc.put("crew", f.crew.toBson()); // T133: optional NPC pilot
+            }
+            if (f.voyage != null) {
+                doc.put("voyage", f.voyage.toBson()); // T140: optional, the voyage is not resumed (the ship is put down)
+            }
+            if (f.benchContents != null) {
+                doc.put("benchContents", f.benchContents.toBson().get("benchContents")); // contents of the other benches, frozen
+            }
+            int[] rungs = f.takeoffRungs;
+            if (rungs != null && rungs.length > 0) {
+                doc.put("takeoffRungs", rungsToBson(rungs)); // removed at a resume if an older world save brought them back
+            }
+            RecallState rs = f.recall != null ? f.recall : (f.quayStation != null ? f.recallInfo : null);
+            if (rs != null) {
+                // 17 October 2026: a recalled ship that is resumed is put down at its leave point, never above the station.
+                doc.put("recall", AirshipRecall.savedOf(rs, f.world).toBson());
+            }
             byte[] bytes = doc.toJson().getBytes(StandardCharsets.UTF_8);
             Files.createDirectories(d);
             Path tmp = d.resolve(f.id + ".json.tmp");
@@ -171,7 +212,14 @@ final class AirshipResume {
                         doc.containsKey("benches") ? AirshipBenches.fromBson(doc.getDocument("benches")) : null,
                         // T64: absent without passengers or in older files.
                         doc.containsKey("passengers") ? AirshipPassengers.fromBson(doc.getArray("passengers")) : null,
-                        Ownership.readFrom(doc)));
+                        Ownership.readFrom(doc),
+                        // T133: NPC pilot, absent without pilot or in older files.
+                        doc.containsKey("crew") ? CrewRecord.fromBson(doc.getDocument("crew")) : null,
+                        doc.containsKey("voyage") ? VoyageState.fromBson(doc.getDocument("voyage")) : null,
+                        // Absent in older files: no bench contents.
+                        AirshipBenchContents.fromBson(doc),
+                        doc.containsKey("recall") ? RecallState.Saved.fromBson(doc.getDocument("recall")) : null,
+                        rungsFromBson(doc)));
             } catch (IOException | RuntimeException e) {
                 LOGGER.at(Level.SEVERE).withCause(e).log("Fichier de reprise de dirigeable illisible : %s", p);
                 try {

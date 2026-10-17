@@ -9,7 +9,7 @@
     {
       "SpawnerId": "Airship_Burner_Weak_Tip_Smoke",
       "PositionOffset": {
-        "Z": 0.7
+        "Z": 1.0
       }
     }
   ],

@@ -23,12 +23,10 @@ import org.joml.Vector3d;
 import java.util.logging.Level;
 
 /**
- * T124: balloons (all types) give their passengers an external view (attachExternal, behind the travel direction, looking at the balloon);
- * the airship keeps the seat view below.
- * Passenger view of a flight (transit balloons, piloted balloons, airship, shared by BalloonManager and AirshipPassengers): a first-person camera attached to the balloon entity the client sees (SetServerCamera, attachedToType
- * EntityId, like SpectatorSystems.applyFollowCamera but not locked and without Spectating), at the seat's eye point, with a fixed random horizontal
- * rotation drawn once per passenger at boarding. The camera cannot look around (an entity-attached camera gives no client look). The body is not mounted: it stays parked in
- * forced flight at zero speed, follows the balloon by itself and is teleported back to the seat only beyond TransitConstants.BODY_SAFETY_DISTANCE.
+ * Passenger view of a flight (transit balloons, piloted balloons, airship, shared by BalloonManager and AirshipPassengers): T124 external
+ * view (attachExternal) for every vehicle, balloons and airship since 16 October 2026 (the inside view was unpleasant): camera attached to the entity the client
+ * sees, behind the horizontal movement of the vehicle and above, looking at the middle of it. The body is not mounted: it stays parked in
+ * forced flight at zero speed, follows the vehicle by itself and is teleported back to the seat only beyond TransitConstants.BODY_SAFETY_DISTANCE.
  * Never throws.
  */
 final class PassengerCamera {
@@ -38,58 +36,30 @@ final class PassengerCamera {
     }
 
     /**
-     * Sends the camera. Position offset = the offset given by the caller from the entity it attaches to (T118: zero, the target is the
-     * seat camera anchor of PassengerSeatView, which already sits at the seat's eye point and turns with the vehicle). Rotation Custom and fixed: a random yaw in [0, 2 pi) drawn once per passenger at boarding, pitch 0.
-     * The camera is re-sent (same yaw) when the entity the client sees changes.
+     * What the external view needs from a vehicle for one tick: its type (framing), the live position of the entity the camera follows and the
+     * horizontal direction behind its heading (used before the first movement). Built every tick by the caller.
      */
-    static void attach(Store<EntityStore> store, BalloonFlight.Passenger p, Ref<EntityStore> target, org.joml.Vector3f off) {
-        attach(store, p, target, off, false);
+    record Source(Deployables.Kind kind, Vector3d pos, double behindX, double behindZ, boolean turning) {
+        /** Balloons never turn: only the airship passes turning. */
+        Source(Deployables.Kind kind, Vector3d pos, double behindX, double behindZ) {
+            this(kind, pos, behindX, behindZ, false);
+        }
     }
 
-    /** T119: camera yaw mode, true (default) = relative to the anchor (turns with the vehicle), false = fixed in the world (T118). Next camera send. */
-    static volatile boolean relativeYaw = false; // relative had no visible effect in game (11 October 2026): world yaw (Custom) by default
+    /** Yaw rate (rad/s) above which the airship counts as turning in place for the external view (about 1 degree per second). */
+    static final double TURNING_YAW_RATE = Math.toRadians(1.0);
 
     /**
-     * Same. anchored: the target is the camera anchor of PassengerSeatView, whose yaw copies the vehicle's: with relativeYaw the rotation
-     * is AttachedToPlusOffset with the random yaw as offset, so the client composes it with the anchor's rotation. The fallback camera
-     * (no anchor yet) stays Custom.
+     * Pure decision: re-send the external view only when the vehicle is not turning, moved enough horizontally, and its travel direction
+     * changed by more than the threshold. A heading change alone never re-sends. Pinned by TransitTests.viewResend.
      */
-    static void attach(Store<EntityStore> store, BalloonFlight.Passenger p, Ref<EntityStore> target, org.joml.Vector3f off, boolean anchored) {
-        try {
-            PlayerRef pr = store.getComponent(p.ref, PlayerRef.getComponentType());
-            NetworkId nid = target != null && target.isValid() ? store.getComponent(target, NetworkId.getComponentType()) : null;
-            if (pr == null || nid == null) {
-                return;
-            }
-            if (!p.camYawSet) { // drawn once per passenger at boarding, kept when the camera is re-sent
-                p.camYaw = randomSeatYaw(java.util.concurrent.ThreadLocalRandom.current());
-                p.camYawSet = true;
-            }
-            ServerCameraSettings s = new ServerCameraSettings();
-            s.attachedToType = AttachedToType.EntityId;
-            s.attachedToEntityId = nid.getId();
-            s.followAttachedEntity = true;
-            s.eyeOffset = false;
-            s.isFirstPerson = true;
-            s.positionType = PositionType.AttachedToPlusOffset;
-            s.positionOffset = new Position(off.x, off.y, off.z);
-            s.positionLerpSpeed = 1f;
-            s.rotationType = RotationType.Custom;
-            s.applyLookType = ApplyLookType.LocalPlayerLookOrientation;
-            s.allowPitchControls = false;
-            s.displayReticle = false;
-            s.skipCharacterPhysics = true;
-            s.rotation = new Direction(p.camYaw, 0f, 0f);
-            if (anchored && relativeYaw) {
-                s.rotationType = RotationType.AttachedToPlusOffset;
-                s.rotationOffset = new Direction(p.camYaw, 0f, 0f);
-            }
-            pr.getPacketHandler().writeNoCache(new SetServerCamera(ClientCameraView.Custom, false, s));
-            p.cameraOn = true;
-            p.cameraTargetId = nid.getId();
-        } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Caméra du passager %s non envoyée", p.name);
-        }
+    static boolean shouldResend(boolean turning, double travelled, double changeDegrees) {
+        return !turning && travelled >= TransitConstants.VIEW_DIRECTION_MIN_MOVE && changeDegrees > TransitConstants.VIEW_DIRECTION_CHANGE_DEGREES;
+    }
+
+    /** Horizontal direction behind a heading yaw theta of the mod (bow = (-sin, -cos), so behind = (sin, cos)). Pure, pinned by TransitTests.behindHeading. */
+    static double[] behindHeading(double theta) {
+        return new double[]{Math.sin(theta), Math.cos(theta)};
     }
 
     /** T124: camera distance (times the balloon size) and height (times the distance) of the external view, op setting, not saved. */
@@ -107,15 +77,23 @@ final class PassengerCamera {
      * Pinned by TransitTests.externalView.
      */
     static ExternalView externalView(double dirX, double dirZ, double size, double distanceFactor, double heightFactor) {
+        return externalView(dirX, dirZ, size, distanceFactor, heightFactor, 0);
+    }
+
+    /** Extra horizontal recoil (blocks) added to the airship's external camera (user request, 16 October 2026). */
+    static final double AIRSHIP_EXTRA_DISTANCE = 8.0;
+
+    /** Same with an extra horizontal recoil in blocks; the height stays heightFactor times the total recoil. */
+    static ExternalView externalView(double dirX, double dirZ, double size, double distanceFactor, double heightFactor, double extra) {
         double len = Math.max(1e-6, Math.hypot(dirX, dirZ));
-        double back = distanceFactor * size;
+        double back = distanceFactor * size + extra;
         double wx = dirX / len * back;
         double wz = dirZ / len * back;
         double dy = heightFactor * back;
         return new ExternalView((float) wx, (float) dy, (float) wz, (float) Math.atan2(wx, wz), (float) Math.atan2(-dy, Math.hypot(wx, wz)));
     }
 
-    /** Aim point (vertical middle of the flight cells relative to the pivot) and size (largest of height, width x, width z) of a balloon type. */
+    /** Aim point (vertical middle of the flight cells relative to the pivot) and size (largest of height, width x, width z) of a vehicle type. */
     record Framing(double centreY, double size) {
     }
 
@@ -146,17 +124,18 @@ final class PassengerCamera {
             }
             double h = maxY - minY + 1;
             double size = Math.max(h, Math.max(maxX - minX + 1, maxZ - minZ + 1));
-            return new Framing((minY + maxY + 1) / 2.0 - BalloonManager.pivot(k).y, size);
+            org.joml.Vector3f pv = k.balloon != null ? BalloonManager.pivot(k) : k.airship.pivot;
+            return new Framing((minY + maxY + 1) / 2.0 - pv.y, size);
         });
     }
 
     /**
-     * T124: sends the external view of a balloon passenger: camera attached to the entity the client sees, behind the travel direction
+     * T124: sends the external view of a passenger (balloon or airship): camera attached to the entity the client sees, behind the travel direction
      * and above, looking at the middle of the balloon. The position offset is in the world frame (not turned by the client). Direction:
-     * opposite to the horizontal move of the entity (before the first move: behind the flight orientation, forward is the prefab -z axis).
+     * opposite to the horizontal move of the entity (before the first move: behind the heading, given by the source).
      * Re-sent by directionChanged. Never throws.
      */
-    static void attachExternal(Store<EntityStore> store, BalloonFlight flight, BalloonFlight.Passenger p, Ref<EntityStore> target) {
+    static void attachExternal(Store<EntityStore> store, Source src, BalloonFlight.Passenger p, Ref<EntityStore> target) {
         try {
             PlayerRef pr = store.getComponent(p.ref, PlayerRef.getComponentType());
             NetworkId nid = target != null && target.isValid() ? store.getComponent(target, NetworkId.getComponentType()) : null;
@@ -164,15 +143,15 @@ final class PassengerCamera {
                 return;
             }
             if (!p.camDirSet) {
-                org.joml.Vector3f fwd = flight.rotation.rotateYaw(new org.joml.Vector3f(0, 0, -1), new org.joml.Vector3f());
-                p.camDirX = -fwd.x;
-                p.camDirZ = -fwd.z;
+                p.camDirX = src.behindX();
+                p.camDirZ = src.behindZ();
                 p.camDirSet = true;
-                p.camLastX = flight.entityPos.x;
-                p.camLastZ = flight.entityPos.z;
+                p.camLastX = src.pos().x;
+                p.camLastZ = src.pos().z;
             }
-            Framing f = framing(flight.kind);
-            ExternalView v = externalView(p.camDirX, p.camDirZ, f.size(), distanceFactor, heightFactor);
+            Framing f = framing(src.kind());
+            ExternalView v = externalView(p.camDirX, p.camDirZ, f.size(), distanceFactor, heightFactor,
+                    src.kind() == Deployables.AIRSHIP ? AIRSHIP_EXTRA_DISTANCE : 0);
             ServerCameraSettings s = new ServerCameraSettings();
             s.attachedToType = AttachedToType.EntityId;
             s.attachedToEntityId = nid.getId();
@@ -198,21 +177,27 @@ final class PassengerCamera {
     }
 
     /** True when the balloon's travel direction changed enough (after enough horizontal move) to re-send the external view. */
-    static boolean directionChanged(BalloonFlight flight, BalloonFlight.Passenger p) {
+    static boolean directionChanged(Source src, BalloonFlight.Passenger p) {
         if (!p.camDirSet) {
             return false;
         }
-        double mx = flight.entityPos.x - p.camLastX;
-        double mz = flight.entityPos.z - p.camLastZ;
+        if (src.turning()) {
+            // The rider's position sweeps an arc while the ship turns: not travel. Re-baseline so the arc is not counted later.
+            p.camLastX = src.pos().x;
+            p.camLastZ = src.pos().z;
+            return false;
+        }
+        double mx = src.pos().x - p.camLastX;
+        double mz = src.pos().z - p.camLastZ;
         if (Math.hypot(mx, mz) < TransitConstants.VIEW_DIRECTION_MIN_MOVE) {
             return false;
         }
-        p.camLastX = flight.entityPos.x;
-        p.camLastZ = flight.entityPos.z;
+        p.camLastX = src.pos().x;
+        p.camLastZ = src.pos().z;
         double nx = -mx;
         double nz = -mz;
         double cos = (nx * p.camDirX + nz * p.camDirZ) / (Math.hypot(nx, nz) * Math.max(1e-6, Math.hypot(p.camDirX, p.camDirZ)));
-        if (Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, cos)))) > TransitConstants.VIEW_DIRECTION_CHANGE_DEGREES) {
+        if (shouldResend(false, Math.hypot(mx, mz), Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, cos)))))) {
             p.camDirX = nx;
             p.camDirZ = nz;
             return true;

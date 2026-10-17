@@ -59,4 +59,8 @@ final class TransitConstants {
     static final int REMOVE_RADIUS = 48;
     /** Passenger capacity of a public balloon. */
     static final int PASSENGERS = 12;
+    /** Radius of the protected cylinder around a station (blocks). */
+    static final int STATION_ZONE_RADIUS = 32;
+    /** Height of the protected cylinder above the pad (blocks). */
+    static final int STATION_ZONE_HEIGHT = 40;
 }

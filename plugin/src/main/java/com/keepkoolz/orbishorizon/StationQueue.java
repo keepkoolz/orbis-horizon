@@ -32,7 +32,7 @@ import java.util.logging.Level;
 final class StationQueue {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 
-    enum QuayState { FREE, APPROACH, DOCKED, DEPARTING, ARRIVING }
+    enum QuayState { FREE, APPROACH, DOCKED, DEPARTING, ARRIVING, RECALL }
 
     /** UNKNOWN: the destination no longer exists in the network (removed between the window opening and the click). */
     enum EnqueueResult { ADDED, ALREADY_QUEUED, FULL, SELF, UNKNOWN }
@@ -53,6 +53,8 @@ final class StationQueue {
         final List<UUID> waiting = new ArrayList<>();
         /** The arriving balloon that holds the quay (state ARRIVING), null otherwise. */
         UUID arriving;
+        /** Flight of the recalled airship that holds the quay (state RECALL), null otherwise. */
+        UUID recall;
     }
 
     private static final Map<TransitNetwork.Station, Quay> QUAYS = new ConcurrentHashMap<>();
@@ -181,7 +183,7 @@ final class StationQueue {
                 }
                 case DOCKED -> tickDocked(store, world, s, q, now);
                 case DEPARTING -> tickDeparting(s, q);
-                case ARRIVING -> {
+                case ARRIVING, RECALL -> {
                 }
             }
         }
@@ -335,6 +337,46 @@ final class StationQueue {
         }
     }
 
+    /** The recalled airship takes the quay: only if FREE, not busy, nothing arriving or waiting and out of the departure gap. */
+    static synchronized boolean beginRecall(TransitNetwork.Station s, UUID flightId) {
+        Quay q = quay(s);
+        synchronized (q) {
+            if (q.state != QuayState.FREE || q.busy || q.arriving != null || !q.waiting.isEmpty()
+                    || System.currentTimeMillis() < q.gapUntilMs) {
+                return false;
+            }
+            q.recall = flightId;
+            q.state = QuayState.RECALL;
+            return true;
+        }
+    }
+
+    /** The recall is over: frees the quay if this flight held it and starts the departure gap. */
+    static void endRecall(TransitNetwork.Station s, UUID flightId) {
+        Quay q = QUAYS.get(s);
+        if (q == null) {
+            return;
+        }
+        synchronized (q) {
+            if (q.state == QuayState.RECALL && flightId != null && flightId.equals(q.recall)) {
+                q.recall = null;
+                q.gapUntilMs = System.currentTimeMillis() + TransitConstants.QUAY_GAP_SECONDS * 1000L;
+                q.state = QuayState.FREE;
+            }
+        }
+    }
+
+    /** The flight that holds the quay for a recall, null if none. */
+    static UUID recallOf(TransitNetwork.Station s) {
+        Quay q = QUAYS.get(s);
+        if (q == null) {
+            return null;
+        }
+        synchronized (q) {
+            return q.state == QuayState.RECALL ? q.recall : null;
+        }
+    }
+
     /** The flight no longer needs the quay (done, rescued or removed): frees it if it held it and forgets it in the waiting order. */
     static void endArrival(TransitNetwork.Station s, UUID flight) {
         Quay q = QUAYS.get(s);
@@ -437,6 +479,11 @@ final class StationQueue {
             }
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Montgolfière à quai de %s non retirée", removed.name);
+        }
+        try {
+            AirshipManager.get().onStationRemoved(world, removed); // a recalled airship lands in place, pilot back at the helm
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Dirigeable rappelé non posé après le retrait de %s", removed.name);
         }
         // Flights in the air heading to the removed station (the network no longer contains it when this is called).
         BalloonManager.get().rerouteTransitTo(world, removed);

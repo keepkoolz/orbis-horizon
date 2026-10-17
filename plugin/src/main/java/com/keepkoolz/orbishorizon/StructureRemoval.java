@@ -33,10 +33,10 @@ final class StructureRemoval {
 
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 
-    /** Result: error non-null if nothing was removed, otherwise the number of blocks removed, items dropped and the marker location. */
-    record Result(Message error, int removed, int items, Vector3i anchorPos) {
+    /** Result: error non-null if nothing was removed, otherwise the number of blocks removed, items dropped or kept in the crate and the marker location. */
+    record Result(Message error, int removed, int items, Vector3i anchorPos, TentContents kept) {
         static Result failure(Message error) {
-            return new Result(error, 0, 0, null);
+            return new Result(error, 0, 0, null, null);
         }
     }
 
@@ -67,6 +67,12 @@ final class StructureRemoval {
     /** Same, broadAttached true removes everything that is not a structural block first (airship prototype). */
     static Result remove(ComponentAccessor<EntityStore> accessor, World world, Deployables.Kind kind, StructureShape shape,
                          Vector3i origin, Rotation rotation, boolean broadAttached) {
+        return remove(accessor, world, kind, shape, origin, rotation, broadAttached, false);
+    }
+
+    /** Same, keepContents true captures the contents for the crate (tent packing) instead of dropping them. */
+    static Result remove(ComponentAccessor<EntityStore> accessor, World world, Deployables.Kind kind, StructureShape shape,
+                         Vector3i origin, Rotation rotation, boolean broadAttached, boolean keepContents) {
         // Box of the structure, in world cells.
         int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
@@ -82,6 +88,10 @@ final class StructureRemoval {
         // a. All the structure's chunks must be loaded (nothing is removed halfway).
         if (!SectionBlocks.sectionsLoaded(world.getChunkStore(), minX, minY, minZ, maxX, maxY, maxZ)) {
             return Result.failure(Texts.t(kind.isAirship() ? "airship.approach" : "tent.approach"));
+        }
+        // a bis. Packing keeps the contents: a chest or bench whose component cannot be read would lose them.
+        if (keepContents && !StructureComponents.unreadable(world, shape, origin, rotation).isEmpty()) {
+            return Result.failure(Texts.t("structure.componentsMissing"));
         }
         // b. Players mounted on a block (stool, bed) near the structure are dismounted. The game does this too
         // when the block disappears (MountSystems$RemoveBlockSeat), this leaves no mount on a removed block.
@@ -102,13 +112,19 @@ final class StructureRemoval {
             }
         }
         // c. Contents copied then emptied, before the blocks are removed.
-        List<StructureContents.Found> contents = StructureContents.takeAll(world, shape, origin, rotation);
+        TentContents kept = null;
+        List<StructureContents.Found> contents = List.of();
+        if (keepContents) {
+            kept = TentContents.capture(world, shape, origin, rotation);
+        } else {
+            contents = StructureContents.takeAll(world, shape, origin, rotation);
+        }
         // d. Registry first (the plugin's removals do not go through the lock events).
         BalloonRegistry.remove(world, origin, rotation, kind.id);
         // e. Blocks: the marker is removed with the default options then its particles are cancelled.
         int removed = BalloonManager.removeBlocks(world, shape, origin, rotation, broadAttached);
         // f. Items dropped at the location of their container.
-        int items = 0;
+        int items = kept != null ? kept.itemCount() : 0;
         Map<Vector3i, List<com.hypixel.hytale.server.core.inventory.ItemStack>> byPos = new LinkedHashMap<>();
         for (StructureContents.Found f : contents) {
             items += f.stack().getQuantity();
@@ -117,6 +133,6 @@ final class StructureRemoval {
         for (Map.Entry<Vector3i, List<com.hypixel.hytale.server.core.inventory.ItemStack>> e : byPos.entrySet()) {
             BalloonManager.dropItems(accessor, e.getValue(), e.getKey());
         }
-        return new Result(null, removed, items, shape.anchor().rotated(rotation).add(origin));
+        return new Result(null, removed, items, shape.anchor().rotated(rotation).add(origin), kept);
     }
 }

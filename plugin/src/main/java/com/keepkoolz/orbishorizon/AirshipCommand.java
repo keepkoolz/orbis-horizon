@@ -22,7 +22,9 @@ public final class AirshipCommand extends AbstractCommandCollection {
 
     public AirshipCommand() {
         super("airship", Texts.cmd("airship.desc"));
-        setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+        // The group is open so that "pilot reset" can be used by captains; every other sub-command keeps its own op-only group.
+        requireNoPermission();
+        addSubCommand(new Pilot());
         addSubCommand(new TakeOff());
         addSubCommand(new Land());
         addSubCommand(new Steer());
@@ -32,6 +34,38 @@ public final class AirshipCommand extends AbstractCommandCollection {
         addSubCommand(new Debug());
         addSubCommand(new Despawn());
         addSubCommand(new Render());
+    }
+
+    /** /orbishorizon airship pilot reset: open to every player, checked in Java (owner of the airship or op). */
+    static final class Pilot extends AbstractCommandCollection {
+        Pilot() {
+            super("pilot", Texts.cmd("airship.pilot.desc"));
+            requireNoPermission();
+            addSubCommand(new PilotReset());
+        }
+    }
+
+    static final class PilotReset extends AbstractPlayerCommand {
+        PilotReset() {
+            super("reset", Texts.cmd("airship.pilot.reset.desc"));
+            requireNoPermission();
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            com.hypixel.hytale.server.core.modules.entity.component.TransformComponent tr =
+                    store.getComponent(ref, com.hypixel.hytale.server.core.modules.entity.component.TransformComponent.getComponentType());
+            if (tr == null) {
+                return;
+            }
+            AirshipCrew.ResetResult r = AirshipCrew.resetPilot(store, world, new org.joml.Vector3d(tr.getPosition()),
+                    player.getUuid(), StructureRemoval.isOp(player.getUuid()));
+            ctx.sendMessage(Texts.t(switch (r) {
+                case DONE -> "crew.reset.done";
+                case NONE -> "crew.reset.none";
+                case NOT_OWNER -> "crew.reset.notOwner";
+            }));
+        }
     }
 
     /** T82: /orbishorizon airship render dual|single, same as the balloon's (next take-off). */
@@ -66,11 +100,6 @@ public final class AirshipCommand extends AbstractCommandCollection {
                 // T119: standing mannequin of the pilot for the others (next take-off), shared by the balloons and the airship.
                 PilotMannequin.enabled = m.equalsIgnoreCase("pilot:on");
                 ctx.sendMessage(Texts.t("cmd.render.pilot").param("mode", PilotMannequin.enabled ? "on" : "off"));
-                return;
-            } else if (m.equalsIgnoreCase("camyaw:relative") || m.equalsIgnoreCase("camyaw:world")) {
-                // T119: passenger camera yaw relative to the vehicle or fixed in the world (next camera send), shared setting.
-                PassengerCamera.relativeYaw = m.equalsIgnoreCase("camyaw:relative");
-                ctx.sendMessage(Texts.t("cmd.render.camyaw").param("mode", PassengerCamera.relativeYaw ? "relative" : "world"));
                 return;
             } else if (!m.equalsIgnoreCase("show")) {
                 ctx.sendMessage(Texts.t("cmd.render.usage").param("command", "/orbishorizon airship render"));

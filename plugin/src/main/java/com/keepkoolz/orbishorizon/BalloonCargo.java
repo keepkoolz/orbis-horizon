@@ -149,7 +149,7 @@ final class BalloonCargo {
 
     /** Live container component at this position (not a copy), or null. Call on the world thread. */
     private static ItemContainerBlock live(World world, Vector3i p) {
-        return BlockModule.getComponent(ItemContainerBlock.getComponentType(), world, p.x, p.y, p.z);
+        return SectionBlocks.blockComponent(world.getChunkStore(), ItemContainerBlock.getComponentType(), p.x, p.y, p.z);
     }
 
     /**

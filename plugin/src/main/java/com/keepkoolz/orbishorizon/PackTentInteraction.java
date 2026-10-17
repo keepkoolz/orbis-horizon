@@ -97,7 +97,7 @@ public class PackTentInteraction extends SimpleInstantInteraction {
             return;
         }
         Vector3i origin = new Vector3i(entry.x(), entry.y(), entry.z());
-        StructureRemoval.Result result = StructureRemoval.remove(commandBuffer, world, kind, shape, origin, entry.rotation());
+        StructureRemoval.Result result = StructureRemoval.remove(commandBuffer, world, kind, shape, origin, entry.rotation(), false, true);
         if (result.error() != null) {
             playerRef.sendMessage(result.error());
             fail(context);
@@ -107,15 +107,19 @@ public class PackTentInteraction extends SimpleInstantInteraction {
         // The empty crate becomes the full crate again, in the same slot. If the swap fails, the full crate
         // is dropped at the foot of the campfire: the tent is already removed, the crate must not be lost.
         ItemStack full = new ItemStack(kind.tent.fullCrateId, 1);
+        if (result.kept() != null) {
+            full = full.withMetadata(TentContents.METADATA_KEY, result.kept().toBson(kind.id));
+        }
         if (heldContainer.setItemStackForSlot((short) context.getHeldItemSlot(), full).succeeded()) {
             context.setHeldItem(full);
         } else {
             LOGGER.at(Level.WARNING).log("Camping_PackTent: la caisse n'a pas pu être remplacée, caisse pleine lâchée au sol");
             BalloonManager.dropItems(commandBuffer, List.of(full), result.anchorPos());
         }
-        playerRef.sendMessage(Texts.t(result.items() > 0 ? "tent.packedDropped" : "tent.packed"));
-        LOGGER.at(Level.INFO).log("Tente « %s » rangée par %s en (%d, %d, %d) : %d bloc(s) retirés, %d objet(s) lâchés",
-                kind.id, playerRef.getUsername(), origin.x, origin.y, origin.z, result.removed(), result.items());
+        playerRef.sendMessage(Texts.t(result.kept() != null ? "tent.packedKept" : "tent.packed"));
+        LOGGER.at(Level.INFO).log("Tente « %s » rangée par %s en (%d, %d, %d) : %d bloc(s) retirés%s",
+                kind.id, playerRef.getUsername(), origin.x, origin.y, origin.z, result.removed(),
+                result.items() > 0 ? ", " + result.items() + " objet(s) gardés dans la caisse" : "");
     }
 
     /** True if this item is the empty crate of some tent type. */

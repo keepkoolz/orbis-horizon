@@ -115,10 +115,10 @@ final class Deployables {
 
     /**
      * Forbidden placement volume of the tent (T44), prefab frame: the bounding box of the recentred prefab
-     * (x from -3 to 3, y from 0 to 1, z from -1 to 2). No block can be placed in the tent, even on an empty cell.
+     * (x from -3 to 3, y from 0 to 1, z from -1 to 3, the outside chest of the small tent at z = 3 included). No block can be placed in the tent, even on an empty cell.
      */
-    private static final int[] TENT_PLACE_MIN = {-3, 0, -1};
-    private static final int[] TENT_PLACE_MAX = {3, 1, 2};
+    static final int[] TENT_PLACE_MIN = {-3, 0, -1};
+    static final int[] TENT_PLACE_MAX = {3, 1, 3};
 
     /** The camping tent (T44). Marker: the game's campfire, unique in the prefab, no burner. */
     static final Kind TENT = new Kind(TENT_KIND, "Camping_Tent.prefab.json", "Bench_Campfire", false,

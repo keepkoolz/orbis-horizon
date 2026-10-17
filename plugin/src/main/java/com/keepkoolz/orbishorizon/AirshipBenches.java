@@ -111,7 +111,7 @@ final class AirshipBenches {
     }
 
     private static BenchBlock live(World world, Vector3i p) {
-        return BlockModule.getComponent(BenchBlock.getComponentType(), world, p.x, p.y, p.z);
+        return SectionBlocks.blockComponent(world.getChunkStore(), BenchBlock.getComponentType(), p.x, p.y, p.z);
     }
 
     private static ItemStack[] copy(ItemStack[] items) {
@@ -178,6 +178,16 @@ final class AirshipBenches {
             }
         }
         entries.clear();
+    }
+
+    /** True while the level of the bench at this position is still waiting for its component (its contents must wait too). */
+    static boolean pendingAt(World world, Vector3i p) {
+        for (Pending q : PENDING) {
+            if (q.world == world && q.pos.equals(p)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Called every tick by AirshipManager.tick for the retries. */

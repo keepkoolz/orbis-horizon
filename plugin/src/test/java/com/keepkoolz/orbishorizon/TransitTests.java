@@ -1,9 +1,12 @@
 package com.keepkoolz.orbishorizon;
 
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
+import org.joml.Vector3f;
 import org.joml.Vector3i;
 
 import java.nio.file.Files;
+import java.util.HashMap;
+import java.util.Map;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
@@ -15,6 +18,10 @@ public class TransitTests {
 
     public static void main(String[] args) throws Exception {
         run("nameRules", TransitTests::nameRules);
+        run("componentGuard", TransitTests::componentGuard);
+        run("tentContentsRoundTrip", TransitTests::tentContentsRoundTrip);
+        run("tentContentsMissing", TransitTests::tentContentsMissing);
+        run("tentContentsVersion", TransitTests::tentContentsVersion);
         run("stationFileRoundTrip", TransitTests::stationFileRoundTrip);
         run("corruptFileIsKept", TransitTests::corruptFileIsKept);
         run("grassLayerCells", TransitTests::grassLayerCells);
@@ -31,15 +38,101 @@ public class TransitTests {
         run("transitViewYaw", TransitTests::transitViewYaw);
         run("groundCageRemaining", TransitTests::groundCageRemaining);
         run("deployPlacement", TransitTests::deployPlacement);
+        run("smallTentChest", TransitTests::smallTentChest);
         run("externalView", TransitTests::externalView);
+        run("behindHeading", TransitTests::behindHeading);
+        run("viewResend", TransitTests::viewResend);
         run("protectionRules", TransitTests::protectionRules);
         run("protectedFileRoundTrip", TransitTests::protectedFileRoundTrip);
         run("registryOwnershipRoundTrip", TransitTests::registryOwnershipRoundTrip);
         run("stationMarkerPoint", TransitTests::stationMarkerPoint);
+        run("stationZoneCell", TransitTests::stationZoneCell);
+        run("stationZoneCorner", TransitTests::stationZoneCorner);
+        run("stationZoneOtherWorld", TransitTests::stationZoneOtherWorld);
         run("ownershipRules", TransitTests::ownershipRules);
         run("ownedMarkerRules", TransitTests::ownedMarkerRules);
         run("mapShareRules", TransitTests::mapShareRules);
+        run("gliderJumpPhase", TransitTests::gliderJumpPhase);
+        run("gliderExitLocal", TransitTests::gliderExitLocal);
+        run("airshipLimitCounts", TransitTests::airshipLimitCounts);
+        run("walkLegsAisle", TransitTests::walkLegsAisle);
+        run("staleEntryUnknownIsPresent", TransitTests::staleEntryUnknownIsPresent);
+        run("landingOwnerLimit", TransitTests::landingOwnerLimit);
+        run("contractMissing", TransitTests::contractMissing);
+        run("crewBsonRoundTrip", TransitTests::crewBsonRoundTrip);
+        run("crewPostAfterReload", TransitTests::crewPostAfterReload);
+        run("crewPostPoint", TransitTests::crewPostPoint);
+        run("helmCellFree", TransitTests::helmCellFree);
+        run("crewDialogueOptions", TransitTests::crewDialogueOptions);
+        run("helmRefusal", TransitTests::helmRefusal);
+        run("deskDecision", TransitTests::deskDecision);
+        run("seatsExcludeStool", TransitTests::seatsExcludeStool);
+        run("pilotGenderAndName", TransitTests::pilotGenderAndName);
+        run("pilotApplyGender", TransitTests::pilotApplyGender);
+        run("voyageList", TransitTests::voyageList);
+        run("arrivalNearStation", TransitTests::arrivalNearStation);
+        run("arrivalRotatesOutOfZones", TransitTests::arrivalRotatesOutOfZones);
+        run("cruiseHeight", TransitTests::cruiseHeight);
+        run("voyageTrip", TransitTests::voyageTrip);
+        run("departureRefusal", TransitTests::departureRefusal);
+        run("captainMapPhase", TransitTests::captainMapPhase);
+        run("mapHolderRule", TransitTests::mapHolderRule);
+        run("autopilotLookAhead", TransitTests::autopilotLookAhead);
+        run("voyageStateBson", TransitTests::voyageStateBson);
+        run("recallSpawnPoint", TransitTests::recallSpawnPoint);
+        run("hoverPivotClearsStation", TransitTests::hoverPivotClearsStation);
+        run("recallLadderSide", TransitTests::recallLadderSide);
+        run("recallLadderCells", TransitTests::recallLadderCells);
+        run("recallClimbing", TransitTests::recallClimbing);
+        run("recallMarkRoundTrip", TransitTests::recallMarkRoundTrip);
+        run("recallRefusal", TransitTests::recallRefusal);
+        run("recallWaitPhase", TransitTests::recallWaitPhase);
+        run("recallWaitCrossed", TransitTests::recallWaitCrossed);
+        run("quayRecallBlocks", TransitTests::quayRecallBlocks);
+        run("recallVoyageState", TransitTests::recallVoyageState);
+        run("recallSavedRoundTrip", TransitTests::recallSavedRoundTrip);
+        run("benchContentsKeys", TransitTests::benchContentsKeys);
+        run("recallRefusalOccupied", TransitTests::recallRefusalOccupied);
+        run("recallStrandOffline", TransitTests::recallStrandOffline);
+        run("recallDepartRetryBound", TransitTests::recallDepartRetryBound);
+        run("recallApproachNear", TransitTests::recallApproachNear);
+        run("recallTakeoffRungsRoundTrip", TransitTests::recallTakeoffRungsRoundTrip);
         System.out.println("TransitTests: " + passed + " OK");
+    }
+
+    private static void pilotGenderAndName() {
+        int f = 0, m = 0;
+        for (long seed = 0; seed < 200; seed++) {
+            PilotLook.Gender g = PilotLook.gender(seed);
+            String n = PilotLook.firstName(seed);
+            List<String> names = g == PilotLook.Gender.FEMALE ? PilotLook.FEMALE_NAMES : PilotLook.MALE_NAMES;
+            check(names.contains(n), "name " + n + " not in the list of " + g);
+            check(g == PilotLook.gender(seed) && n.equals(PilotLook.firstName(seed)), "unstable for seed " + seed);
+            if (g == PilotLook.Gender.FEMALE) f++; else m++;
+        }
+        check(f >= 50 && m >= 50, "gender split " + f + "/" + m);
+    }
+
+    private static void pilotApplyGender() {
+        long fs = -1, ms = -1;
+        for (long seed = 0; seed < 50 && (fs < 0 || ms < 0); seed++) {
+            if (PilotLook.gender(seed) == PilotLook.Gender.FEMALE) { if (fs < 0) fs = seed; } else if (ms < 0) ms = seed;
+        }
+        com.hypixel.hytale.protocol.PlayerSkin a = new com.hypixel.hytale.protocol.PlayerSkin();
+        a.haircut = "Quiff.BrownDark"; a.face = "Face_Stubble"; a.facialHair = "Goatee.Brown";
+        PilotLook.applyGender(a, fs);
+        check(a.facialHair == null, "female keeps facial hair");
+        check(a.haircut.endsWith(".BrownDark") && PilotLook.FEMALE_HAIR.contains(a.haircut.substring(0, a.haircut.indexOf('.'))), "female haircut " + a.haircut);
+        check(PilotLook.FEMALE_FACES.contains(a.face), "female face " + a.face);
+        com.hypixel.hytale.protocol.PlayerSkin b = new com.hypixel.hytale.protocol.PlayerSkin();
+        b.haircut = "Quiff.BrownDark"; b.face = "Face_Stubble"; b.facialHair = "Goatee.Brown";
+        PilotLook.applyGender(b, ms);
+        check("Goatee.Brown".equals(b.facialHair), "male lost facial hair");
+        check(b.haircut.endsWith(".BrownDark") && PilotLook.MALE_HAIR.contains(b.haircut.substring(0, b.haircut.indexOf('.'))), "male haircut " + b.haircut);
+        check(PilotLook.MALE_FACES.contains(b.face), "male face " + b.face);
+        check("Bun.BrownDark".equals(PilotLook.replaceId("Slickback.BrownDark.SlickbackClean", "Bun")), "variant kept");
+        check(!PilotLook.MALE_HAIR.contains("Slickback"), "Slickback listed");
+        check("Bun".equals(PilotLook.replaceId(null, "Bun")) && "Bun".equals(PilotLook.replaceId("Quiff", "Bun")), "bare id");
     }
 
     interface Test { void run() throws Exception; }
@@ -53,6 +146,174 @@ public class TransitTests {
             e.printStackTrace();
             System.exit(1);
         }
+    }
+
+    private static void gliderExitLocal() {
+        Vector3f e = GliderJump.exitLocal(new Vector3f(1.5f, 9.5f, -6.5f), 5);
+        eq(1.5f, e.x);
+        eq(2.5f, e.y);
+        eq(-6.5f, e.z);
+    }
+
+    private static void gliderJumpPhase() {
+        eq(-1, GliderJump.phase(1000, 1000));
+        eq(-1, GliderJump.phase(1000, 1999));
+        eq(5, GliderJump.phase(1000, 2000));
+        eq(5, GliderJump.phase(1000, 3499));
+        eq(4, GliderJump.phase(1000, 3500));
+        eq(1, GliderJump.phase(1000, 9499));
+        eq(0, GliderJump.phase(1000, 9500));
+        eq(0, GliderJump.phase(1000, 60000));
+    }
+
+    static void contractMissing() {
+        Map<String, Integer> have = new HashMap<>(Map.of("Ingredient_Bar_Gold", 31, "Ingredient_Bar_Silver", 5));
+        Map<String, Integer> m = PilotContract.missing(have);
+        eq(0, m.get("Ingredient_Bar_Gold"));
+        eq(15, m.get("Ingredient_Bar_Silver"));
+        eq(10, m.get("Ingredient_Life_Essence_Concentrated"));
+        eq(3, m.size());
+        check(PilotContract.missing(Map.of("Ingredient_Bar_Gold", 30, "Ingredient_Bar_Silver", 20,
+                "Ingredient_Life_Essence_Concentrated", 10)).values().stream().allMatch(v -> v == 0), "exact price is enough");
+    }
+
+    private static void crewBsonRoundTrip() {
+        CrewRecord c = new CrewRecord(java.util.UUID.fromString("00000000-0000-0000-0000-000000000042"), 77L, CrewRecord.Post.STOOL);
+        eq(c, CrewRecord.fromBson(c.toBson()));
+        eq("stool", c.toBson().getString("post").getValue());
+        eq(null, CrewRecord.fromBson(new org.bson.BsonDocument("post", new org.bson.BsonString("deck"))));
+    }
+
+    private static void crewPostAfterReload() {
+        BalloonRegistry.Entry e = new BalloonRegistry.Entry("w", 1, 2, 3, Rotation.None, "airship", null, 0, false,
+                List.of(), java.util.UUID.randomUUID(), null, false,
+                new CrewRecord(java.util.UUID.randomUUID(), 5L, CrewRecord.Post.HELM));
+        BalloonRegistry.Entry back = BalloonRegistry.entryFromBson(BalloonRegistry.entryToBson(e));
+        eq(e.crew(), back.crew());
+        BalloonRegistry.Entry none = BalloonRegistry.entryFromBson(BalloonRegistry.entryToBson(
+                new BalloonRegistry.Entry("w", 1, 2, 3, Rotation.None, "airship", null)));
+        eq(null, none.crew());
+    }
+
+    private static void autopilotLookAhead() {
+        java.util.List<double[]> p = AirshipAutopilot.lookAheadPoints(0, 0, 1, 0, 5, 100);
+        eq(8, p.size());
+        for (int i = 0; i < p.size(); i++) {
+            check(Math.abs(p.get(i)[0] - (1 + 2 * i)) < 1e-9 && Math.abs(p.get(i)[1]) < 1e-9, "point " + i);
+        }
+        p = AirshipAutopilot.lookAheadPoints(0, 0, 1, 0, 5, 4);
+        eq(2, p.size());
+        check(Math.abs(p.get(1)[0] - 3) < 1e-9, "second point at 3");
+        p = AirshipAutopilot.lookAheadPoints(10, 20, 0, -1, 5, 100);
+        check(Math.abs(p.get(0)[0] - 10) < 1e-9 && Math.abs(p.get(0)[1] - 19) < 1e-9, "direction respected");
+    }
+
+    private static void voyageStateBson() {
+        java.util.UUID c = java.util.UUID.randomUUID();
+        VoyageState v = new VoyageState("Port Nord", VoyagePlanner.Kind.STATION, 120.5, -33.0, 150.0, c);
+        VoyageState r = VoyageState.fromBson(v.toBson());
+        check(r != null, "read back");
+        eq("Port Nord", r.destName);
+        eq(VoyagePlanner.Kind.STATION, r.destKind);
+        check(r.destX == 120.5 && r.destZ == -33.0 && r.cruiseY == 150.0, "numbers");
+        eq(c, r.captain);
+        check(VoyageState.fromBson(new org.bson.BsonDocument()) == null, "malformed gives null");
+    }
+
+    private static void departureRefusal() {
+        eq(null, AirshipAutopilot.departureRefusalKey(true, 3, 15, true));
+        eq(null, AirshipAutopilot.departureRefusalKey(true, 15, 15, true));
+        eq("crew.voyage.noCaptain", AirshipAutopilot.departureRefusalKey(false, 3, 15, true));
+        eq("airship.error.full", AirshipAutopilot.departureRefusalKey(true, 16, 15, true));
+        eq("crew.voyage.handsFull", AirshipAutopilot.departureRefusalKey(true, 3, 15, false));
+        // Order: captain first, then seats, then the hotbar.
+        eq("crew.voyage.noCaptain", AirshipAutopilot.departureRefusalKey(false, 16, 15, false));
+        eq("airship.error.full", AirshipAutopilot.departureRefusalKey(true, 16, 15, false));
+    }
+
+    private static void captainMapPhase() {
+        eq(-1, CaptainMap.phase(0, 499));
+        eq(3, CaptainMap.phase(0, 500));
+        eq(3, CaptainMap.phase(0, 1499));
+        eq(2, CaptainMap.phase(0, 1500));
+        eq(1, CaptainMap.phase(0, 2500));
+        eq(1, CaptainMap.phase(0, 3499));
+        eq(0, CaptainMap.phase(0, 3500));
+    }
+
+    private static void mapHolderRule() {
+        java.util.UUID cap = java.util.UUID.randomUUID();
+        java.util.UUID other = java.util.UUID.randomUUID();
+        java.util.Set<java.util.UUID> active = java.util.Set.of(cap);
+        eq(false, CaptainMap.mustLoseMap(true, cap, active));
+        eq(true, CaptainMap.mustLoseMap(true, other, active));
+        eq(true, CaptainMap.mustLoseMap(true, cap, java.util.Set.of()));
+        eq(false, CaptainMap.mustLoseMap(false, other, active));
+    }
+
+    private static void crewDialogueOptions() {
+        eq(List.of(), AirshipVoyagePage.dialogueOptions(false, AirshipCrew.CrewState.AT_HELM));
+        eq(List.of(AirshipVoyagePage.CrewOrder.VOYAGE, AirshipVoyagePage.CrewOrder.TAKE_HELM),
+                AirshipVoyagePage.dialogueOptions(true, AirshipCrew.CrewState.AT_HELM));
+        eq(List.of(AirshipVoyagePage.CrewOrder.RETURN_HELM), AirshipVoyagePage.dialogueOptions(true, AirshipCrew.CrewState.SEATED));
+        eq(List.of(), AirshipVoyagePage.dialogueOptions(true, AirshipCrew.CrewState.WALKING));
+        eq(List.of(), AirshipVoyagePage.dialogueOptions(true, AirshipCrew.CrewState.ABSENT));
+    }
+
+    private static void helmCellFree() {
+        org.joml.Vector3d helm = new org.joml.Vector3d(0.5, 72.05, -9.5);
+        check(AirshipCrew.helmCellFree(List.of(), helm), "empty deck");
+        check(!AirshipCrew.helmCellFree(List.of(new org.joml.Vector3d(0.9, 72.0, -9.3)), helm), "player on helm");
+        check(AirshipCrew.helmCellFree(List.of(new org.joml.Vector3d(2.0, 72.0, -9.5)), helm), "player beside");
+        check(AirshipCrew.helmCellFree(List.of(new org.joml.Vector3d(0.5, 80.0, -9.5)), helm), "player far above");
+    }
+
+    private static void crewPostPoint() {
+        BalloonRegistry.Entry none = new BalloonRegistry.Entry("w", 100, 64, 200, Rotation.None, "airship", null);
+        org.joml.Vector3d p = AirshipCrew.postPoint(none, AirshipCrew.HELM);
+        check(Math.abs(p.x - 100.5) < 1e-6 && Math.abs(p.y - 72.05) < 1e-6 && Math.abs(p.z - 190.5) < 1e-6, "helm None " + p);
+        BalloonRegistry.Entry flip = new BalloonRegistry.Entry("w", 100, 64, 200, Rotation.OneEighty, "airship", null);
+        org.joml.Vector3d q = AirshipCrew.postPoint(flip, AirshipCrew.HELM);
+        check(Math.abs(q.x - 100.5) < 1e-6 && Math.abs(q.y - 72.05) < 1e-6 && Math.abs(q.z - 210.5) < 1e-6, "helm OneEighty " + q);
+    }
+
+    private static void near(double expected, double actual) {
+        if (Math.abs(expected - actual) > 0.01) {
+            throw new AssertionError("expected " + expected + " but was " + actual);
+        }
+    }
+
+    private static void tentContentsRoundTrip() {
+        BalloonCargo cargo = new BalloonCargo(List.of(new BalloonCargo.Entry(new Vector3i(1, 0, 3),
+                "Furniture_Kweebec_Chest_Small", (short) 18, new com.hypixel.hytale.server.core.inventory.ItemStack[18])));
+        TentContents t = new TentContents(AirshipBenchContents.fromBson(null), cargo);
+        org.bson.BsonDocument d = t.toBson("tent");
+        eq(1, d.getInt32("v").getValue());
+        eq("tent", d.getString("kind").getValue());
+        TentContents back = TentContents.fromBson(d, "tent");
+        check(back != null, "relu");
+        eq(d, back.toBson("tent"));
+    }
+
+    private static void tentContentsMissing() {
+        eq(null, TentContents.fromBson(null, "tent"));
+    }
+
+    /** The guard lists the expected cells that gave no component, in order. */
+    private static void componentGuard() {
+        List<Vector3i> expected = List.of(new Vector3i(0, 1, 2), new Vector3i(3, 4, 5), new Vector3i(6, 7, 8));
+        check(StructureComponents.missing(expected, Set.copyOf(expected)).isEmpty(), "all found: nothing missing");
+        List<Vector3i> missing = StructureComponents.missing(expected, Set.of(new Vector3i(3, 4, 5)));
+        check(missing.equals(List.of(new Vector3i(0, 1, 2), new Vector3i(6, 7, 8))), "missing cells: " + missing);
+        check(StructureComponents.missing(List.of(), Set.of()).isEmpty(), "no expected cell");
+    }
+
+    private static void tentContentsVersion() {
+        TentContents t = new TentContents(AirshipBenchContents.fromBson(null), new BalloonCargo(List.of()));
+        org.bson.BsonDocument d = t.toBson("tent");
+        eq(null, TentContents.fromBson(d, "tent_big"));
+        d.put("v", new org.bson.BsonInt32(2));
+        eq(null, TentContents.fromBson(d, "tent"));
     }
 
     private static void eq(Object expected, Object actual) {
@@ -74,7 +335,7 @@ public class TransitTests {
         }
     }
 
-    /** T118: ONLY, HIDE and HIDE_SET visibility rules, and the camera anchor point (seat offset plus eye height). */
+    /** T118: ONLY, HIDE and HIDE_SET visibility rules. */
     static void viewFilterRules() {
         java.util.UUID a = java.util.UUID.randomUUID(), b = java.util.UUID.randomUUID(), c = java.util.UUID.randomUUID();
         ViewFilter.Rule only = new ViewFilter.Rule(a, ViewFilter.Mode.ONLY);
@@ -87,8 +348,6 @@ public class TransitTests {
         eq(true, ViewFilter.hiddenFrom(set, a));
         eq(true, ViewFilter.hiddenFrom(set, b));
         eq(false, ViewFilter.hiddenFrom(set, c));
-        org.joml.Vector3f eye = PassengerSeatView.eyeOffset(new org.joml.Vector3f(1f, 2f, -3f));
-        eq(true, eye.x == 1f && eye.z == -3f && Math.abs(eye.y - (2f + TransitConstants.VIEW_EYE_HEIGHT_ABOVE_SEAT)) < 1e-6);
     }
 
     /** T120: cage left on the ground, balloon home at y 100 with the cage lowered by 12 (target 88). */
@@ -102,6 +361,27 @@ public class TransitTests {
         PassengerCamera.ExternalView w = PassengerCamera.externalView(-1, -1, 10, 2, 0);
         check(Math.abs(Math.hypot(w.x(), w.z()) - 20) < 1e-3, "horizontal distance = factor * size");
         check(w.x() < 0 && w.z() < 0 && Math.abs(w.pitch()) < 1e-6, "same side as the direction, level at height 0");
+    }
+
+    /** Airship external view: behind the ship is opposite to its bow (-sin t, -cos t). */
+    static void viewResend() {
+        PassengerCamera.ExternalView a = PassengerCamera.externalView(0, 1, 10, 1, 0.25, 0);
+        PassengerCamera.ExternalView b = PassengerCamera.externalView(0, 1, 10, 1, 0.25, 8);
+        check(Math.abs(b.z() - a.z() - 8) < 1e-3 && Math.abs(b.y() - 0.25 * 18) < 1e-3, "extra recoil keeps the height ratio");
+        check(!PassengerCamera.shouldResend(true, 5, 90), "no resend while turning");
+        check(!PassengerCamera.shouldResend(false, 1, 90), "no resend before enough travel");
+        check(!PassengerCamera.shouldResend(false, 5, 5), "no resend for a small direction change");
+        check(PassengerCamera.shouldResend(false, 5, 30), "resend once moving with a changed direction");
+    }
+
+    static void behindHeading() {
+        double[] b = PassengerCamera.behindHeading(0);
+        check(Math.abs(b[0]) < 1e-9 && Math.abs(b[1] - 1) < 1e-9, "heading 0: bow toward -z, behind toward +z");
+        double[] c = PassengerCamera.behindHeading(Math.PI / 2);
+        check(Math.abs(c[0] - 1) < 1e-9 && Math.abs(c[1]) < 1e-9, "heading 90 degrees: behind toward +x");
+        double theta = 1.0;
+        double[] d = PassengerCamera.behindHeading(theta);
+        check(Math.abs(d[0] + (-Math.sin(theta))) < 1e-9 && Math.abs(d[1] + (-Math.cos(theta))) < 1e-9, "behind = minus bow");
     }
 
     static void groundCageRemaining() {
@@ -454,6 +734,94 @@ public class TransitTests {
         }
     }
 
+    /** Small tent: the outside Kweebec chest exists and every block fits the no-placement box. */
+    private static void smallTentChest() throws Exception {
+        String j = Files.readString(Path.of("Server/Prefabs/Camping_Tent.prefab.json"));
+        String blocks = j.substring(j.indexOf("\"blocks\""), j.indexOf("\"fluids\""));
+        var m = java.util.regex.Pattern.compile(
+                "\\{\\s*\"x\": (-?\\d+),\\s*\"y\": (-?\\d+),\\s*\"z\": (-?\\d+),\\s*\"name\": \"([^\"]+)\"(?:(?!\"x\")[\\s\\S])*?(?:\"rotation\": (\\d+))?\\s*\\}(?=,\\s*\\{|\\s*\\])").matcher(blocks);
+        boolean chest = false;
+        int[] mn = Deployables.TENT_PLACE_MIN, mx = Deployables.TENT_PLACE_MAX;
+        while (m.find()) {
+            int x = Integer.parseInt(m.group(1)), y = Integer.parseInt(m.group(2)), z = Integer.parseInt(m.group(3));
+            if (m.group(4).equals("Empty")) {
+                continue;
+            }
+            check(x >= mn[0] && x <= mx[0] && y >= mn[1] && y <= mx[1] && z >= mn[2] && z <= mx[2],
+                    "block in box " + m.group(4) + " " + x + "," + y + "," + z);
+            if (m.group(4).equals("Furniture_Kweebec_Chest_Small") && x == 1 && y == 0 && z == 3) {
+                chest = true;
+                check(m.group(5) == null || m.group(5).equals("0"), "chest rotation");
+            }
+        }
+        check(chest, "chest at (1, 0, 3)");
+    }
+
+    private static void stationZoneCell() {
+        StationZone.Zone z = new StationZone.Zone("Gare", 0.5, 0.5, 9, 76);
+        check(StationZone.cellTouches(z, 31, 20, 0), "inside radius");
+        check(!StationZone.cellTouches(z, 33, 20, 0), "outside radius");
+        check(!StationZone.cellTouches(z, 0, 8, 0), "below bottom");
+        check(!StationZone.cellTouches(z, 0, 77, 0), "above top");
+        check(StationZone.cellTouches(z, 0, 76, 0), "top included");
+    }
+
+    private static void stationZoneCorner() {
+        // Corner cell (23, 0, 23) is within 32 of (0.5, 0.5), the next diagonal one is not.
+        StationZone.Zone z = new StationZone.Zone("Gare", 0.5, 0.5, -5, 60);
+        check(StationZone.cellTouches(z, 23, 0, 23), "corner touches");
+        check(!StationZone.cellTouches(z, 24, 0, 24), "next one does not");
+    }
+
+    private static void stationZoneOtherWorld() {
+        check(StationZone.blockingStation(List.of(), null, new Vector3i(0, 0, 0), Rotation.None) == null,
+                "no zone, no block");
+    }
+
+    private static void staleEntryUnknownIsPresent() {
+        // World not loaded (no universe in tests): the entry is unknown, so it counts as present and is never dropped.
+        BalloonRegistry.Entry e = new BalloonRegistry.Entry("no_such_world", 0, 0, 0,
+                com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None, Deployables.AIRSHIP_KIND, UUID.randomUUID());
+        check(!BalloonRegistry.removeIfGone(e), "unknown entry is kept");
+    }
+
+    private static void walkLegsAisle() {
+        // From the stool to the helm: aisle west, aisle east, door leg on the stool side, door leg on the helm side.
+        java.util.List<double[]> a = AirshipCrew.walkLegs(new double[]{-2, 8, 4}, CrewRecord.Post.HELM);
+        eq(4, a.size());
+        eq(-1.0, a.get(0)[0]);
+        eq(4.4, a.get(0)[2]);
+        eq(0.0, a.get(1)[0]);
+        eq(4.4, a.get(1)[2]);
+        eq(3.5, a.get(2)[2]);
+        eq(0.5, a.get(3)[2]);
+        // From the helm to the stool: door legs, then aisle east, then aisle west.
+        java.util.List<double[]> b = AirshipCrew.walkLegs(new double[]{0, 8, -10}, CrewRecord.Post.STOOL);
+        eq(4, b.size());
+        eq(0.5, b.get(0)[2]);
+        eq(3.5, b.get(1)[2]);
+        eq(0.0, b.get(2)[0]);
+        eq(-1.0, b.get(3)[0]);
+        // Already on the east aisle point: only the two door legs remain.
+        eq(2, AirshipCrew.walkLegs(new double[]{0, 8, 4.4}, CrewRecord.Post.HELM).size());
+        // Just south of the door going to the stool: back out to the wide aisle (east, then west), clear of the counter.
+        eq(2, AirshipCrew.walkLegs(new double[]{0, 8, 3.5}, CrewRecord.Post.STOOL).size());
+    }
+
+    private static void airshipLimitCounts() {
+        UUID a = UUID.randomUUID(), b = UUID.randomUUID();
+        check(AirshipLimit.ownsAny(a, java.util.Arrays.asList(null, b, a)), "owned among others");
+        check(!AirshipLimit.ownsAny(a, java.util.Arrays.asList(null, b)), "not owned");
+        check(!AirshipLimit.ownsAny(null, java.util.Arrays.asList((UUID) null)), "unowned never counts");
+    }
+
+    private static void landingOwnerLimit() {
+        UUID p = UUID.randomUUID();
+        check(Ownership.landingOwner(Ownership.NONE, p, "Ann", false).owner() == null, "already owns one: stays unowned");
+        check(p.equals(Ownership.landingOwner(Ownership.NONE, p, "Ann", true).owner()), "free: becomes owner");
+        check(Ownership.landingOwner(Ownership.NONE, p, "Ann", false).id() != null, "always an id");
+    }
+
     private static void check(boolean ok, String what) {
         if (!ok) {
             throw new AssertionError(what);
@@ -542,5 +910,283 @@ public class TransitTests {
         // Ninety sends the cell (19, 7, 0) to (0, 7, -19), centre (0.5, 7, -18.5)
         org.joml.Vector3d q = StationMarkerProvider.markerPoint(new Vector3i(100, 64, 200), Rotation.Ninety);
         eq(new org.joml.Vector3d(100.5, 71, 181.5), q);
+    }
+
+    private static void deskDecision() {
+        AirshipCrew.CrewState h = AirshipCrew.CrewState.AT_HELM;
+        eq(AirshipDesk.Action.NO_PILOT, AirshipDesk.decide(true, false, AirshipCrew.CrewState.ABSENT));
+        eq(AirshipDesk.Action.NO_PILOT, AirshipDesk.decide(false, false, h));
+        eq(AirshipDesk.Action.NOT_CAPTAIN, AirshipDesk.decide(false, true, h));
+        eq(AirshipDesk.Action.START_NOW, AirshipDesk.decide(true, true, h));
+        eq(AirshipDesk.Action.WALK_FIRST, AirshipDesk.decide(true, true, AirshipCrew.CrewState.SEATED));
+        eq(AirshipDesk.Action.BUSY, AirshipDesk.decide(true, true, AirshipCrew.CrewState.WALKING));
+        eq(AirshipDesk.Action.ABSENT, AirshipDesk.decide(true, true, AirshipCrew.CrewState.ABSENT));
+    }
+
+    private static void helmRefusal() {
+        CrewRecord helm = new CrewRecord(UUID.randomUUID(), 1L, CrewRecord.Post.HELM);
+        CrewRecord stool = helm.withPost(CrewRecord.Post.STOOL);
+        eq(null, AirshipCrew.helmRefusalKey(null, AirshipCrew.CrewState.ABSENT));
+        eq("crew.helm.held", AirshipCrew.helmRefusalKey(helm, AirshipCrew.CrewState.AT_HELM));
+        eq("crew.helm.notSeated", AirshipCrew.helmRefusalKey(stool, AirshipCrew.CrewState.WALKING));
+        eq(null, AirshipCrew.helmRefusalKey(stool, AirshipCrew.CrewState.SEATED));
+    }
+
+    private static void seatsExcludeStool() {
+        StructureShape s = StructureShape.ofCells(List.of(
+                new StructureShape.Cell(-2, 8, 4, "Airship_Stool"), new StructureShape.Cell(2, 8, 9, "Airship_Stool"),
+                new StructureShape.Cell(1, 4, 5, "Airship_Stool"), new StructureShape.Cell(0, 0, 0, "Wood_Softwood_Planks")));
+        Vector3i stool = new Vector3i(AirshipCrew.STOOL[0], AirshipCrew.STOOL[1], AirshipCrew.STOOL[2]);
+        int all = AirshipPassengers.seats(s).size();
+        eq(all - 1, AirshipPassengers.seats(s, Set.of(stool)).size());
+    }
+
+    private static void voyageList() {
+        java.util.List<VoyagePlanner.Destination> all = java.util.List.of(
+                new VoyagePlanner.Destination("far station", VoyagePlanner.Kind.STATION, 50, 0, 64),
+                new VoyagePlanner.Destination("near", VoyagePlanner.Kind.MARKER, 20, 0, Integer.MIN_VALUE),
+                new VoyagePlanner.Destination("m2", VoyagePlanner.Kind.MARKER, 300, 0, Integer.MIN_VALUE),
+                new VoyagePlanner.Destination("m1", VoyagePlanner.Kind.MARKER, 100, 0, Integer.MIN_VALUE),
+                new VoyagePlanner.Destination("s0", VoyagePlanner.Kind.STATION, 40, 0, 64));
+        java.util.List<VoyagePlanner.Destination> out = VoyagePlanner.list(all, 0, 0);
+        eq(4, out.size());
+        eq("m1", out.get(0).name());
+        eq("m2", out.get(1).name());
+        eq("s0", out.get(2).name());
+        eq("far station", out.get(3).name());
+    }
+
+    private static void arrivalNearStation() {
+        double[] p = VoyagePlanner.stationArrival(0, 0, 500, 0, java.util.List.of());
+        check(Math.abs(p[0] - 70) < 0.01 && Math.abs(p[1]) < 0.01, "arrival (70, 0)");
+    }
+
+    private static void arrivalRotatesOutOfZones() {
+        double[] other = {90, 0};
+        double[] p = VoyagePlanner.stationArrival(0, 0, 500, 0, java.util.List.<double[]>of(other));
+        check(Math.abs(Math.hypot(p[0], p[1]) - 70) < 0.01, "70 from first pad");
+        check(Math.hypot(p[0] - other[0], p[1] - other[1]) >= 70, "free of the other pad");
+    }
+
+    private static void cruiseHeight() {
+        eq(190, VoyagePlanner.cruiseY(100, 150, 319));
+        eq(140, VoyagePlanner.cruiseY(100, Integer.MIN_VALUE, 319));
+        eq(309, VoyagePlanner.cruiseY(300, Integer.MIN_VALUE, 319));
+    }
+
+    private static void voyageTrip() {
+        check(Math.abs(VoyagePlanner.tripSeconds(100, 64, 104, 5, 4) - 35) < 1e-9, "trip 35 s");
+    }
+
+    static void recallSpawnPoint() {
+        double[] a = RecallPlanner.spawnPoint(0, 0, 500, 0);
+        near(120, a[0]);
+        near(0, a[1]);
+        double[] b = RecallPlanner.spawnPoint(0, 0, 0, 0);
+        near(120, b[0]);
+        near(0, b[1]);
+        double[] c = RecallPlanner.spawnPoint(10, 10, 10, -300);
+        near(10, c[0]);
+        near(-110, c[1]);
+    }
+
+    static void hoverPivotClearsStation() {
+        double[] p = RecallPlanner.hoverPivot(0, 0, 74, 0);
+        near(84, p[1]);
+        for (int k = 0; k < 4; k++) {
+            double yaw = k * Math.PI / 2;
+            double[] h = RecallPlanner.hoverPivot(5, -7, 74, yaw);
+            near(yaw, h[3]);
+            near(5, h[0] - 10 * -Math.sin(yaw));
+            near(-7, h[2] - 10 * -Math.cos(yaw));
+        }
+    }
+
+    static void recallWaitPhase() {
+        eq(-1, RecallPlanner.waitMessageAt(0));
+        eq(-1, RecallPlanner.waitMessageAt(29_999));
+        eq(30, RecallPlanner.waitMessageAt(30_000));
+        eq(30, RecallPlanner.waitMessageAt(30_999));
+        eq(-1, RecallPlanner.waitMessageAt(31_000));
+        eq(-1, RecallPlanner.waitMessageAt(49_000));
+        eq(10, RecallPlanner.waitMessageAt(50_500));
+        eq(-1, RecallPlanner.waitMessageAt(59_000));
+        eq(-1, RecallPlanner.waitMessageAt(-5));
+        eq(60_000L, RecallPlanner.WAIT_MS);
+    }
+
+    static void recallWaitCrossed() {
+        eq(-1, RecallPlanner.waitThresholdReached(0, Integer.MAX_VALUE));
+        eq(30, RecallPlanner.waitThresholdReached(30_000, Integer.MAX_VALUE));
+        eq(-1, RecallPlanner.waitThresholdReached(35_000, 30));
+        eq(10, RecallPlanner.waitThresholdReached(52_500, 30));
+        eq(-1, RecallPlanner.waitThresholdReached(52_500, 10));
+        eq(10, RecallPlanner.waitThresholdReached(55_000, Integer.MAX_VALUE));
+    }
+
+    static List<double[]> stationBoardingPoints() {
+        List<double[]> pts = new java.util.ArrayList<>();
+        for (float[] p : Deployables.STATION_BOARDING_POINTS) {
+            pts.add(new double[] {p[0] + 0.5, p[1], p[2] + 0.5});
+        }
+        return pts;
+    }
+
+    static void recallLadderSide() {
+        // Station rotation None: pad centre at (19.5, 0.5), boarding points at x 12..14, so the ladder at x = 14.5 (pad - 5) is the nearest.
+        List<double[]> pts = stationBoardingPoints();
+        int[] side = RecallPlanner.ladderSide(19.5, 0.5, pts);
+        eq(0, side[0]);
+        eq(-1, side[1]);
+        eq(-1, RecallPlanner.ladderSx(19.5, 0.5, pts, 0));
+        eq(1, RecallPlanner.ladderSx(19.5, 0.5, pts, 2)); // the other ladder of a half-turned ship
+        // Points on the other side of the pad: a half turn is not needed, the other ladder is nearer.
+        List<double[]> east = new java.util.ArrayList<>();
+        east.add(new double[] {25.5, 8, 0.5});
+        int[] e = RecallPlanner.ladderSide(19.5, 0.5, east);
+        eq(0, e[0]);
+        eq(1, e[1]);
+        // A station to the north: ladder along z, a quarter turn is chosen.
+        List<double[]> north = new java.util.ArrayList<>();
+        north.add(new double[] {19.5, 8, -5.5});
+        int[] n = RecallPlanner.ladderSide(19.5, 0.5, north);
+        eq(true, n[0] == 1 || n[0] == 3);
+    }
+
+    static void recallLadderCells() {
+        // The ladder bottom at y 19: rungs 18 down to 8, the stairs at y 7 are solid and stay.
+        List<Integer> col = RecallPlanner.ladderCells(19, y -> y == 7, 48);
+        eq(11, col.size());
+        eq(18, col.get(0));
+        eq(8, col.get(col.size() - 1));
+        eq(java.util.List.of(), RecallPlanner.ladderCells(19, y -> y == 18, 48));
+        eq(3, RecallPlanner.ladderCells(19, y -> false, 3).size());
+        eq(19, RecallPlanner.ladderCells(19, y -> false, 100).size()); // never under y = 0
+    }
+
+    static void recallMarkRoundTrip() {
+        UUID quay = UUID.randomUUID();
+        BalloonRegistry.Recall mark = new BalloonRegistry.Recall(quay, 10, 64, -20, Rotation.Ninety, 120.5, -3.0, new int[] {14, 18, 0, 14, 17, 0});
+        BalloonRegistry.Entry e = new BalloonRegistry.Entry("w", 1, 2, 3, Rotation.None, "airship", null, 0, false, java.util.List.of(),
+                null, null, false, null, mark);
+        BalloonRegistry.Entry back = BalloonRegistry.entryFromBson(BalloonRegistry.entryToBson(e));
+        eq(quay, back.recall().quayId());
+        eq(Rotation.Ninety, back.recall().stationRotation());
+        eq(6, back.recall().ladders().length);
+        eq(17, back.recall().ladders()[4]);
+        eq(null, BalloonRegistry.entryFromBson(BalloonRegistry.entryToBson(new BalloonRegistry.Entry("w", 1, 2, 3, Rotation.None, "airship", null))).recall());
+    }
+
+    static void recallClimbing() {
+        List<int[]> rungs = new java.util.ArrayList<>();
+        for (int y = 18; y >= 8; y--) {
+            rungs.add(new int[] {14, y, 0});
+        }
+        double top = 8.0; // top of the station: the lowest rung cell stands on it
+        eq(true, RecallPlanner.isClimbing(14.5, 12.0, 0.5, rungs, top)); // mid-ladder
+        eq(true, RecallPlanner.isClimbing(15.3, 12.0, 0.2, rungs, top)); // within a block of the column
+        eq(true, RecallPlanner.isClimbing(14.5, 19.4, 0.5, rungs, top)); // at the top, under the deck
+        eq(false, RecallPlanner.isClimbing(14.5, 8.0, 0.5, rungs, top)); // on the boarding step
+        eq(false, RecallPlanner.isClimbing(14.5, 8.2, 0.9, rungs, top)); // on the step, next to the column
+        eq(false, RecallPlanner.isClimbing(14.5, 20.5, 0.5, rungs, top)); // on the deck
+        eq(false, RecallPlanner.isClimbing(14.5, 6.0, 0.5, rungs, top)); // below the station
+        eq(false, RecallPlanner.isClimbing(17.0, 12.0, 0.5, rungs, top)); // elsewhere
+        eq(false, RecallPlanner.isClimbing(14.5, 12.0, 0.5, java.util.List.of(), top));
+    }
+
+    static void recallRefusal() {
+        eq("recall.noAirship", RecallPlanner.recallRefusalKey(false, true, true, false));
+        eq("recall.inFlight", RecallPlanner.recallRefusalKey(true, true, true, false));
+        eq("recall.already", RecallPlanner.recallRefusalKey(true, false, true, false));
+        eq("recall.quayBusy", RecallPlanner.recallRefusalKey(true, false, false, false));
+        eq(null, RecallPlanner.recallRefusalKey(true, false, false, true));
+    }
+
+    static void recallRefusalOccupied() {
+        // Order: no airship, in flight, already recalling (a ship parked above a station counts), occupied, quay busy.
+        eq("recall.occupied", RecallPlanner.recallRefusalKey(true, false, false, true, false));
+        eq("recall.already", RecallPlanner.recallRefusalKey(true, false, true, true, true));
+        eq("recall.inFlight", RecallPlanner.recallRefusalKey(true, true, false, true, true));
+        eq("recall.noAirship", RecallPlanner.recallRefusalKey(false, false, false, true, true));
+        eq(null, RecallPlanner.recallRefusalKey(true, false, false, false, true));
+        eq("recall.quayBusy", RecallPlanner.recallRefusalKey(true, false, false, false, false));
+    }
+
+    static void recallStrandOffline() {
+        eq(true, RecallPlanner.strandOffline(false, "w", "w", true));
+        eq(false, RecallPlanner.strandOffline(true, "w", "w", true)); // online: the take-off handles him
+        eq(false, RecallPlanner.strandOffline(false, "other", "w", true)); // saved in another world
+        eq(false, RecallPlanner.strandOffline(false, null, "w", true)); // unknown world
+        eq(false, RecallPlanner.strandOffline(false, "w", "w", false)); // not on the ship
+    }
+
+    static void recallDepartRetryBound() {
+        eq(true, RecallPlanner.departRetryAllowed(1));
+        eq(true, RecallPlanner.departRetryAllowed(RecallPlanner.MAX_DEPART_TRIES - 1));
+        eq(false, RecallPlanner.departRetryAllowed(RecallPlanner.MAX_DEPART_TRIES));
+    }
+
+    static void recallApproachNear() {
+        eq(true, RecallPlanner.approachNear(100, 100, 100, 100));
+        eq(true, RecallPlanner.approachNear(100, 100, 110, 110)); // about 14 blocks
+        eq(false, RecallPlanner.approachNear(100, 100, 120, 100));
+    }
+
+    static void recallTakeoffRungsRoundTrip() {
+        int[] flat = AirshipRecall.flatten(List.of(new int[] {1, 70, -3}, new int[] {1, 69, -3}));
+        eq(6, flat.length);
+        org.bson.BsonDocument d = new org.bson.BsonDocument();
+        d.put("takeoffRungs", AirshipResume.rungsToBson(flat));
+        int[] back = AirshipResume.rungsFromBson(org.bson.BsonDocument.parse(d.toJson()));
+        eq(6, back.length);
+        eq(69, back[4]);
+        eq(-3, back[5]);
+        eq(null, AirshipResume.rungsFromBson(new org.bson.BsonDocument())); // older files
+    }
+
+    static void quayRecallBlocks() {
+        TransitNetwork.Station s = new TransitNetwork.Station("Port Recall", "w", new org.joml.Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
+        UUID f = UUID.randomUUID();
+        eq(true, StationQueue.beginRecall(s, f));
+        eq(StationQueue.QuayState.RECALL, StationQueue.state(s));
+        eq(f, StationQueue.recallOf(s));
+        eq(false, StationQueue.beginRecall(s, UUID.randomUUID()));
+        eq(false, StationQueue.tryBeginArrival(s, UUID.randomUUID()));
+        StationQueue.endRecall(s, UUID.randomUUID()); // not the holder: no effect
+        eq(StationQueue.QuayState.RECALL, StationQueue.state(s));
+        StationQueue.endRecall(s, f);
+        eq(StationQueue.QuayState.FREE, StationQueue.state(s));
+        eq(null, StationQueue.recallOf(s));
+        eq(false, StationQueue.beginRecall(s, f)); // departure gap
+    }
+
+    static void recallVoyageState() {
+        VoyageState plain = new VoyageState("A", VoyagePlanner.Kind.STATION, 1, 2, 70, null);
+        eq(false, plain.fuelFree);
+        eq(VoyageState.ArrivalMode.LAND, plain.arrivalMode);
+        VoyageState recall = new VoyageState("A", VoyagePlanner.Kind.STATION, 1, 2, 70, null, true, VoyageState.ArrivalMode.HOVER);
+        eq(true, recall.fuelFree);
+        eq(VoyageState.ArrivalMode.HOVER, recall.arrivalMode);
+    }
+
+    static void recallSavedRoundTrip() {
+        UUID owner = UUID.randomUUID();
+        RecallState.Saved saved = new RecallState.Saved("Station 1", owner, 120.5, -33.25, 70.0, -12.5);
+        RecallState.Saved back = RecallState.Saved.fromBson(saved.toBson());
+        eq(saved, back);
+        eq(null, RecallState.Saved.fromBson(new RecallState.Saved("S", null, 1, 2, 3, 4).toBson()).owner());
+    }
+
+    static void benchContentsKeys() {
+        // Older resume files have no key: nothing to put back. An empty set writes an empty array under the key.
+        eq(0, AirshipBenchContents.fromBson(new org.bson.BsonDocument()).entryCount());
+        eq(0, AirshipBenchContents.fromBson(null).entryCount());
+        org.bson.BsonDocument d = AirshipBenchContents.fromBson(null).toBson();
+        eq(true, d.containsKey("benchContents"));
+        eq(0, AirshipBenchContents.fromBson(d).entryCount());
+        // The fuel tank is the engines' business, every other multi-cell origin cell is a candidate.
+        eq(false, AirshipBenchContents.isCandidate(new StructureShape.Cell(0, 5, 8, "Airship_Fuel_Tank", 0)));
+        eq(true, AirshipBenchContents.isCandidate(new StructureShape.Cell(3, 8, 5, "Bench_Furnace", 0)));
+        eq(false, AirshipBenchContents.isCandidate(new StructureShape.Cell(3, 8, 6, "Bench_Furnace", 1024)));
     }
 }

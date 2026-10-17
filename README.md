@@ -26,18 +26,22 @@ Fill the burner with fuel, climb into the basket, pull the chain, and the ground
 
 A flying ship with a whole workshop on board: every workbench you need, beds, chests and seats for a crew. It floats without fuel and only burns fuel while it moves or turns. It goes where you fly and turns to face where you look. Building it is a long road, with rare materials from deep in the world.
 
+You can hire a pilot at any station. Ask them to take you to one of your map markers or to a station and they fly the ship while you sit in the captain's chair, or pick the destination on the chart in the cabin. Parked far away, the airship comes to a station when you call it, and you climb a ladder to board.
+
 ### Balloon stations
 
-A station is a stone walkway with a landing pad at its end and a little hut for the station master. Name it when you set it up. Talk to the station master, pick a faraway station, and a balloon floats down onto the pad. Climb in, sit on a stool, and when the countdown ends it carries you across the sky on its own, looking out from your seat towards where you are going. You step off on the boarding platform of the other station, with its name across the screen. No fuel to find, nothing to steer. Every station anyone sets up is a stop for everybody.
+A station is a stone walkway with a landing pad at its end and a little hut for the station master. Name it when you set it up. Talk to the station master, pick a faraway station, and a balloon floats down onto the pad. Climb in, sit on a stool, and when the countdown ends it carries you across the sky on its own while you watch it fly from the outside. You step off on the boarding platform of the other station, with its name across the screen. No fuel to find, nothing to steer. Every station anyone sets up is a stop for everybody.
 
 ## Before you set off
 
 - Everything is crafted at the basic workbench, in the Tinkering tab. The bigger vehicles need an upgraded workbench. Each vehicle is a single recipe, with no parts to make first.
 - Hold a crate and you see where the structure will go, block by block, before you set it up.
+- Pack a tent and what you left in its chests and campfire travels in the crate, ready for your next camp. The small tent has a chest outside for your things.
 - Once set up, a tent, balloon, airship or station is locked, so nobody breaks it by accident. Beds, chests, burners and seats still work.
-- Friends standing on board when you take off travel with you, seated, and watch the sky from their seat. Other players see you fly by.
+- Friends standing on board when you take off travel with you, seated, and watch the sky from outside the vehicle. Passengers can leave mid-flight with a glider. Other players see you fly by.
+- Stations keep a clear area around their landing pad, and you can only own one airship at a time.
 
-Orbis Horizon 1.7 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8.
+Orbis Horizon 1.8 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8.
 
 The wiki has the exact recipes, how to fly each vehicle and the operator commands.
 
