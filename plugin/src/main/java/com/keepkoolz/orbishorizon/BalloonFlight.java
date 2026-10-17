@@ -234,6 +234,11 @@ final class BalloonFlight {
         /** Seat shared with another player (automatic descent with more people than seats). */
         final boolean shared;
         volatile PassengerMode mode;
+        /**
+         * Where the player stood just before being seated (world position), null for the pilot and the voyage captain. A passenger who
+         * disconnects in flight is sent back here, never to where the vehicle is or to its destination (T150).
+         */
+        volatile Vector3d boardPos;
         /** Time of the last placement (ms), so a seating that has not arrived yet is not judged. */
         long boardedMs;
         /** Last server action on this passenger (remount, teleport), in ms. */

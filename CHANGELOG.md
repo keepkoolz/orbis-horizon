@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.8.1
+
+A small release that closes a shortcut: leaving the game during a flight no longer takes you to your destination.
+
+### Changed
+
+- The inside of the airship envelope is now empty: the braziers and the cobwebs that were hidden in it are gone. An airship set up before this version still has them and would leave them floating in the air at take-off. Have an operator remove it, then set up a new one.
+
+### Fixed
+
+- Leaving the game during a flight no longer gets you to your destination. On a public transit trip you go back to the departure station. On a balloon or airship flown by someone else you go back to where you boarded.
+- The captain's map now looks like the game's handheld map, in your hand and in your inventory. The game refused its old texture.
+
 ## v1.8
 
 This release brings your own pilot. Hire one, let them fly you to your markers or to a station, call your airship to a station when you need it, and jump off with a glider. Tents now keep their contents in the crate.

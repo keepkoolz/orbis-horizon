@@ -3416,13 +3416,6 @@
     },
     {
       "x": -2,
-      "y": 15,
-      "z": -3,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -2,
       "y": 17,
       "z": -3,
       "name": "Cloth_Block_Wool_White"
@@ -3502,21 +3495,6 @@
       "y": 12,
       "z": -2,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": -2,
-      "y": 14,
-      "z": -2,
-      "name": "Deco_SpiderWeb",
-      "support": 15,
-      "rotation": 1
-    },
-    {
-      "x": -2,
-      "y": 16,
-      "z": -2,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": -2,
@@ -3602,21 +3580,6 @@
     },
     {
       "x": -2,
-      "y": 13,
-      "z": -1,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -2,
-      "y": 15,
-      "z": -1,
-      "name": "Deco_SpiderWeb",
-      "support": 15,
-      "rotation": 1
-    },
-    {
-      "x": -2,
       "y": 17,
       "z": -1,
       "name": "Cloth_Block_Wool_White"
@@ -3669,27 +3632,6 @@
       "y": 12,
       "z": 0,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": -2,
-      "y": 13,
-      "z": 0,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -2,
-      "y": 14,
-      "z": 0,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -2,
-      "y": 16,
-      "z": 0,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": -2,
@@ -3852,13 +3794,6 @@
     },
     {
       "x": -2,
-      "y": 16,
-      "z": 2,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -2,
       "y": 17,
       "z": 2,
       "name": "Cloth_Block_Wool_White"
@@ -3971,13 +3906,6 @@
     },
     {
       "x": -2,
-      "y": 14,
-      "z": 3,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -2,
       "y": 17,
       "z": 3,
       "name": "Cloth_Block_Wool_White"
@@ -4050,21 +3978,6 @@
     },
     {
       "x": -2,
-      "y": 13,
-      "z": 4,
-      "name": "Deco_SpiderWeb",
-      "support": 15,
-      "rotation": 1
-    },
-    {
-      "x": -2,
-      "y": 16,
-      "z": 4,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -2,
       "y": 17,
       "z": 4,
       "name": "Cloth_Block_Wool_White"
@@ -4125,13 +4038,6 @@
     },
     {
       "x": -2,
-      "y": 14,
-      "z": 5,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -2,
       "y": 17,
       "z": 5,
       "name": "Cloth_Block_Wool_White"
@@ -4200,20 +4106,6 @@
     },
     {
       "x": -2,
-      "y": 14,
-      "z": 6,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -2,
-      "y": 16,
-      "z": 6,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -2,
       "y": 17,
       "z": 6,
       "name": "Cloth_Block_Wool_White"
@@ -4273,14 +4165,6 @@
       "y": 12,
       "z": 7,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": -2,
-      "y": 14,
-      "z": 7,
-      "name": "Deco_SpiderWeb",
-      "support": 15,
-      "rotation": 1
     },
     {
       "x": -2,
@@ -4344,14 +4228,6 @@
       "y": 12,
       "z": 8,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": -2,
-      "y": 16,
-      "z": 8,
-      "name": "Deco_SpiderWeb",
-      "support": 15,
-      "rotation": 11
     },
     {
       "x": -2,
@@ -4403,20 +4279,6 @@
       "y": 11,
       "z": 9,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": -2,
-      "y": 15,
-      "z": 9,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -2,
-      "y": 16,
-      "z": 9,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": -2,
@@ -4477,14 +4339,6 @@
     },
     {
       "x": -2,
-      "y": 14,
-      "z": 10,
-      "name": "Deco_SpiderWeb",
-      "support": 15,
-      "rotation": 1
-    },
-    {
-      "x": -2,
       "y": 17,
       "z": 10,
       "name": "Cloth_Block_Wool_White"
@@ -4507,13 +4361,6 @@
       "y": 12,
       "z": 11,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": -2,
-      "y": 15,
-      "z": 11,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": -2,
@@ -5121,13 +4968,6 @@
     },
     {
       "x": -1,
-      "y": 14,
-      "z": -2,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -1,
       "y": 17,
       "z": -2,
       "name": "Cloth_Block_Wool_White"
@@ -5170,13 +5010,6 @@
       "y": 12,
       "z": -1,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": -1,
-      "y": 16,
-      "z": -1,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": -1,
@@ -5267,13 +5100,6 @@
       "y": 11,
       "z": 1,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": -1,
-      "y": 16,
-      "z": 1,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": -1,
@@ -5585,20 +5411,6 @@
     },
     {
       "x": -1,
-      "y": 15,
-      "z": 6,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -1,
-      "y": 16,
-      "z": 6,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -1,
       "y": 17,
       "z": 6,
       "name": "Cloth_Block_Wool_White"
@@ -5662,27 +5474,6 @@
       "y": 12,
       "z": 7,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": -1,
-      "y": 14,
-      "z": 7,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -1,
-      "y": 15,
-      "z": 7,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -1,
-      "y": 16,
-      "z": 7,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": -1,
@@ -5750,13 +5541,6 @@
       "y": 12,
       "z": 8,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": -1,
-      "y": 16,
-      "z": 8,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": -1,
@@ -5933,13 +5717,6 @@
     },
     {
       "x": -1,
-      "y": 16,
-      "z": 11,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": -1,
       "y": 17,
       "z": 11,
       "name": "Cloth_Block_Wool_White"
@@ -5972,12 +5749,6 @@
       "name": "Metal_Bronze_Pipe_Large_Mouthpiece",
       "support": 15,
       "rotation": 8
-    },
-    {
-      "x": -1,
-      "y": 11,
-      "z": 12,
-      "name": "Furniture_Village_Brazier"
     },
     {
       "x": -1,
@@ -6423,13 +6194,6 @@
     },
     {
       "x": 0,
-      "y": 14,
-      "z": -5,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 0,
       "y": 17,
       "z": -5,
       "name": "Cloth_Block_Wool_White"
@@ -6471,26 +6235,6 @@
       "y": 11,
       "z": -4,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 0,
-      "y": 12,
-      "z": -4,
-      "name": "Furniture_Village_Brazier"
-    },
-    {
-      "x": 0,
-      "y": 14,
-      "z": -4,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 0,
-      "y": 16,
-      "z": -4,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": 0,
@@ -6650,19 +6394,6 @@
     },
     {
       "x": 0,
-      "y": 12,
-      "z": -1,
-      "name": "Furniture_Village_Brazier"
-    },
-    {
-      "x": 0,
-      "y": 16,
-      "z": -1,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 0,
       "y": 17,
       "z": -1,
       "name": "Cloth_Block_Wool_White"
@@ -6705,20 +6436,6 @@
       "y": 11,
       "z": 0,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 0,
-      "y": 15,
-      "z": 0,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 0,
-      "y": 16,
-      "z": 0,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": 0,
@@ -6873,19 +6590,6 @@
     },
     {
       "x": 0,
-      "y": 12,
-      "z": 3,
-      "name": "Furniture_Village_Brazier"
-    },
-    {
-      "x": 0,
-      "y": 13,
-      "z": 3,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 0,
       "y": 17,
       "z": 3,
       "name": "Cloth_Block_Wool_White"
@@ -6927,13 +6631,6 @@
       "y": 11,
       "z": 4,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 0,
-      "y": 16,
-      "z": 4,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": 0,
@@ -7100,12 +6797,6 @@
     },
     {
       "x": 0,
-      "y": 12,
-      "z": 7,
-      "name": "Furniture_Village_Brazier"
-    },
-    {
-      "x": 0,
       "y": 17,
       "z": 7,
       "name": "Cloth_Block_Wool_White"
@@ -7168,13 +6859,6 @@
       "y": 11,
       "z": 8,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 0,
-      "y": 16,
-      "z": 8,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": 0,
@@ -7308,12 +6992,6 @@
     },
     {
       "x": 0,
-      "y": 12,
-      "z": 10,
-      "name": "Furniture_Village_Brazier"
-    },
-    {
-      "x": 0,
       "y": 17,
       "z": 10,
       "name": "Cloth_Block_Wool_White"
@@ -7337,13 +7015,6 @@
       "y": 11,
       "z": 11,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 0,
-      "y": 14,
-      "z": 11,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": 0,
@@ -7811,28 +7482,6 @@
     },
     {
       "x": 1,
-      "y": 13,
-      "z": -5,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 1,
-      "y": 14,
-      "z": -5,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 1,
-      "y": 15,
-      "z": -5,
-      "name": "Deco_SpiderWeb",
-      "support": 15,
-      "rotation": 10
-    },
-    {
-      "x": 1,
       "y": 17,
       "z": -5,
       "name": "Cloth_Block_Wool_White"
@@ -7873,20 +7522,6 @@
       "y": 12,
       "z": -4,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 1,
-      "y": 13,
-      "z": -4,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 1,
-      "y": 14,
-      "z": -4,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": 1,
@@ -7970,13 +7605,6 @@
     },
     {
       "x": 1,
-      "y": 13,
-      "z": -3,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 1,
       "y": 17,
       "z": -3,
       "name": "Cloth_Block_Wool_White"
@@ -8018,13 +7646,6 @@
       "y": 12,
       "z": -2,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 1,
-      "y": 13,
-      "z": -2,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": 1,
@@ -8115,13 +7736,6 @@
       "y": 12,
       "z": 0,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 1,
-      "y": 16,
-      "z": 0,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": 1,
@@ -8613,13 +8227,6 @@
     },
     {
       "x": 1,
-      "y": 16,
-      "z": 8,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 1,
       "y": 17,
       "z": 8,
       "name": "Cloth_Block_Wool_White"
@@ -8793,14 +8400,6 @@
     },
     {
       "x": 1,
-      "y": 14,
-      "z": 11,
-      "name": "Deco_SpiderWeb",
-      "support": 15,
-      "rotation": 2
-    },
-    {
-      "x": 1,
       "y": 17,
       "z": 11,
       "name": "Cloth_Block_Wool_White"
@@ -8834,12 +8433,6 @@
       "name": "Metal_Bronze_Pipe_Large_Mouthpiece",
       "support": 15,
       "rotation": 8
-    },
-    {
-      "x": 1,
-      "y": 11,
-      "z": 12,
-      "name": "Furniture_Village_Brazier"
     },
     {
       "x": 1,
@@ -9259,13 +8852,6 @@
     },
     {
       "x": 2,
-      "y": 15,
-      "z": -5,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 2,
       "y": 17,
       "z": -5,
       "name": "Cloth_Block_Wool_White"
@@ -9371,14 +8957,6 @@
     },
     {
       "x": 2,
-      "y": 16,
-      "z": -3,
-      "name": "Deco_SpiderWeb",
-      "support": 15,
-      "rotation": 9
-    },
-    {
-      "x": 2,
       "y": 17,
       "z": -3,
       "name": "Cloth_Block_Wool_White"
@@ -9431,13 +9009,6 @@
       "y": 12,
       "z": -2,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 2,
-      "y": 16,
-      "z": -2,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": 2,
@@ -9631,13 +9202,6 @@
       "y": 11,
       "z": 1,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 2,
-      "y": 14,
-      "z": 1,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": 2,
@@ -9850,21 +9414,6 @@
     },
     {
       "x": 2,
-      "y": 14,
-      "z": 4,
-      "name": "Deco_SpiderWeb",
-      "support": 15,
-      "rotation": 3
-    },
-    {
-      "x": 2,
-      "y": 15,
-      "z": 4,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 2,
       "y": 17,
       "z": 4,
       "name": "Cloth_Block_Wool_White"
@@ -9929,34 +9478,6 @@
       "y": 12,
       "z": 5,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 2,
-      "y": 13,
-      "z": 5,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 2,
-      "y": 14,
-      "z": 5,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 2,
-      "y": 15,
-      "z": 5,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
-    },
-    {
-      "x": 2,
-      "y": 16,
-      "z": 5,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": 2,
@@ -10087,13 +9608,6 @@
       "y": 12,
       "z": 7,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 2,
-      "y": 14,
-      "z": 7,
-      "name": "Deco_SpiderWeb_Full",
-      "support": 15
     },
     {
       "x": 2,
@@ -10291,22 +9805,6 @@
       "y": 12,
       "z": 11,
       "name": "Cloth_Block_Wool_White"
-    },
-    {
-      "x": 2,
-      "y": 15,
-      "z": 11,
-      "name": "Deco_SpiderWeb",
-      "support": 15,
-      "rotation": 8
-    },
-    {
-      "x": 2,
-      "y": 16,
-      "z": 11,
-      "name": "Deco_SpiderWeb",
-      "support": 15,
-      "rotation": 8
     },
     {
       "x": 2,

@@ -2623,21 +2623,19 @@ public final class BalloonManager {
         landNow(flight, false);
     }
 
-    /** shutdown: server stop (landAll), a transit flight also writes a stranded entry (destination drop point) per passenger. */
+    /** shutdown: server stop (landAll), a transit flight also writes a stranded entry (departure boarding point) per passenger. */
     private void landNow(BalloonFlight flight, boolean shutdown) {
         if (flights.get(flight.pilotUuid) != flight) {
             return;
         }
         Store<EntityStore> store = flight.world.getEntityStore().getStore();
         if (flight.transit != null) {
-            // A transit balloon is never placed in blocks in mid-air: its passengers are set down at the destination station
-            // (the nearest one if it was removed, the ground if none is left) and it is just removed. The resume file goes with it.
-            TransitNetwork.Station dest = transitDestination(flight.world, flight.transit.from, flight.transit.to, flight.entityPos);
+            // A transit balloon is never placed in blocks in mid-air: its passengers are put back on the DEPARTURE station
+            // (T150, never the destination: a stop or an early end must not skip the trip) and it is just removed. The resume file goes with it.
+            List<Vector3d> pts = transitReturnPoints(flight.world, flight.transit.from, flight.transit.to, flight.entityPos);
             if (shutdown) {
                 // The deferred teleports and the resume file (deleted by endTransit) cannot be relied on at a stop: each passenger is noted
                 // in stranded/ (applied when they next arrive in the world), at the destination drop point or on the ground below.
-                List<Vector3d> pts = dest != null
-                        ? TransitAutopilot.dropPoints(dest.origin, dest.rotation, Math.max(1, flight.passengers.size())) : null;
                 int k = 0;
                 for (BalloonFlight.Passenger p : flight.passengers) {
                     Vector3d spot = pts != null ? pts.get(Math.min(k++, pts.size() - 1))
@@ -2645,9 +2643,8 @@ public final class BalloonManager {
                     BalloonResume.writeStranded(p.uuid, flight.world.getName(), spot.x, spot.y, spot.z);
                 }
             }
-            if (dest != null) {
-                releaseTransitPassengers(store, flight,
-                        TransitAutopilot.dropPoints(dest.origin, dest.rotation, Math.max(1, flight.passengers.size())));
+            if (pts != null) {
+                releaseTransitPassengers(store, flight, pts);
             } else {
                 groundTransitPassengers(store, flight);
             }
@@ -2712,7 +2709,7 @@ public final class BalloonManager {
      */
     void landAll() {
         for (BalloonFlight flight : new ArrayList<>(flights.values())) {
-            boolean ok = runOnWorld(flight.world, () -> landNow(flight), LAND_WAIT_MS);
+            boolean ok = runOnWorld(flight.world, () -> landNow(flight, true), LAND_WAIT_MS);
             if (!ok) {
                 LOGGER.at(Level.WARNING).log("Montgolfière de %s non reposée : fichier de reprise gardé", flight.pilotUuid);
             }
@@ -2843,7 +2840,8 @@ public final class BalloonManager {
 
     /**
      * Resume of a transit flight (stop or crash in the air): no block is placed. Orphan entities are removed and the passengers of the file
-     * are set down on the drop points of the destination station (the departure or nearest one if it was removed, the ground if none is left):
+     * are put back on the boarding points of the DEPARTURE station (T150, the nearest other one if it was removed, the destination only if it is the
+     * last station, the ground if none is left):
      * teleported if online, else noted in stranded/ and applied on their next arrival.
      */
     private void recoverTransit(World world, Store<EntityStore> store, BalloonResume.Record rec) throws IOException {
@@ -2859,9 +2857,7 @@ public final class BalloonManager {
         PilotMannequin.removeOrphan(world, store, rec.balloon()); // T119
         PassengerSeatView.removeOrphans(world, store, rec.balloon(), rec.passengers().stream().map(BalloonResume.Seated::uuid).toList());
         Vector3d here = new Vector3d(rec.origin().x + 0.5, rec.origin().y, rec.origin().z + 0.5);
-        TransitNetwork.Station dest = transitDestination(world, rec.transitFrom(), rec.transitTo(), here);
-        List<Vector3d> points = dest != null
-                ? TransitAutopilot.dropPoints(dest.origin, dest.rotation, Math.max(1, rec.passengers().size())) : null;
+        List<Vector3d> points = transitReturnPoints(world, rec.transitFrom(), rec.transitTo(), here);
         int i = 0;
         for (BalloonResume.Seated sp : rec.passengers()) {
             try {
@@ -2889,7 +2885,7 @@ public final class BalloonManager {
         }
         BalloonResume.delete(rec.pilot());
         LOGGER.at(Level.INFO).log("Vol de transport %s repris après arrêt : %d passager(s) posé(s) à %s", rec.pilot(),
-                rec.passengers().size(), dest != null ? dest.name : "le sol");
+                rec.passengers().size(), points != null ? "la station de départ" : "le sol");
     }
 
     // ------------------------------------------------------------------ passengers (T21)
@@ -2977,8 +2973,10 @@ public final class BalloonManager {
             Vector3f pv = pivot(kind);
             Vector3i block = new Vector3i(Math.round(pv.x), Math.round(pv.y), Math.round(pv.z));
             for (Occupant o : people) {
-                result.add(new BalloonFlight.Passenger(o.ref(), o.player().getUuid(), o.player().getUsername(), -1, block,
-                        new Vector3f(pv.x, pv.y + seatHeight, pv.z), true, passengerMode, pose));
+                BalloonFlight.Passenger sp = new BalloonFlight.Passenger(o.ref(), o.player().getUuid(), o.player().getUsername(), -1, block,
+                        new Vector3f(pv.x, pv.y + seatHeight, pv.z), true, passengerMode, pose);
+                sp.boardPos = o.pos();
+                result.add(sp);
             }
             return result;
         }
@@ -3024,8 +3022,10 @@ public final class BalloonManager {
             }
             StructureShape.Cell c = seats.get(seatOf[j]);
             Occupant o = people.get(j);
-            result.add(new BalloonFlight.Passenger(o.ref(), o.player().getUuid(), o.player().getUsername(), seatOf[j],
-                    new Vector3i(c.x(), c.y(), c.z()), new Vector3f(c.x(), c.y() + height, c.z()), shared[j], passengerMode, pose));
+            BalloonFlight.Passenger np = new BalloonFlight.Passenger(o.ref(), o.player().getUuid(), o.player().getUsername(), seatOf[j],
+                    new Vector3i(c.x(), c.y(), c.z()), new Vector3f(c.x(), c.y() + height, c.z()), shared[j], passengerMode, pose);
+            np.boardPos = o.pos();
+            result.add(np);
         }
         return result;
     }
@@ -3503,11 +3503,16 @@ public final class BalloonManager {
         }
     }
 
-    /** Destination station of a transit flight by name, else TransitAutopilot.rerouteTarget, else null. */
-    private static TransitNetwork.Station transitDestination(World world, String from, String to, Vector3d here) {
-        TransitNetwork net = TransitNetwork.get();
-        TransitNetwork.Station dest = to != null ? net.byName(world.getName(), to) : null;
-        return dest != null ? dest : TransitAutopilot.rerouteTarget(net.stations(world.getName()), from, here);
+    /**
+     * T150: boarding points (the departure platform) where the passengers of a transit flight that ends early are put back, see
+     * TransitAutopilot.returnStation. Null if there is no station at all (the caller puts them on the ground).
+     */
+    static List<Vector3d> transitReturnPoints(World world, String from, String to, Vector3d here) {
+        TransitNetwork.Station st = TransitAutopilot.returnStation(TransitNetwork.get().stations(world.getName()), from, to, here);
+        if (st == null) {
+            return null;
+        }
+        return TransitAutopilot.boardingPoints(st);
     }
 
     private void dropPassenger(BalloonFlight f, BalloonFlight.Passenger p) {
@@ -3529,13 +3534,16 @@ public final class BalloonManager {
         }
         TransformComponent t = store.getComponent(p.ref, TransformComponent.getComponentType());
         if (t != null) {
-            t.setPosition(groundBelow(f.world, prefabPoint(f.entityPos, f.rotation, p.seatLocal)));
+            // T150: back where they boarded (the seated pilot of a dry descent has no boarding position and stays with the balloon).
+            Vector3d back = p.boardPos;
+            t.setPosition(groundBelow(f.world, back != null ? back : prefabPoint(f.entityPos, f.rotation, p.seatLocal)));
         }
     }
 
     /**
      * Passenger of a transit flight who disconnects: dismounted, and their saved position (and a stranded entry, applied when they arrive
-     * in the world) is a drop point of the destination station, not the air below the balloon. No station left: the ground below.
+     * in the world) is a boarding point of the DEPARTURE station (T150: quitting must not skip the trip), else the nearest other station,
+     * else the destination if it is the only one left. No station left: the ground below.
      */
     private void dropTransitPassenger(BalloonFlight f, BalloonFlight.Passenger p) {
         Store<EntityStore> store = f.world.getEntityStore().getStore();
@@ -3546,10 +3554,9 @@ public final class BalloonManager {
         } catch (RuntimeException e) {
             // The player is leaving: flight settings will be restored on their next connection.
         }
-        TransitNetwork.Station dest = transitDestination(f.world, f.transit.from, f.transit.to, f.entityPos);
+        List<Vector3d> pts = transitReturnPoints(f.world, f.transit.from, f.transit.to, f.entityPos);
         Vector3d spot;
-        if (dest != null) {
-            List<Vector3d> pts = TransitAutopilot.dropPoints(dest.origin, dest.rotation, TransitConstants.PASSENGERS);
+        if (pts != null) {
             spot = pts.get(Math.floorMod(p.seat, pts.size()));
         } else {
             spot = groundBelow(f.world, prefabPoint(f.entityPos, f.rotation, p.seatLocal));
@@ -3652,7 +3659,11 @@ public final class BalloonManager {
     }
 
     /** A player in the gondola, with their distance to the pivot. */
-    record Occupant(PlayerRef player, Ref<EntityStore> ref, double distance) {
+    record Occupant(PlayerRef player, Ref<EntityStore> ref, double distance, Vector3d pos) {
+        /** Occupant without a known boarding position (the captain's chair rider, who stays with the vehicle). */
+        Occupant(PlayerRef player, Ref<EntityStore> ref, double distance) {
+            this(player, ref, distance, null);
+        }
     }
 
     private final Map<String, Hover> hovers = new ConcurrentHashMap<>();
@@ -3872,7 +3883,7 @@ public final class BalloonManager {
                     || local.z < nMin.z || local.z > nMax.z) {
                 continue;
             }
-            list.add(new Occupant(p, ref, local.distance(pv)));
+            list.add(new Occupant(p, ref, local.distance(pv), new Vector3d(pos)));
         }
         list.sort(Comparator.comparingDouble(Occupant::distance));
         return list;

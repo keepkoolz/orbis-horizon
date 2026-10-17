@@ -31,6 +31,7 @@ public class TransitTests {
         run("cruiseAndHolding", TransitTests::cruiseAndHolding);
         run("holdingPoints", TransitTests::holdingPoints);
         run("rerouteTarget", TransitTests::rerouteTarget);
+        run("returnStation", TransitTests::returnStation);
         run("followNoTeleportLoop", TransitTests::followNoTeleportLoop);
         run("randomSeatYawRange", TransitTests::randomSeatYawRange);
         run("viewFilterRules", TransitTests::viewFilterRules);
@@ -490,6 +491,17 @@ public class TransitTests {
         eq(b, TransitAutopilot.rerouteTarget(List.of(b, c), "A", here)); // departure removed: nearest
         eq(c, TransitAutopilot.rerouteTarget(List.of(c), "A", here));
         eq(null, TransitAutopilot.rerouteTarget(List.of(), "A", here)); // nothing left: the ground
+    }
+
+    static void returnStation() {
+        TransitNetwork.Station a = new TransitNetwork.Station("A", "w", new Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
+        TransitNetwork.Station b = new TransitNetwork.Station("B", "w", new Vector3i(500, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
+        TransitNetwork.Station c = new TransitNetwork.Station("C", "w", new Vector3i(900, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
+        org.joml.Vector3d here = new org.joml.Vector3d(480, 110, 0); // right above B, the destination
+        eq(a, TransitAutopilot.returnStation(List.of(a, b, c), "A", "B", here)); // departure still there: back to it
+        eq(c, TransitAutopilot.returnStation(List.of(b, c), "A", "B", here)); // departure removed: nearest other than the destination
+        eq(b, TransitAutopilot.returnStation(List.of(b), "A", "B", here)); // the destination only if it is the last one
+        eq(null, TransitAutopilot.returnStation(List.of(), "A", "B", here)); // nothing left: the ground
     }
 
     static void holdingPoints() {

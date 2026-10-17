@@ -99,6 +99,32 @@ final class TransitAutopilot {
         return best;
     }
 
+    /**
+     * Station a player who leaves a transit flight early (disconnect, server stop, crash) is sent back to: the departure station if it still
+     * exists, else the nearest one other than the destination, else the destination if it is the only one left, else null (the ground).
+     * Never the destination when another choice exists, so quitting the game cannot be used to arrive instantly.
+     */
+    static TransitNetwork.Station returnStation(List<TransitNetwork.Station> stations, String from, String to, Vector3d here) {
+        TransitNetwork.Station best = null;
+        TransitNetwork.Station dest = null;
+        double bestD = Double.MAX_VALUE;
+        for (TransitNetwork.Station s : stations) {
+            if (s.name.equals(from)) {
+                return s;
+            }
+            if (s.name.equals(to)) {
+                dest = s;
+                continue;
+            }
+            double d = here.distanceSquared(s.origin.x, s.origin.y, s.origin.z);
+            if (d < bestD) {
+                bestD = d;
+                best = s;
+            }
+        }
+        return best != null ? best : dest;
+    }
+
     /** Order of the flight among the waiting arrivals: its index, or the number of waiting ones (behind them) if it is not registered. */
     static int holdIndexFor(List<UUID> waitingOrder, UUID flight) {
         int i = waitingOrder.indexOf(flight);

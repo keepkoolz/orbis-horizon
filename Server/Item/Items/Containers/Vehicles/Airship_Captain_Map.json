@@ -3,22 +3,10 @@
     "Name": "server.orbis_horizon.items.airship_captain_map.name",
     "Description": "server.orbis_horizon.items.airship_captain_map.description"
   },
-  "Icon": "Icons/ItemsGenerated/Deco_Map.png",
-  "Model": "Blocks/Miscellaneous/Map.blockymodel",
-  "Texture": "Blocks/Miscellaneous/Map_Texture.png",
-  "PlayerAnimationsId": "Item",
+  "Icon": "Icons/ItemsGenerated/Tool_Map.png",
+  "Model": "Items/Consumables/Scrolls/Map.blockymodel",
+  "Texture": "Items/Consumables/Scrolls/Map_Wood.png",
+  "PlayerAnimationsId": "Block",
   "MaxStack": 1,
-  "IconProperties": {
-    "Scale": 0.695,
-    "Translation": [
-      -0.895,
-      -3.895
-    ],
-    "Rotation": [
-      30.945,
-      51.195,
-      22.5
-    ]
-  },
   "ItemSoundSetId": "ISS_Blocks_Wood"
 }

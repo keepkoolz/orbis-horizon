@@ -183,7 +183,7 @@ final class AirshipPassengers {
             Ref<EntityStore> ref = other.getReference();
             TransformComponent t = ref != null && ref.isValid() ? store.getComponent(ref, TransformComponent.getComponentType()) : null;
             if (t != null && AirshipManager.insideShape(s, origin, rotation, t.getPosition())) {
-                list.add(new BalloonManager.Occupant(other, ref, 0));
+                list.add(new BalloonManager.Occupant(other, ref, 0, new Vector3d(t.getPosition())));
             }
         }
         return list;
@@ -254,6 +254,7 @@ final class AirshipPassengers {
             BalloonManager.Occupant o = people.get(j);
             BalloonFlight.Passenger p = new BalloonFlight.Passenger(o.ref(), o.player().getUuid(), o.player().getUsername(), seatOf[j],
                     new Vector3i(c.x(), c.y(), c.z()), seatLocal(c), false, legacy, BalloonManager.get().pose());
+            p.boardPos = o.pos();
             result.add(new Rider(p, exitLocal(s, c), m));
         }
         return result;
@@ -602,7 +603,10 @@ final class AirshipPassengers {
         f.riders.clear();
     }
 
-    /** A rider who disconnects: released, their saved position set on the ground under their seat (else saved in the air). */
+    /**
+     * A rider who disconnects: released, their saved position set on the ground where they boarded (T150), else (the captain on the chair)
+     * under their seat.
+     */
     void dropOne(Store<EntityStore> store, AirshipFlight f, Rider r) {
         f.riders.remove(r);
         if (!r.p.ref.isValid()) {
@@ -611,7 +615,8 @@ final class AirshipPassengers {
         release(store, r);
         TransformComponent t = store.getComponent(r.p.ref, TransformComponent.getComponentType());
         if (t != null) {
-            t.setPosition(BalloonManager.groundBelow(f.world, manager.shipPoint(f, r.p.seatLocal)));
+            Vector3d back = r.p.boardPos;
+            t.setPosition(BalloonManager.groundBelow(f.world, back != null ? back : manager.shipPoint(f, r.p.seatLocal)));
         }
     }
 
