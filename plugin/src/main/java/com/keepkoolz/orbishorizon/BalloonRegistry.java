@@ -47,7 +47,14 @@ final class BalloonRegistry {
      * balloon, 0 and closed for every other type) nor the captured animals (T74, at most 3, immutable list) count in equality: an entry is found by world, origin, rotation and kind.
      */
     record Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
-                 java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall) {
+                 java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall,
+                 java.util.List<ShipLadder.Saved> ladders) {
+        /** An entry without rope ladders (retracted). */
+        Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
+              java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall) {
+            this(world, x, y, z, rotation, kind, owner, descent, open, animals, id, ownerName, shared, crew, recall, java.util.List.of());
+        }
+
         /** An entry without a recall mark. */
         Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
               java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew) {
@@ -222,7 +229,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, old.crew, recall);
+                old.animals, old.id, old.ownerName, old.shared, old.crew, recall, old.ladders);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -242,7 +249,27 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, descent, open, old.animals,
-                old.id, old.ownerName, old.shared, old.crew, old.recall);
+                old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders);
+        ENTRIES.remove(old);
+        ENTRIES.add(next);
+        cageDirty = true;
+        if (force || System.currentTimeMillis() - cageSavedMs >= 1000) {
+            flushCage();
+        }
+        return next;
+    }
+
+    /**
+     * Sets the rope ladder state (retracted when the list is empty) of a placed airship. Written at once if force is true,
+     * otherwise at most once per second (same throttling as the cage). Returns the new entry, null if not registered.
+     */
+    static synchronized Entry setLadders(World world, Vector3i origin, Rotation rotation, java.util.List<ShipLadder.Saved> ladders, boolean force) {
+        Entry old = get(world, origin, rotation, Deployables.AIRSHIP_KIND);
+        if (old == null) {
+            return null;
+        }
+        Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, java.util.List.copyOf(ladders));
         ENTRIES.remove(old);
         ENTRIES.add(next);
         cageDirty = true;
@@ -262,7 +289,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                java.util.List.copyOf(animals), old.id, old.ownerName, old.shared, old.crew, old.recall);
+                java.util.List.copyOf(animals), old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -279,7 +306,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, crew, old.recall);
+                old.animals, old.id, old.ownerName, old.shared, crew, old.recall, old.ladders);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -356,7 +383,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, shared, old.crew, old.recall);
+                old.animals, old.id, old.ownerName, shared, old.crew, old.recall, old.ladders);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -409,6 +436,12 @@ final class BalloonRegistry {
             if (shape == null) {
                 continue;
             }
+            if (!e.ladders.isEmpty() && isLadderRung(e, pos)) {
+                // A rope ladder rung under an airship: only the rung block can be broken, nothing can be placed.
+                if ((placing || broken == null || ShipLadder.ROPE_BLOCK.equals(broken.getId())) && stillThere(world, shape, e)) {
+                    return e;
+                }
+            }
             Vector3i local = e.rotation.toInverse().rotateYaw(new Vector3i(pos.x - e.x, pos.y - e.y, pos.z - e.z), new Vector3i());
             if (!shape.inBounds(local.x, local.y, local.z)) {
                 continue;
@@ -431,6 +464,18 @@ final class BalloonRegistry {
             return e;
         }
         return null;
+    }
+
+    private static boolean isLadderRung(Entry e, Vector3i pos) {
+        for (ShipLadder.Saved l : e.ladders) {
+            int[] f = l.rungs();
+            for (int i = 0; i + 2 < f.length; i += 3) {
+                if (f[i] == pos.x && f[i + 1] == pos.y && f[i + 2] == pos.z) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** The entry whose shape contains a block at this world cell, null if none (T43). Same calculation as isLocked, without the placement volume. */
@@ -541,7 +586,22 @@ final class BalloonRegistry {
         if (e.recall != null) {
             d.put("recall", e.recall.toBson());
         }
+        if (!e.ladders.isEmpty()) {
+            org.bson.BsonArray a = new org.bson.BsonArray();
+            for (ShipLadder.Saved l : e.ladders) {
+                a.add(l.toBson());
+            }
+            d.put("ladders", a);
+        }
         return d;
+    }
+
+    private static java.util.List<ShipLadder.Saved> laddersFromBson(org.bson.BsonArray a) {
+        java.util.List<ShipLadder.Saved> list = new java.util.ArrayList<>();
+        for (org.bson.BsonValue v : a) {
+            list.add(ShipLadder.Saved.fromBson(v.asDocument()));
+        }
+        return java.util.List.copyOf(list);
     }
 
     /** Reads one registry entry, tolerating files written by older versions. */
@@ -561,7 +621,8 @@ final class BalloonRegistry {
                 // T133: NPC pilot, absent in older files.
                 d.containsKey("crew") ? CrewRecord.fromBson(d.getDocument("crew")) : null,
                 // T145: recall mark of an airship waiting above a station, absent otherwise.
-                d.containsKey("recall") ? Recall.fromBson(d.getDocument("recall")) : null);
+                d.containsKey("recall") ? Recall.fromBson(d.getDocument("recall")) : null,
+                d.containsKey("ladders") ? laddersFromBson(d.getArray("ladders")) : java.util.List.of());
     }
 
     private static void load() {

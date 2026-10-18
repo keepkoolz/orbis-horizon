@@ -123,7 +123,7 @@ final class AirshipDesk {
                 }
                 if (st == AirshipCrew.CrewState.AT_HELM) {
                     Message error = AirshipManager.get().startVoyage(store, world, captain, e, p.dest);
-                    if (error != null) {
+                    if (error != null && error != AirshipManager.DEFERRED) {
                         captain.sendMessage(error);
                     }
                 } else {

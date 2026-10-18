@@ -16,7 +16,80 @@ import java.util.UUID;
 public class TransitTests {
     private static int passed = 0;
 
+    static void ladderLeverPhases() {
+        eq(ShipLadder.Phase.LOWERING, ShipLadder.onLever(ShipLadder.Phase.UP));
+        eq(ShipLadder.Phase.RAISING, ShipLadder.onLever(ShipLadder.Phase.LOWERING));
+        eq(ShipLadder.Phase.RAISING, ShipLadder.onLever(ShipLadder.Phase.DOWN));
+        eq(ShipLadder.Phase.LOWERING, ShipLadder.onLever(ShipLadder.Phase.RAISING));
+        eq(ShipLadder.Phase.LOWERING, ShipLadder.afterLowerStep(true, 10));
+        eq(ShipLadder.Phase.DOWN, ShipLadder.afterLowerStep(true, 48));
+        eq(ShipLadder.Phase.DOWN, ShipLadder.afterLowerStep(false, 3));
+    }
+
+    static void ladderAdoptPhase() {
+        for (ShipLadder.Phase ph : ShipLadder.Phase.values()) {
+            eq(ph, ShipLadder.adoptPhase(ph, 0));
+        }
+        eq(ShipLadder.Phase.LOWERING, ShipLadder.adoptPhase(ShipLadder.Phase.UP, 3));
+        eq(ShipLadder.Phase.LOWERING, ShipLadder.adoptPhase(ShipLadder.Phase.LOWERING, 3));
+        eq(ShipLadder.Phase.DOWN, ShipLadder.adoptPhase(ShipLadder.Phase.DOWN, 3));
+        eq(ShipLadder.Phase.RAISING, ShipLadder.adoptPhase(ShipLadder.Phase.RAISING, 3));
+    }
+
+    static void ladderCaught() {
+        eq(true, ShipLadder.caught(40.0, 40));
+        eq(true, ShipLadder.caught(40.9, 40));
+        eq(false, ShipLadder.caught(41.0, 40));
+        eq(false, ShipLadder.caught(39.5, 40));
+    }
+
+    static void ladderColumnCheck() {
+        // column cell (10, 20), lowest rung y 40, bottom fixed rung y 44 -> feet in [40, 45)
+        eq(true, ShipLadder.inColumn(10.5, 42.0, 20.5, 10, 20, 40, 44));
+        eq(true, ShipLadder.inColumn(10.0, 40.0, 20.9, 10, 20, 40, 44));
+        eq(false, ShipLadder.inColumn(11.2, 42.0, 20.5, 10, 20, 40, 44)); // next cell
+        eq(false, ShipLadder.inColumn(9.9, 42.0, 20.5, 10, 20, 40, 44));
+        eq(false, ShipLadder.inColumn(10.5, 39.9, 20.5, 10, 20, 40, 44)); // below the lowest rung
+        eq(false, ShipLadder.inColumn(10.5, 45.0, 20.5, 10, 20, 40, 44)); // on the deck
+        eq(true, ShipLadder.inColumn(-0.5, 42.0, -0.5, -1, -1, 40, 44));  // negative coords floor
+    }
+
+    static void raiseSkipsForeign() {
+        int[] rungs = {5, 60, 0, 5, 59, 0, 5, 58, 0};       // top to bottom
+        int[] out = ShipLadder.foreignSafeRaise(rungs, c -> c[1] != 59); // the y = 59 cell holds a foreign block
+        eq(6, out.length);
+        eq(58, out[1]);   // bottom first
+        eq(60, out[4]);
+    }
+
+    static void laddersRoundTrip() {
+        ShipLadder.Saved s = new ShipLadder.Saved(-1, ShipLadder.Phase.RAISING, new int[] {10, 60, 5, 10, 59, 5});
+        ShipLadder.Saved back = ShipLadder.Saved.fromBson(s.toBson());
+        eq(-1, back.side());
+        eq(ShipLadder.Phase.RAISING, back.phase());
+        eq(6, back.rungs().length);
+        eq(59, back.rungs()[4]);
+        BalloonRegistry.Entry e = BalloonRegistry.entryFromBson(BalloonRegistry.entryToBson(
+                new BalloonRegistry.Entry("w", 0, 50, 0, Rotation.None, Deployables.AIRSHIP_KIND, null)));
+        eq(0, e.ladders().size());
+        BalloonRegistry.Entry withL = new BalloonRegistry.Entry("w", 0, 50, 0, Rotation.None, Deployables.AIRSHIP_KIND, null,
+                0, false, java.util.List.of(), null, null, false, null, null, java.util.List.of(s));
+        BalloonRegistry.Entry rt = BalloonRegistry.entryFromBson(BalloonRegistry.entryToBson(withL));
+        eq(1, rt.ladders().size());
+        eq(ShipLadder.Phase.RAISING, rt.ladders().get(0).phase());
+        eq(true, withL.equals(e));
+        BalloonRegistry.Recall r = new BalloonRegistry.Recall(java.util.UUID.randomUUID(), 1, 2, 3, Rotation.None, 0.5, 0.5, new int[] {1, 2, 3});
+        eq(3, BalloonRegistry.Recall.fromBson(r.toBson()).ladders().length);
+    }
+
     public static void main(String[] args) throws Exception {
+        run("pendingDepartureSingle", TransitTests::pendingDepartureSingle);
+        run("ladderLeverPhases", TransitTests::ladderLeverPhases);
+        run("ladderAdoptPhase", TransitTests::ladderAdoptPhase);
+        run("ladderCaught", TransitTests::ladderCaught);
+        run("ladderColumnCheck", TransitTests::ladderColumnCheck);
+        run("raiseSkipsForeign", TransitTests::raiseSkipsForeign);
+        run("laddersRoundTrip", TransitTests::laddersRoundTrip);
         run("nameRules", TransitTests::nameRules);
         run("componentGuard", TransitTests::componentGuard);
         run("tentContentsRoundTrip", TransitTests::tentContentsRoundTrip);
@@ -32,6 +105,7 @@ public class TransitTests {
         run("holdingPoints", TransitTests::holdingPoints);
         run("rerouteTarget", TransitTests::rerouteTarget);
         run("returnStation", TransitTests::returnStation);
+        run("leaveSpot", TransitTests::leaveSpot);
         run("followNoTeleportLoop", TransitTests::followNoTeleportLoop);
         run("randomSeatYawRange", TransitTests::randomSeatYawRange);
         run("viewFilterRules", TransitTests::viewFilterRules);
@@ -98,6 +172,10 @@ public class TransitTests {
         run("recallDepartRetryBound", TransitTests::recallDepartRetryBound);
         run("recallApproachNear", TransitTests::recallApproachNear);
         run("recallTakeoffRungsRoundTrip", TransitTests::recallTakeoffRungsRoundTrip);
+        run("legacyLadderAccepted", TransitTests::legacyLadderAccepted);
+        run("ashoreSide", TransitTests::ashoreSide);
+        run("ashoreDescent", TransitTests::ashoreDescent);
+        run("gateRule", TransitTests::gateRule);
         System.out.println("TransitTests: " + passed + " OK");
     }
 
@@ -165,6 +243,16 @@ public class TransitTests {
         eq(1, GliderJump.phase(1000, 9499));
         eq(0, GliderJump.phase(1000, 9500));
         eq(0, GliderJump.phase(1000, 60000));
+    }
+
+    static void pendingDepartureSingle() {
+        java.util.Map<Object, Runnable> pending = new java.util.HashMap<>();
+        eq(true, ShipLadder.registerPending(pending, "ship", () -> {}));
+        eq(false, ShipLadder.registerPending(pending, "ship", () -> {}));  // second departure during the same raise
+        eq(1, pending.size());
+        eq(ShipLadder.Defer.PROCEED, ShipLadder.deferResult(true, false));
+        eq(ShipLadder.Defer.DEFERRED, ShipLadder.deferResult(false, true));
+        eq(ShipLadder.Defer.ALREADY_PENDING, ShipLadder.deferResult(false, false));
     }
 
     static void contractMissing() {
@@ -491,6 +579,12 @@ public class TransitTests {
         eq(b, TransitAutopilot.rerouteTarget(List.of(b, c), "A", here)); // departure removed: nearest
         eq(c, TransitAutopilot.rerouteTarget(List.of(c), "A", here));
         eq(null, TransitAutopilot.rerouteTarget(List.of(), "A", here)); // nothing left: the ground
+    }
+
+    static void leaveSpot() {
+        eq(AirshipManager.LeaveSpot.DECK, AirshipManager.leaveSpot(true, false));
+        eq(AirshipManager.LeaveSpot.GROUND, AirshipManager.leaveSpot(true, true));
+        eq(AirshipManager.LeaveSpot.GROUND, AirshipManager.leaveSpot(false, false));
     }
 
     static void returnStation() {
@@ -1145,7 +1239,7 @@ public class TransitTests {
     }
 
     static void recallTakeoffRungsRoundTrip() {
-        int[] flat = AirshipRecall.flatten(List.of(new int[] {1, 70, -3}, new int[] {1, 69, -3}));
+        int[] flat = new int[] {1, 70, -3, 1, 69, -3};
         eq(6, flat.length);
         org.bson.BsonDocument d = new org.bson.BsonDocument();
         d.put("takeoffRungs", AirshipResume.rungsToBson(flat));
@@ -1200,5 +1294,48 @@ public class TransitTests {
         eq(false, AirshipBenchContents.isCandidate(new StructureShape.Cell(0, 5, 8, "Airship_Fuel_Tank", 0)));
         eq(true, AirshipBenchContents.isCandidate(new StructureShape.Cell(3, 8, 5, "Bench_Furnace", 0)));
         eq(false, AirshipBenchContents.isCandidate(new StructureShape.Cell(3, 8, 6, "Bench_Furnace", 1024)));
+    }
+
+    static void legacyLadderAccepted() {
+        eq(true, BalloonManager.legacyAlias("Airship_Rope_Ladder", "Furniture_Crude_Ladder"));
+        eq(true, BalloonManager.legacyAlias("Airship_Captain_Map_Desk", "Deco_Map"));
+        eq(false, BalloonManager.legacyAlias("Airship_Rope_Ladder", "Furniture_Kweebec_Ladder"));
+        eq(false, BalloonManager.legacyAlias("Airship_Ladder_Lever", "Deco_Lever"));
+    }
+
+    static void ashoreSide() {
+        // theta 0: prefab frame equals world frame, +x flank is +1.
+        eq(1, AirshipAutopilot.ashoreSide(3, 0, 0));
+        eq(-1, AirshipAutopilot.ashoreSide(-3, 0, 0));
+        eq(-1, AirshipAutopilot.ashoreSide(0, 7, 0)); // tie: -1
+        double th = Math.PI / 2;
+        // prefab point (4, 0, 0) rotated to the world by AirshipMath.rotateY, must come back as the +x flank.
+        org.joml.Vector3d w = AirshipMath.rotateY(4, 0, 0, th, new org.joml.Vector3d());
+        eq(1, AirshipAutopilot.ashoreSide(w.x, w.z, th));
+        org.joml.Vector3d w2 = AirshipMath.rotateY(-4, 0, 1, th, new org.joml.Vector3d());
+        eq(-1, AirshipAutopilot.ashoreSide(w2.x, w2.z, th));
+    }
+
+    static void ashoreDescent() {
+        // ladder bottom cell y 100, ground block y 40 (surface 41): 59 above the ground, 29 to go down to be 30 above.
+        eq(29, (int) Math.round(AirshipAutopilot.ashoreDescent(100, 40, 30)));
+        eq(0, (int) Math.round(AirshipAutopilot.ashoreDescent(70, 40, 30))); // exactly 29 above... already low enough
+        eq(0, (int) Math.round(AirshipAutopilot.ashoreDescent(50, 40, 30)));
+        eq(0.0, AirshipAutopilot.ashoreDescent(71, 40, 30)); // bottom exactly 30 above the surface (41)
+        eq(true, Double.isNaN(AirshipAutopilot.ashoreDescent(100, Double.NaN, 30)));
+        eq(30, AirshipAutopilot.ASHORE_MAX_ABOVE);
+    }
+
+    static void gateRule() {
+        eq(ShipLadder.GateAction.OPEN, ShipLadder.gateAction(ShipLadder.Phase.DOWN, false, false));
+        eq(ShipLadder.GateAction.NONE, ShipLadder.gateAction(ShipLadder.Phase.DOWN, true, false));
+        eq(ShipLadder.GateAction.NONE, ShipLadder.gateAction(ShipLadder.Phase.LOWERING, false, false));
+        eq(ShipLadder.GateAction.CLOSE, ShipLadder.gateAction(ShipLadder.Phase.UP, true, true));
+        eq(ShipLadder.GateAction.NONE, ShipLadder.gateAction(ShipLadder.Phase.UP, true, false)); // opened by a player
+        eq(ShipLadder.GateAction.NONE, ShipLadder.gateAction(ShipLadder.Phase.RAISING, true, true));
+        eq("OpenDoorOut", ShipLadder.gateOpenState(1));
+        eq("CloseDoorOut", ShipLadder.gateCloseState(1));
+        eq("OpenDoorIn", ShipLadder.gateOpenState(-1));
+        eq("CloseDoorIn", ShipLadder.gateCloseState(-1));
     }
 }

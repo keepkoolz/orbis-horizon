@@ -891,8 +891,18 @@ public final class BalloonManager {
         if (n.startsWith(c.baseName())) {
             return true;
         }
-        // T148: ships posed before the captain's desk still hold the game's Deco_Map in that cell.
-        return "Airship_Captain_Map_Desk".equals(c.baseName()) && n.startsWith("Deco_Map");
+        return legacyAlias(c.baseName(), n);
+    }
+
+    /**
+     * Blocks that older ships still hold in a cell whose prefab block was replaced later:
+     * the game's Deco_Map (T148 desk) and the game's crude ladder (rope ladder).
+     */
+    static boolean legacyAlias(String prefabName, String worldBase) {
+        if ("Airship_Captain_Map_Desk".equals(prefabName)) {
+            return worldBase.startsWith("Deco_Map");
+        }
+        return "Airship_Rope_Ladder".equals(prefabName) && worldBase.startsWith("Furniture_Crude_Ladder");
     }
 
     private Ref<EntityStore> spawnModelEntity(Store<EntityStore> store, Vector3d position, Rotation rotation, String id) {

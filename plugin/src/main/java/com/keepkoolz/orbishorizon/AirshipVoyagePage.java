@@ -223,6 +223,9 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
                     if (a == AirshipDesk.Action.START_NOW) {
                         error = AirshipManager.get().startVoyage(store, world, playerRef, e, d,
                                 () -> AirshipDesk.sayOrder(playerRef, e.crew(), d.name()));
+                        if (error == AirshipManager.DEFERRED) {
+                            error = null;
+                        }
                     } else if (a == AirshipDesk.Action.WALK_FIRST) {
                         error = AirshipDesk.walkFirst(store, world, playerRef, e, d);
                     } else if (a == AirshipDesk.Action.BUSY) {
@@ -238,7 +241,7 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
                 int i = Integer.parseInt(data.dest);
                 if (options.contains(CrewOrder.VOYAGE) && i >= 0 && i < shown.size()) {
                     Message error = AirshipManager.get().startVoyage(store, world, playerRef, e, shown.get(i));
-                    if (error != null) {
+                    if (error != null && error != AirshipManager.DEFERRED) {
                         playerRef.sendMessage(error);
                         // Recall window: a refused destination (hotbar full, too many players) keeps the window open, so the
                         // captain can fix it and choose again instead of the ship leaving on the close.

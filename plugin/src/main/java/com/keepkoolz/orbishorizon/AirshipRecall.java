@@ -332,8 +332,8 @@ final class AirshipRecall {
     /** Ships waiting in blocks above a station (WAIT, CHOOSE). In memory: the registry mark keeps what a restart needs. */
     private static final java.util.Set<RecallState> PARKED = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private static final String LADDER_BLOCK = "Furniture_Crude_Ladder";
-    private static final int LADDER_MAX = 48;
     private static final int SET_NO_PARTICLES = 4;
+    private static final long LADDER_TIMEOUT_MS = 90_000;
 
     /**
      * The descent is over: the ship is put in blocks where it hovers (the usual landing, locked, pilot back at the helm), the rungs
@@ -356,188 +356,21 @@ final class AirshipRecall {
         r.rotation = placed.rotation();
         r.quayId = f.quayId != null ? f.quayId : f.id;
         r.sx = RecallPlanner.ladderSx(r.padX, r.padZ, boardingPoints(r.station), (int) Math.round(r.rotation.getRadians() / (Math.PI / 2)) & 3);
-        placeLadders(world, r);
-        r.phase = RecallState.Phase.WAIT;
+        r.crew = f.crew;
+        ShipLadder.lower(world, r.origin, r.rotation, r.sx);
+        r.phase = RecallState.Phase.LADDER; // the minute starts when the rope ladder is down
         r.waitStartMs = now;
         r.announced = Integer.MAX_VALUE;
         writeMark(world, r);
         PARKED.add(r);
-        LOGGER.at(Level.INFO).log("Rappel : dirigeable posé en l'air au-dessus de %s (%s), %d barreau(x) d'échelle", r.station.name, why,
-                r.ladders.size());
-        StationQueue.broadcast(world, r.station, Texts.pilot("crew.recall.here", f.crew));
-    }
-
-    /** True if the player already pilots or rides any vehicle (airship or balloon, transit flights included). */
-    private static boolean aboardAnyVehicle(UUID player) {
-        for (AirshipFlight other : AirshipManager.get().flights()) {
-            if (player.equals(other.pilotUuid)) {
-                return true;
-            }
-            for (AirshipPassengers.Rider rider : other.riders) {
-                if (player.equals(rider.p.uuid)) {
-                    return true;
-                }
-            }
-        }
-        if (BalloonManager.get().isFlying(player)) {
-            return true;
-        }
-        for (BalloonFlight b : BalloonManager.get().flights()) {
-            for (BalloonFlight.Passenger p : b.passengers) {
-                if (player.equals(p.uuid)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        LOGGER.at(Level.INFO).log("Rappel : dirigeable posé en l'air au-dessus de %s (%s), l'échelle de corde descend", r.station.name, why);
     }
 
     /** Writes the recall mark (quay, station, spawn point, rungs) in the registry entry of the parked ship. */
     private static void writeMark(World world, RecallState r) {
-        int[] flat = flatten(r.ladders);
+        int[] flat = new int[0]; // the wooden rungs are gone: the mark keeps an empty array (old marks stay readable)
         BalloonRegistry.setRecall(world, r.origin, r.rotation, new BalloonRegistry.Recall(r.quayId, r.station.origin.x, r.station.origin.y,
                 r.station.origin.z, r.station.rotation, r.spawnX, r.spawnZ, flat));
-    }
-
-    private static boolean isAir(SectionReader reader, int x, int y, int z) {
-        return reader.hasStorageInMemory(x, y, z) && reader.getBlock(x, y, z) == 0 && BalloonManager.liquidAt(reader, x, y, z) == null;
-    }
-
-    /** The cell of the lowest ladder rung of the ship, on its ladder side. */
-    private static Vector3i bottomRung(RecallState r) {
-        return r.rotation.rotateYaw(new Vector3i(r.sx * 5, 4, 0), new Vector3i()).add(r.origin);
-    }
-
-    /**
-     * Rungs under the ship's ladder, one cell at a time in the air down to the first block that is not air (never over a station block),
-     * the same block and rotation as the ship's own ladder. Recorded in the state.
-     */
-    private static void placeLadders(World world, RecallState r) {
-        r.ladders.clear();
-        try {
-            Vector3i b = bottomRung(r);
-            SectionReader reader = new SectionReader(world.getChunkStore());
-            BlockType type = SectionBlocks.typeAt(reader, b.x, b.y, b.z);
-            if (type == null || !LADDER_BLOCK.equals(type.getId())) {
-                LOGGER.at(Level.WARNING).log("Rappel : barreau du dirigeable introuvable en %s, pas d'échelle temporaire", b);
-                return;
-            }
-            int id = reader.getBlock(b.x, b.y, b.z);
-            int rot = reader.getRotationIndex(b.x, b.y, b.z);
-            List<Integer> ys = RecallPlanner.ladderCells(b.y, y -> !isAir(reader, b.x, y, b.z), LADDER_MAX);
-            for (int y : ys) {
-                if (SectionBlocks.setAt(world.getChunkStore(), b.x, y, b.z, id, type, rot, 0, SET_NO_PARTICLES)) {
-                    r.ladders.add(new int[] {b.x, y, b.z});
-                }
-            }
-        } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Rappel : échelle temporaire non posée");
-        }
-    }
-
-    /**
-     * Takes the temporary rungs down (only cells that still hold the ladder block). A rung that could not be read or written (section
-     * not in memory) stays in the list and in the mark, so that a later pass or the world load removes it. Never throws.
-     */
-    static void removeLadders(World world, RecallState r) {
-        try {
-            SectionReader reader = new SectionReader(world.getChunkStore());
-            List<int[]> kept = new ArrayList<>();
-            for (int[] c : r.ladders) {
-                if (!reader.hasStorageInMemory(c[0], c[1], c[2])) {
-                    kept.add(c);
-                    continue;
-                }
-                BlockType t = SectionBlocks.typeAt(reader, c[0], c[1], c[2]);
-                if (t != null && LADDER_BLOCK.equals(t.getId())
-                        && !SectionBlocks.setAt(world.getChunkStore(), c[0], c[1], c[2], BlockType.EMPTY_KEY, SET_NO_PARTICLES)) {
-                    kept.add(c);
-                }
-            }
-            if (!kept.isEmpty()) {
-                LOGGER.at(Level.WARNING).log("Rappel : %d barreau(x) hors mémoire gardé(s) dans la marque", kept.size());
-            }
-            r.ladders.clear();
-            r.ladders.addAll(kept);
-            if (r.origin != null && BalloonRegistry.get(world, r.origin, r.rotation, Deployables.AIRSHIP_KIND) != null) {
-                writeMark(world, r);
-            }
-        } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Rappel : barreaux non retirés");
-        }
-    }
-
-    /**
-     * Players still on the temporary rungs when the ship is about to leave are put on its deck (top of the side ladder) so that the
-     * take-off seats them like anyone aboard instead of letting them fall. Only players on the rungs move. Returns how many.
-     */
-    static int boardClimbers(Store<EntityStore> store, World world, RecallState r) {
-        return climbers(store, world, r, true, List.of());
-    }
-
-    /** How many players are on the rungs of the ship parked at this pose (0 if none waits there), nobody moved. */
-    static int climbersAt(Store<EntityStore> store, World world, Vector3i origin, Rotation rotation,
-                          List<BalloonManager.Occupant> alreadyCounted) {
-        RecallState r = parkedAt(world, origin, rotation);
-        return r == null ? 0 : climbers(store, world, r, false, alreadyCounted);
-    }
-
-    /** Puts the rungs back after a departure that was refused once they were taken down. No-op if the ship no longer waits. */
-    static void restoreLadders(World world, Vector3i origin, Rotation rotation) {
-        RecallState r = parkedAt(world, origin, rotation);
-        if (r != null && r.leaveRetryMs == 0) {
-            if (r.ladders.isEmpty() && r.phase == RecallState.Phase.WAIT && !r.minuteOver) {
-                placeLadders(world, r); // only while the minute lasts
-            }
-            writeMark(world, r); // the entry put back by a failed take-off has no recall mark
-        }
-    }
-
-    /** Players on the rungs, not counting the ones already counted as aboard (a climber can also stand inside the ship bounds). */
-    private static int climbers(Store<EntityStore> store, World world, RecallState r, boolean move,
-                                List<BalloonManager.Occupant> alreadyCounted) {
-        int moved = 0;
-        if (r.ladders.isEmpty() || r.origin == null) {
-            return 0;
-        }
-        double stationTop = r.station.origin.y + 10; // highest block of the station is origin.y + 9
-        // The standable deck cell next to the ladder gate (prefab (+-4, 7, 0)): plank floor under it, air in it.
-        Vector3i cell = r.rotation.rotateYaw(new Vector3i(r.sx * 4, 7, 0), new Vector3i()).add(r.origin);
-        Vector3d deck = new Vector3d(cell.x + 0.5, cell.y + 0.1, cell.z + 0.5);
-        for (PlayerRef pr : world.getPlayerRefs()) {
-            Ref<EntityStore> ref = pr.getReference();
-            try {
-                if (ref == null || !ref.isValid() || BalloonManager.isDead(store, ref) || aboardAnyVehicle(pr.getUuid())) {
-                    continue;
-                }
-                boolean counted = false;
-                for (BalloonManager.Occupant o : alreadyCounted) {
-                    counted |= ref.equals(o.ref());
-                }
-                if (counted) {
-                    continue;
-                }
-                TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
-                if (t == null || !RecallPlanner.isClimbing(t.getPosition().x, t.getPosition().y, t.getPosition().z, r.ladders, stationTop)) {
-                    continue;
-                }
-                if (!move) {
-                    moved++;
-                    continue;
-                }
-                store.putComponent(ref, com.hypixel.hytale.server.core.modules.entity.teleport.Teleport.getComponentType(),
-                        com.hypixel.hytale.server.core.modules.entity.teleport.Teleport.createForPlayer(deck,
-                                new com.hypixel.hytale.math.vector.Rotation3f(t.getRotation())));
-                t.setPosition(new Vector3d(deck)); // the take-off counts the players aboard now
-                moved++;
-            } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Rappel : grimpeur non monté à bord");
-            }
-        }
-        if (move && moved > 0) {
-            LOGGER.at(Level.INFO).log("Rappel : %d grimpeur(s) monté(s) sur le pont avant le décollage", moved);
-        }
-        return moved;
     }
 
     /** The parked ship of this origin and rotation, null if none waits there. */
@@ -550,34 +383,19 @@ final class AirshipRecall {
         return null;
     }
 
-    /** Right before a take-off from blocks: if the ship waits above a station, the climbers go aboard and the rungs come down. */
-    static void prepareDeparture(Store<EntityStore> store, World world, Vector3i origin, Rotation rotation) {
+    /** Writes the recall mark again after a refused take-off put the entry back without it. No-op if the ship no longer waits. */
+    static void restoreMark(World world, Vector3i origin, Rotation rotation) {
         RecallState r = parkedAt(world, origin, rotation);
-        if (r == null) {
-            return;
+        if (r != null && r.leaveRetryMs == 0) {
+            writeMark(world, r);
         }
-        boardClimbers(store, world, r);
-        r.departedRungs = flatten(r.ladders); // kept by the flight's resume file: a crash with an older world save brings them back
-        removeLadders(world, r);
-    }
-
-    /** Cells {x, y, z} as a flat array. */
-    static int[] flatten(List<int[]> cells) {
-        int[] flat = new int[cells.size() * 3];
-        int i = 0;
-        for (int[] c : cells) {
-            flat[i++] = c[0];
-            flat[i++] = c[1];
-            flat[i++] = c[2];
-        }
-        return flat;
     }
 
     /**
      * Resume after a crash: the rungs a ship had right before its take-off from the waiting place come back with an older world save.
      * Those still holding the ladder block are removed. Never throws.
      */
-    static void removeOldRungs(World world, int[] flat) {
+    static void removeLegacyRungs(World world, int[] flat) {
         if (flat == null || flat.length < 3) {
             return;
         }
@@ -610,7 +428,6 @@ final class AirshipRecall {
         f.quayStation = r.station;
         f.quayId = r.quayId;
         f.recallInfo = r;
-        f.takeoffRungs = r.departedRungs;
         PARKED.remove(r);
         closePage(r);
         LOGGER.at(Level.INFO).log("Rappel : l'attente au-dessus de %s est terminée, le dirigeable a décollé", r.station.name);
@@ -652,7 +469,27 @@ final class AirshipRecall {
             }
             return;
         }
-        if (r.phase == RecallState.Phase.WAIT) {
+        if (r.phase == RecallState.Phase.DEPART) {
+            if (!ShipLadder.departing(world, r.origin, r.rotation)) {
+                // The deferred departure was dropped without running: try again (counts tries, bounded).
+                LOGGER.at(Level.WARNING).log("Rappel : départ en attente perdu au-dessus de %s, nouvel essai", r.station.name);
+                leaveNow(store, world, r, entry);
+            }
+            return; // otherwise the rope ladders come up and the departure restarts by itself
+        }
+        if (r.phase == RecallState.Phase.LADDER) {
+            boolean down = ShipLadder.phase(world, r.origin, r.rotation, r.sx) == ShipLadder.Phase.DOWN;
+            if (down || now - r.waitStartMs >= LADDER_TIMEOUT_MS) {
+                if (!down) {
+                    LOGGER.at(Level.WARNING).log("Rappel : l'échelle de corde n'est pas descendue après %d s, la minute commence quand même",
+                            LADDER_TIMEOUT_MS / 1000);
+                }
+                r.phase = RecallState.Phase.WAIT;
+                r.waitStartMs = now;
+                r.announced = Integer.MAX_VALUE;
+                StationQueue.broadcast(world, r.station, Texts.pilot("crew.recall.here", r.crew));
+            }
+        } else if (r.phase == RecallState.Phase.WAIT) {
             long elapsed = now - r.waitStartMs;
             int threshold = RecallPlanner.waitThresholdReached(elapsed, r.announced);
             if (threshold > 0) {
@@ -679,9 +516,8 @@ final class AirshipRecall {
     private static void finishWait(World world, RecallState r, boolean shipStays) {
         PARKED.remove(r);
         closePage(r);
-        removeLadders(world, r);
-        if (shipStays && r.ladders.isEmpty()) {
-            // Rungs not taken down keep their mark: the next world load removes them (see recoverParked).
+        if (shipStays) {
+            ShipLadder.raiseAll(world, r.origin, r.rotation); // animated: the ship stays in blocks
             BalloonRegistry.setRecall(world, r.origin, r.rotation, null);
         }
         StationQueue.endRecall(r.station, r.quayId);
@@ -709,11 +545,8 @@ final class AirshipRecall {
         return null;
     }
 
-    /** End of the minute: climbers aboard, rungs down, then the captain's window if he is aboard, otherwise the ship leaves. */
+    /** End of the minute: the captain's window if he is aboard, otherwise the ship leaves (the ladders come up with the departure). */
     private static void endWait(Store<EntityStore> store, World world, RecallState r, BalloonRegistry.Entry entry, long now) {
-        r.minuteOver = true;
-        boardClimbers(store, world, r);
-        removeLadders(world, r);
         if (!captainAboard(store, world, r) || entry.crew() == null) {
             LOGGER.at(Level.INFO).log("Rappel : capitaine absent, le dirigeable repart");
             leaveNow(store, world, r, entry);
@@ -785,8 +618,18 @@ final class AirshipRecall {
      * Take-off from blocks with the players aboard. A departure forced by the end of the wait must never leave the ship above the
      * station: if it cannot go yet the quay stays held and the try is repeated every 5 s.
      */
-    private static void leaveNow(Store<EntityStore> store, World world, RecallState r, BalloonRegistry.Entry entry) {
+    static void leaveNow(Store<EntityStore> store, World world, RecallState r, BalloonRegistry.Entry entry) {
+        if (ShipLadder.departing(world, r.origin, r.rotation)) {
+            r.phase = RecallState.Phase.DEPART; // already waiting for the ladders: no try is burnt
+            r.leaveRetryMs = 0;
+            return;
+        }
         Message refusal = AirshipManager.get().leaveFromParked(store, world, entry, r);
+        if (refusal == AirshipManager.DEFERRED) {
+            r.leaveRetryMs = 0;
+            r.phase = RecallState.Phase.DEPART; // the rope ladders come up first: the departure restarts by itself, no try is counted
+            return;
+        }
         if (refusal == null || !PARKED.contains(r)) {
             return; // left, or no longer waiting (nothing to retry)
         }
@@ -1012,17 +855,13 @@ final class AirshipRecall {
             r.origin = origin;
             r.rotation = entry.rotation();
             r.quayId = mark.quayId();
-            r.minuteOver = true;
-            for (int i = 0; i + 2 < mark.ladders().length; i += 3) {
-                r.ladders.add(new int[] {mark.ladders()[i], mark.ladders()[i + 1], mark.ladders()[i + 2]});
-            }
             if (station == null) {
                 LOGGER.at(Level.INFO).log("Rappel : station du dirigeable en attente disparue, barreaux et marque retirés");
-                removeLadders(world, r);
+                removeLegacyRungs(world, mark.ladders());
                 BalloonRegistry.setRecall(world, origin, entry.rotation(), null);
                 return;
             }
-            removeLadders(world, r);
+            removeLegacyRungs(world, mark.ladders()); // wooden rungs of a mark written before the rope ladder
             strandOfflinePlayers(world, r, station);
             PARKED.add(r);
             StationQueue.beginRecall(station, r.quayId); // best effort: the quay is held while the ship leaves

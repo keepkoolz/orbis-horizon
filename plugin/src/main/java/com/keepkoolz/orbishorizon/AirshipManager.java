@@ -16,6 +16,7 @@ import com.hypixel.hytale.protocol.ChangeVelocityType;
 import com.hypixel.hytale.protocol.ColorLight;
 import com.hypixel.hytale.protocol.FlyMode;
 import com.hypixel.hytale.protocol.GameMode;
+import com.hypixel.hytale.server.core.modules.entity.damage.DeathComponent;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.protocol.MountController;
 import com.hypixel.hytale.protocol.Position;
@@ -387,6 +388,12 @@ final class AirshipManager {
 
     // ------------------------------------------------------------------ take-off
 
+    /**
+     * Sentinel (compared by identity) returned by takeOff, startVoyage and leaveFromParked when the departure waits for the rope
+     * ladders to come up: not an error, callers must neither send it nor count it as a refusal.
+     */
+    static final Message DEFERRED = Message.raw("");
+
     /** Null if all went well, otherwise an error message for the player (nothing is removed then). */
     Message takeOff(Store<EntityStore> store, Ref<EntityStore> pilotRef, PlayerRef player, World world) {
         if (flights.containsKey(player.getUuid()) || BalloonManager.get().isFlying(player.getUuid())) {
@@ -427,17 +434,51 @@ final class AirshipManager {
         // T145: the refusals come before anything is changed above a station (the climbers on the rungs count as aboard).
         int seats = AirshipPassengers.seats(s, excluded).size(); // stools and tavern benches (2 seats each)
         List<BalloonManager.Occupant> inside = AirshipPassengers.aboard(store, world, s, origin, rotation, player.getUuid());
-        int onBoard = inside.size() + AirshipRecall.climbersAt(store, world, origin, rotation, inside);
+        int onBoard = inside.size();
         if (onBoard > seats) {
             return Texts.t("airship.error.full").param("max", seats + 1).param("extra", onBoard - seats);
         }
-        AirshipRecall.prepareDeparture(store, world, origin, rotation); // T145: climbers aboard, rungs off
+        // The rope ladders come up before the ship leaves; the take-off then goes on by itself.
+        Vector3d parkedPivot = parkedPivot(origin, rotation);
+        Player pl = store.getComponent(pilotRef,
+                Player.getComponentType());
+        GameMode mode = pl != null ? pl.getGameMode() : null;
+        ShipLadder.Defer defer = ShipLadder.deferDeparture(world, origin, rotation,
+                () -> stillAtHelm(store, pilotRef, parkedPivot, mode),
+                () -> {
+                    Message later = takeOff(store, pilotRef, player, world);
+                    if (later != null && later != DEFERRED) {
+                        player.sendMessage(later);
+                    }
+                });
+        if (defer == ShipLadder.Defer.ALREADY_PENDING) {
+            return Texts.t("airship.ladder.departing");
+        }
+        if (defer == ShipLadder.Defer.DEFERRED) {
+            player.sendMessage(Texts.t("airship.ladder.raisingBeforeTakeoff"));
+            return DEFERRED;
+        }
         List<BalloonManager.Occupant> aboard = AirshipPassengers.aboard(store, world, s, origin, rotation, player.getUuid());
         Message launched = launch(store, world, s, origin, rotation, pilotRef, player, passengers.assign(store, s, origin, rotation, aboard, excluded));
         if (launched != null) {
-            AirshipRecall.restoreLadders(world, origin, rotation); // refused after the rungs came down: the wait goes on
+            AirshipRecall.restoreMark(world, origin, rotation); // refused after the rungs came down: the wait goes on
         }
         return launched;
+    }
+
+    /** True while the player is alive, near the parked ship's pivot and still in the game mode of the request. */
+    private static boolean stillAtHelm(Store<EntityStore> store, Ref<EntityStore> ref, Vector3d pivot,
+                                       GameMode mode) {
+        if (ref == null || !ref.isValid() || store.getComponent(ref, DeathComponent.getComponentType()) != null) {
+            return false;
+        }
+        TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
+        if (t == null || t.getPosition().distance(pivot) > 1.5) {
+            return false;
+        }
+        Player p = store.getComponent(ref,
+                Player.getComponentType());
+        return p != null && p.getGameMode() == mode;
     }
 
     /**
@@ -462,6 +503,35 @@ final class AirshipManager {
             }
         }
         return null;
+    }
+
+    /** T152: after the pose of a voyage whose captain is ashore, lowers the ladder of the chosen side and tells the riders. Never throws. */
+    private static void lowerAshoreLadder(Store<EntityStore> store, AirshipFlight f, Vector3i origin, Rotation rotation) {
+        VoyageState v = f.voyage;
+        if (v == null || !v.ashore || v.ashoreAnnounced) {
+            return;
+        }
+        try {
+            v.ashoreAnnounced = true;
+            ShipLadder.lower(f.world, origin, rotation, v.ashoreSide);
+            java.util.Set<UUID> told = new java.util.HashSet<>();
+            for (AirshipPassengers.Rider r : f.riders) {
+                PlayerRef pr = playerOf(store, r.p.ref);
+                if (pr != null && told.add(pr.getUuid())) {
+                    pr.sendMessage(Texts.pilot("crew.voyage.captainOverboard", f.crew));
+                }
+            }
+            if (v.captain != null && !told.contains(v.captain)) {
+                for (PlayerRef pr : f.world.getPlayerRefs()) {
+                    if (v.captain.equals(pr.getUuid())) {
+                        pr.sendMessage(Texts.pilot("crew.voyage.captainOverboard", f.crew));
+                    }
+                }
+            }
+            LOGGER.at(Level.INFO).log("Voyage : échelle du côté %d déployée pour le capitaine à terre", v.ashoreSide);
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : échelle du capitaine à terre non déployée");
+        }
     }
 
     /** T139: the end of a voyage that reached its destination: the riders hear the pilot (the pilot NPC is recreated at the helm by finishLanding). */
@@ -561,25 +631,45 @@ final class AirshipManager {
         // T145: every refusal is checked before the rungs come down (the climbers count as aboard).
         int seats = AirshipPassengers.seats(s).size();
         List<BalloonManager.Occupant> inside = AirshipPassengers.aboard(store, world, s, origin, rotation, captain.getUuid());
-        int onBoard = inside.size() + AirshipRecall.climbersAt(store, world, origin, rotation, inside);
+        int onBoard = inside.size();
         boolean ownerAboard = insideShape(s, origin, rotation, pt.getPosition());
         String refusal = AirshipAutopilot.departureRefusalKey(ownerAboard, onBoard, seats, hasFreeHotbarSlot(store, capRef));
         if (refusal != null) {
             Message m = Texts.pilot(refusal, entry.crew());
             return "airship.error.full".equals(refusal) ? m.param("max", seats + 1).param("extra", onBoard - seats) : m;
         }
+        // The rope ladders come up first; the voyage then starts by itself (the refusals are passed, onAccepted runs once).
+        ShipLadder.Defer defer = ShipLadder.deferDeparture(world, origin, rotation,
+                () -> capRef.isValid() && captainInside(store, capRef, s, origin, rotation),
+                () -> {
+                    Message later = startVoyage(store, world, captain, e, d, null);
+                    if (later != null && later != DEFERRED) {
+                        captain.sendMessage(later);
+                    }
+                });
+        if (defer == ShipLadder.Defer.ALREADY_PENDING) {
+            return Texts.t("airship.ladder.departing");
+        }
         if (onAccepted != null) {
             onAccepted.run();
         }
-        AirshipRecall.prepareDeparture(store, world, origin, rotation); // T145: climbers aboard, rungs off
+        if (defer == ShipLadder.Defer.DEFERRED) {
+            captain.sendMessage(Texts.pilot("airship.ladder.raisingBeforeTakeoffPilot", entry.crew()));
+            return DEFERRED;
+        }
         List<BalloonManager.Occupant> aboard = AirshipPassengers.aboard(store, world, s, origin, rotation, captain.getUuid());
         List<AirshipPassengers.Rider> riders = new ArrayList<>(passengers.assign(store, s, origin, rotation, aboard, Set.of()));
         riders.add(0, passengers.chairRider(s, new BalloonManager.Occupant(captain, capRef, 0)));
         Message launched = launchVoyage(store, world, s, origin, rotation, captain, riders, d, null, captain.getUuid(), captain.getUsername());
         if (launched != null) {
-            AirshipRecall.restoreLadders(world, origin, rotation);
+            AirshipRecall.restoreMark(world, origin, rotation);
         }
         return launched;
+    }
+
+    private static boolean captainInside(Store<EntityStore> store, Ref<EntityStore> ref, StructureShape s, Vector3i origin, Rotation rotation) {
+        TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
+        return t != null && insideShape(s, origin, rotation, t.getPosition());
     }
 
     /**
@@ -616,7 +706,18 @@ final class AirshipManager {
         if (unreadable != null) {
             return unreadable;
         }
-        AirshipRecall.prepareDeparture(store, world, origin, rotation);
+        ShipLadder.Defer defer = ShipLadder.deferDeparture(world, origin, rotation, () -> true, () -> {
+            BalloonRegistry.Entry again = BalloonRegistry.get(world, origin, rotation, Deployables.AIRSHIP_KIND);
+            if (again != null) {
+                AirshipRecall.leaveNow(world.getEntityStore().getStore(), world, r, again);
+            }
+        });
+        if (defer == ShipLadder.Defer.ALREADY_PENDING) {
+            return Texts.t("airship.ladder.departing");
+        }
+        if (defer == ShipLadder.Defer.DEFERRED) {
+            return DEFERRED;
+        }
         PlayerRef captain = AirshipRecall.captainRef(store, world, r);
         List<BalloonManager.Occupant> aboard = AirshipPassengers.aboard(store, world, s, origin, rotation, r.owner);
         List<AirshipPassengers.Rider> riders = new ArrayList<>(passengers.assign(store, s, origin, rotation, aboard, Set.of()));
@@ -646,6 +747,10 @@ final class AirshipManager {
     private Message launchVoyage(Store<EntityStore> store, World world, StructureShape s, Vector3i origin, Rotation rotation,
                                  PlayerRef captain, List<AirshipPassengers.Rider> riders, VoyagePlanner.Destination d,
                                  RecallState leave, UUID ownerId, String ownerName) {
+        if (!ShipLadder.allUp(world, origin, rotation)) {
+            LOGGER.at(Level.WARNING).log("Décollage refusé : échelle encore descendue");
+            return Texts.t("airship.error.noAirship");
+        }
         Deployables.Kind kind = Deployables.AIRSHIP;
         Deployables.AirshipSpec spec = spec();
         UUID id = UUID.randomUUID();
@@ -663,7 +768,7 @@ final class AirshipManager {
             AirshipResume.delete(f.id);
             if (parked != null) {
                 // The ship is back in blocks above the station: its recall mark goes back and, in the minute only, the rungs.
-                AirshipRecall.restoreLadders(world, origin, rotation);
+                AirshipRecall.restoreMark(world, origin, rotation);
             }
             return Texts.t("error.modelMissing").param("model", spec.idleModelId);
         }
@@ -759,6 +864,15 @@ final class AirshipManager {
         if (preflight != null) {
             return preflight;
         }
+        // The owner is far away: a lowered ladder is removed at once (players on the column are put on the ground).
+        ShipLadder.removeNow(store, world, origin, rotation);
+        if (!ShipLadder.allUp(world, origin, rotation)) {
+            // Safety net: rungs remain (section not loaded): ask for the sections so the next try can remove them.
+            ShipLadder.raiseAll(world, origin, rotation);
+            ShipLadder.requestRungSections(world, origin, rotation);
+            LOGGER.at(Level.WARNING).log("Rappel refusé : échelle encore descendue, remontée lancée");
+            return Texts.t("airship.ladder.raisingBeforeTakeoff");
+        }
         if (!shipSectionsLoaded(world, origin)) {
             // Never detach a structure that is not in memory (nothing would be removed, the ship would be duplicated).
             LOGGER.at(Level.WARNING).log("Rappel : sections du dirigeable posé non chargées, rappel refusé");
@@ -832,6 +946,10 @@ final class AirshipManager {
 
     private Message launch(Store<EntityStore> store, World world, StructureShape s, Vector3i origin, Rotation rotation,
                            Ref<EntityStore> pilotRef, PlayerRef player, List<AirshipPassengers.Rider> riders) {
+        if (!ShipLadder.allUp(world, origin, rotation)) {
+            LOGGER.at(Level.WARNING).log("Décollage refusé : échelle encore descendue");
+            return Texts.t("airship.error.noAirship");
+        }
         Deployables.Kind kind = Deployables.AIRSHIP;
         Deployables.AirshipSpec spec = spec();
         TransformComponent pilotTransform = store.getComponent(pilotRef, TransformComponent.getComponentType());
@@ -1634,7 +1752,7 @@ final class AirshipManager {
                         } catch (RuntimeException e) {
                             LOGGER.at(Level.WARNING).withCause(e).log("Voyage : carte du capitaine non reprise");
                         }
-                        AirshipAutopilot.stop(f, "crew.voyage.captainGone");
+                        AirshipAutopilot.captainAshore(f);
                     }
                     return GliderJump.Result.DONE;
                 }
@@ -2527,6 +2645,7 @@ final class AirshipManager {
             f.benchContents.restore(f.world, store, origin, rotation); // the contents of the other processing benches
         }
         releasePilot(store, f, origin, rotation);
+        lowerAshoreLadder(store, f, origin, rotation); // T152: the captain went down, one ladder is lowered
         announceArrival(store, f);
         endVoyageCleanup(store, f); // T141: before the riders are released
         passengers.disembark(store, f, origin, rotation); // T64: each passenger stands next to their stool
@@ -2546,7 +2665,11 @@ final class AirshipManager {
             restorePilotMovement(store, ref);
             TransformComponent pt = store.getComponent(ref, TransformComponent.getComponentType());
             Rotation3f look = pt != null ? new Rotation3f(pt.getRotation()) : new Rotation3f();
-            store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(pilotSpot(origin, rotation), look));
+            Vector3d spot = pilotSpot(origin, rotation);
+            if (pt != null) {
+                pt.setPosition(spot); // also now: a deferred teleport may not be applied before a disconnecting player is saved
+            }
+            store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(spot, look));
             PlayerRef pr = store.getComponent(ref, PlayerRef.getComponentType());
             if (pr != null) {
                 pr.sendMessage(Texts.t("airship.landed"));
@@ -2626,13 +2749,52 @@ final class AirshipManager {
         return out;
     }
 
+    /**
+     * T152: ladder side (+1 or -1) nearest to the captain now, chosen when the ship is moored. -1 if he is offline, dead, in another
+     * world or unreadable. Never throws.
+     */
+    int ashoreSideNow(AirshipFlight f) {
+        try {
+            UUID cap = f.voyage != null ? f.voyage.captain : null;
+            if (cap == null) {
+                return -1;
+            }
+            for (PlayerRef pr : f.world.getPlayerRefs()) {
+                if (!cap.equals(pr.getUuid())) {
+                    continue;
+                }
+                Ref<EntityStore> ref = pr.getReference();
+                Store<EntityStore> store = f.world.getEntityStore().getStore();
+                if (ref == null || !ref.isValid() || store.getComponent(ref, DeathComponent.getComponentType()) != null) {
+                    return -1;
+                }
+                TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
+                if (t != null) {
+                    return AirshipAutopilot.ashoreSide(t.getPosition().x - f.pos.x, t.getPosition().z - f.pos.z, f.theta);
+                }
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : côté de l'échelle du capitaine illisible");
+        }
+        return -1;
+    }
+
     /** T140: the captain left (death, disconnect, game mode): the ship is put down in place. Call on the world thread. */
     private void landVoyagesOf(UUID captain, String why) {
+        landVoyagesOf(captain, why, false);
+    }
+
+    /** ashore false = put down in place at once (T140), true = descend to the ground first and lower a ladder (T152). */
+    private void landVoyagesOf(UUID captain, String why, boolean ashore) {
         for (AirshipFlight f : voyagesOf(captain)) {
             if (f.finishing) {
                 continue;
             }
             try {
+                if (ashore && f.recall == null && AirshipAutopilot.captainAshore(f)) {
+                    LOGGER.at(Level.INFO).log("Voyage : capitaine %s (%s), le dirigeable descend avant de se poser", why, captain);
+                    continue;
+                }
                 if (AirshipRecall.divertToLeave(f)) {
                     LOGGER.at(Level.INFO).log("Voyage : capitaine %s (%s), le dirigeable s'éloigne de la station avant de se poser", why, captain);
                     continue;
@@ -2672,7 +2834,7 @@ final class AirshipManager {
                 try {
                     PlayerRef pr = ref.isValid() ? playerOf(store, ref) : null;
                     if (pr != null && f.voyage != null && pr.getUuid().equals(f.voyage.captain)) {
-                        landVoyagesOf(pr.getUuid(), "mort");
+                        landVoyagesOf(pr.getUuid(), "mort", true);
                     }
                 } catch (RuntimeException e) {
                     LOGGER.at(Level.WARNING).withCause(e).log("Voyage : mort du capitaine non traitée");
@@ -2829,8 +2991,12 @@ final class AirshipManager {
      */
     void onPlayerGone(UUID uuid) {
         onPilotGone(uuid);
+        List<AirshipFlight> voyages = voyagesOf(uuid);
         for (AirshipFlight f : new ArrayList<>(flights.values())) {
-            for (AirshipPassengers.Rider r : f.riders) {
+            if (voyages.contains(f)) {
+                continue; // the captain is handled below: the ship is put down first, he is saved on its deck if it was
+            }
+            for (AirshipPassengers.Rider r : new ArrayList<>(f.riders)) {
                 if (!r.p.uuid.equals(uuid)) {
                     continue;
                 }
@@ -2841,19 +3007,28 @@ final class AirshipManager {
                         : "Passager du dirigeable %s parti : libération impossible", r.p.name);
             }
         }
-        for (AirshipFlight f : voyagesOf(uuid)) {
+        for (AirshipFlight f : voyages) {
             try {
                 boolean[] landed = {false};
+                boolean[] diverted = {false};
                 boolean ok = BalloonManager.runOnWorld(f.world, () -> {
                     if (AirshipRecall.divertToLeave(f)) {
                         landed[0] = true; // flies away from the station first, lands at the leave point
+                        diverted[0] = true;
                         return;
                     }
-                    landed[0] = landImmediately(f);
+                    landed[0] = landImmediately(f); // disembark puts the captain on the deck next to the chair
                     if (!landed[0]) {
                         AirshipAutopilot.stop(f, "crew.voyage.captainGone");
                     }
                 }, LAND_WAIT_MS);
+                if (leaveSpot(ok && landed[0], diverted[0]) == LeaveSpot.GROUND) {
+                    for (AirshipPassengers.Rider r : new ArrayList<>(f.riders)) {
+                        if (r.p.uuid.equals(uuid)) {
+                            BalloonManager.runOnWorld(f.world, () -> passengers.dropOne(f.world.getEntityStore().getStore(), f, r), LAND_WAIT_MS);
+                        }
+                    }
+                }
                 LOGGER.at(ok && landed[0] ? Level.INFO : Level.WARNING).log(ok && landed[0]
                         ? "Voyage : capitaine %s parti, dirigeable reposé"
                         : "Voyage : capitaine %s parti, pose impossible : arrêt du voyage", uuid);
@@ -2861,6 +3036,14 @@ final class AirshipManager {
                 LOGGER.at(Level.WARNING).withCause(e).log("Voyage : départ du capitaine non traité");
             }
         }
+    }
+
+    /** Where a disconnecting captain is saved. */
+    enum LeaveSpot { DECK, GROUND }
+
+    /** The ship is in blocks (posed, not diverted): the captain stays on its deck, else on the ground under his seat. */
+    static LeaveSpot leaveSpot(boolean posed, boolean diverted) {
+        return posed && !diverted ? LeaveSpot.DECK : LeaveSpot.GROUND;
     }
 
     /** PlayerDisconnectEvent: the world still runs and the player is still in it, the ship is put down at once. */
@@ -2946,6 +3129,7 @@ final class AirshipManager {
 
     void recoverWorld(World world) {
         AirshipRecall.recoverWorld(world); // ships waiting in blocks above a station
+        ShipLadder.recoverWorld(world); // rope ladders kept in the registry
         for (AirshipResume.Record rec : AirshipResume.loadAll(world.getName())) {
             if (flights.containsKey(rec.id()) || !recovering.add(rec.id())) {
                 continue;
@@ -3109,7 +3293,7 @@ final class AirshipManager {
             }
             BalloonRegistry.remove(world, o, r, Deployables.AIRSHIP_KIND);
             int n = BalloonManager.removeBlocks(world, s, o, r, true);
-            AirshipRecall.removeOldRungs(world, rec.takeoffRungs()); // the temporary ladder of a recall came back with the old save
+            AirshipRecall.removeLegacyRungs(world, rec.takeoffRungs()); // the temporary ladder of a recall came back with the old save
             LOGGER.at(Level.INFO).log("Ancien dirigeable resté au point de décollage retiré (%d blocs)", n);
         }
     }
@@ -3214,6 +3398,10 @@ final class AirshipManager {
         }
         // Kept before the removal, which deletes the registry entry: the pilot is removed only if the removal succeeds.
         BalloonRegistry.Entry posedEntry = BalloonRegistry.get(world, origin, rotation, Deployables.AIRSHIP_KIND);
+        if (ShipLadder.removeNow(store, world, origin, rotation)) { // rope ladders first, no animation
+            ShipLadder.requestRungSections(world, origin, rotation);
+            return Texts.t("airship.approach"); // a rung is out of the loaded chunks: nothing was removed
+        }
         StructureRemoval.Result result = StructureRemoval.remove(store, world, Deployables.AIRSHIP, s, origin, rotation, true);
         if (result.error() != null) {
             return result.error();

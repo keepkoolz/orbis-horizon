@@ -5,10 +5,11 @@ import java.util.UUID;
 /** State of an airship recall to a station (T143): where it appeared, where it hovers and which phase it is in. */
 final class RecallState {
     /**
-     * APPROACH: flown by the voyage autopilot. DESCEND: vertical descent to the hover pose. WAIT: hovering above the station, the
-     * players on the platform board. CHOOSE: the captain picks a destination. LEAVE: flown away by the autopilot.
+     * APPROACH: flown by the voyage autopilot. DESCEND: vertical descent to the hover pose. LADDER: parked in blocks, the rope ladder
+     * comes down. WAIT: the minute, the players on the platform board. CHOOSE: the captain picks a destination. DEPART: a departure
+     * waits for the rope ladders to come up. LEAVE: flown away by the autopilot.
      */
-    enum Phase { APPROACH, DESCEND, WAIT, CHOOSE, LEAVE }
+    enum Phase { APPROACH, DESCEND, LADDER, WAIT, CHOOSE, DEPART, LEAVE }
 
     final TransitNetwork.Station station;
     final UUID owner;
@@ -29,24 +30,21 @@ final class RecallState {
     /** Last announced threshold of the wait (30, 20, 10). */
     int announced = Integer.MAX_VALUE;
     long chooseStartMs;
-    /** The ship in blocks above the station (WAIT, CHOOSE): origin, rotation, ladder side and temporary rungs {x, y, z}. */
+    /** The ship in blocks above the station (WAIT, CHOOSE): origin, rotation and ladder side. */
     volatile org.joml.Vector3i origin;
     volatile com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation rotation;
     int sx = -1;
-    final java.util.List<int[]> ladders = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** The pilot record of the parked ship (for the pilot's lines). */
+    volatile CrewRecord crew;
     /** Flight id that holds the quay of the station (kept across the take-off from blocks). */
     UUID quayId;
     /** A forced departure was refused: when to try again (0 = none). */
     volatile long leaveRetryMs;
-    /** The minute is over (the rungs are down for good): a refused departure must not put them back. */
-    volatile boolean minuteOver;
     /** Retries of the leave flight blocked inside the zone (after MAX_LEAVE_TRIES the ship is put down by the forced pose). */
     int leaveTries;
     static final int MAX_LEAVE_TRIES = 10;
     /** Refused departures from the waiting place (bounded by RecallPlanner.MAX_DEPART_TRIES). */
     int departTries;
-    /** Rung cells {x, y, z} there were right before the take-off from blocks (kept in the resume file for a crash, M3). */
-    volatile int[] departedRungs;
     /** The destination window opened for the captain (closed when the choice times out). */
     volatile AirshipVoyagePage page;
 

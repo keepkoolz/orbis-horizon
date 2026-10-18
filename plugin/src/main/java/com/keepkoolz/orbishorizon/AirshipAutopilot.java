@@ -4,7 +4,9 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
 import org.joml.Vector3d;
+import org.joml.Vector3f;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -117,6 +119,117 @@ final class AirshipAutopilot {
         }
     }
 
+    // ------------------------------------------------------------------ captain ashore (T152)
+
+    /** Height above the ground the bottom of the fixed ladder may keep when the captain is left ashore. */
+    static final int ASHORE_MAX_ABOVE = 30;
+
+    /**
+     * Ladder side (+1 or -1, prefab frame) nearest to a world offset (dx, dz) from the ship pivot, ship heading theta.
+     * The offset is rotated back into the prefab frame, a tie goes to -1. Pure.
+     */
+    static int ashoreSide(double dx, double dz, double theta) {
+        double localX = dx * Math.cos(theta) - dz * Math.sin(theta);
+        return localX > 0 ? 1 : -1;
+    }
+
+    /**
+     * Blocks to sink so the bottom cell of the ladder is at most maxAbove blocks over the ground (groundBlockY = y of the first
+     * solid block below, its top is groundBlockY + 1). NaN while the ground is unknown. Pure.
+     */
+    static double ashoreDescent(double bottomY, double groundBlockY, double maxAbove) {
+        if (Double.isNaN(groundBlockY)) {
+            return Double.NaN;
+        }
+        return Math.max(0, bottomY - (groundBlockY + 1) - maxAbove);
+    }
+
+    /**
+     * The captain jumped or died during the voyage: the ship sinks (no advance, no turn) until the bottom of the fixed ladder on
+     * the chosen side is at most 30 blocks over the ground, then lands by the usual stop path and lowers that ladder. Never throws.
+     */
+    static boolean captainAshore(AirshipFlight f) {
+        VoyageState v = f.voyage;
+        if (v == null || f.landing || f.finishing || v.stopped || v.ashore) {
+            return false;
+        }
+        try {
+            // Same recall guards as stop(): a recall flight is handled by the recall, no ashore phase.
+            if (AirshipRecall.approachStopped(f) || AirshipRecall.retryLeave(f) || AirshipRecall.divertToLeave(f)) {
+                return true;
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : garde du rappel en échec");
+        }
+        v.ashore = true;
+        v.phase = VoyageState.Phase.ASHORE;
+        v.progressMs = 0;
+        v.ashoreGroundWaitMs = 0;
+        LOGGER.at(Level.INFO).log("Voyage : capitaine à terre, le dirigeable descend");
+        return true;
+    }
+
+    /** ASHORE tick: sink to the mooring height, then land. */
+    private static void ashore(Store<EntityStore> store, World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f,
+                               VoyageState v, double dt, long now) {
+        f.yawRate = 0;
+        f.yawAcc = 0;
+        v.ashoreSide = am.ashoreSideNow(f);
+        Vector3d bottom = am.shipPoint(f, new Vector3f(v.ashoreSide * ShipLadder.SIDE_X, ShipLadder.BOTTOM_FIXED_Y, 0));
+        int cx = (int) Math.floor(bottom.x);
+        int cz = (int) Math.floor(bottom.z);
+        int cy = (int) Math.floor(bottom.y);
+        double ground = groundBlockY(world, cx, cy, cz);
+        if (Double.isNaN(ground)) {
+            if (v.ashoreGroundWaitMs == 0) {
+                v.ashoreGroundWaitMs = now;
+            }
+            if (now - v.ashoreGroundWaitMs >= CHUNK_WAIT_MS) {
+                LOGGER.at(Level.INFO).log("Voyage : sol inconnu sous l'échelle, pose sur place");
+                finishAshore(am, f, v);
+                return;
+            }
+            SectionBlocks.loadSections(world.getChunkStore(), cx - 1, Math.max(0, cy - 64), cz - 1, cx + 1, cy, cz + 1);
+            return;
+        }
+        v.ashoreGroundWaitMs = 0;
+        double need = ashoreDescent(cy, ground, ASHORE_MAX_ABOVE);
+        if (need <= 0.05) {
+            finishAshore(am, f, v);
+            return;
+        }
+        double dy = Math.min(BalloonManager.defaultDescentSpeed(world, store) * dt, need);
+        double before = f.pos.y;
+        am.move(world, f, hull, new Vector3d(f.pos.x, f.pos.y - dy, f.pos.z), f.theta, now);
+        if (f.pos.y > before - 1e-9) {
+            LOGGER.at(Level.INFO).log("Voyage : descente arrêtée par un obstacle, pose ici");
+            finishAshore(am, f, v);
+        }
+    }
+
+    /** Y of the first non-air block under the cell (x, y, z), NaN if a section on the way is not loaded. */
+    private static double groundBlockY(World world, int x, int y, int z) {
+        SectionReader reader = new SectionReader(world.getChunkStore());
+        for (int yy = y - 1; yy >= 0; yy--) {
+            if (!reader.hasStorageInMemory(x, yy, z)) {
+                return Double.NaN;
+            }
+            if (!ShipLadder.isAir(reader, x, yy, z)) {
+                return yy;
+            }
+        }
+        return -1;
+    }
+
+    private static void finishAshore(AirshipManager am, AirshipFlight f, VoyageState v) {
+        v.ashoreSide = am.ashoreSideNow(f); // the side is chosen now that the ship is about to be moored
+        v.stopped = true;
+        v.arrived = false;
+        v.phase = VoyageState.Phase.STOPPING;
+        v.progressMs = 0;
+        am.startLanding(f, false);
+    }
+
     // ------------------------------------------------------------------ every tick
 
     /** One tick of the voyage of a pilotless flight. Never throws. */
@@ -140,13 +253,14 @@ final class AirshipAutopilot {
                 case CLIMB -> climb(store, world, am, hull, f, v, d, now);
                 case TURN -> turn(store, world, am, hull, f, v, d, now);
                 case CRUISE -> cruise(store, world, am, hull, f, v, d, now);
+                case ASHORE -> ashore(store, world, am, hull, f, v, d, now);
                 case ARRIVE, RETRY, STOPPING -> retry(store, world, am, hull, f, v, d, now);
             }
             if (f.finishing) {
                 return;
             }
             fuelWindow(store, am, f, v, now);
-            if (!v.fuelFree && f.dry && !v.stopped && v.phase != VoyageState.Phase.ARRIVE) {
+            if (!v.fuelFree && f.dry && !v.stopped && !v.ashore && v.phase != VoyageState.Phase.ARRIVE) {
                 stop(f, "crew.voyage.dry");
             }
             am.updateThrust(store, f, now);
@@ -373,7 +487,7 @@ final class AirshipAutopilot {
         double moved = Math.abs(f.pos.x - v.progressX) + Math.abs(f.pos.y - v.progressY) + Math.abs(f.pos.z - v.progressZ);
         if (moved > PROGRESS_MOVE || Math.abs(f.theta - v.progressTheta) > Math.toRadians(1)) {
             markProgress(f, v, now);
-        } else if (!v.stopped && now - v.progressMs >= NO_PROGRESS_MS) {
+        } else if (!v.stopped && !v.ashore && now - v.progressMs >= NO_PROGRESS_MS) {
             LOGGER.at(Level.INFO).log("Voyage : aucun progrès depuis %d s", NO_PROGRESS_MS / 1000);
             markProgress(f, v, now);
             stop(f, "crew.voyage.blocked");

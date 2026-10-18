@@ -46,7 +46,7 @@ public class AirshipTakeOffInteraction extends SimpleInstantInteraction {
             Message error = manager.isFlying(player.getUuid())
                     ? manager.requestLanding(player.getUuid())
                     : manager.takeOff(store, ref, player, world);
-            if (error != null) {
+            if (error != null && error != AirshipManager.DEFERRED) {
                 player.sendMessage(error);
             }
         });

@@ -44,6 +44,8 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 .register(CageLeverInteraction.TYPE_ID, CageLeverInteraction.class, CageLeverInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
                 .register(CageGateInteraction.TYPE_ID, CageGateInteraction.class, CageGateInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
+                .register(AirshipLadderLeverInteraction.TYPE_ID, AirshipLadderLeverInteraction.class, AirshipLadderLeverInteraction.CODEC);
         getEntityStoreRegistry().registerSystem(new BalloonFlightSystem());
         getCodecRegistry(Interaction.CODEC)
                 .register(AirshipTakeOffInteraction.TYPE_ID, AirshipTakeOffInteraction.class, AirshipTakeOffInteraction.CODEC);

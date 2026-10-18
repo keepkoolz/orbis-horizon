@@ -119,7 +119,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
         @Override
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
             Message error = AirshipManager.get().takeOff(store, ref, player, world);
-            if (error != null) {
+            if (error != null && error != AirshipManager.DEFERRED) {
                 ctx.sendMessage(error);
             }
         }

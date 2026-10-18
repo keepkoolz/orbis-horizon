@@ -121,21 +121,21 @@
       "x": -5,
       "y": 4,
       "z": 0,
-      "name": "Furniture_Crude_Ladder",
+      "name": "Airship_Rope_Ladder",
       "rotation": 3
     },
     {
       "x": -5,
       "y": 5,
       "z": 0,
-      "name": "Furniture_Crude_Ladder",
+      "name": "Airship_Rope_Ladder",
       "rotation": 3
     },
     {
       "x": -5,
       "y": 6,
       "z": 0,
-      "name": "Furniture_Crude_Ladder",
+      "name": "Airship_Rope_Ladder",
       "rotation": 3
     },
     {
@@ -12708,21 +12708,21 @@
       "x": 5,
       "y": 4,
       "z": 0,
-      "name": "Furniture_Crude_Ladder",
+      "name": "Airship_Rope_Ladder",
       "rotation": 1
     },
     {
       "x": 5,
       "y": 5,
       "z": 0,
-      "name": "Furniture_Crude_Ladder",
+      "name": "Airship_Rope_Ladder",
       "rotation": 1
     },
     {
       "x": 5,
       "y": 6,
       "z": 0,
-      "name": "Furniture_Crude_Ladder",
+      "name": "Airship_Rope_Ladder",
       "rotation": 1
     },
     {
@@ -13182,6 +13182,20 @@
       "z": -15,
       "name": "Wood_Softwood_Stairs",
       "rotation": 34
+    },
+    {
+      "x": -4,
+      "y": 7,
+      "z": -1,
+      "name": "Airship_Ladder_Lever",
+      "rotation": 3
+    },
+    {
+      "x": 4,
+      "y": 7,
+      "z": -1,
+      "name": "Airship_Ladder_Lever",
+      "rotation": 1
     }
   ],
   "fluids": [
@@ -27413,6 +27427,20 @@
       "x": 3,
       "y": 9,
       "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -4,
+      "y": 7,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 4,
+      "y": 7,
+      "z": -1,
       "name": "Empty",
       "level": 0
     }

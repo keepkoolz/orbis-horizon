@@ -8,7 +8,7 @@ import java.util.UUID;
 
 /** State of a server-driven airship voyage (the pilot NPC takes the captain to a destination fixed at departure). */
 final class VoyageState {
-    enum Phase { CLIMB, TURN, CRUISE, ARRIVE, RETRY, STOPPING }
+    enum Phase { CLIMB, TURN, CRUISE, ARRIVE, RETRY, STOPPING, ASHORE }
 
     /** What the ship does above the destination: LAND starts the landing alignment, HOVER hands over to the recall (T143). */
     enum ArrivalMode { LAND, HOVER }
@@ -49,6 +49,15 @@ final class VoyageState {
     double windowX;
     double windowZ;
     double windowTheta;
+
+    /** The captain jumped or died during the voyage (T152): the ship sinks to a mooring height and lowers one ladder on this side. */
+    volatile boolean ashore;
+    /** Ladder side (+1 or -1 in the prefab frame) chosen for the captain ashore. */
+    volatile int ashoreSide = -1;
+    /** ASHORE: since when the ground below is unknown (sections not loaded), 0 = known. */
+    long ashoreGroundWaitMs;
+    /** The pilot's "the captain went down" line was sent. */
+    boolean ashoreAnnounced;
 
     static final int MAX_RETRIES = 10;
     static final double RETRY_CLIMB = 3;

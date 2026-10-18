@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.8.2
+
+The airship gets rope ladders: lower one to the ground whenever it is parked in the air, so nobody is ever stuck below it.
+
+### Added
+
+- The airship now has a rope ladder on each side. Two levers, one beside each gate, lower and raise it one rung at a time while the airship is parked in the air. The lever position shows whether the ladder is down. Pull the lever again while it moves to reverse it. Anyone caught by the rope as it rises is set down on the ground without harm.
+- Before any take-off (helm, pilot trip, captain's chart, recall departure) the ladder is raised first, then the airship leaves. Asking for a second departure while the ladder is rising is refused.
+- If the captain jumps off with a glider or dies during a trip with the pilot, the airship now sinks until the bottom of the ladder on the captain's side is at most 30 blocks above the ground, sets down in blocks and lowers that one ladder. The pilot tells the passengers still on board.
+- The deck gate above a ladder opens when the ladder is fully down and closes when it is fully up, but only if the airship opened it itself. A gate you opened yourself stays as you left it.
+
+### Changed
+
+- When you call your airship to a station, the same rope ladder comes down to the boarding platform and the minute starts once it touches the bottom. Anyone still on the ladder when the airship leaves is set on the ground instead of being lifted onto the deck.
+- An airship set up before this version keeps its wooden rungs and has no levers. It gets the rope ladders and levers the next time it lands.
+
+### Fixed
+
+- Leaving the game from the captain's chair during a trip no longer drops you on the ground under the airship. Once the airship is set down, you come back on its deck next to the chair.
+
 ## v1.8.1
 
 A small release that closes a shortcut: leaving the game during a flight no longer takes you to your destination.
