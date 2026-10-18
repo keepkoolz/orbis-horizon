@@ -58,6 +58,21 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
     /** Bed block of each player currently in a bed, memorised on mount (the block's component can be gone at removal). */
     private static final Map<Ref<EntityStore>, Vector3i> BEDS = new ConcurrentHashMap<>();
 
+    /**
+     * T154: end of the night the player sleeps through, per player in a bed. Sampled each tick while the world is in slumber
+     * (WorldSlumber.getTargetInstant). At the end of the slumber UpdateWorldSlumberSystem sets the world to Awake, then the game time
+     * to the wake-up time, then removes the bed mounts; a manual get-up, or a slumber cut short because someone got up, leaves the game
+     * time before the target. So full night = game time at removal reached the last sampled target.
+     */
+    private static final Map<Ref<EntityStore>, java.time.Instant> SLEEP_TARGET = new ConcurrentHashMap<>();
+    /** Tolerance on the target, in seconds of game time. */
+    private static final long TARGET_SLACK_SECONDS = 1L;
+
+    /** True if the game time reached the slumber target (the player slept the whole night). Pure, tested. */
+    static boolean reachedTarget(java.time.Instant target, java.time.Instant gameTime) {
+        return target != null && gameTime != null && !gameTime.isBefore(target.minusSeconds(TARGET_SLACK_SECONDS));
+    }
+
     @Override
     public ComponentType<EntityStore, MountedComponent> componentType() {
         return MountedComponent.getComponentType();
@@ -80,7 +95,13 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
                 BEDS.put(ref, bed);
             }
             World world = store.getExternalData().getWorld();
-            world.execute(() -> patchRespawnPoints(store, ref, world));
+            Vector3i bedForCamp = bed;
+            world.execute(() -> {
+                patchRespawnPoints(store, ref, world);
+                if (bedForCamp != null) {
+                    CampRespawn.onLieDown(store, ref, world, BalloonRegistry.find(world, bedForCamp), bedForCamp);
+                }
+            });
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Lit de tente : montage non traité");
         }
@@ -98,6 +119,8 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
         if (mount.getBlockMountType() != BlockMountType.Bed) {
             return;
         }
+        // T154: read and drop the slumber target on every path below, so no stale entry stays.
+        java.time.Instant target = SLEEP_TARGET.remove(ref);
         try {
             Vector3i bed = bedPosition(mount);
             String source = "composant";
@@ -121,10 +144,45 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
             Vector3i bedPos = bed;
             String bedSource = source;
             World world = store.getExternalData().getWorld();
+            // T154: full night? Read now, the world time was set just before the mount removal.
+            boolean fullNight = false;
+            try {
+                com.hypixel.hytale.server.core.modules.time.WorldTimeResource time =
+                        store.getResource(com.hypixel.hytale.server.core.modules.time.WorldTimeResource.getResourceType());
+                fullNight = reachedTarget(target, time != null ? time.getGameTime() : null);
+            } catch (RuntimeException ex) {
+                LOGGER.at(Level.WARNING).withCause(ex).log("Lit : nuit complète non évaluée");
+            }
+            final boolean night = fullNight;
+            com.hypixel.hytale.server.core.universe.PlayerRef pr = store.getComponent(ref, com.hypixel.hytale.server.core.universe.PlayerRef.getComponentType());
+            final java.util.UUID sleeper = pr != null ? pr.getUuid() : null;
             // Deferred: after the dismount, and after a tent packing of the same tick (which removes the registry entry).
             world.execute(() -> getUp(store, ref, world, bedPos, bedSource));
+            // Queued after getUp: the sleeping bag packs itself once its owner is out of the bed.
+            world.execute(() -> autoPack(store, ref, world, bedPos, night, sleeper));
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Lit de tente : démontage non traité");
+        }
+    }
+
+    /** T154: the owner of a sleeping bag wakes after a full night, the camp packs itself into their inventory. Never throws. */
+    private static void autoPack(Store<EntityStore> store, Ref<EntityStore> ref, World world, Vector3i bedPos, boolean fullNight,
+                                 java.util.UUID sleeper) {
+        try {
+            if (!fullNight || sleeper == null || !ref.isValid()) {
+                return;
+            }
+            BalloonRegistry.Entry e = BalloonRegistry.find(world, bedPos);
+            if (e == null) {
+                return;
+            }
+            boolean owner = e.owner() != null && e.owner().equals(sleeper);
+            if (CampPacker.shouldAutoPack(true, owner, e.kind())) {
+                LOGGER.at(Level.INFO).log("Sac de couchage : nuit complète, rangement automatique en %d, %d, %d", e.x(), e.y(), e.z());
+                CampPacker.pack(store, ref, world, e, false);
+            }
+        } catch (RuntimeException ex) {
+            LOGGER.at(Level.WARNING).withCause(ex).log("Sac de couchage : rangement au réveil non traité");
         }
     }
 
@@ -174,14 +232,14 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
     }
 
     /** World exit spot of a tent (feet), after the entry's rotation. */
-    private static Vector3d exitPosition(BalloonRegistry.Entry e, Deployables.TentSpec spec) {
+    static Vector3d exitPosition(BalloonRegistry.Entry e, Deployables.TentSpec spec) {
         Vector3d logical = new Vector3d(e.x() + 0.5, e.y(), e.z() + 0.5);
         Vector3f local = new Vector3f(spec.exitPoint).add(0f, EXIT_LIFT, 0f);
         return BalloonManager.prefabPoint(logical, e.rotation(), local);
     }
 
     /** Yaw (radians) of a player facing outwards at the exit: yaw 0 looks towards -Z, so a direction (dx, dz) gives atan2(-dx, -dz). */
-    private static float exitYaw(BalloonRegistry.Entry e, Deployables.TentSpec spec) {
+    static float exitYaw(BalloonRegistry.Entry e, Deployables.TentSpec spec) {
         Vector3f d = e.rotation().rotateYaw(new Vector3f(spec.exitFacing), new Vector3f());
         return (float) Math.atan2(-d.x, -d.z);
     }
@@ -230,6 +288,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
      * teleport arrives, then puts the player back next to the bed. Called on every tick of each world. Never throws.
      */
     static void tick(Store<EntityStore> store, World world) {
+        sampleSlumber(store, world);
         if (PENDING.isEmpty()) {
             return;
         }
@@ -250,6 +309,27 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
             }
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Lit de tente : seconde téléportation non traitée");
+        }
+    }
+
+    /** T154: remembers the slumber's target time for the players in a bed of this world. Never throws. */
+    private static void sampleSlumber(Store<EntityStore> store, World world) {
+        if (BEDS.isEmpty()) {
+            return;
+        }
+        try {
+            com.hypixel.hytale.builtin.beds.sleep.resources.WorldSomnolence somnolence =
+                    store.getResource(com.hypixel.hytale.builtin.beds.sleep.resources.WorldSomnolence.getResourceType());
+            if (somnolence == null || !(somnolence.getState() instanceof com.hypixel.hytale.builtin.beds.sleep.resources.WorldSlumber slumber)) {
+                return;
+            }
+            for (Ref<EntityStore> ref : BEDS.keySet()) {
+                if (ref.isValid() && ref.getStore() == store) {
+                    SLEEP_TARGET.put(ref, slumber.getTargetInstant());
+                }
+            }
+        } catch (RuntimeException ex) {
+            LOGGER.at(Level.WARNING).withCause(ex).log("Lit : nuit non échantillonnée");
         }
     }
 

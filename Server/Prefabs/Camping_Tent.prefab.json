@@ -224,6 +224,12 @@
       "y": 0,
       "z": 2,
       "name": "*Cloth_Roof_Orange_State_Definitions_Corner_Left"
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "z": 2,
+      "name": "Camping_Pack_Placed_Tent"
     }
   ],
   "fluids": [
@@ -420,6 +426,13 @@
       "x": 1,
       "y": 0,
       "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "z": 2,
       "name": "Empty",
       "level": 0
     }

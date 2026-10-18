@@ -18,5 +18,6 @@ The following content is not covered by the licence above. It belongs to its aut
   - the flame particle systems and spawners of the small balloon (Server/Particles/Vehicles/Hotair_Balloon_Basic), copied from the game and modified
   - the flamethrower sound effect (Server/Entity/Effects/Hotair_Balloon_Burner_Boost.json), copied from the game and modified
   - the parts of the item and block definitions copied from game items
+- The way the camp pack is drawn on the player's back (the look rebuilt as model attachments, SkinAttachments) is inspired by the True Backpack mod, published under the CC0 licence (public domain) at https://github.com/SupremoSama/Hytale-TrueBackpack. The code was rewritten for this mod.
 
 The mod needs the game to run. HytaleServer.jar and Assets.zip are not part of this repository.

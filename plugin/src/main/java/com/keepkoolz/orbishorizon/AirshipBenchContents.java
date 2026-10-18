@@ -252,6 +252,15 @@ final class AirshipBenchContents {
         }
     }
 
+    /** A copy whose benches all sit at this prefab-frame position (the campfire of another tent, T156). */
+    AirshipBenchContents relocated(Vector3i to) {
+        AirshipBenchContents out = new AirshipBenchContents();
+        for (Entry e : entries) {
+            out.entries.add(new Entry(new Vector3i(to), e.contents, e.fuel));
+        }
+        return out;
+    }
+
     int entryCount() {
         return entries.size();
     }

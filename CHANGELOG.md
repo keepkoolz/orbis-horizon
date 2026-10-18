@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.8.3
+
+Tent crates become camping packs: a leather backpack that you carry and that shows on your back. A new Sleeping bag starts the chain, and each upgrade keeps what was inside.
+
+### Added
+
+- Three camp packs: Sleeping bag (new), Small tent and Large tent. Right-click the ground to set the camp up, use the pack on the ground to pack it away. The camp's contents travel in the pack.
+- The sleeping bag sets up a straw bed, a lit brazier and its pack on the ground. It packs itself away when you wake up after a full night.
+- Upgrade a pack at the workbench (Sleeping bag to Small tent to Large tent) and keep its contents. Keep the lower pack on you. A craft that would lose contents is refused.
+- The camp where you last slept becomes your camp respawn point in this world, even after you pack it. If the spot is blocked, you are moved to a free spot within 8 blocks. Beds of the game are not touched.
+- The pack with the highest level in your inventory shows on your back. `/orbishorizon camping back on|off` (operators) switches it. It stays off if the True Backpack mod is installed.
+- `/orbishorizon camping pack`: packs your nearest tent within 8 blocks, for tents set up before this version.
+- A camping pack cannot be stored in a tent chest, full or empty, so packs cannot be nested. The old tent crates are refused too. If one gets in anyway, it is dropped on the ground when you pack the tent.
+
+### Changed
+
+- Tent crates are replaced by camp packs. Full crates in your inventory are converted into packs of the same level, with their contents, when you join a world. Empty crates disappear. Crates in chests or on the ground still work, and are renamed "(old crate)" so they are not mistaken for the packs. Tents already set up get a pack on the ground at their entrance, unless a block is in the way.
+- The recipes of the old crates are gone. Packs are crafted at the basic workbench, tier 1, 2 and 3.
+- Credit: the back view of the pack is inspired by True Backpack (CC0).
+
 ## v1.8.2
 
 The airship gets rope ladders: lower one to the ground whenever it is parked in the air, so nobody is ever stuck below it.

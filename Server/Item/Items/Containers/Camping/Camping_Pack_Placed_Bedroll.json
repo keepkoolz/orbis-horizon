@@ -1,0 +1,42 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.camping_pack_placed_bedroll.name",
+    "Description": "server.orbis_horizon.items.camping_pack_placed_bedroll.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Camping_Pack_Bedroll.png",
+  "Categories": [
+    "Items.Tools"
+  ],
+  "BlockType": {
+    "Material": "Empty",
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "CustomModel": "Items/Camping/Camping_Pack_Placed.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Items/Camping/Camping_Pack_Bedroll_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "HitboxType": "Brazier_Small",
+    "Flags": {
+      "IsStackable": false
+    },
+    "BlockParticleSetId": "Dust",
+    "BlockSoundSetId": "Cloth",
+    "PhysicalMaterialId": "Wool",
+    "InteractionHint": "server.orbis_horizon.interactionHints.packCamp",
+    "Interactions": {
+      "Use": {
+        "Interactions": [
+          {
+            "Type": "Camping_PackCamp"
+          }
+        ]
+      }
+    }
+  },
+  "PlayerAnimationsId": "Block",
+  "MaxStack": 1,
+  "ItemSoundSetId": "ISS_Items_Cloth"
+}

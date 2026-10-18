@@ -76,7 +76,7 @@ public class PackTentInteraction extends SimpleInstantInteraction {
             return;
         }
         // The empty crate must be that of the targeted tent type (small crate for the small tent, big for the big).
-        if (!kind.tent.emptyCrateId.equals(held.getItemId())) {
+        if (!held.getItemId().equals(kind.tent.legacyEmptyCrateId)) {
             playerRef.sendMessage(Texts.t("tent.wrongCrate"));
             fail(context);
             return;
@@ -103,20 +103,22 @@ public class PackTentInteraction extends SimpleInstantInteraction {
             fail(context);
             return;
         }
+        CampRespawn.afterRemoval(world, entry);
 
-        // The empty crate becomes the full crate again, in the same slot. If the swap fails, the full crate
-        // is dropped at the foot of the campfire: the tent is already removed, the crate must not be lost.
-        ItemStack full = new ItemStack(kind.tent.fullCrateId, 1);
-        if (result.kept() != null) {
-            full = full.withMetadata(TentContents.METADATA_KEY, result.kept().toBson(kind.id));
-        }
+        // T158: the old empty crate gives the pack of the tier (contents kept), in the same slot. If the swap fails, the pack
+        // is dropped at the foot of the campfire: the tent is already removed, it must not be lost.
+        CampTiers.Tier tier = CampTiers.ofKind(kind.id);
+        ItemStack full = tier != null ? CampPacker.packStack(tier, result.kept()) : new ItemStack(kind.tent.legacyFullCrateId, 1);
         if (heldContainer.setItemStackForSlot((short) context.getHeldItemSlot(), full).succeeded()) {
             context.setHeldItem(full);
         } else {
             LOGGER.at(Level.WARNING).log("Camping_PackTent: la caisse n'a pas pu être remplacée, caisse pleine lâchée au sol");
             BalloonManager.dropItems(commandBuffer, List.of(full), result.anchorPos());
         }
-        playerRef.sendMessage(Texts.t(result.kept() != null ? "tent.packedKept" : "tent.packed"));
+        if (result.ejected() > 0) {
+            playerRef.sendMessage(Texts.t("camp.packInChest"));
+        }
+        playerRef.sendMessage(Texts.t(result.kept() != null && result.items() > 0 ? "tent.packedKept" : "tent.packed"));
         LOGGER.at(Level.INFO).log("Tente « %s » rangée par %s en (%d, %d, %d) : %d bloc(s) retirés%s",
                 kind.id, playerRef.getUsername(), origin.x, origin.y, origin.z, result.removed(),
                 result.items() > 0 ? ", " + result.items() + " objet(s) gardés dans la caisse" : "");
@@ -125,7 +127,7 @@ public class PackTentInteraction extends SimpleInstantInteraction {
     /** True if this item is the empty crate of some tent type. */
     private static boolean isEmptyCrate(String itemId) {
         for (Deployables.Kind k : Deployables.TENTS) {
-            if (k.tent.emptyCrateId.equals(itemId)) {
+            if (itemId != null && itemId.equals(k.tent.legacyEmptyCrateId)) {
                 return true;
             }
         }

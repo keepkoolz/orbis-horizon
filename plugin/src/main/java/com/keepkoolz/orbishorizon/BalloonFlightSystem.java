@@ -31,6 +31,10 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
         BalloonManager.get().sweepProtection(store, store.getExternalData().getWorld());
         // T125: second teleport of a player who got up from a tent bed.
         TentBedSystem.tick(store, store.getExternalData().getWorld());
+        CampRespawn.tick(store, store.getExternalData().getWorld());
+        PackBackView.tick(store, store.getExternalData().getWorld()); // T157: never throws
+        CampUpgrade.tick(store, store.getExternalData().getWorld());
+        LegacyCamps.tick(store, store.getExternalData().getWorld()); // T158: never throws
         CaptainMap.tick(store, store.getExternalData().getWorld()); // T141: never throws
         // Glider jump: passengers taking a glider in hand.
         try {

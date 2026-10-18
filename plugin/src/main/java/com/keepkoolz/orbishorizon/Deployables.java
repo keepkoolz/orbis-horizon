@@ -124,7 +124,7 @@ final class Deployables {
     static final Kind TENT = new Kind(TENT_KIND, "Camping_Tent.prefab.json", "Bench_Campfire", false,
             TENT_PLACE_MIN, TENT_PLACE_MAX,
             "lock.tent.break", "lock.tent.place", null,
-            new TentSpec("Camping_Tent_Crate", "Camping_Tent_Crate_Empty",
+            new TentSpec("Camping_Pack_Tent", "Camping_Tent_Crate", "Camping_Tent_Crate_Empty",
                     new float[] {-2f, 0f, 0.5f}, new float[] {-1f, 0f, 0f}));
 
     static final String TENT_BIG_KIND = "tent_big";
@@ -137,7 +137,22 @@ final class Deployables {
     static final Kind TENT_BIG = new Kind(TENT_BIG_KIND, "Camping_Tent_Big.prefab.json", "Bench_Campfire", false,
             TENT_BIG_PLACE_MIN, TENT_BIG_PLACE_MAX,
             "lock.tent.break", "lock.tent.place", null,
-            new TentSpec("Camping_Tent_Big_Crate", "Camping_Tent_Big_Crate_Empty"));
+            new TentSpec("Camping_Pack_Tent_Big", "Camping_Tent_Big_Crate", "Camping_Tent_Big_Crate_Empty", null, null));
+
+    static final String BEDROLL_KIND = "bedroll";
+
+    /** Forbidden placement volume of the bedroll camp, prefab frame: the prefab box (x 1..3, y 0..1, z 0..2). */
+    private static final int[] BEDROLL_PLACE_MIN = {1, 0, 0};
+    private static final int[] BEDROLL_PLACE_MAX = {3, 1, 2};
+
+    /**
+     * The sleeping-bag camp (T153): a bed, a bivouac fire and the placed bag. The marker is the placed bag (unique in the prefab).
+     * It has no legacy crates.
+     */
+    static final Kind BEDROLL = new Kind(BEDROLL_KIND, "Camping_Bedroll.prefab.json", "Camping_Pack_Placed_Bedroll", false,
+            BEDROLL_PLACE_MIN, BEDROLL_PLACE_MAX,
+            "lock.tent.break", "lock.tent.place", null,
+            new TentSpec("Camping_Pack_Bedroll", null, null, null, null));
 
     static final String AIRSHIP_KIND = "airship";
 
@@ -225,11 +240,11 @@ final class Deployables {
             STATION_PLACE_MIN, STATION_PLACE_MAX,
             "lock.station.break", "lock.station.place");
 
-    private static final List<Kind> ALL = List.of(BALLOON, BALLOON_BASIC, BALLOON_TRANSPORT, TENT, TENT_BIG, AIRSHIP,
+    private static final List<Kind> ALL = List.of(BALLOON, BALLOON_BASIC, BALLOON_TRANSPORT, BEDROLL, TENT, TENT_BIG, AIRSHIP,
             BALLOON_PUBLIC, STATION);
 
     /** Tent types, in the order they are logged at startup. */
-    static final List<Kind> TENTS = List.of(TENT, TENT_BIG);
+    static final List<Kind> TENTS = List.of(BEDROLL, TENT, TENT_BIG);
 
     /** Balloon types (T54), in the order recognition tries them. They share the same anchor burner. */
     static final List<Kind> BALLOONS = List.of(BALLOON, BALLOON_BASIC, BALLOON_TRANSPORT);
@@ -353,10 +368,14 @@ final class Deployables {
         }
     }
 
-    /** Data specific to a tent type: the full crate (held to deploy) and the empty crate (held to pack, left after deploying). */
+    /**
+     * Data specific to a camp type: the pack item (held to deploy, T153) and the legacy crates of before T153 (null for the
+     * sleeping bag, which never had crates).
+     */
     static final class TentSpec {
-        final String fullCrateId;
-        final String emptyCrateId;
+        final String packItemId;
+        final String legacyFullCrateId;
+        final String legacyEmptyCrateId;
         /**
          * Exit spot (T93), prefab frame before rotation, in blocks relative to the centre of the origin cell (same convention
          * as BalloonManager.prefabPoint): where a player who gets up from a bed of the tent is put, feet height. Null if the
@@ -366,13 +385,10 @@ final class Deployables {
         /** Direction the player faces at the exit spot, prefab frame before rotation (horizontal). Null with exitPoint. */
         final Vector3f exitFacing;
 
-        TentSpec(String fullCrateId, String emptyCrateId) {
-            this(fullCrateId, emptyCrateId, null, null);
-        }
-
-        TentSpec(String fullCrateId, String emptyCrateId, float[] exitPoint, float[] exitFacing) {
-            this.fullCrateId = fullCrateId;
-            this.emptyCrateId = emptyCrateId;
+        TentSpec(String packItemId, String legacyFullCrateId, String legacyEmptyCrateId, float[] exitPoint, float[] exitFacing) {
+            this.packItemId = packItemId;
+            this.legacyFullCrateId = legacyFullCrateId;
+            this.legacyEmptyCrateId = legacyEmptyCrateId;
             this.exitPoint = exitPoint == null ? null : new Vector3f(exitPoint[0], exitPoint[1], exitPoint[2]);
             this.exitFacing = exitFacing == null ? null : new Vector3f(exitFacing[0], exitFacing[1], exitFacing[2]);
         }

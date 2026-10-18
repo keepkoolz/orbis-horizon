@@ -34,7 +34,11 @@ final class StructureRemoval {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 
     /** Result: error non-null if nothing was removed, otherwise the number of blocks removed, items dropped or kept in the crate and the marker location. */
-    record Result(Message error, int removed, int items, Vector3i anchorPos, TentContents kept) {
+    record Result(Message error, int removed, int items, Vector3i anchorPos, TentContents kept, int ejected) {
+        Result(Message error, int removed, int items, Vector3i anchorPos, TentContents kept) {
+            this(error, removed, items, anchorPos, kept, 0);
+        }
+
         static Result failure(Message error) {
             return new Result(error, 0, 0, null, null);
         }
@@ -56,6 +60,14 @@ final class StructureRemoval {
             LOGGER.at(Level.WARNING).withCause(e).log("Droits de %s non lus : traité comme non op", uuid);
             return false;
         }
+    }
+
+    /**
+     * T154: whether a cell may be cleared. A cell that is not the camp's placed bag follows the usual rule (it is cleared, the caller
+     * only offers cells it already matched); the bag cell is cleared only when the world block there really is the placed bag.
+     */
+    static boolean removeCell(boolean isBagCell, boolean worldMatchesPrefab) {
+        return !isBagCell || worldMatchesPrefab;
     }
 
     /** Removes the structure placed at this origin. The registry, blocks, contents and mounts are handled here. */
@@ -87,7 +99,7 @@ final class StructureRemoval {
         }
         // a. All the structure's chunks must be loaded (nothing is removed halfway).
         if (!SectionBlocks.sectionsLoaded(world.getChunkStore(), minX, minY, minZ, maxX, maxY, maxZ)) {
-            return Result.failure(Texts.t(kind.isAirship() ? "airship.approach" : "tent.approach"));
+            return Result.failure(Texts.t(kind.isAirship() ? "airship.approach" : CampTiers.ofKind(kind.id) != null ? "camp.approach" : "tent.approach"));
         }
         // a bis. Packing keeps the contents: a chest or bench whose component cannot be read would lose them.
         if (keepContents && !StructureComponents.unreadable(world, shape, origin, rotation).isEmpty()) {
@@ -133,6 +145,14 @@ final class StructureRemoval {
         for (Map.Entry<Vector3i, List<com.hypixel.hytale.server.core.inventory.ItemStack>> e : byPos.entrySet()) {
             BalloonManager.dropItems(accessor, e.getValue(), e.getKey());
         }
-        return new Result(null, removed, items, shape.anchor().rotated(rotation).add(origin), kept);
+        int ejectedCount = 0;
+        if (kept != null && !kept.ejected().isEmpty()) {
+            Vector3i at = kept.ejectedPos() != null ? rotation.rotateYaw(kept.ejectedPos(), new Vector3i()).add(origin) : shape.anchor().rotated(rotation).add(origin);
+            for (com.hypixel.hytale.server.core.inventory.ItemStack st : kept.ejected()) {
+                ejectedCount += st.getQuantity();
+            }
+            BalloonManager.dropItems(accessor, kept.ejected(), at);
+        }
+        return new Result(null, removed, items, shape.anchor().rotated(rotation).add(origin), kept, ejectedCount);
     }
 }

@@ -1,18 +1,20 @@
-![Orbis Origin](images/orbis-horizon-header-3.jpg)
+![Orbis Origin](images/logo/orbis-horizon-header-3.jpg)
 
 Orbis Horizon is an adventure mod for Hytale about leaving home behind. You build your gear at the workbench, carry it in a crate, and set it up wherever the road takes you. A tent for the night, a hot air balloon to cross the valley, an airship once the world starts to feel small, and balloon stations that fly you from one place to the next.
 
-When it's time to move on, the camp folds back into its crate and the balloon lands wherever you choose.
+When it's time to move on, the camp folds back into its pack and the balloon lands wherever you choose.
 
 The mod is still in development, and more gear is on the way.
 
 ## What you can take with you
 
-### Tents
+### Camps
 
-The Small Tent is your first step out the door: a bed, a campfire, a stool and a lantern, ready in a second. Set it up at dusk, sleep, pack it in the morning and the crate goes back in your bag. When you get out of bed, you step out by the entrance, ready to leave.
+Your camp now fits in a leather backpack that you can see on your back. The sleeping bag is where it starts: a straw bed and a little fire, set up in a second and good for one night. Wake up after a full night and it packs itself away.
 
-The Large Tent is a proper base camp for two, with chests to keep what you found along the way.
+Upgrade the sleeping bag into the Small tent: a bed, a campfire, a stool, a lantern and a little chest outside. Upgrade that into the Large tent, a proper base camp for two with chests to keep what you found along the way. Every upgrade keeps what you left inside.
+
+Wherever you sleep, that is where you come back if the road is unkind, even after you have packed the camp.
 
 ### Hot air balloons
 
@@ -36,7 +38,7 @@ A station is a stone walkway with a landing pad at its end and a little hut for 
 
 - Everything is crafted at the basic workbench, in the Tinkering tab. The bigger vehicles need an upgraded workbench. Each vehicle is a single recipe, with no parts to make first.
 - Hold a crate and you see where the structure will go, block by block, before you set it up.
-- Pack a tent and what you left in its chests and campfire travels in the crate, ready for your next camp. The small tent has a chest outside for your things.
+- Pack a camp and what you left in its chests and campfire travels in the pack, ready for your next camp. The small tent has a chest outside for your things.
 - Once set up, a tent, balloon, airship or station is locked, so nobody breaks it by accident. Beds, chests, burners and seats still work.
 - Friends standing on board when you take off travel with you, seated, and watch the sky from outside the vehicle. Passengers can leave mid-flight with a glider. Other players see you fly by.
 - Stations keep a clear area around their landing pad, and you can only own one airship at a time.
@@ -55,6 +57,7 @@ The changes of each version are listed in [CHANGELOG.md](CHANGELOG.md).
 - The airship prefab is based on [Starter Airship: The Cloudwork (V.2)](https://www.curseforge.com/hytale/prefabs/the-cloudwork). It has been modified for this mod (burners, helm used for take-off, etc.). Check the reuse terms on its page before distributing the mod.
 - The tent prefabs are based on [Desert Base Camp - Tent (Model 2)](https://www.curseforge.com/hytale/prefabs/desert-base-camp-tent-model-2) and [Desert Base Camp - Tent (Model 1)](https://www.curseforge.com/hytale/prefabs/desert-base-camp-tent). They have been modified for this mod (added, moved and removed blocks). Check the reuse terms on their pages before distributing the mod.
 - The 3D flight model and its texture are generated from the prefab using the game's block textures. These textures, and the game assets copied or adapted for the mod, belong to Hypixel Studios.
+- The way the camp pack is drawn on your back is inspired by [True Backpack](https://github.com/SupremoSama/Hytale-TrueBackpack), published under the CC0 licence (public domain). The code was rewritten for this mod.
 
 ## Licence
 

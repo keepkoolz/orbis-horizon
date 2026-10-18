@@ -380,6 +380,12 @@
       "z": 5,
       "name": "Cloth_Roof_Orange_Vertical",
       "rotation": 1
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "z": 0,
+      "name": "Camping_Pack_Placed_Tent_Big"
     }
   ],
   "fluids": [
@@ -737,6 +743,13 @@
       "x": 3,
       "y": 0,
       "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "z": 0,
       "name": "Empty",
       "level": 0
     }

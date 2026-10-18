@@ -715,7 +715,8 @@ public final class BalloonManager {
                 }
                 Vector3i p = c.rotated(rotation).add(origin);
                 BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
-                if (bt != null && sameBlock(bt, c)) {
+                boolean bagCell = c.baseName().startsWith("Camping_Pack_Placed_");
+                if (bt != null && (bagCell ? StructureRemoval.removeCell(true, sameBlock(bt, c)) : sameBlock(bt, c))) {
                     // The anchor block (the burner, formerly the brazier, or the tent's campfire, T46) is removed without the "no particles" option: with it, the flame
                     // stayed displayed in the sky (test of 3 October 2026, suspected cause). The airship (broadAttached) is excluded: its
                     // anchor is the wooden helm (T67), which burst into break particles, and its block particles are cancelled apart.
@@ -3636,6 +3637,9 @@ public final class BalloonManager {
             // T126: a marker the mod placed and could not remove (world change, crash) is removed on every arrival.
             PassengerProtection.clearOnArrival(holder, pr.getUuid());
             CaptainMap.removeAll(holder); // T141: a captain's map left by a crash
+            LegacyCamps.onArrival(pr.getUuid()); // T158
+            LegacyCamps.convertInventory(holder); // T158: old tent crates become packs, before the pack upgrade and the back view
+            CampUpgrade.onArrival(holder, pr.getUuid()); // T156: a finished camp pack upgrade whose contents were not put on the new pack
             BalloonResume.Stranded st = BalloonResume.takeStranded(pr.getUuid(), world.getName());
             if (st == null) {
                 return;

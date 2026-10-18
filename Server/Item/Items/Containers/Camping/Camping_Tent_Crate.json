@@ -10,41 +10,6 @@
   "Categories": [
     "Furniture.Containers"
   ],
-  "Recipe": {
-    "Input": [
-      {
-        "ItemId": "Ingredient_Fibre",
-        "Quantity": 40
-      },
-      {
-        "ItemId": "Ingredient_Hide_Medium",
-        "Quantity": 10
-      },
-      {
-        "ItemId": "Ingredient_Stick",
-        "Quantity": 20
-      },
-      {
-        "ItemId": "Bench_Campfire",
-        "Quantity": 1
-      },
-      {
-        "ItemId": "Furniture_Crude_Bed",
-        "Quantity": 1
-      }
-    ],
-    "BenchRequirement": [
-      {
-        "Type": "Crafting",
-        "Categories": [
-          "Workbench_Tinkering"
-        ],
-        "Id": "Workbench",
-        "RequiredTierLevel": 1
-      }
-    ],
-    "TimeSeconds": 3
-  },
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Cube",

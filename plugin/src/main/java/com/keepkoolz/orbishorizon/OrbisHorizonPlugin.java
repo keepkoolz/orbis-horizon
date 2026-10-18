@@ -34,6 +34,10 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         getCodecRegistry(Interaction.CODEC)
                 .register(StationMasterInteraction.TYPE_ID, StationMasterInteraction.class, StationMasterInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
+                .register(DeployCampInteraction.TYPE_ID, DeployCampInteraction.class, DeployCampInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
+                .register(PackCampInteraction.TYPE_ID, PackCampInteraction.class, PackCampInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
                 .register(PackTentInteraction.TYPE_ID, PackTentInteraction.class, PackTentInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
                 .register(TakeOffBalloonInteraction.TYPE_ID, TakeOffBalloonInteraction.class, TakeOffBalloonInteraction.CODEC);
@@ -73,6 +77,12 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Déplacement de l'ancien combustible des brûleurs désactivé");
         }
+        try {
+            // No camping pack in the chests of a mod tent: slot filters are not saved, reinstalled when a chest appears.
+            getChunkStoreRegistry().registerSystem(new CampChestFilter());
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Filtre des coffres de tente désactivé");
+        }
         // T19: resume files in the plugin data folder, landing on pilot disconnection and on
         // server shutdown, resume when worlds load.
         BalloonResume.init(getDataDirectory());
@@ -83,6 +93,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         TransitNetwork.get().load(getDataDirectory());
         TransitSettings.load(getDataDirectory());
         PassengerProtection.load(getDataDirectory());
+        CampRespawn.load(getDataDirectory());
         try {
             getEntityStoreRegistry().registerSystem(new BalloonLockSystems.Break());
             getEntityStoreRegistry().registerSystem(new BalloonLockSystems.Damage());
@@ -99,8 +110,16 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         // T93: a player who gets up from the small tent's bed is put at the tent exit, the bed's respawn point too.
         try {
             getEntityStoreRegistry().registerSystem(new TentBedSystem());
+            getEntityStoreRegistry().registerSystem(new CampRespawn.RespawnWatcher());
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Sortie du lit de la tente : système désactivé");
+        }
+        // T156: upgrading a camp pack keeps the contents of the lower pack (craft events).
+        try {
+            getEntityStoreRegistry().registerSystem(new CampUpgrade.Pre());
+            getEntityStoreRegistry().registerSystem(new CampUpgrade.Post());
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Amélioration des sacs de campement : système désactivé");
         }
         // T75: a game mode change of a pilot or passenger makes them leave the vehicle (the game resets the movement settings).
         try {
@@ -113,6 +132,18 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             getEntityStoreRegistry().registerSystem(new PassengerProtection.DamageFilter());
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Protection des passagers contre les dégâts désactivée");
+        }
+        // T157: the camp pack in the inventory is drawn on the player's back (look rebuilt as attachments).
+        try {
+            getEntityStoreRegistry().registerSystem(new PackBackView.SkinWatch());
+            getEntityStoreRegistry().registerSystem(new PackBackView.SettingsWatch());
+            getEntityStoreRegistry().registerSystem(new PackBackView.ModelWatch());
+            getEntityStoreRegistry().registerSystem(new PackBackView.InventoryWatch());
+            getEntityStoreRegistry().registerSystem(new PackBackView.RespawnWatch());
+            getEventRegistry().registerGlobal(com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent.class,
+                    event -> PackBackView.onReady(event.getPlayerRef()));
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Sac de campement sur le dos désactivé");
         }
         // T82: dual rendering of the vehicles in flight needs the per-viewer visibility filter. Without it every flight keeps the single entity.
         try {
@@ -178,6 +209,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
 
     @Override
     protected void start() {
+        PackBackView.detectOtherBackpackMod(); // T157: once, result logged
         // T44: the tent shape is read once (asset prefabs are loaded before start). A failure
         // is logged by Deployables and the shape will be read again on demand.
         for (Deployables.Kind kind : Deployables.TENTS) {
@@ -185,7 +217,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             if (tent != null) {
                 StructureShape.Cell anchor = tent.anchor();
                 getLogger().at(Level.INFO).log("%s : %d case(s), repère en (%d, %d, %d)",
-                        kind == Deployables.TENT ? "Tente" : "Grande tente", tent.cells().size(), anchor.x(), anchor.y(), anchor.z());
+                        kind == Deployables.TENT ? "Tente" : kind == Deployables.BEDROLL ? "Sac de couchage" : "Grande tente", tent.cells().size(), anchor.x(), anchor.y(), anchor.z());
             }
         }
         // Airship prototype: the shape is read once and the collision hull computed (logged by AirshipManager).

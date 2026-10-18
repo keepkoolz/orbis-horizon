@@ -1,0 +1,77 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.camping_pack_tent.name",
+    "Description": "server.orbis_horizon.items.camping_pack_tent.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Camping_Pack_Tent.png",
+  "Model": "Items/Back/BackpackBig.blockymodel",
+  "Texture": "Items/Camping/Camping_Pack_Tent_Texture.png",
+  "PlayerAnimationsId": "Block",
+  "MaxStack": 1,
+  "ItemLevel": 2,
+  "Categories": [
+    "Items.Tools"
+  ],
+  "Recipe": {
+    "Input": [
+      {
+        "ResourceTypeId": "Camping_Pack_Bedroll",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Ingredient_Fibre",
+        "Quantity": 40
+      },
+      {
+        "ItemId": "Ingredient_Hide_Medium",
+        "Quantity": 10
+      },
+      {
+        "ItemId": "Ingredient_Stick",
+        "Quantity": 20
+      },
+      {
+        "ItemId": "Bench_Campfire",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Furniture_Crude_Chest_Small",
+        "Quantity": 1
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Tinkering"
+        ],
+        "Id": "Workbench",
+        "RequiredTierLevel": 2
+      }
+    ],
+    "TimeSeconds": 3
+  },
+  "Interactions": {
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "Camping_DeployCamp",
+          "PrefabPath": "Camping_Tent.prefab.json",
+          "Offset": {
+            "X": 0,
+            "Y": 1,
+            "Z": -3
+          },
+          "RotationOffset": "Ninety",
+          "Force": true
+        }
+      ]
+    }
+  },
+  "ItemSoundSetId": "ISS_Items_Cloth",
+  "ResourceTypes": [
+    {
+      "Id": "Camping_Pack_Tent"
+    }
+  ]
+}

@@ -18,5 +18,6 @@ public final class OrbisHorizonCommand extends AbstractCommandCollection {
         addSubCommand(new PreviewCommand());
         addSubCommand(new PassengersCommand());
         addSubCommand(new MapCommand());
+        addSubCommand(new CampingCommand());
     }
 }

@@ -82,7 +82,29 @@ public class TransitTests {
         eq(3, BalloonRegistry.Recall.fromBson(r.toBson()).ladders().length);
     }
 
+    static void legacyCrateConversion() {
+        eq("Camping_Pack_Tent", LegacyCamps.convertedItem("Camping_Tent_Crate"));
+        eq("Camping_Pack_Tent_Big", LegacyCamps.convertedItem("Camping_Tent_Big_Crate"));
+        eq("", LegacyCamps.convertedItem("Camping_Tent_Crate_Empty"));
+        eq("", LegacyCamps.convertedItem("Camping_Tent_Big_Crate_Empty"));
+        eq(null, LegacyCamps.convertedItem("Camping_Pack_Tent"));
+    }
+
+    static void legacyBagCellFree() {
+        check(LegacyCamps.bagCellFree(false, false), "air or grass");
+        check(!LegacyCamps.bagCellFree(true, false), "player block");
+        check(!LegacyCamps.bagCellFree(false, true), "water");
+    }
+
     public static void main(String[] args) throws Exception {
+        run("campWakeRule", TransitTests::campWakeRule);
+        run("campChestForbidden", TransitTests::campChestForbidden);
+        run("campChestSplit", TransitTests::campChestSplit);
+        run("legacyCrateConversion", TransitTests::legacyCrateConversion);
+        run("legacyBagCellFree", TransitTests::legacyBagCellFree);
+        run("campPackerGiveFallback", TransitTests::campPackerGiveFallback);
+        run("removalKeepsForeignBagCell", TransitTests::removalKeepsForeignBagCell);
+        run("slumberTargetReached", TransitTests::slumberTargetReached);
         run("pendingDepartureSingle", TransitTests::pendingDepartureSingle);
         run("ladderLeverPhases", TransitTests::ladderLeverPhases);
         run("ladderAdoptPhase", TransitTests::ladderAdoptPhase);
@@ -99,6 +121,7 @@ public class TransitTests {
         run("corruptFileIsKept", TransitTests::corruptFileIsKept);
         run("grassLayerCells", TransitTests::grassLayerCells);
         run("settingsRoundTrip", TransitTests::settingsRoundTrip);
+        run("packBackShownTier", TransitTests::packBackShownTier);
         run("reservationIsExclusive", TransitTests::reservationIsExclusive);
         run("queueRules", TransitTests::queueRules);
         run("cruiseAndHolding", TransitTests::cruiseAndHolding);
@@ -114,6 +137,14 @@ public class TransitTests {
         run("groundCageRemaining", TransitTests::groundCageRemaining);
         run("deployPlacement", TransitTests::deployPlacement);
         run("smallTentChest", TransitTests::smallTentChest);
+        run("campTiersTable", TransitTests::campTiersTable);
+        run("campTiersJson", TransitTests::campTiersJson);
+        run("campUpgradeRefusal", TransitTests::campUpgradeRefusal);
+        run("campUpgradeQueue", TransitTests::campUpgradeQueue);
+        run("campUpgradeCarryAfterPost", TransitTests::campUpgradeCarryAfterPost);
+        run("campUpgradeReconcile", TransitTests::campUpgradeReconcile);
+        run("tentContentsConvert", TransitTests::tentContentsConvert);
+        run("campRecipesJson", TransitTests::campRecipesJson);
         run("externalView", TransitTests::externalView);
         run("behindHeading", TransitTests::behindHeading);
         run("viewResend", TransitTests::viewResend);
@@ -176,6 +207,10 @@ public class TransitTests {
         run("ashoreSide", TransitTests::ashoreSide);
         run("ashoreDescent", TransitTests::ashoreDescent);
         run("gateRule", TransitTests::gateRule);
+        run("campRespawnShouldRescue", TransitTests::campRespawnShouldRescue);
+        run("campRespawnFreeSpot", TransitTests::campRespawnFreeSpot);
+        run("campRespawnOwnersOfBed", TransitTests::campRespawnOwnersOfBed);
+        run("campRespawnFileRoundTrip", TransitTests::campRespawnFileRoundTrip);
         System.out.println("TransitTests: " + passed + " OK");
     }
 
@@ -403,6 +438,41 @@ public class TransitTests {
         eq(null, TentContents.fromBson(d, "tent_big"));
         d.put("v", new org.bson.BsonInt32(2));
         eq(null, TentContents.fromBson(d, "tent"));
+    }
+
+    static void campRespawnShouldRescue() {
+        eq(false, CampRespawn.shouldRescue(1.0, Double.POSITIVE_INFINITY));
+        eq(true, CampRespawn.shouldRescue(30.0, Double.POSITIVE_INFINITY));
+        eq(false, CampRespawn.shouldRescue(30.0, 1.5));
+        eq(true, CampRespawn.shouldRescue(30.0, 20.0));
+        eq(false, CampRespawn.shouldRescue(2.0, 50.0));
+    }
+
+    static void campRespawnFreeSpot() {
+        Vector3i c = new Vector3i(0, 64, 0);
+        eq(c, CampRespawn.freeSpotNear(c, 8, p -> true));
+        eq(new Vector3i(1, 64, 0), CampRespawn.freeSpotNear(c, 8, p -> p.x == 1 && p.y == 64 && p.z == 0));
+        eq(null, CampRespawn.freeSpotNear(c, 8, p -> false));
+        eq(null, CampRespawn.freeSpotNear(c, 2, p -> p.x == 5));
+        // Same distance: lowest y, then x, then z.
+        eq(new Vector3i(0, 63, 0), CampRespawn.freeSpotNear(c, 2, p -> p.x == 0 && p.z == 0 && p.y != 64));
+    }
+
+    static void campRespawnOwnersOfBed() {
+        UUID a = UUID.randomUUID(), b = UUID.randomUUID();
+        Map<UUID, Vector3i> pts = Map.of(a, new Vector3i(1, 0, 0), b, new Vector3i(9, 0, 9));
+        eq(Set.of(a), CampRespawn.ownersOfBed(pts, new Vector3i(1, 0, 0)));
+    }
+
+    static void campRespawnFileRoundTrip() throws Exception {
+        Path dir = Files.createTempDirectory("camp-respawn");
+        UUID a = UUID.randomUUID();
+        CampRespawn.Point p = new CampRespawn.Point(a, "w", new Vector3i(1, 2, 3), new org.joml.Vector3d(1.5, 2.1, 3.5), "Tent", 0.5f);
+        eq(List.of(p), CampRespawn.fromBson(CampRespawn.toBson(List.of(p))));
+        Files.writeString(dir.resolve("camp-respawn.json"), "{ not json");
+        CampRespawn.load(dir);
+        check(Files.exists(dir.resolve("camp-respawn.json.bad")), "corrupt file renamed .bad");
+        check(!Files.exists(dir.resolve("camp-respawn.json")), "corrupt file moved away");
     }
 
     private static void eq(Object expected, Object actual) {
@@ -712,6 +782,14 @@ public class TransitTests {
         }
     }
 
+    static void packBackShownTier() {
+        eq(null, PackBackView.shownTier(List.of("Tool_Pickaxe_Iron")));
+        eq(CampTiers.Tier.TENT, PackBackView.shownTier(List.of("Camping_Pack_Bedroll", "Camping_Pack_Tent")));
+        eq(CampTiers.Tier.TENT_BIG, PackBackView.shownTier(List.of("Camping_Pack_Tent_Big", "Camping_Pack_Bedroll")));
+        eq(null, PackBackView.shownTier(List.of("Camping_Tent_Crate")));
+        eq("Items/Camping/Camping_Pack_Tent_Big_Texture.png", PackBackView.textureOf(CampTiers.Tier.TENT_BIG));
+    }
+
     static void settingsRoundTrip() throws Exception {
         Path dir = Files.createTempDirectory("transit-settings");
         try {
@@ -721,6 +799,14 @@ public class TransitTests {
             eq(true, TransitSettings.recipeEnabled());
             TransitSettings.load(dir);
             eq(true, TransitSettings.recipeEnabled());
+            eq(true, TransitSettings.packBackView());
+            TransitSettings.setPackBackView(false);
+            TransitSettings.load(dir);
+            eq(false, TransitSettings.packBackView());
+            eq(true, TransitSettings.recipeEnabled());
+            Files.writeString(dir.resolve("transit-settings.json"), "{\"recipeEnabled\": true}");
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.packBackView());
             Files.writeString(dir.resolve("transit-settings.json"), "{garbage");
             TransitSettings.load(dir);
             eq(false, TransitSettings.recipeEnabled());
@@ -837,6 +923,225 @@ public class TransitTests {
             check(c.offset().equals(new Vector3i(Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)), Integer.parseInt(m.group(4)))),
                     e.getKey() + " offset");
             check(c.rotationOffset().name().equals(m.group(5)), e.getKey() + " rotation offset");
+        }
+    }
+
+    /** T153: the tier table, the lookups and the bag cells. */
+    private static void campTiersTable() {
+        eq(CampTiers.Tier.TENT, CampTiers.Tier.BEDROLL.next());
+        eq(CampTiers.Tier.TENT, CampTiers.Tier.TENT_BIG.previous());
+        eq(null, CampTiers.Tier.TENT_BIG.next());
+        eq(null, CampTiers.Tier.BEDROLL.previous());
+        eq(CampTiers.Tier.TENT_BIG, CampTiers.ofPack("Camping_Pack_Tent_Big"));
+        eq(CampTiers.Tier.BEDROLL, CampTiers.ofKind("bedroll"));
+        eq(CampTiers.Tier.TENT, CampTiers.ofPlacedBlock("Camping_Pack_Placed_Tent"));
+        eq(null, CampTiers.ofPack("Camping_Tent_Crate"));
+        eq(new Vector3i(-2, 0, 2), CampTiers.bagCell(CampTiers.Tier.TENT));
+        eq(new Vector3i(-2, 0, 0), CampTiers.bagCell(CampTiers.Tier.TENT_BIG));
+        eq(Deployables.BEDROLL, Deployables.forPrefab("Camping_Bedroll.prefab.json"));
+    }
+
+    /** T153: the pack and placed-bag JSON files, and the bag cell of each prefab. */
+    private static void campTiersJson() throws Exception {
+        for (CampTiers.Tier t : CampTiers.Tier.values()) {
+            Path dir = Path.of("Server/Item/Items/Containers/Camping");
+            String pack = Files.readString(dir.resolve(t.packItemId() + ".json")).replaceAll("\\s", "");
+            check(pack.contains("\"MaxStack\":1"), t + " MaxStack");
+            check(pack.contains("\"ItemLevel\":" + t.level() + ","), t + " ItemLevel");
+            check(!pack.contains("\"BlockType\""), t + " pack has no BlockType");
+            check(pack.contains("\"Type\":\"Camping_DeployCamp\""), t + " deploy interaction");
+            String placed = Files.readString(dir.resolve(t.placedBlockId() + ".json")).replaceAll("\\s", "");
+            check(placed.contains("\"Type\":\"Camping_PackCamp\""), t + " pack interaction on the placed bag");
+            check(placed.contains("\"Material\":\"Empty\""), t + " placed bag is not solid");
+            check(DeployPlacement.CRATES.containsKey(t.packItemId()), t + " in DeployPlacement.CRATES");
+            Deployables.Kind kind = null;
+            for (Deployables.Kind k : Deployables.TENTS) {
+                if (k.id.equals(t.kindId())) {
+                    kind = k;
+                }
+            }
+            check(kind != null && kind.isTent(), t + " kind");
+            check(t.packItemId().equals(kind.tent.packItemId), t + " TentSpec pack id");
+            String prefab = Files.readString(Path.of("Server/Prefabs", kind.prefabPath));
+            var root = org.bson.BsonDocument.parse(prefab);
+            int found = 0;
+            Vector3i cell = CampTiers.bagCell(t);
+            for (var e : root.getArray("blocks")) {
+                var b = e.asDocument();
+                if (b.getString("name").getValue().equals(t.placedBlockId())) {
+                    found++;
+                    check(b.getInt32("x").getValue() == cell.x && b.getInt32("y").getValue() == cell.y
+                            && b.getInt32("z").getValue() == cell.z, t + " bag cell");
+                }
+            }
+            eq(1, found);
+        }
+    }
+
+    /** T156: refusal rule of a pack upgrade. */
+    private static void campUpgradeRefusal() {
+        eq(CampUpgrade.Refusal.NO_BAG, CampUpgrade.check(0, 0));
+        eq(CampUpgrade.Refusal.NONE, CampUpgrade.check(1, 1));
+        eq(CampUpgrade.Refusal.NONE, CampUpgrade.check(3, 1));
+        eq(CampUpgrade.Refusal.SEVERAL_FULL, CampUpgrade.check(2, 2));
+    }
+
+    private static void campUpgradeCarryAfterPost() {
+        org.bson.BsonDocument c = new org.bson.BsonDocument();
+        var full = new CampUpgrade.Note(CampTiers.Tier.TENT, c, c, 0, (short) 3);
+        var empty = new CampUpgrade.Note(CampTiers.Tier.TENT, null, null, -1, (short) -1);
+        eq(CampUpgrade.Outcome.APPLY, CampUpgrade.outcome(full, false));
+        eq(CampUpgrade.Outcome.GIVE_BACK, CampUpgrade.outcome(full, true));
+        eq(CampUpgrade.Outcome.NOTHING, CampUpgrade.outcome(empty, false));
+        eq(CampUpgrade.Outcome.NOTHING, CampUpgrade.outcome(empty, true));
+        eq(CampUpgrade.Outcome.NOTHING, CampUpgrade.outcome(null, false));
+    }
+
+    /** Reconcile rule: idle queue gives contents back and clears every note, a running queue keeps them, null notes are discarded. */
+    private static void campUpgradeReconcile() {
+        org.bson.BsonDocument c = new org.bson.BsonDocument();
+        var full = new CampUpgrade.Note(CampTiers.Tier.TENT, c, c, 0, (short) 3);
+        var empty = new CampUpgrade.Note(CampTiers.Tier.TENT, null, null, -1, (short) -1);
+        java.util.List<CampUpgrade.Note> q = new java.util.ArrayList<>(java.util.List.of(empty, full));
+        eq(0, CampUpgrade.reconcile(q, 1, 5).size());
+        eq(2, q.size());
+        eq(0, CampUpgrade.reconcile(q, 0, 1).size());
+        eq(2, q.size());
+        var back = CampUpgrade.reconcile(q, 0, CampUpgrade.IDLE_TICKS);
+        eq(1, back.size());
+        check(back.get(0) == full, "contents given back");
+        eq(0, q.size());
+    }
+
+    /** FIFO note rule: Pre and Post fire in the same order, contents go to the first output of their tier, once. */
+    private static void campUpgradeQueue() {
+        org.bson.BsonDocument c = new org.bson.BsonDocument();
+        java.util.List<CampUpgrade.Note> q = new java.util.ArrayList<>();
+        var empty = new CampUpgrade.Note(CampTiers.Tier.TENT, null, null, -1, (short) -1);
+        var full = new CampUpgrade.Note(CampTiers.Tier.TENT, c, c, 0, (short) 3);
+        var other = new CampUpgrade.Note(CampTiers.Tier.TENT_BIG, null, null, -1, (short) -1);
+        // Two queued upgrades of the same tier (first with the empty pack, second with the full one) and another tier in between.
+        q.add(empty);
+        q.add(other);
+        q.add(full);
+        check(CampUpgrade.take(q, CampTiers.Tier.TENT) == empty, "first output takes the first note (empty)");
+        check(CampUpgrade.take(q, CampTiers.Tier.TENT_BIG) == other, "other tier takes only its own note");
+        eq(1, q.size());
+        check(CampUpgrade.take(q, CampTiers.Tier.TENT) == full, "second output gets the contents, once");
+        eq(0, q.size());
+        check(CampUpgrade.take(q, CampTiers.Tier.TENT) == null, "no note left: nothing to carry");
+        // A cancelled craft returns its own contents, nothing else.
+        q.add(full);
+        CampUpgrade.Note n = CampUpgrade.take(q, CampTiers.Tier.TENT);
+        eq(CampUpgrade.Outcome.GIVE_BACK, CampUpgrade.outcome(n, true));
+        eq(0, q.size());
+    }
+
+    /** T156: small tent contents re-addressed to the large tent (campfire, chest, surplus chest). */
+    private static void tentContentsConvert() throws Exception {
+        // ItemStack needs the asset store (absent in these tests): the containers are empty, positions and capacity are checked.
+        var slots1 = new com.hypixel.hytale.server.core.inventory.ItemStack[18];
+        var slots2 = new com.hypixel.hytale.server.core.inventory.ItemStack[12];
+        BalloonCargo cargo = new BalloonCargo(List.of(
+                new BalloonCargo.Entry(new Vector3i(1, 0, 3), "Furniture_Kweebec_Chest_Small", (short) 18, slots1),
+                new BalloonCargo.Entry(new Vector3i(1, 0, 5), "Furniture_Kweebec_Chest_Small", (short) 12, slots2),
+                new BalloonCargo.Entry(new Vector3i(1, 0, 7), "Furniture_Kweebec_Chest_Small", (short) 18, new com.hypixel.hytale.server.core.inventory.ItemStack[18])));
+        org.bson.BsonDocument benchDoc = new org.bson.BsonDocument();
+        org.bson.BsonDocument e = new org.bson.BsonDocument();
+        e.put("x", new org.bson.BsonInt32(-3));
+        e.put("y", new org.bson.BsonInt32(0));
+        e.put("z", new org.bson.BsonInt32(1));
+        e.put("bench", new org.bson.BsonDocument());
+        org.bson.BsonArray arr = new org.bson.BsonArray();
+        arr.add(e);
+        benchDoc.put("benchContents", arr);
+        TentContents small = new TentContents(AirshipBenchContents.fromBson(benchDoc), cargo);
+        TentContents big = small.convert(prefabShape("Camping_Tent_Big.prefab.json"));
+        org.bson.BsonDocument d = big.toBson("tent_big");
+        eq("tent_big", d.getString("kind").getValue());
+        var bench = d.getDocument("benches").getArray("benchContents").get(0).asDocument();
+        eq(2, bench.getInt32("x").getValue());
+        eq(0, bench.getInt32("y").getValue());
+        eq(0, bench.getInt32("z").getValue());
+        var chests = d.getDocument("cargo").getArray("containers");
+        eq(3, chests.size());
+        int[][] expect = {{-2, 0, 3}, {2, 0, 3}, {2, 0, 3}};
+        for (int i = 0; i < 3; i++) {
+            var c = chests.get(i).asDocument();
+            eq(expect[i][0], c.getInt32("x").getValue());
+            eq(expect[i][1], c.getInt32("y").getValue());
+            eq(expect[i][2], c.getInt32("z").getValue());
+        }
+        eq(18, chests.get(0).asDocument().getInt32("capacity").getValue());
+        eq(12, chests.get(1).asDocument().getInt32("capacity").getValue());
+        eq("Furniture_Kweebec_Chest_Small", chests.get(2).asDocument().getString("block").getValue());
+    }
+
+    /** Shape read from a prefab file (the real shapes need the asset module, absent in these tests). */
+    private static StructureShape prefabShape(String file) throws Exception {
+        var root = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Prefabs", file)));
+        List<StructureShape.Cell> cells = new java.util.ArrayList<>();
+        for (var e : root.getArray("blocks")) {
+            var b = e.asDocument();
+            cells.add(new StructureShape.Cell(b.getInt32("x").getValue(), b.getInt32("y").getValue(), b.getInt32("z").getValue(),
+                    b.getString("name").getValue(), b.containsKey("filler") ? b.getInt32("filler").getValue() : 0));
+        }
+        return StructureShape.ofCells(cells);
+    }
+
+    /** T156: the pack recipes match the spec, the lower pack comes first, ids exist, piles <= 40, legacy crates have no recipe. */
+    private static void campRecipesJson() throws Exception {
+        Path dir = Path.of("Server/Item/Items/Containers/Camping");
+        Object[][] spec = {
+                {"Camping_Pack_Bedroll", 1, new String[] {"Furniture_Crude_Bed", "Ingredient_Fibre", "Ingredient_Hide_Light", "Ingredient_Stick"}, new int[] {1, 20, 6, 10}},
+                {"Camping_Pack_Tent", 2, new String[] {"Camping_Pack_Bedroll", "Ingredient_Fibre", "Ingredient_Hide_Medium", "Ingredient_Stick", "Bench_Campfire", "Furniture_Crude_Chest_Small"}, new int[] {1, 40, 10, 20, 1, 1}},
+                {"Camping_Pack_Tent_Big", 3, new String[] {"Camping_Pack_Tent", "Ingredient_Fibre", "Ingredient_Hide_Medium", "Ingredient_Stick", "Furniture_Crude_Bed", "Furniture_Crude_Chest_Small"}, new int[] {1, 60, 15, 20, 1, 1}},
+        };
+        java.util.Set<String> zipNames = new java.util.HashSet<>();
+        Path zip = Path.of(System.getProperty("user.home"), "repositories/hytale/server-ref/Assets.zip");
+        if (Files.exists(zip)) {
+            try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(zip.toFile())) {
+                z.stream().forEach(en -> zipNames.add(en.getName().substring(en.getName().lastIndexOf('/') + 1)));
+            }
+        }
+        for (Object[] row : spec) {
+            var root = org.bson.BsonDocument.parse(Files.readString(dir.resolve(row[0] + ".json")));
+            var r = root.getDocument("Recipe");
+            var in = r.getArray("Input");
+            String[] ids = (String[]) row[2];
+            int[] qty = (int[]) row[3];
+            eq(ids.length, in.size());
+            int piles = 0;
+            for (int i = 0; i < ids.length; i++) {
+                var inDoc = in.get(i).asDocument();
+                boolean lowerPack = i == 0 && ids[i].startsWith("Camping_Pack_");
+                if (lowerPack) {
+                    // The lower pack carries its contents in metadata, so only the resource type path matches it.
+                    eq(ids[i], inDoc.getString("ResourceTypeId").getValue());
+                    check(Files.exists(Path.of("Server/Item/ResourceTypes", ids[i] + ".json")), "resource type exists " + ids[i]);
+                    String rtIcon = Files.readString(Path.of("Server/Item/ResourceTypes", ids[i] + ".json")).replaceAll("\\s", "");
+                    check(rtIcon.contains("\"Icon\":\"Icons/ResourceTypes/"), "resource type icon under Icons/ResourceTypes " + ids[i]);
+                    var packItem = org.bson.BsonDocument.parse(Files.readString(dir.resolve(ids[i] + ".json")));
+                    eq(ids[i], packItem.getArray("ResourceTypes").get(0).asDocument().getString("Id").getValue());
+                } else {
+                    eq(ids[i], inDoc.getString("ItemId").getValue());
+                }
+                eq(qty[i], in.get(i).asDocument().getInt32("Quantity").getValue());
+                piles += (qty[i] + 99) / 100;
+                String file = ids[i] + ".json";
+                check(lowerPack || zipNames.isEmpty() || zipNames.contains(file) || Files.exists(dir.resolve(file)), "id exists " + ids[i]);
+            }
+            check(piles <= 40, row[0] + " piles");
+            var bench = r.getArray("BenchRequirement").get(0).asDocument();
+            eq("Crafting", bench.getString("Type").getValue());
+            eq("Workbench", bench.getString("Id").getValue());
+            eq("Workbench_Tinkering", bench.getArray("Categories").get(0).asString().getValue());
+            eq((Integer) row[1], bench.getInt32("RequiredTierLevel").getValue());
+            eq(3, r.getInt32("TimeSeconds").getValue());
+            check(!r.containsKey("KnowledgeRequired"), row[0] + " no knowledge");
+        }
+        for (String crate : new String[] {"Camping_Tent_Crate", "Camping_Tent_Big_Crate"}) {
+            check(!Files.readString(dir.resolve(crate + ".json")).contains("\"Recipe\""), crate + " has no recipe");
         }
     }
 
@@ -1337,5 +1642,63 @@ public class TransitTests {
         eq("CloseDoorOut", ShipLadder.gateCloseState(1));
         eq("OpenDoorIn", ShipLadder.gateOpenState(-1));
         eq("CloseDoorIn", ShipLadder.gateCloseState(-1));
+    }
+
+    static void campWakeRule() {
+        check(CampPacker.shouldAutoPack(true, true, "bedroll"), "night, owner, bedroll");
+        check(!CampPacker.shouldAutoPack(false, true, "bedroll"), "got up early");
+        check(!CampPacker.shouldAutoPack(true, false, "bedroll"), "not the owner");
+        check(!CampPacker.shouldAutoPack(true, true, "tent"), "tents never pack alone");
+        check(!CampPacker.shouldAutoPack(true, true, "tent_big"), "big tents never pack alone");
+    }
+
+    static void campPackerGiveFallback() {
+        check(CampPacker.fits(1), "a free slot fits");
+        check(!CampPacker.fits(0), "no free slot drops at the feet");
+        // ItemStack needs the game's item assets (not loaded in tests): the metadata document packStack stores is checked instead.
+        TentContents contents = new TentContents(AirshipBenchContents.fromBson(null), new BalloonCargo(new java.util.ArrayList<>()));
+        org.bson.BsonDocument doc = contents.toBson(CampTiers.Tier.TENT.kindId());
+        eq("tent", doc.getString("kind").getValue());
+        check(TentContents.fromBson(doc, "tent") != null, "round trip keeps the kind");
+        check(TentContents.fromBson(doc, "bedroll") == null, "another kind is ignored");
+        eq("Camping_Pack_Tent", CampTiers.Tier.TENT.packItemId());
+    }
+
+    static void removalKeepsForeignBagCell() {
+        check(!StructureRemoval.removeCell(true, false), "bag cell holding a foreign block is kept");
+        check(StructureRemoval.removeCell(true, true), "the placed bag itself is cleared");
+        check(StructureRemoval.removeCell(false, true), "ordinary prefab block");
+        check(StructureRemoval.removeCell(false, false), "ordinary cell follows the usual rule");
+    }
+
+    static void slumberTargetReached() {
+        java.time.Instant target = java.time.Instant.parse("2026-01-02T06:00:00Z");
+        check(TentBedSystem.reachedTarget(target, target), "exactly at target");
+        check(TentBedSystem.reachedTarget(target, target.plusSeconds(500)), "past target");
+        check(!TentBedSystem.reachedTarget(target, target.minusSeconds(600)), "cut short");
+        check(!TentBedSystem.reachedTarget(null, target), "never slept");
+    }
+
+    static void campChestForbidden() {
+        for (String id : new String[]{"Camping_Pack_Bedroll", "Camping_Pack_Tent", "Camping_Pack_Tent_Big", "Camping_Tent_Crate", "Camping_Tent_Big_Crate"}) {
+            check(CampChestFilter.forbidden(id), id + " is refused");
+        }
+        check(!CampChestFilter.forbidden("Utility_Leather_Backpack"), "backpack accepted");
+        check(!CampChestFilter.forbidden("Ingredient_Stick"), "stick accepted");
+        check(!CampChestFilter.forbidden(null), "null accepted");
+    }
+
+    static void campChestSplit() {
+        boolean[] mask = CampChestFilter.ejectMask(new String[]{"Ingredient_Stick", null, "Camping_Pack_Tent", "Camping_Pack_Bedroll", "Camping_Tent_Crate"});
+        check(!mask[0] && !mask[1] && mask[2] && mask[3] && mask[4], "only the packs are ejected, slots keep their index");
+        CampChestFilter.Plan mixed = CampChestFilter.plan(new String[]{"Ingredient_Stick", "Camping_Pack_Tent", null});
+        check(mixed.anyEjected() && mixed.anyLeft() && mixed.eject()[1] && !mixed.eject()[0], "mixed chest keeps the stick, ejects the pack");
+        CampChestFilter.Plan only = CampChestFilter.plan(new String[]{null, "Camping_Pack_Bedroll"});
+        check(only.anyEjected() && !only.anyLeft(), "a chest holding only a pack is emptied entirely");
+        CampChestFilter.Plan clean = CampChestFilter.plan(new String[]{"Ingredient_Stick", null});
+        check(!clean.anyEjected() && clean.anyLeft(), "a clean chest is untouched");
+        // ItemStack needs the game's item assets: the split is checked on an empty cargo.
+        CampChestFilter.Split sp = CampChestFilter.split(new BalloonCargo(new java.util.ArrayList<>()));
+        check(sp.kept().isEmpty() && sp.ejected().isEmpty() && sp.dropPos() == null, "empty cargo splits to nothing");
     }
 }

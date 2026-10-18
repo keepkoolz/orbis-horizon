@@ -126,7 +126,7 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
         // The crate swap is done in the held slot: without it, nothing is placed (no tent without a swapped crate).
         ItemStack held = context.getHeldItem();
         ItemContainer heldContainer = context.getHeldItemContainer();
-        if (held == null || heldContainer == null || !kind.tent.fullCrateId.equals(held.getItemId())) {
+        if (held == null || heldContainer == null || !held.getItemId().equals(kind.tent.legacyFullCrateId)) {
             LOGGER.at(Level.WARNING).log("Camping_DeployTent: objet tenu inattendu (%s)", held != null ? held.getItemId() : "aucun");
             fail(context);
             return;
@@ -190,15 +190,14 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
         int flags = (force ? 1 : 0) | 8; // same options as SpawnPrefab
         PrefabUtil.paste(buffer, world, new Vector3i(origin), rotation, new FastRandom(), flags, 0, commandBuffer);
         BalloonRegistry.add(world, origin, rotation, kind.id, Ownership.of(playerRef.getUuid(), playerRef.getUsername()));
+        CampChestFilter.installWithRetry(world, shape, origin, rotation);
 
         // The full crate becomes the empty crate, in the same slot. Done first: the kept contents are put back
         // only if the swap succeeded, otherwise the player would keep the crate with its metadata and duplicate them.
-        ItemStack empty = new ItemStack(kind.tent.emptyCrateId, 1);
-        boolean swapped = heldContainer.setItemStackForSlot((short) context.getHeldItemSlot(), empty).succeeded();
-        if (swapped) {
-            context.setHeldItem(empty);
-        } else {
-            LOGGER.at(Level.WARNING).log("Camping_DeployTent: la caisse n'a pas pu être remplacée par la caisse vide");
+        // T158: the old full crate is consumed, no empty crate in exchange (the tent is packed with its bag now).
+        boolean swapped = heldContainer.removeItemStackFromSlot((short) context.getHeldItemSlot(), 1, true, false).succeeded();
+        if (!swapped) {
+            LOGGER.at(Level.WARNING).log("Camping_DeployTent: la caisse n'a pas pu être retirée");
         }
 
         // The crate may carry the contents kept when the tent was packed: put them back (deferred out of the
