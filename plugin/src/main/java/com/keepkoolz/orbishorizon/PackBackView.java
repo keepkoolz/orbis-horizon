@@ -10,6 +10,7 @@ import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.component.system.RefChangeSystem;
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.protocol.ModelUpdate;
 import com.hypixel.hytale.server.core.asset.type.model.config.Model;
 import com.hypixel.hytale.server.core.asset.type.model.config.ModelAttachment;
 import com.hypixel.hytale.server.core.entity.UUIDComponent;
@@ -19,9 +20,11 @@ import com.hypixel.hytale.server.core.event.events.ecs.RespawnEvent;
 import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
+import com.hypixel.hytale.server.core.modules.entity.component.EntityScaleComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.ModelComponent;
 import com.hypixel.hytale.server.core.modules.entity.player.PlayerSettings;
 import com.hypixel.hytale.server.core.modules.entity.player.PlayerSkinComponent;
+import com.hypixel.hytale.server.core.modules.entity.tracker.EntityTrackerSystems;
 import com.hypixel.hytale.server.core.plugin.PluginBase;
 import com.hypixel.hytale.server.core.plugin.PluginManager;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -30,6 +33,8 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,6 +50,8 @@ final class PackBackView {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
     private static final String TEXTURE_FOLDER = "Items/Camping/";
     private static final long GUARD_MS = 2000L;
+    /** Delay before the model is sent again to a player who has just started to see a pack wearer (after the skin packet). */
+    private static final long VIEWER_RESEND_MS = 250L;
 
     /** Players (UUID) whose model currently carries a pack, with their entity reference for the per-tick guard. */
     private static final Map<String, Ref<EntityStore>> SHOWN = new ConcurrentHashMap<>();
@@ -54,6 +61,12 @@ final class PackBackView {
     private static final ThreadLocal<Boolean> REBUILDING = ThreadLocal.withInitial(() -> false);
     private static final Map<String, Long> LAST_GUARD_MS = new ConcurrentHashMap<>();
     private static volatile Boolean otherBackpackMod;
+    /**
+     * Per pack wearer (UUID): viewers already served, and new viewers with the time their model resend is due. A viewer who
+     * starts to see the wearer gets the model and the skin in the same update list, and the skin rebuilds the look without
+     * the attachments on that client, so the model is sent to him again a moment later. World thread only.
+     */
+    private static final Map<String, Map<Ref<EntityStore>, Long>> VIEWERS = new HashMap<>();
 
     private PackBackView() {
     }
@@ -182,12 +195,17 @@ final class PackBackView {
         return ids;
     }
 
-    /** Per-world-tick guard, at most every 2 s: a player shown with a pack whose model lost it is refreshed. */
+    /**
+     * Per-world-tick work: the model resend to new viewers of each pack wearer, then, at most every 2 s, the guard that
+     * refreshes a player shown with a pack whose model lost it.
+     */
     static void tick(Store<EntityStore> store, World world) {
         try {
             if (SHOWN.isEmpty()) {
+                VIEWERS.clear();
                 return;
             }
+            resendToNewViewers(store);
             long now = System.currentTimeMillis();
             Long last = LAST_GUARD_MS.get(world.getName());
             if (last != null && now - last < GUARD_MS) {
@@ -210,6 +228,50 @@ final class PackBackView {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Garde du sac de campement sur le dos en échec");
+        }
+    }
+
+    /** Sends the wearer's model again to each viewer who started to see him {@link #VIEWER_RESEND_MS} ago. Never throws. */
+    private static void resendToNewViewers(Store<EntityStore> store) {
+        try {
+            VIEWERS.keySet().removeIf(id -> !SHOWN.containsKey(id));
+            long now = System.currentTimeMillis();
+            for (Map.Entry<String, Ref<EntityStore>> e : SHOWN.entrySet()) {
+                Ref<EntityStore> ref = e.getValue();
+                if (!ref.isValid() || ref.getStore() != store) {
+                    continue;
+                }
+                EntityTrackerSystems.Visible visible = store.getComponent(ref, EntityTrackerSystems.Visible.getComponentType());
+                ModelComponent mc = store.getComponent(ref, ModelComponent.getComponentType());
+                if (visible == null || mc == null || visible.visibleTo == null) {
+                    continue;
+                }
+                Map<Ref<EntityStore>, Long> known = VIEWERS.computeIfAbsent(e.getKey(), k -> new HashMap<>());
+                known.keySet().removeIf(v -> !visible.visibleTo.containsKey(v));
+                for (Ref<EntityStore> viewer : visible.visibleTo.keySet()) {
+                    // a viewer already there when the pack was put on got the model alone: due at once is harmless
+                    known.putIfAbsent(viewer, now + VIEWER_RESEND_MS);
+                }
+                ModelUpdate update = null;
+                for (Iterator<Map.Entry<Ref<EntityStore>, Long>> it = known.entrySet().iterator(); it.hasNext(); ) {
+                    Map.Entry<Ref<EntityStore>, Long> v = it.next();
+                    if (v.getValue() == Long.MAX_VALUE || v.getValue() > now) {
+                        continue;
+                    }
+                    v.setValue(Long.MAX_VALUE); // served, until he stops seeing the wearer
+                    EntityTrackerSystems.EntityViewer viewer = visible.visibleTo.get(v.getKey());
+                    if (viewer == null || viewer.visible == null || !viewer.visible.contains(ref)) {
+                        continue;
+                    }
+                    if (update == null) {
+                        EntityScaleComponent scale = store.getComponent(ref, EntityScaleComponent.getComponentType());
+                        update = new ModelUpdate(mc.getModel().toPacket(), scale != null ? scale.getScale() : 0f);
+                    }
+                    viewer.queueUpdate(ref, update);
+                }
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Sac de campement sur le dos : renvoi du modèle aux nouveaux spectateurs en échec");
         }
     }
 

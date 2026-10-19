@@ -169,10 +169,10 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
             VoyagePlanner.Destination d = dests.get(i);
             if (d.kind() != last) {
                 last = d.kind();
-                cmd.append("#List", "Pages/Airship_Voyage_Entry.ui");
-                cmd.set("#List[" + row + "] #Name.Text", m(d.kind() == VoyagePlanner.Kind.MARKER ? "voyage.markers" : "voyage.stations"));
-                cmd.set("#List[" + row + "] #Dir.Text", "");
-                cmd.set("#List[" + row + "] #Dist.Text", "");
+                // Section title styled like the headers of the station master's window, with a gap above all but the first.
+                cmd.append("#List", "Pages/Airship_Voyage_Header.ui");
+                cmd.set("#List[" + row + "] #Text.Text", m(d.kind() == VoyagePlanner.Kind.MARKER ? "voyage.markers" : "voyage.stations"));
+                cmd.set("#List[" + row + "] #Gap.Visible", row > 0);
                 row++;
             }
             double dx = d.x() - fromX;

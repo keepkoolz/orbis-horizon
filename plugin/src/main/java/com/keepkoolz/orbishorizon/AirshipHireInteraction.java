@@ -137,6 +137,7 @@ public class AirshipHireInteraction extends SimpleInstantInteraction {
             playerRef.sendMessage(Texts.t("crew.contract.failed"));
             return;
         }
+        Telemetry.count("airship.pilot_hired");
         playerRef.sendMessage(Texts.pilot("crew.hire.welcome", hired));
         LOGGER.at(Level.INFO).log("Pilote : engagé par %s en (%d, %d, %d)", playerRef.getUsername(), entry.x(), entry.y(), entry.z());
     }

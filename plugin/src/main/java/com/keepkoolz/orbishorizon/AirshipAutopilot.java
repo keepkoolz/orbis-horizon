@@ -116,6 +116,7 @@ final class AirshipAutopilot {
             AirshipManager.get().startLanding(f, false);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Voyage : arrêt impossible");
+            Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
 
@@ -160,6 +161,7 @@ final class AirshipAutopilot {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Voyage : garde du rappel en échec");
+            Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
         v.ashore = true;
         v.phase = VoyageState.Phase.ASHORE;
@@ -267,6 +269,7 @@ final class AirshipAutopilot {
             watchdog(am, f, v, now);
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Voyage : erreur dans le tick du dirigeable %s", f.id);
+            Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
 
@@ -492,5 +495,14 @@ final class AirshipAutopilot {
             markProgress(f, v, now);
             stop(f, "crew.voyage.blocked");
         }
+    }
+
+    /** Name of the voyage or recall phase of a flight, or null (telemetry only). */
+    static String phaseOf(AirshipFlight f) {
+        if (f == null) return null;
+        VoyageState v = f.voyage;
+        if (v != null && v.phase != null) return v.phase.name();
+        RecallState r = f.recall;
+        return r != null && r.phase != null ? r.phase.name() : null;
     }
 }

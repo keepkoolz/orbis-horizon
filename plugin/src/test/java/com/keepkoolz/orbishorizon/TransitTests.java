@@ -5,6 +5,8 @@ import org.joml.Vector3f;
 import org.joml.Vector3i;
 
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.nio.file.Path;
@@ -97,6 +99,12 @@ public class TransitTests {
     }
 
     public static void main(String[] args) throws Exception {
+        run("usageCountersSnapshot", TransitTests::usageCountersSnapshot);
+        run("errorThrottleWindow", TransitTests::errorThrottleWindow);
+        run("telemetryWithoutBeacon", TransitTests::telemetryWithoutBeacon);
+        run("shutdownFlushSettled", TransitTests::shutdownFlushSettled);
+        run("usageNamesMatchDescriptor", TransitTests::usageNamesMatchDescriptor);
+        run("redactedErrorHasNoMessage", TransitTests::redactedErrorHasNoMessage);
         run("campWakeRule", TransitTests::campWakeRule);
         run("campChestForbidden", TransitTests::campChestForbidden);
         run("campChestSplit", TransitTests::campChestSplit);
@@ -1700,5 +1708,64 @@ public class TransitTests {
         // ItemStack needs the game's item assets: the split is checked on an empty cargo.
         CampChestFilter.Split sp = CampChestFilter.split(new BalloonCargo(new java.util.ArrayList<>()));
         check(sp.kept().isEmpty() && sp.ejected().isEmpty() && sp.dropPos() == null, "empty cargo splits to nothing");
+    }
+
+    static void usageCountersSnapshot() {
+        UsageCounters c = new UsageCounters();
+        c.increment("deploy.tent"); c.increment("deploy.tent"); c.increment("glider.jump");
+        c.increment("not.a.counter");
+        Map<String, Long> s = c.snapshotAndReset();
+        check(s.size() == 2, "two non-zero counters");
+        check(s.get("deploy.tent") == 2L && s.get("glider.jump") == 1L, "counts");
+        check(new ArrayList<>(s.keySet()).equals(List.of("deploy.tent", "glider.jump")), "NAMES order");
+        check(c.snapshotAndReset().isEmpty(), "reset after snapshot");
+        check(UsageCounters.NAMES.size() == 19, "19 counters");
+    }
+
+    static void shutdownFlushSettled() {
+        check(!Telemetry.flushSettled("a", "b", true, 0, 5000), "in progress never settled");
+        check(Telemetry.flushSettled("a", "a", false, 0, 0), "nothing pending");
+        check(Telemetry.flushSettled("a", "b", false, 3, 0), "new pass completed");
+        check(!Telemetry.flushSettled("a", "a", false, 3, 200), "still waiting");
+        check(Telemetry.flushSettled("a", "a", false, 3, 1000), "grace elapsed");
+        check(Telemetry.flushSettled(null, null, false, 3, 1500), "null results, grace elapsed");
+    }
+
+    static void telemetryWithoutBeacon() {
+        Telemetry.count("deploy.tent");
+        Telemetry.count("unknown.counter");
+        Telemetry.error("balloon.takeoff", new RuntimeException("x"), null, null);
+        Telemetry.stop();
+        check(true, "no exception without start");
+    }
+
+    static void usageNamesMatchDescriptor() throws Exception {
+        String json = java.nio.file.Files.readString(java.nio.file.Path.of("Server/Beacon/project.json"));
+        // allowedEvents must list exactly UsageCounters.NAMES
+        for (String n : UsageCounters.NAMES) check(json.contains("\"" + n + "\""), "descriptor allows " + n);
+        check(json.contains("\"projectId\": \"orbis-horizon\"") || json.contains("\"projectId\":\"orbis-horizon\""), "project id pinned");
+        check(json.contains("\"proj_Imk2qiS_8E0rfsYNdHHUg0Zs\""), "project key");
+        check(json.contains("com.keepkoolz.orbishorizon"), "package prefix");
+    }
+
+    static void errorThrottleWindow() {
+        ErrorThrottle t = new ErrorThrottle(1000, 3);
+        check(t.admit("a", 0) == 0, "first send");
+        check(t.admit("a", 10) == -1 && t.admit("a", 20) == -1, "suppressed in window");
+        check(t.admit("a", 1000) == 2, "repeats reported after window");
+        t.admit("b", 1001); t.admit("c", 1002); t.admit("d", 1003);
+        check(t.admit("a", 1004) == 0, "oldest forgotten beyond max entries");
+    }
+
+    static void redactedErrorHasNoMessage() {
+        Exception e = new IllegalStateException("Steve at -755, 118, -106");
+        RuntimeException r = ErrorThrottle.redact(e);
+        check(!String.valueOf(r.getMessage()).contains("Steve"), "message removed");
+        check(String.valueOf(r.getMessage()).equals("java.lang.IllegalStateException"), "class name kept");
+        check(Arrays.equals(r.getStackTrace(), e.getStackTrace()), "stack kept");
+        check(r.getCause() == null, "no cause chain (causes may carry messages)");
+        String fp = ErrorThrottle.fingerprint("balloon.takeoff", e);
+        check(fp.startsWith("balloon.takeoff|java.lang.IllegalStateException|"), "fingerprint shape");
+        check(!fp.contains("Steve"), "fingerprint without message");
     }
 }

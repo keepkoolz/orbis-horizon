@@ -64,6 +64,7 @@ final class CampPacker {
             rest = t != null ? t.getRemainder() : stack;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Sac non donné au joueur, lâché au sol");
+            Telemetry.error("pack", e, null, null);
         }
         if (rest != null && !rest.isEmpty()) {
             TransformComponent tr = store.getComponent(player, TransformComponent.getComponentType());
@@ -99,6 +100,7 @@ final class CampPacker {
                 shape = kind.shape();
             } catch (IOException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Campement : forme illisible");
+                Telemetry.error("pack", e, null, null);
                 return Result.failure(Texts.t("camp.notACamp"));
             }
             Vector3i origin = new Vector3i(entry.x(), entry.y(), entry.z());
@@ -125,6 +127,7 @@ final class CampPacker {
             return new Result(null, kept, !inInventory);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Campement : rangement en échec");
+            Telemetry.error("pack", e, null, null);
             return Result.failure(Texts.t("camp.notACamp"));
         }
     }

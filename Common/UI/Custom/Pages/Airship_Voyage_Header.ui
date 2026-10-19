@@ -1,0 +1,5 @@
+Group {
+  LayoutMode: Top;
+  Group #Gap { Anchor: (Height: 16); }
+  Label #Text { Style: (RenderBold: true, RenderUppercase: true, TextColor: #94a7bb); Anchor: (Bottom: 6); }
+}

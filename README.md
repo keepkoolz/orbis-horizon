@@ -47,6 +47,10 @@ Orbis Horizon 1.8 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8
 
 The wiki has the exact recipes, how to fly each vehicle and the operator commands.
 
+## Telemetry
+
+The mod quietly reports how many servers use it and which features get used, and it reports its own errors, so bugs can be found faster. No player name, position or world ever leaves your server, and the server owner can switch it off at any time. The details are in the [wiki](https://github.com/keepkoolz/orbis-horizon/wiki#telemetry).
+
 ## Changelog
 
 The changes of each version are listed in [CHANGELOG.md](CHANGELOG.md).

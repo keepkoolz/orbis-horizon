@@ -492,6 +492,7 @@ final class TransitAutopilot {
                     com.hypixel.hytale.protocol.packets.interface_.EventTitleStyle.Major);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Titre d'arrivée non affiché");
+            Telemetry.error("transit", e, null, null);
         }
     }
 

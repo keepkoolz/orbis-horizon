@@ -237,6 +237,9 @@ final class GliderJump {
                 }
             }
         }
+        if (result == Result.DONE) {
+            Telemetry.count("glider.jump");
+        }
         PlayerRef pr = pending.ref.isValid() ? store.getComponent(pending.ref, PlayerRef.getComponentType()) : null;
         if (pr != null) {
             hideTitle(pr, result == Result.DONE ? JUMP_HIDE_FADE_S : CANCEL_HIDE_FADE_S);

@@ -214,6 +214,7 @@ final class StationQueue {
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Station %s : montgolfière d'approche en échec", s.name);
+                Telemetry.error("transit", e, null, null);
                 q.retryAtMs = System.currentTimeMillis() + 5000;
             } finally {
                 q.busy = false;
@@ -263,6 +264,7 @@ final class StationQueue {
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Station %s : départ en échec", s.name);
+                Telemetry.error("transit", e, null, null);
                 q.deadlineMs = System.currentTimeMillis() + 5000;
             } finally {
                 q.busy = false;
@@ -479,11 +481,13 @@ final class StationQueue {
             }
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Montgolfière à quai de %s non retirée", removed.name);
+            Telemetry.error("transit", e, null, null);
         }
         try {
             AirshipManager.get().onStationRemoved(world, removed); // a recalled airship lands in place, pilot back at the helm
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Dirigeable rappelé non posé après le retrait de %s", removed.name);
+            Telemetry.error("airship.recall", e, null, null);
         }
         // Flights in the air heading to the removed station (the network no longer contains it when this is called).
         BalloonManager.get().rerouteTransitTo(world, removed);

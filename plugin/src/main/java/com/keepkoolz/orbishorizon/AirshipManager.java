@@ -405,6 +405,7 @@ final class AirshipManager {
             s = kind.shape();
         } catch (IOException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Voyage : lecture du prefab du dirigeable impossible");
+            Telemetry.error("airship.takeoff", e, null, null);
             return Texts.t("airship.error.prefabUnreadable").param("error", String.valueOf(e.getMessage()));
         }
         TransformComponent pt = store.getComponent(pilotRef, TransformComponent.getComponentType());
@@ -462,6 +463,8 @@ final class AirshipManager {
         Message launched = launch(store, world, s, origin, rotation, pilotRef, player, passengers.assign(store, s, origin, rotation, aboard, excluded));
         if (launched != null) {
             AirshipRecall.restoreMark(world, origin, rotation); // refused after the rungs came down: the wait goes on
+        } else {
+            Telemetry.count("takeoff." + Telemetry.kindId(kind));
         }
         return launched;
     }
@@ -531,6 +534,7 @@ final class AirshipManager {
             LOGGER.at(Level.INFO).log("Voyage : échelle du côté %d déployée pour le capitaine à terre", v.ashoreSide);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Voyage : échelle du capitaine à terre non déployée");
+            Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
 
@@ -597,6 +601,7 @@ final class AirshipManager {
             s = kind.shape();
         } catch (IOException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Voyage : lecture du prefab du dirigeable impossible");
+            Telemetry.error("airship.autopilot", ex, Telemetry.kindId(kind), null);
             return Texts.t("airship.error.prefabUnreadable").param("error", String.valueOf(ex.getMessage()));
         }
         TransformComponent pt = store.getComponent(capRef, TransformComponent.getComponentType());
@@ -663,6 +668,8 @@ final class AirshipManager {
         Message launched = launchVoyage(store, world, s, origin, rotation, captain, riders, d, null, captain.getUuid(), captain.getUsername());
         if (launched != null) {
             AirshipRecall.restoreMark(world, origin, rotation);
+        } else {
+            Telemetry.count("airship.voyage");
         }
         return launched;
     }
@@ -856,6 +863,7 @@ final class AirshipManager {
             s = kind.shape();
         } catch (IOException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Rappel : lecture du prefab du dirigeable impossible");
+            Telemetry.error("airship.recall", ex, Telemetry.kindId(kind), null);
             return Texts.t("airship.error.prefabUnreadable").param("error", String.valueOf(ex.getMessage()));
         }
         Vector3i origin = new Vector3i(entry.x(), entry.y(), entry.z());
@@ -923,6 +931,7 @@ final class AirshipManager {
             return null;
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Rappel : apparition impossible, le dirigeable est reposé");
+            Telemetry.error("airship.recall", ex, Telemetry.kindId(kind), null);
             flights.remove(f.id);
             f.recall = null;
             f.voyage = null;
@@ -1183,6 +1192,7 @@ final class AirshipManager {
             CaptainMap.forget(captain);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Voyage : nettoyage de fin en échec");
+            Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
 
@@ -1275,6 +1285,7 @@ final class AirshipManager {
             mm.update(pr.getPacketHandler());
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Vitesse horizontale du pilote %s non mise à 0", f.pilotName);
+            Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
 
@@ -1395,6 +1406,7 @@ final class AirshipManager {
             f.modelId = id;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Modèle %s non appliqué au dirigeable", id);
+            Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             return;
         }
         f.thrust = to;
@@ -1437,6 +1449,7 @@ final class AirshipManager {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Réglages de déplacement du pilote non remis à la normale");
+            Telemetry.error("airship.land", e, null, null);
         }
     }
 
@@ -1466,6 +1479,7 @@ final class AirshipManager {
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("États de %s non lus pour les particules", n);
+                Telemetry.error("airship.flight", e, null, null);
             }
             return ids;
         });
@@ -1629,6 +1643,7 @@ final class AirshipManager {
             return light;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Lumière %s du dirigeable impossible", key);
+            Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             return null;
         }
     }
@@ -1680,6 +1695,7 @@ final class AirshipManager {
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Lumière du foyer du dirigeable non mise à jour");
+                Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
             return;
         }
@@ -1751,6 +1767,7 @@ final class AirshipManager {
                             CaptainMap.forget(uuid);
                         } catch (RuntimeException e) {
                             LOGGER.at(Level.WARNING).withCause(e).log("Voyage : carte du capitaine non reprise");
+                            Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
                         }
                         AirshipAutopilot.captainAshore(f);
                     }
@@ -1760,6 +1777,7 @@ final class AirshipManager {
             return GliderJump.Result.FAILED;
         } catch (RuntimeException | java.io.IOException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Saut en glider : éjection du passager du dirigeable en échec");
+            Telemetry.error("airship.passenger", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             return GliderJump.Result.FAILED;
         }
     }
@@ -1820,6 +1838,7 @@ final class AirshipManager {
                 if (now - f.lastCollisionLogMs > COLLISION_LOG_INTERVAL_MS) {
                     f.lastCollisionLogMs = now;
                     LOGGER.at(Level.WARNING).withCause(e).log("Erreur dans le tick du dirigeable %s", f.id);
+                    Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
                 }
             }
         }
@@ -1968,6 +1987,7 @@ final class AirshipManager {
             f.velActive = vx != 0 || vz != 0;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Vitesse de portage du dirigeable non envoyée");
+            Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
 
@@ -2598,6 +2618,7 @@ final class AirshipManager {
                     }
                 } catch (RuntimeException e) {
                     LOGGER.at(Level.WARNING).withCause(e).log("Vol libre du pilote %s non rétabli", f.pilotName);
+                    Telemetry.error("airship.land", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
                 }
                 pr.sendMessage(message);
             }
@@ -2676,6 +2697,7 @@ final class AirshipManager {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pilote %s non reposé proprement", f.pilotName);
+            Telemetry.error("airship.land", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
 
@@ -2727,6 +2749,7 @@ final class AirshipManager {
             LOGGER.at(Level.WARNING).log("Pose immédiate du dirigeable %s impossible : fichier de reprise gardé", f.id);
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pose immédiate du dirigeable %s en échec", f.id);
+            Telemetry.error("airship.land", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
         return null;
     }
@@ -2775,6 +2798,7 @@ final class AirshipManager {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Voyage : côté de l'échelle du capitaine illisible");
+            Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
         return -1;
     }
@@ -2807,6 +2831,7 @@ final class AirshipManager {
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Voyage : pose après départ du capitaine en échec");
+                Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
         }
     }
@@ -2838,6 +2863,7 @@ final class AirshipManager {
                     }
                 } catch (RuntimeException e) {
                     LOGGER.at(Level.WARNING).withCause(e).log("Voyage : mort du capitaine non traitée");
+                    Telemetry.error("airship.passenger", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
                 }
             }
         });
@@ -2910,6 +2936,7 @@ final class AirshipManager {
                     }
                 } catch (RuntimeException e) {
                     LOGGER.at(Level.WARNING).withCause(e).log("Voyage : changement de mode du capitaine non traité");
+                    Telemetry.error("airship.passenger", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
                 }
             }
         });
@@ -3034,6 +3061,7 @@ final class AirshipManager {
                         : "Voyage : capitaine %s parti, pose impossible : arrêt du voyage", uuid);
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Voyage : départ du capitaine non traité");
+                Telemetry.error("airship.passenger", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
         }
     }
@@ -3090,6 +3118,7 @@ final class AirshipManager {
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Rappel : point d'éloignement non calculé pour %s", f.id);
+                Telemetry.error("airship.land", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
         }
         return landImmediately(f);
@@ -3121,6 +3150,7 @@ final class AirshipManager {
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Rappel : dirigeable %s non posé après le retrait de la station", f.id);
+                Telemetry.error("airship.recall", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
         }
     }
@@ -3170,6 +3200,7 @@ final class AirshipManager {
             } catch (RuntimeException | java.io.IOException e) {
                 recovering.remove(rec.id());
                 LOGGER.at(Level.SEVERE).withCause(e).log("Reprise du vol de dirigeable %s impossible : fichier gardé", rec.id());
+                Telemetry.error("airship.recover", e, null, null);
             }
         }
     }
@@ -3266,6 +3297,7 @@ final class AirshipManager {
             LOGGER.at(Level.INFO).log("Dirigeable %s reposé en %s (reprise après arrêt en vol)", rec.id(), origin);
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.SEVERE).withCause(e).log("Reprise du dirigeable %s en échec : fichier gardé pour un prochain essai", rec.id());
+            Telemetry.error("airship.recover", e, null, null);
         } finally {
             recovering.remove(rec.id());
         }
@@ -3412,6 +3444,7 @@ final class AirshipManager {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pilote non retiré avec le dirigeable");
+            Telemetry.error("airship.despawn", e, null, null);
         }
         for (int i = 0; i < inside.size(); i++) {
             try {
@@ -3422,6 +3455,7 @@ final class AirshipManager {
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Joueur du dirigeable non posé au sol");
+                Telemetry.error("airship.despawn", e, null, null);
             }
         }
         LOGGER.at(Level.INFO).log("Retrait par %s : dirigeable posé en %s (rotation %s), %d blocs retirés, %d objet(s) lâchés",
@@ -3454,6 +3488,7 @@ final class AirshipManager {
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Pilote non remis au sol proprement");
+                Telemetry.error("airship.despawn", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
         }
         Vector3d ground = BalloonManager.groundBelow(world, pos);

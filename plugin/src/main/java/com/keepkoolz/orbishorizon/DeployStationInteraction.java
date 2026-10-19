@@ -113,6 +113,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
             balloon = Deployables.BALLOON_PUBLIC.shape();
         } catch (IOException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Transit_DeployStation: forme illisible");
+            Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
             fail(context);
             return;
         }
@@ -189,6 +190,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
         int flags = (force ? 1 : 0) | 8; // same options as SpawnPrefab
         BalloonManager.pasteKeepingTerrain(buffer, world, station, origin, rotation, flags, commandBuffer, kind.id,
                 Ownership.of(playerRef.getUuid(), null), Deployables.STATION_GRASS_Y); // station: owner kept as before, no map marker (out of scope)
+        Telemetry.count("deploy.station");
         // The station is locked from the paste (registry). It joins the network when its name is chosen: the name window opens
         // here, deferred like the other entity-side work started from an interaction.
         final Vector3i placedOrigin = new Vector3i(origin);
@@ -209,6 +211,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
                 p.getPageManager().openCustomPage(ref, store, new StationNamePage(playerRef, world, placedOrigin, placedRotation));
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Fenêtre du nom de la station impossible : nom automatique");
+                Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
                 StationNamePage.onPlayerGone(playerRef.getUuid());
                 if (TransitNetwork.get().at(world.getName(), placedOrigin) == null) {
                     completeRegistration(world, placedOrigin, placedRotation, playerRef.getUuid(), null, playerRef);

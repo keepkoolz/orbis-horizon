@@ -20,4 +20,6 @@ The following content is not covered by the licence above. It belongs to its aut
   - the parts of the item and block definitions copied from game items
 - The way the camp pack is drawn on the player's back (the look rebuilt as model attachments, SkinAttachments) is inspired by the True Backpack mod, published under the CC0 licence (public domain) at https://github.com/SupremoSama/Hytale-TrueBackpack. The code was rewritten for this mod.
 
+- The telemetry uses the Beacon runtime by Alechilles, published under the Beacon Runtime License 1.0 at https://github.com/Alechilles/Beacon. It is embedded in the mod JAR without modification, and its licence is in META-INF/beacon/LICENSE inside the JAR (copy in third-party/beacon/LICENSE).
+
 The mod needs the game to run. HytaleServer.jar and Assets.zip are not part of this repository.

@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 1,
+  "projectId": "orbis-horizon",
+  "displayName": "Orbis Horizon",
+  "packagePrefixes": [
+    "com.keepkoolz.orbishorizon"
+  ],
+  "hosted": {
+    "projectKey": "proj_Imk2qiS_8E0rfsYNdHHUg0Zs"
+  },
+  "telemetry": {
+    "stats": {
+      "supported": true,
+      "defaultEnabled": true
+    },
+    "crash": {
+      "supported": true,
+      "defaultEnabled": true,
+      "uncaughtExceptions": true,
+      "setupFailures": true,
+      "startFailures": true,
+      "exceptionalWorldRemovals": true
+    },
+    "events": {
+      "errors": {
+        "supported": true,
+        "defaultEnabled": true,
+        "details": {
+          "orbis.error": {
+            "allowedFields": {
+              "zone": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "kind": {
+                "type": "string",
+                "maxLength": 32
+              },
+              "phase": {
+                "type": "string",
+                "maxLength": 32
+              },
+              "exception": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "repeats": {
+                "type": "number"
+              },
+              "gameVersion": {
+                "type": "string",
+                "maxLength": 32
+              }
+            }
+          }
+        }
+      }
+    },
+    "usage": {
+      "supported": true,
+      "defaultEnabled": true,
+      "allowedEvents": [
+        "deploy.balloon",
+        "deploy.balloon_basic",
+        "deploy.balloon_transport",
+        "deploy.airship",
+        "deploy.bedroll",
+        "deploy.tent",
+        "deploy.tent_big",
+        "deploy.station",
+        "takeoff.balloon",
+        "takeoff.balloon_basic",
+        "takeoff.balloon_transport",
+        "takeoff.airship",
+        "airship.voyage",
+        "airship.recall",
+        "airship.pilot_hired",
+        "transit.trip",
+        "cage.capture",
+        "glider.jump",
+        "camp.upgrade"
+      ],
+      "details": {
+        "deploy.balloon": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "deploy.balloon_basic": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "deploy.balloon_transport": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "deploy.airship": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "deploy.bedroll": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "deploy.tent": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "deploy.tent_big": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "deploy.station": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "takeoff.balloon": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "takeoff.balloon_basic": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "takeoff.balloon_transport": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "takeoff.airship": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "airship.voyage": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "airship.recall": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "airship.pilot_hired": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "transit.trip": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "cage.capture": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "glider.jump": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "camp.upgrade": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "performance": {
+      "supported": false
+    },
+    "diagnostics": {
+      "supported": false
+    },
+    "reports": {
+      "supported": false
+    }
+  }
+}

@@ -118,6 +118,7 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
             shape = kind.shape();
         } catch (IOException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Camping_DeployCamp: forme de la tente illisible");
+            Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
             fail(context);
             return;
         }
@@ -199,6 +200,7 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
         int flags = (force ? 1 : 0) | 8; // same options as SpawnPrefab
         PrefabUtil.paste(buffer, world, new Vector3i(origin), rotation, new FastRandom(), flags, 0, commandBuffer);
         BalloonRegistry.add(world, origin, rotation, kind.id, Ownership.of(playerRef.getUuid(), playerRef.getUsername()));
+        Telemetry.count("deploy." + kind.id);
         CampChestFilter.installWithRetry(world, shape, origin, rotation);
 
         // The pack may carry the contents kept when the camp was packed: put them back (deferred out of the
@@ -217,6 +219,7 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
                                 LOGGER.at(Level.INFO).log("Campement : %d objet(s) remis depuis le sac", count);
                             } catch (RuntimeException e) {
                                 LOGGER.at(Level.WARNING).withCause(e).log("Campement : contenu du sac non remis");
+                                Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
                             }
                         });
                     }
@@ -224,6 +227,7 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Campement : contenu du sac illisible");
+            Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
         }
         LOGGER.at(Level.INFO).log("Campement « %s » posé en (%d, %d, %d) rotation %s par %s", kind.id, origin.x, origin.y, origin.z, rotation, playerRef.getUsername());
     }

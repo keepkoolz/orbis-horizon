@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.8.4
+
+### Added
+
+- Anonymous telemetry through Beacon: number of servers and players, mod and game versions, hourly counters of the features used, and the mod's own caught errors without their message. Names, positions, worlds and chest contents are never sent. The server owner can switch it off with Beacon's consent window, the `/beacon` commands or its settings file. See the wiki.
+
+### Changed
+
+- The section titles of the airship's destination list now look like the ones in the station master's window.
+
+### Fixed
+
+- Other players now see the camp pack on your back, also when they come into view or join after you put it on.
+
 ## v1.8.3
 
 Tent crates become camping packs: a leather backpack that you carry and that shows on your back. A new Sleeping bag starts the chain, and each upgrade keeps what was inside.

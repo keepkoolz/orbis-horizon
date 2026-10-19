@@ -3,3 +3,4 @@ dist/*.jar
 .DS_Store
 __pycache__/
 .curseforge-media
+lib/

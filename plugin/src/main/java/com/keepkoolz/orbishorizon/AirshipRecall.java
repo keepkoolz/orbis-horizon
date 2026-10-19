@@ -157,11 +157,14 @@ final class AirshipRecall {
             } catch (RuntimeException e) {
                 StationQueue.endRecall(s, flightId);
                 LOGGER.at(Level.WARNING).withCause(e).log("Rappel : démarrage impossible");
+                Telemetry.error("airship.recall", e, null, null);
                 return Texts.t("crew.recall.noAirship");
             }
+            Telemetry.count("airship.recall");
             return null;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : demande en échec");
+            Telemetry.error("airship.recall", e, null, null);
             return Texts.t("crew.recall.noAirship");
         }
     }
@@ -185,6 +188,7 @@ final class AirshipRecall {
                 if (t != null) {
                     // Never detach a structure that is not in memory: the recall ends cleanly, the ship stays where it is.
                     LOGGER.at(Level.WARNING).withCause(t).log("Rappel : chargement des sections impossible, rappel annulé");
+                    Telemetry.error("airship.recall", t, null, null);
                     world.execute(() -> {
                         StationQueue.endRecall(s, flightId);
                         owner.sendMessage(Texts.t("crew.recall.unreachable"));
@@ -226,6 +230,7 @@ final class AirshipRecall {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : apparition en échec");
+            Telemetry.error("airship.recall", e, Telemetry.kindId(Deployables.AIRSHIP), null);
             failure = Texts.t("crew.recall.noAirship");
         }
         if (failure != null) {
@@ -255,6 +260,7 @@ final class AirshipRecall {
             }
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : erreur dans le tick du dirigeable %s", f.id);
+            Telemetry.error("airship.recall", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
 
@@ -414,6 +420,7 @@ final class AirshipRecall {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : anciens barreaux non retirés");
+            Telemetry.error("airship.recall", e, null, null);
         }
     }
 
@@ -446,6 +453,7 @@ final class AirshipRecall {
                 tickWait(store, world, r, now);
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Rappel : erreur dans l'attente au-dessus de %s", r.station.name);
+                Telemetry.error("airship.recall", e, null, null);
             }
         }
     }
@@ -541,6 +549,7 @@ final class AirshipRecall {
             }
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : présence du capitaine non vérifiée");
+            Telemetry.error("airship.recall", e, null, ph(r));
         }
         return null;
     }
@@ -577,6 +586,7 @@ final class AirshipRecall {
             LOGGER.at(Level.INFO).log("Rappel : fenêtre des destinations ouverte pour %s", pr.getUsername());
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : fenêtre des destinations impossible, le dirigeable repart");
+            Telemetry.error("airship.recall", e, null, ph(r));
             leaveNow(store, world, r, entry);
         }
     }
@@ -611,6 +621,7 @@ final class AirshipRecall {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : départ impossible");
+            Telemetry.error("airship.recall", e, null, ph(r));
         }
     }
 
@@ -708,6 +719,7 @@ final class AirshipRecall {
             return true;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : nouvel essai de l'éloignement impossible");
+            Telemetry.error("airship.recall", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             return false;
         }
     }
@@ -735,6 +747,7 @@ final class AirshipRecall {
             return true;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : approche bloquée non traitée");
+            Telemetry.error("airship.recall", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             return false;
         }
     }
@@ -764,6 +777,7 @@ final class AirshipRecall {
             return true;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : éloignement impossible");
+            Telemetry.error("airship.recall", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             return false;
         }
     }
@@ -789,6 +803,7 @@ final class AirshipRecall {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : sortie de zone non vérifiée");
+            Telemetry.error("airship.recall", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
 
@@ -833,6 +848,7 @@ final class AirshipRecall {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : reprise des dirigeables en attente impossible");
+            Telemetry.error("airship.recover", e, null, null);
         }
     }
 
@@ -869,6 +885,7 @@ final class AirshipRecall {
             leaveNow(world.getEntityStore().getStore(), world, r, entry);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : reprise du dirigeable en attente en échec");
+            Telemetry.error("airship.recall", e, Telemetry.kindId(Deployables.AIRSHIP), null);
         } finally {
             RECOVERING.remove(old.id());
         }
@@ -906,11 +923,17 @@ final class AirshipRecall {
                         }
                     } catch (RuntimeException e) {
                         LOGGER.at(Level.WARNING).withCause(e).log("Rappel : joueur hors ligne %s non vérifié", id);
+                        Telemetry.error("airship.recall", e, null, ph(r));
                     }
                 });
             }
         } catch (Exception e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Rappel : joueurs hors ligne à bord non vérifiés");
+            Telemetry.error("airship.recall", e, null, ph(r));
         }
+    }
+
+    private static String ph(RecallState r) {
+        return r != null && r.phase != null ? r.phase.name() : null;
     }
 }

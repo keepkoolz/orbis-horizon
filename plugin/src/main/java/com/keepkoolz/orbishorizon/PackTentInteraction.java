@@ -93,6 +93,7 @@ public class PackTentInteraction extends SimpleInstantInteraction {
             shape = kind.shape();
         } catch (IOException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Camping_PackTent: forme de la tente illisible");
+            Telemetry.error("pack", e, Telemetry.kindId(kind), null);
             fail(context);
             return;
         }

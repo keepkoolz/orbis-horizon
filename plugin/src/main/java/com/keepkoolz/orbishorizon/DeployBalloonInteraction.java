@@ -164,6 +164,7 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             PlayerRef placer = commandBuffer.getComponent(player, PlayerRef.getComponentType());
             Ownership own = placer != null ? Ownership.of(placer.getUuid(), placer.getUsername()) : Ownership.NONE;
             BalloonManager.pasteKeepingTerrain(buffer, world, shape, origin, rotation, flags, commandBuffer, kind.id, own);
+            Telemetry.count("deploy." + kind.id);
         } else {
             // Unreadable shape: placed without terrain protection and without registry entry (logged by shapeOrNull).
             PrefabUtil.paste(buffer, world, origin, rotation, new FastRandom(), flags, 0, commandBuffer);

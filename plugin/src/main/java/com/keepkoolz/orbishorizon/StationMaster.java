@@ -99,6 +99,7 @@ final class StationMaster {
             return id.getUuid();
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Chef de gare de « %s » non créé", s.name);
+            Telemetry.error("transit", e, null, null);
             return null;
         }
     }
@@ -149,6 +150,7 @@ final class StationMaster {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Apparence du chef de gare de « %s » non posée", s.name);
+            Telemetry.error("transit", e, null, null);
         }
     }
 
@@ -188,6 +190,7 @@ final class StationMaster {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Chef de gare de « %s » non supprimé", s.name);
+            Telemetry.error("transit", e, null, null);
         }
         RESERVATIONS.remove(s);
         LAST_REWIRE.remove(s);
@@ -332,6 +335,7 @@ final class StationMaster {
                 spawn(store, world, s);
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Chef de gare de « %s » non remis en état", s.name);
+                Telemetry.error("transit", e, null, null);
             }
         }
     }
@@ -407,6 +411,7 @@ final class StationMaster {
 
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Câblage du chef de gare de « %s » non vérifié", s.name);
+                Telemetry.error("transit", e, null, null);
             }
         }
     }
@@ -460,6 +465,7 @@ final class StationMaster {
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Orientation du chef de gare de « %s » non réglée", s.name);
+                Telemetry.error("transit", e, null, null);
             }
         }
     }
@@ -556,6 +562,7 @@ final class StationMaster {
             p.getPageManager().openCustomPage(playerRef, store, new DestinationPage(player, s));
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Fenêtre de destination impossible pour « %s »", s.name);
+            Telemetry.error("transit", e, null, null);
             release(s, player.getUuid());
         }
     }

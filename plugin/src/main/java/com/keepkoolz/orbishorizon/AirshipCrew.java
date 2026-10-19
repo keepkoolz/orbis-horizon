@@ -150,6 +150,7 @@ final class AirshipCrew {
             return id.getUuid();
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : non créé en (%d, %d, %d)", e.x(), e.y(), e.z());
+            Telemetry.error("airship.crew", ex, null, null);
             return null;
         }
     }
@@ -271,6 +272,7 @@ final class AirshipCrew {
             LOGGER.at(Level.WARNING).log("Pilote : aucune apparence acceptée, rien n'est posé");
         } catch (Exception ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : apparence non posée");
+            Telemetry.error("airship.crew", ex, null, null);
         }
     }
 
@@ -378,6 +380,7 @@ final class AirshipCrew {
             return m;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pilote : mannequin de vol impossible");
+            Telemetry.error("airship.crew", e, null, null);
             return null;
         }
     }
@@ -400,6 +403,7 @@ final class AirshipCrew {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pilote : mannequin de vol non regroupé");
+            Telemetry.error("airship.crew", e, null, null);
         }
     }
 
@@ -422,6 +426,7 @@ final class AirshipCrew {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pilote : pose assise du mannequin impossible");
+            Telemetry.error("airship.crew", e, null, null);
         }
     }
 
@@ -441,6 +446,7 @@ final class AirshipCrew {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pilote : mannequin de vol non supprimé");
+            Telemetry.error("airship.crew", e, null, null);
         }
         m.ref = null;
         m.twin = null;
@@ -462,6 +468,7 @@ final class AirshipCrew {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pilote : mannequin de vol resté dans le monde non supprimé");
+            Telemetry.error("airship.crew", e, null, null);
         }
     }
 
@@ -537,6 +544,7 @@ final class AirshipCrew {
             }
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : non supprimé en (%d, %d, %d)", e.x(), e.y(), e.z());
+            Telemetry.error("airship.crew", ex, null, null);
         }
         PENDING.removeIf(p -> p.sameAirship(e));
         LAST_REWIRE.remove(key(e));
@@ -709,6 +717,7 @@ final class AirshipCrew {
                 }
             } catch (RuntimeException ex) {
                 LOGGER.at(Level.WARNING).withCause(ex).log("Pilote non remis en état en (%d, %d, %d)", e.x(), e.y(), e.z());
+                Telemetry.error("airship.crew", ex, null, null);
             }
         }
     }
@@ -748,6 +757,7 @@ final class AirshipCrew {
                 removeDuplicates(store, e, ref);
             } catch (RuntimeException ex) {
                 LOGGER.at(Level.WARNING).withCause(ex).log("Câblage du pilote non vérifié en (%d, %d, %d)", e.x(), e.y(), e.z());
+                Telemetry.error("airship.crew", ex, null, null);
             }
         }
     }
@@ -886,6 +896,7 @@ final class AirshipCrew {
             }
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : relevé en erreur");
+            Telemetry.error("airship.crew", ex, null, null);
         }
     }
 
@@ -935,6 +946,7 @@ final class AirshipCrew {
             return stuckLong;
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : journal de marche en erreur");
+            Telemetry.error("airship.crew", ex, null, null);
             return false;
         }
     }
@@ -962,6 +974,7 @@ final class AirshipCrew {
             AnimationUtils.playAnimation(ref, AnimationSlot.Movement, "Sit", true, store);
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : pose assise non jouée");
+            Telemetry.error("airship.crew", ex, null, null);
         }
     }
 
@@ -978,6 +991,7 @@ final class AirshipCrew {
             AnimationUtils.playAnimation(ref, AnimationSlot.Movement, "Sit", true, store);
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : pose assise non rejouée");
+            Telemetry.error("airship.crew", ex, null, null);
         }
     }
 
@@ -988,6 +1002,7 @@ final class AirshipCrew {
                 AnimationUtils.stopAnimation(ref, AnimationSlot.Movement, true, store);
             } catch (RuntimeException ex) {
                 LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : pose assise non arrêtée");
+                Telemetry.error("airship.crew", ex, null, null);
             }
         }
     }
@@ -1012,6 +1027,7 @@ final class AirshipCrew {
             LOGGER.at(Level.WARNING).log("Pilote : montage sur le tabouret refusé (%s), repli sur la laisse et l'animation assise", res);
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : montage sur le tabouret en erreur, repli");
+            Telemetry.error("airship.crew", ex, null, null);
         }
         FALLBACK.add(npc);
         setLeash(store, ref, stool);
@@ -1154,6 +1170,7 @@ final class AirshipCrew {
             LOGGER.at(Level.WARNING).log("Pilote : %s, téléporté à son poste %s en (%.1f, %.1f, %.1f)", why, post.key, pp.x, pp.y, pp.z);
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : téléportation au poste en erreur");
+            Telemetry.error("airship.crew", ex, null, null);
         }
     }
 
@@ -1208,6 +1225,7 @@ final class AirshipCrew {
                 pilotStep(store, world, e, now);
             } catch (RuntimeException ex) {
                 LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : marche en erreur en (%d, %d, %d)", e.x(), e.y(), e.z());
+                Telemetry.error("airship.crew", ex, null, null);
             }
         }
     }

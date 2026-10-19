@@ -410,6 +410,7 @@ final class CampUpgrade {
                     giveBackOnline(store, ref, note);
                     return;
                 }
+                Telemetry.count("camp.upgrade");
                 World world = store.getExternalData().getWorld();
                 if (!apply(containers(store, ref), note.target(), note.contents())) {
                     WAITS.computeIfAbsent(pr.getUuid(), k -> new java.util.concurrent.CopyOnWriteArrayList<>())

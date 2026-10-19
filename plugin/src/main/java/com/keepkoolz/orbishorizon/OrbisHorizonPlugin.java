@@ -176,6 +176,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             BalloonManager.get().landAll();
             AirshipManager.get().landAll();
             BalloonRegistry.flushCage();
+            Telemetry.stop();
         });
         // World map markers of the stations, registered on every world like the game's warps.
         getEventRegistry().registerGlobal(AddWorldEvent.class, event -> {
@@ -293,6 +294,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 getLogger().at(Level.WARNING).withCause(e).log("Reprise des dirigeables de %s remise au démarrage du monde", world.getName());
             }
         }
+        Telemetry.start(this); // last: Beacon starts after the normal setup
     }
 
     @Override
@@ -300,6 +302,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         BalloonManager.get().landAll();
         AirshipManager.get().landAll();
         BalloonRegistry.flushCage();
+        Telemetry.stop();
     }
 
     /** Airship: the head-yaw reader (before ProcessPlayerInput) and the flight tick. A failure is logged and the system is skipped. */

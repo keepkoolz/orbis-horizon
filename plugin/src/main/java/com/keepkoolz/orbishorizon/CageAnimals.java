@@ -89,15 +89,21 @@ final class CageAnimals {
                 step(world, entry, to);
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Animaux de la cage : déplacement impossible");
+                Telemetry.error("cage", e, null, null);
             }
         }
 
         @Override
         public CaptureResult onClosed(World world, BalloonRegistry.Entry entry) {
             try {
-                return capture(world, entry);
+                CaptureResult r = capture(world, entry);
+                if (r != null && r.captured() > 0) {
+                    Telemetry.count("cage.capture");
+                }
+                return r;
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Animaux de la cage : capture impossible");
+                Telemetry.error("cage", e, null, null);
                 return null;
             }
         }
@@ -108,6 +114,7 @@ final class CageAnimals {
                 release(world, entry);
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Animaux de la cage : libération impossible");
+                Telemetry.error("cage", e, null, null);
             }
         }
     };
@@ -390,6 +397,7 @@ final class CageAnimals {
             return id == null ? a : a.withUuid(id.getUuid());
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Animal de la cage (%s) non recréé", a.role());
+            Telemetry.error("cage", e, null, null);
             return null;
         }
     }
@@ -503,6 +511,7 @@ final class CageAnimals {
                     place(world, p.origin(), p.rotation(), p.kind(), e.animals(), e.descent());
                 } catch (RuntimeException ex) {
                     LOGGER.at(Level.WARNING).withCause(ex).log("Animaux de la cage en %s non remis en place", p.origin());
+                    Telemetry.error("cage", ex, null, null);
                 }
             }
         }
