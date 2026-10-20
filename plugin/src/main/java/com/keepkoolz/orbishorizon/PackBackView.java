@@ -67,6 +67,15 @@ final class PackBackView {
      * the attachments on that client, so the model is sent to him again a moment later. World thread only.
      */
     private static final Map<String, Map<Ref<EntityStore>, Long>> VIEWERS = new HashMap<>();
+    /**
+     * Players (UUID) who just arrived in a world, with their entity and the time their own model resend is due. On every
+     * arrival the game sends the player his own model then his skin in one list (PlayerSystems.sendPlayerSelf), and the skin
+     * rebuilds his look without the attachments on his client, so the model is sent to him again a moment later.
+     */
+    private static final Map<String, SelfResend> SELF = new ConcurrentHashMap<>();
+
+    private record SelfResend(Ref<EntityStore> ref, long dueMs) {
+    }
 
     private PackBackView() {
     }
@@ -201,6 +210,7 @@ final class PackBackView {
      */
     static void tick(Store<EntityStore> store, World world) {
         try {
+            resendToSelf(store);
             if (SHOWN.isEmpty()) {
                 VIEWERS.clear();
                 return;
@@ -275,11 +285,50 @@ final class PackBackView {
         }
     }
 
-    /** Called when a player arrives (connection, respawn through PlayerReadyEvent). */
+    /** Sends a pack wearer who arrived {@link #VIEWER_RESEND_MS} ago his own model again. World thread, never throws. */
+    private static void resendToSelf(Store<EntityStore> store) {
+        if (SELF.isEmpty()) {
+            return;
+        }
+        try {
+            long now = System.currentTimeMillis();
+            for (Iterator<Map.Entry<String, SelfResend>> it = SELF.entrySet().iterator(); it.hasNext(); ) {
+                Map.Entry<String, SelfResend> e = it.next();
+                Ref<EntityStore> ref = e.getValue().ref();
+                if (!ref.isValid()) {
+                    it.remove();
+                    continue;
+                }
+                if (ref.getStore() != store || e.getValue().dueMs() > now) {
+                    continue;
+                }
+                it.remove();
+                if (!SHOWN.containsKey(e.getKey())) {
+                    continue; // no pack on his back: the native look the game sent is right
+                }
+                ModelComponent mc = store.getComponent(ref, ModelComponent.getComponentType());
+                EntityTrackerSystems.EntityViewer self = store.getComponent(ref, EntityTrackerSystems.EntityViewer.getComponentType());
+                if (mc == null || self == null || !SkinAttachments.hasBag(mc.getModel())) {
+                    continue;
+                }
+                EntityScaleComponent scale = store.getComponent(ref, EntityScaleComponent.getComponentType());
+                self.queueUpdate(ref, new ModelUpdate(mc.getModel().toPacket(), scale != null ? scale.getScale() : 0f));
+                LOGGER.at(Level.INFO).log("Sac de campement sur le dos : modèle renvoyé au joueur après arrivée");
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Sac de campement sur le dos : renvoi du modèle au joueur en échec");
+        }
+    }
+
+    /** Called when a player arrives (connection, world change such as a goblin breach, respawn through PlayerReadyEvent). */
     static void onReady(Ref<EntityStore> ref) {
         try {
             if (ref != null && ref.isValid()) {
                 refresh(ref.getStore(), ref, "arrivée du joueur");
+                String id = uuid(ref.getStore(), ref);
+                if (id != null) {
+                    SELF.put(id, new SelfResend(ref, System.currentTimeMillis() + VIEWER_RESEND_MS));
+                }
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Arrivée du joueur : sac de campement sur le dos en échec");

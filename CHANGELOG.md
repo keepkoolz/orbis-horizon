@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.8.5
+
+### Fixed
+
+- The camp pack no longer disappears from your own back after you change worlds, for example when you go into or come back from a goblin breach.
+
 ## v1.8.4
 
 ### Added
