@@ -151,9 +151,9 @@
       {
         "Type": "Crafting",
         "Categories": [
-          "Workbench_Tinkering"
+          "OrbisHorizon_Transport"
         ],
-        "Id": "Workbench",
+        "Id": "OrbisHorizon_Bench",
         "RequiredTierLevel": 3
       }
     ],

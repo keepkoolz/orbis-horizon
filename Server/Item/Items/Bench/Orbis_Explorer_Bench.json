@@ -1,0 +1,223 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.orbis_explorer_bench.name",
+    "Description": "server.orbis_horizon.items.orbis_explorer_bench.description"
+  },
+  "Recipe": {
+    "Input": [
+      {
+        "Quantity": 6,
+        "ResourceTypeId": "Wood_Trunk"
+      },
+      {
+        "Quantity": 4,
+        "ResourceTypeId": "Rock"
+      },
+      {
+        "ItemId": "Ingredient_Fibre",
+        "Quantity": 20
+      },
+      {
+        "ItemId": "Ingredient_Hide_Light",
+        "Quantity": 4
+      },
+      {
+        "ItemId": "Ingredient_Stick",
+        "Quantity": 10
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Crafting"
+        ],
+        "Id": "Workbench",
+        "RequiredTierLevel": 1
+      }
+    ],
+    "TimeSeconds": 3.0
+  },
+  "Icon": "Icons/ItemsGenerated/Orbis_Explorer_Bench.png",
+  "Categories": [
+    "Furniture.Benches"
+  ],
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Benches/Explorer_Bench.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Benches/Explorer_Bench_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "HitboxType": "Bench_Workbench",
+    "VariantRotation": "NESW",
+    "Bench": {
+      "Type": "Crafting",
+      "Categories": [
+        {
+          "Id": "OrbisHorizon_Camp",
+          "Icon": "Icons/CraftingCategories/OrbisHorizon/Camp.png",
+          "Name": "server.orbis_horizon.benchCategories.camp"
+        },
+        {
+          "Id": "OrbisHorizon_Transport",
+          "Icon": "Icons/CraftingCategories/OrbisHorizon/Transport.png",
+          "Name": "server.orbis_horizon.benchCategories.transport"
+        }
+      ],
+      "LocalOpenSoundEventId": "SFX_Workbench_Open",
+      "LocalCloseSoundEventId": "SFX_Workbench_Close",
+      "CompletedSoundEventId": "SFX_Workbench_Craft",
+      "FailedSoundEventId": "SFX_Generic_Crafting_Failed",
+      "BenchUpgradeSoundEventId": "SFX_Workbench_Upgrade_Start_Default",
+      "BenchUpgradeCompletedSoundEventId": "SFX_Workbench_Upgrade_Complete_Default",
+      "Id": "OrbisHorizon_Bench",
+      "TierLevels": [
+        {
+          "CraftingTimeReductionModifier": 0.0,
+          "UpgradeRequirement": {
+            "Material": [
+              {
+                "ItemId": "Ingredient_Bar_Iron",
+                "Quantity": 30
+              },
+              {
+                "ItemId": "Ingredient_Bar_Copper",
+                "Quantity": 20
+              },
+              {
+                "ItemId": "Ingredient_Hide_Medium",
+                "Quantity": 15
+              },
+              {
+                "ItemId": "Cloth_Block_Wool_White",
+                "Quantity": 40
+              },
+              {
+                "ItemId": "Ingredient_Charcoal",
+                "Quantity": 10
+              }
+            ],
+            "TimeSeconds": 5.0
+          }
+        },
+        {
+          "CraftingTimeReductionModifier": 0.15,
+          "UpgradeRequirement": {
+            "Material": [
+              {
+                "ItemId": "Ingredient_Bar_Cobalt",
+                "Quantity": 20
+              },
+              {
+                "ItemId": "Ingredient_Bar_Thorium",
+                "Quantity": 20
+              },
+              {
+                "ItemId": "Ingredient_Leather_Heavy",
+                "Quantity": 15
+              },
+              {
+                "ItemId": "Ingredient_Fire_Essence",
+                "Quantity": 10
+              },
+              {
+                "ItemId": "Cloth_Block_Wool_White",
+                "Quantity": 80
+              }
+            ],
+            "TimeSeconds": 10.0
+          }
+        },
+        {
+          "CraftingTimeReductionModifier": 0.3
+        }
+      ]
+    },
+    "BlockEntity": {
+      "Components": {
+        "BenchBlock": {}
+      }
+    },
+    "State": {
+      "Definitions": {
+        "Tier2": {
+          "CustomModel": "Blocks/Benches/Explorer_Bench2.blockymodel",
+          "CustomModelTexture": [
+            {
+              "Texture": "Blocks/Benches/Explorer_Bench2_Texture.png",
+              "Weight": 1
+            }
+          ],
+          "HitboxType": "Bench_Workbench",
+          "CustomModelAnimation": "Blocks/Benches/Explorer_Bench_Float.blockyanim",
+          "Looping": true,
+          "State": {
+            "Definitions": {
+              "Tier2": "*Orbis_Explorer_Bench_State_Definitions_Tier2"
+            }
+          }
+        },
+        "Tier3": {
+          "CustomModel": "Blocks/Benches/Explorer_Bench3.blockymodel",
+          "CustomModelTexture": [
+            {
+              "Texture": "Blocks/Benches/Explorer_Bench3_Texture.png",
+              "Weight": 1
+            }
+          ],
+          "HitboxType": "Bench_Workbench",
+          "CustomModelAnimation": "Blocks/Benches/Explorer_Bench_Float.blockyanim",
+          "Looping": true,
+          "State": {
+            "Definitions": {
+              "Tier3": "*Orbis_Explorer_Bench_State_Definitions_Tier3"
+            }
+          }
+        }
+      }
+    },
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Benches"
+      }
+    },
+    "BlockParticleSetId": "Wood",
+    "ParticleColor": "#6e4a2f",
+    "Support": {
+      "Down": [
+        {
+          "FaceType": "Full"
+        }
+      ]
+    },
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "TextureComputedColor": "#6C4C30"
+  },
+  "PlayerAnimationsId": "Block",
+  "IconProperties": {
+    "Scale": 0.42,
+    "Rotation": [
+      22.5,
+      45.0,
+      22.5
+    ],
+    "Translation": [
+      12.9,
+      -11.7
+    ]
+  },
+  "Tags": {
+    "Type": [
+      "Bench"
+    ]
+  },
+  "MaxStack": 1,
+  "ItemLevel": 1,
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

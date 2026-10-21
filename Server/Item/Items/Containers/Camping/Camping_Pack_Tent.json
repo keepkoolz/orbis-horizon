@@ -43,9 +43,9 @@
       {
         "Type": "Crafting",
         "Categories": [
-          "Workbench_Tinkering"
+          "OrbisHorizon_Camp"
         ],
-        "Id": "Workbench",
+        "Id": "OrbisHorizon_Bench",
         "RequiredTierLevel": 2
       }
     ],

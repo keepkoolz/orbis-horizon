@@ -508,3 +508,7 @@ orbis_horizon.items.airship_exhaust_pipe.name = Sortie de brûleur
 orbis_horizon.items.airship_exhaust_pipe.description = Une sortie de brûleur de navire. Elle fume légèrement à quai tant que le réservoir a du combustible.
 orbis_horizon.items.steamboat_chimney_top.name = Haut de cheminée
 orbis_horizon.items.steamboat_chimney_top.description = Le haut de la cheminée d'un navire. Il fume légèrement à quai tant que le réservoir a du combustible.
+orbis_horizon.items.orbis_explorer_bench.name = Établi d'explorateur
+orbis_horizon.items.orbis_explorer_bench.description = Un établi de voyageur qui grandit avec vos périples, où naissent campements et machines volantes.
+orbis_horizon.benchCategories.camp = Campement
+orbis_horizon.benchCategories.transport = Transports

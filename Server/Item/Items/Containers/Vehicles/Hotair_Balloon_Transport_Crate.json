@@ -14,18 +14,14 @@
     "Input": [
       {
         "ItemId": "Ingredient_Bar_Iron",
-        "Quantity": 44
-      },
-      {
-        "ItemId": "Ingredient_Bar_Cobalt",
-        "Quantity": 6
+        "Quantity": 35
       },
       {
         "ItemId": "Ingredient_Bar_Thorium",
-        "Quantity": 4
+        "Quantity": 15
       },
       {
-        "ItemId": "Ingredient_Fire_Essence",
+        "ItemId": "Ingredient_Life_Essence_Concentrated",
         "Quantity": 4
       },
       {
@@ -45,9 +41,9 @@
       {
         "Type": "Crafting",
         "Categories": [
-          "Workbench_Tinkering"
+          "OrbisHorizon_Transport"
         ],
-        "Id": "Workbench",
+        "Id": "OrbisHorizon_Bench",
         "RequiredTierLevel": 2
       }
     ],

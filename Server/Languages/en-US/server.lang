@@ -508,3 +508,7 @@ orbis_horizon.items.airship_exhaust_pipe.name = Burner outlet
 orbis_horizon.items.airship_exhaust_pipe.description = A burner outlet of a ship. It puffs a little smoke while the ship is moored and its fuel tank holds fuel.
 orbis_horizon.items.steamboat_chimney_top.name = Chimney top
 orbis_horizon.items.steamboat_chimney_top.description = The top of a ship's chimney. It puffs a little smoke while the ship is moored and its fuel tank holds fuel.
+orbis_horizon.items.orbis_explorer_bench.name = Explorer's workbench
+orbis_horizon.items.orbis_explorer_bench.description = A traveller's bench that grows with your journeys, where camps and flying machines take shape.
+orbis_horizon.benchCategories.camp = Camp
+orbis_horizon.benchCategories.transport = Transport

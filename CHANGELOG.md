@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.9.1
+
+Explorers get their own workbench: every camp pack and vehicle crate is now crafted there, and its look grows with each tier.
+
+### Added
+
+- The Explorer's workbench: crafted at the basic workbench, in the Crafting tab with the other benches, upgraded twice, with a Camp tab and a Transport tab. Plans and little models of what you can build appear on it at each tier, and a balloon and an airship float above it at the top tier.
+
+### Changed
+
+- All the mod's recipes (camp packs, balloons, airship, steamboat and balloon station crates) are now crafted at the Explorer's workbench, at the same tiers as before.
+- The animal transport balloon crate now needs 35 iron bars, 15 thorium bars and 4 concentrated life essences instead of iron, cobalt, thorium and fire essence.
+
+### Fixed
+
+- The steamboat crate's picture now shows the paddle wheel under the cabin, on the hull.
+
 ## v1.9
 
 A paddle steamer joins the fleet: set it down on a lake, a river or the sea, fuel its tank and cast off.

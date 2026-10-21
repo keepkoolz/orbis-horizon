@@ -40,7 +40,7 @@ A station is a stone walkway with a landing pad at its end and a little hut for 
 
 ## Before you set off
 
-- Everything is crafted at the basic workbench, in the Tinkering tab. The bigger vehicles need an upgraded workbench. Each vehicle is a single recipe, with no parts to make first.
+- Everything is crafted at the Explorer's workbench, an explorer's desk with its own tabs. Upgrade it and plans and little models of what you can build appear on top of it, down to a balloon floating above the bench. Each vehicle is a single recipe, with no parts to make first.
 - Hold a crate and you see where the structure will go, block by block, before you set it up.
 - Pack a camp and what you left in its chests and campfire travels in the pack, ready for your next camp. The small tent has a chest outside for your things.
 - Once set up, a tent, balloon, airship or station is locked, so nobody breaks it by accident. Beds, chests, burners and seats still work.

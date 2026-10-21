@@ -178,6 +178,8 @@ public class TransitTests {
         run("campUpgradeReconcile", TransitTests::campUpgradeReconcile);
         run("tentContentsConvert", TransitTests::tentContentsConvert);
         run("campRecipesJson", TransitTests::campRecipesJson);
+        run("explorerBenchJson", TransitTests::explorerBenchJson);
+        run("recipesOnExplorerBench", TransitTests::recipesOnExplorerBench);
         run("externalView", TransitTests::externalView);
         run("behindHeading", TransitTests::behindHeading);
         run("viewResend", TransitTests::viewResend);
@@ -1217,6 +1219,165 @@ public class TransitTests {
         return StructureShape.ofCells(cells);
     }
 
+    /** The explorer bench item JSON: bench id, categories and texts. */
+    private static void explorerBenchJson() throws Exception {
+        var root = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Item/Items/Bench/Orbis_Explorer_Bench.json")));
+        var block = root.getDocument("BlockType");
+        var bench = block.getDocument("Bench");
+        eq("OrbisHorizon_Bench", bench.getString("Id").getValue());
+        eq("Crafting", bench.getString("Type").getValue());
+        var cats = bench.getArray("Categories");
+        eq(2, cats.size());
+        eq("OrbisHorizon_Camp", cats.get(0).asDocument().getString("Id").getValue());
+        eq("OrbisHorizon_Transport", cats.get(1).asDocument().getString("Id").getValue());
+        var tiers = bench.getArray("TierLevels");
+        eq(3, tiers.size());
+        double[] red = {0, 0.15, 0.3};
+        for (int i = 0; i < 3; i++) {
+            var t = tiers.get(i).asDocument();
+            double v = t.containsKey("CraftingTimeReductionModifier") ? t.getNumber("CraftingTimeReductionModifier").doubleValue() : 0;
+            check(Math.abs(v - red[i]) < 1e-9, "reduction " + i);
+        }
+        java.util.Set<String> zipNames = new java.util.HashSet<>();
+        Path zip = Path.of(System.getProperty("user.home"), "repositories/hytale/server-ref/Assets.zip");
+        if (Files.exists(zip)) {
+            try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(zip.toFile())) {
+                z.stream().forEach(en -> zipNames.add(en.getName().substring(en.getName().lastIndexOf('/') + 1)));
+            }
+        }
+        for (int i = 0; i < 2; i++) {
+            String icon = cats.get(i).asDocument().getString("Icon").getValue();
+            // The game refuses tab icons outside Icons/CraftingCategories/ (asset validation fails and the mod does not load).
+            check(icon.startsWith("Icons/CraftingCategories/"), "category icon under Icons/CraftingCategories " + icon);
+            check(Files.exists(Path.of("Common", icon)), "category icon exists " + icon);
+        }
+        Object[][] up = {
+                {0, new String[] {"Ingredient_Bar_Iron", "Ingredient_Bar_Copper", "Ingredient_Hide_Medium", "Cloth_Block_Wool_White", "Ingredient_Charcoal"}, new int[] {30, 20, 15, 40, 10}, 5.0},
+                {1, new String[] {"Ingredient_Bar_Cobalt", "Ingredient_Bar_Thorium", "Ingredient_Leather_Heavy", "Ingredient_Fire_Essence", "Cloth_Block_Wool_White"}, new int[] {20, 20, 15, 10, 80}, 10.0},
+        };
+        for (Object[] u : up) {
+            var req = tiers.get((Integer) u[0]).asDocument().getDocument("UpgradeRequirement");
+            var mats = req.getArray("Material");
+            String[] ids = (String[]) u[1];
+            int[] qty = (int[]) u[2];
+            eq(ids.length, mats.size());
+            for (int i = 0; i < ids.length; i++) {
+                eq(ids[i], mats.get(i).asDocument().getString("ItemId").getValue());
+                eq(qty[i], mats.get(i).asDocument().getInt32("Quantity").getValue());
+                check(zipNames.isEmpty() || zipNames.contains(ids[i] + ".json"), "id exists " + ids[i]);
+            }
+            check(Math.abs(req.getNumber("TimeSeconds").doubleValue() - (Double) u[3]) < 1e-9, "upgrade time");
+        }
+        eq("Blocks/Benches/Explorer_Bench.blockymodel", block.getString("CustomModel").getValue());
+        eq("Bench_Workbench", block.getString("HitboxType").getValue());
+        var states = block.getDocument("State").getDocument("Definitions");
+        check(!states.containsKey("CraftCompleted"), "no CraftCompleted");
+        String[] names = {"Tier2", "Tier3"};
+        String[] models = {"Explorer_Bench2", "Explorer_Bench3"};
+        for (int i = 0; i < 2; i++) {
+            var st = states.getDocument(names[i]);
+            eq("Blocks/Benches/" + models[i] + ".blockymodel", st.getString("CustomModel").getValue());
+            eq("Bench_Workbench", st.getString("HitboxType").getValue());
+            eq("Blocks/Benches/Explorer_Bench_Float.blockyanim", st.getString("CustomModelAnimation").getValue());
+            check(st.getBoolean("Looping").getValue(), "looping " + names[i]);
+            check(!st.getDocument("State").getDocument("Definitions").containsKey("CraftCompleted"), "no nested CraftCompleted");
+            check(Files.exists(Path.of("Common/Blocks/Benches/" + models[i] + ".blockymodel")), "model file " + models[i]);
+            String tex = st.getArray("CustomModelTexture").get(0).asDocument().getString("Texture").getValue();
+            check(Files.exists(Path.of("Common/" + tex)), "texture file " + tex);
+        }
+        check(Files.exists(Path.of("Common/Blocks/Benches/Explorer_Bench_Float.blockyanim")), "anim file");
+        check(Files.exists(Path.of("Common/" + block.getArray("CustomModelTexture").get(0).asDocument().getString("Texture").getValue())), "texture 1");
+        check(Files.exists(Path.of("Common/" + root.getString("Icon").getValue())), "icon file");
+        var r = root.getDocument("Recipe");
+        var rb = r.getArray("BenchRequirement").get(0).asDocument();
+        eq("Workbench", rb.getString("Id").getValue());
+        eq("Crafting", rb.getString("Type").getValue());
+        eq("Workbench_Crafting", rb.getArray("Categories").get(0).asString().getValue());
+        eq(1, rb.getInt32("RequiredTierLevel").getValue());
+        check(Math.abs(r.getNumber("TimeSeconds").doubleValue() - 3.0) < 1e-9, "recipe time");
+        var in = r.getArray("Input");
+        eq(5, in.size());
+        eq("Wood_Trunk", in.get(0).asDocument().getString("ResourceTypeId").getValue());
+        eq(6, in.get(0).asDocument().getInt32("Quantity").getValue());
+        eq("Rock", in.get(1).asDocument().getString("ResourceTypeId").getValue());
+        eq(4, in.get(1).asDocument().getInt32("Quantity").getValue());
+        String[] rid = {"Ingredient_Fibre", "Ingredient_Hide_Light", "Ingredient_Stick"};
+        int[] rq = {20, 4, 10};
+        for (int i = 0; i < 3; i++) {
+            eq(rid[i], in.get(i + 2).asDocument().getString("ItemId").getValue());
+            eq(rq[i], in.get(i + 2).asDocument().getInt32("Quantity").getValue());
+            check(zipNames.isEmpty() || zipNames.contains(rid[i] + ".json"), "id exists " + rid[i]);
+        }
+        String raw = Files.readString(Path.of("Server/Item/Items/Bench/Orbis_Explorer_Bench.json"));
+        for (String k : new String[] {"items.orbis_explorer_bench.name", "items.orbis_explorer_bench.description", "benchCategories.camp", "benchCategories.transport"}) {
+            check(raw.contains("server.orbis_horizon." + k), "json key " + k);
+            for (String lang : new String[] {"en-US", "fr-FR"}) {
+                check(Files.readString(Path.of("Server/Languages/" + lang + "/server.lang")).contains("orbis_horizon." + k + " ="), lang + " " + k);
+            }
+        }
+    }
+
+    /** Every mod recipe except the bench's own is made on the explorer bench, in the expected category and tier. */
+    private static void recipesOnExplorerBench() throws Exception {
+        java.util.Map<String, Object[]> table = new java.util.HashMap<>();
+        String camp = "OrbisHorizon_Camp", tr = "OrbisHorizon_Transport";
+        table.put("Camping_Pack_Bedroll", new Object[] {camp, 1});
+        table.put("Camping_Pack_Tent", new Object[] {camp, 2});
+        table.put("Camping_Pack_Tent_Big", new Object[] {camp, 3});
+        table.put("Hotair_Balloon_Basic_Crate", new Object[] {tr, 2});
+        table.put("Hotair_Balloon_Transport_Crate", new Object[] {tr, 2});
+        table.put("Hotair_Balloon_Crate", new Object[] {tr, 3});
+        table.put("Airship_Cloudwork_Crate", new Object[] {tr, 3});
+        table.put("Steamboat_Crate", new Object[] {tr, 3});
+        table.put("Balloon_Station_Crate", new Object[] {tr, 3});
+        java.util.List<Path> files;
+        try (var w = Files.walk(Path.of("Server/Item/Items"))) {
+            files = w.filter(p -> p.toString().endsWith(".json")).toList();
+        }
+        int seen = 0;
+        for (Path p : files) {
+            var root = org.bson.BsonDocument.parse(Files.readString(p));
+            if (!root.containsKey("Recipe")) {
+                continue;
+            }
+            String name = p.getFileName().toString().replace(".json", "");
+            var r = root.getDocument("Recipe");
+            var bench = r.getArray("BenchRequirement").get(0).asDocument();
+            if (name.equals("Orbis_Explorer_Bench")) {
+                eq("Workbench", bench.getString("Id").getValue());
+                continue;
+            }
+            Object[] exp = table.get(name);
+            check(exp != null, "recipe not in table: " + name);
+            seen++;
+            eq("OrbisHorizon_Bench", bench.getString("Id").getValue());
+            eq(exp[0], bench.getArray("Categories").get(0).asString().getValue());
+            eq(exp[1], bench.getInt32("RequiredTierLevel").getValue());
+            int piles = 0;
+            for (var in : r.getArray("Input")) {
+                piles += (in.asDocument().getInt32("Quantity").getValue() + 99) / 100;
+            }
+            check(piles <= 40, name + " piles");
+            if (name.equals("Balloon_Station_Crate")) {
+                check(r.getBoolean("KnowledgeRequired").getValue(), "station knowledge");
+            }
+            if (name.equals("Hotair_Balloon_Transport_Crate")) {
+                java.util.Map<String, Integer> m = new java.util.HashMap<>();
+                for (var in : r.getArray("Input")) {
+                    m.put(in.asDocument().getString("ItemId").getValue(), in.asDocument().getInt32("Quantity").getValue());
+                }
+                eq(35, m.get("Ingredient_Bar_Iron"));
+                eq(15, m.get("Ingredient_Bar_Thorium"));
+                eq(4, m.get("Ingredient_Life_Essence_Concentrated"));
+                check(!m.containsKey("Ingredient_Bar_Cobalt") && !m.containsKey("Ingredient_Fire_Essence"), "no cobalt or fire essence");
+                eq(250, m.get("Cloth_Block_Wool_White"));
+                eq(300, m.get("Cloth_Block_Wool_Green"));
+                eq(24, m.get("Wood_Hardwood_Planks"));
+            }
+        }
+        eq(table.size(), seen);
+    }
+
     /** T156: the pack recipes match the spec, the lower pack comes first, ids exist, piles <= 40, legacy crates have no recipe. */
     private static void campRecipesJson() throws Exception {
         Path dir = Path.of("Server/Item/Items/Containers/Camping");
@@ -1262,8 +1423,8 @@ public class TransitTests {
             check(piles <= 40, row[0] + " piles");
             var bench = r.getArray("BenchRequirement").get(0).asDocument();
             eq("Crafting", bench.getString("Type").getValue());
-            eq("Workbench", bench.getString("Id").getValue());
-            eq("Workbench_Tinkering", bench.getArray("Categories").get(0).asString().getValue());
+            eq("OrbisHorizon_Bench", bench.getString("Id").getValue());
+            eq("OrbisHorizon_Camp", bench.getArray("Categories").get(0).asString().getValue());
             eq((Integer) row[1], bench.getInt32("RequiredTierLevel").getValue());
             eq(3, r.getInt32("TimeSeconds").getValue());
             check(!r.containsKey("KnowledgeRequired"), row[0] + " no knowledge");
