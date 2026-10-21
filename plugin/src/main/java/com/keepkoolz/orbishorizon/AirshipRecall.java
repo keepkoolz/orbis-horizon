@@ -173,7 +173,7 @@ final class AirshipRecall {
                               BalloonRegistry.Entry entry, UUID flightId) {
         Vector3i origin = new Vector3i(entry.x(), entry.y(), entry.z());
         Rotation rotation = entry.rotation();
-        Vector3d parked = AirshipManager.get().parkedPivot(origin, rotation);
+        Vector3d parked = AirshipManager.get().parkedPivot(Deployables.AIRSHIP, origin, rotation);
         Plan plan = plan(s, parked.x, parked.z);
         LOGGER.at(Level.INFO).log("Rappel : dirigeable de %s demandé à %s, apparition en (%.0f, %d, %.0f)", owner.getUsername(), s.name,
                 plan.spawnX(), plan.cruiseY(), plan.spawnZ());
@@ -285,7 +285,7 @@ final class AirshipRecall {
     private static void descend(Store<EntityStore> store, World world, AirshipFlight f, RecallState r, double dt, long now)
             throws IOException {
         AirshipManager am = AirshipManager.get();
-        AirshipManager.Hull hull = am.hullOf(f.kind.shape());
+        AirshipManager.Hull hull = am.hullOf(f.kind, f.kind.shape());
         double yawErr = AirshipMath.wrapPi(r.hoverTheta - f.theta);
         boolean yawDone = Math.abs(yawErr) < Math.toRadians(AirshipAutopilot.TURN_DONE_DEG);
         double step = 0;

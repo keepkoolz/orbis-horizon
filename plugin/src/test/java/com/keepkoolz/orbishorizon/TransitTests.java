@@ -64,6 +64,18 @@ public class TransitTests {
         eq(60, out[4]);
     }
 
+    static void resumeKindRead() {
+        org.bson.BsonDocument empty = new org.bson.BsonDocument();
+        check(AirshipResume.kindOf(empty) == Deployables.AIRSHIP, "absent -> airship");
+        check(AirshipResume.kindOf(new org.bson.BsonDocument("kind", new org.bson.BsonString("airship"))) == Deployables.AIRSHIP, "airship");
+        boolean threw = false;
+        try { AirshipResume.kindOf(new org.bson.BsonDocument("kind", new org.bson.BsonString("tent"))); } catch (IllegalArgumentException e) { threw = true; }
+        check(threw, "non-ship kind refused");
+        threw = false;
+        try { AirshipResume.kindOf(new org.bson.BsonDocument("kind", new org.bson.BsonString("nope"))); } catch (IllegalArgumentException e) { threw = true; }
+        check(threw, "unknown kind refused");
+    }
+
     static void laddersRoundTrip() {
         ShipLadder.Saved s = new ShipLadder.Saved(-1, ShipLadder.Phase.RAISING, new int[] {10, 60, 5, 10, 59, 5});
         ShipLadder.Saved back = ShipLadder.Saved.fromBson(s.toBson());
@@ -104,7 +116,10 @@ public class TransitTests {
         run("telemetryWithoutBeacon", TransitTests::telemetryWithoutBeacon);
         run("shutdownFlushSettled", TransitTests::shutdownFlushSettled);
         run("usageNamesMatchDescriptor", TransitTests::usageNamesMatchDescriptor);
+        run("wheelAnimationsDeclared", TransitTests::wheelAnimationsDeclared);
         run("redactedErrorHasNoMessage", TransitTests::redactedErrorHasNoMessage);
+        run("travelTargetReverse", TransitTests::travelTargetReverse);
+        run("pilotSpeedReverse", TransitTests::pilotSpeedReverse);
         run("campWakeRule", TransitTests::campWakeRule);
         run("campChestForbidden", TransitTests::campChestForbidden);
         run("campChestSplit", TransitTests::campChestSplit);
@@ -120,6 +135,7 @@ public class TransitTests {
         run("ladderColumnCheck", TransitTests::ladderColumnCheck);
         run("raiseSkipsForeign", TransitTests::raiseSkipsForeign);
         run("laddersRoundTrip", TransitTests::laddersRoundTrip);
+        run("resumeKindRead", TransitTests::resumeKindRead);
         run("nameRules", TransitTests::nameRules);
         run("componentGuard", TransitTests::componentGuard);
         run("tentContentsRoundTrip", TransitTests::tentContentsRoundTrip);
@@ -144,6 +160,15 @@ public class TransitTests {
         run("transitViewYaw", TransitTests::transitViewYaw);
         run("groundCageRemaining", TransitTests::groundCageRemaining);
         run("deployPlacement", TransitTests::deployPlacement);
+        run("waterSurfaceSearch", TransitTests::waterSurfaceSearch);
+        run("steamboatFitCheck", TransitTests::steamboatFitCheck);
+        run("gliderAllowedKinds", TransitTests::gliderAllowedKinds);
+        run("steamboatAnchor", TransitTests::steamboatAnchor);
+        run("steamboatSeats", TransitTests::steamboatSeats);
+        run("markerIgnoresFiller", TransitTests::markerIgnoresFiller);
+        run("wheelSpecFlags", TransitTests::wheelSpecFlags);
+        run("neighbourFluidChoice", TransitTests::neighbourFluidChoice);
+        run("quartersByCloseness", TransitTests::quartersByCloseness);
         run("smallTentChest", TransitTests::smallTentChest);
         run("campTiersTable", TransitTests::campTiersTable);
         run("campTiersJson", TransitTests::campTiersJson);
@@ -169,6 +194,8 @@ public class TransitTests {
         run("gliderJumpPhase", TransitTests::gliderJumpPhase);
         run("gliderExitLocal", TransitTests::gliderExitLocal);
         run("airshipLimitCounts", TransitTests::airshipLimitCounts);
+        run("shipFeatureFlags", TransitTests::shipFeatureFlags);
+        run("limitIgnoresOtherShips", TransitTests::limitIgnoresOtherShips);
         run("walkLegsAisle", TransitTests::walkLegsAisle);
         run("staleEntryUnknownIsPresent", TransitTests::staleEntryUnknownIsPresent);
         run("landingOwnerLimit", TransitTests::landingOwnerLimit);
@@ -219,6 +246,18 @@ public class TransitTests {
         run("campRespawnFreeSpot", TransitTests::campRespawnFreeSpot);
         run("campRespawnOwnersOfBed", TransitTests::campRespawnOwnersOfBed);
         run("campRespawnFileRoundTrip", TransitTests::campRespawnFileRoundTrip);
+        run("shipKinds", TransitTests::shipKinds);
+        run("submergedCells", TransitTests::submergedCells);
+        run("steamboatKind", TransitTests::steamboatKind);
+        run("smokeExhaustCells", TransitTests::smokeExhaustCells);
+        run("smokeLegacyAlias", TransitTests::smokeLegacyAlias);
+        run("steamboatThickSmoke", TransitTests::steamboatThickSmoke);
+        run("hullOnWater", TransitTests::hullOnWater);
+        run("shipKindsOrder", TransitTests::shipKindsOrder);
+        run("wheelTable", TransitTests::wheelTable);
+        run("wheelNames", TransitTests::wheelNames);
+        run("wheelHoldAndCycle", TransitTests::wheelHoldAndCycle);
+        run("shipTextKeys", TransitTests::shipTextKeys);
         System.out.println("TransitTests: " + passed + " OK");
     }
 
@@ -898,6 +937,87 @@ public class TransitTests {
         eq(r, net.at("default", new Vector3i(10, 64, -20)));
     }
 
+    private static void quartersByCloseness() {
+        Rotation[] q = AirshipManager.quartersByCloseness(Math.toRadians(80));
+        check(q[0] == Rotation.Ninety && q[3] == Rotation.TwoSeventy, "80 deg: 90 first, 270 last");
+        check(q.length == 4 && java.util.Set.of(q).size() == 4, "four distinct quarters");
+        check(AirshipManager.quartersByCloseness(Math.toRadians(-10))[0] == Rotation.None, "-10 deg: none first");
+        check(AirshipManager.quartersByCloseness(Math.toRadians(45))[0] == Rotation.Ninety, "45 deg tie: counterclockwise (90) first");
+    }
+
+    /** Lot 2: a filler cell of the helm is not the anchor. */
+    private static void neighbourFluidChoice() {
+        SteamboatWater.Neighbour flow = new SteamboatWater.Neighbour(1, (byte) 3, false);
+        SteamboatWater.Neighbour hi = new SteamboatWater.Neighbour(1, (byte) 5, false);
+        SteamboatWater.Neighbour src = new SteamboatWater.Neighbour(2, (byte) 8, true);
+        check(SteamboatWater.betterNeighbour(null, flow) == flow, "first kept");
+        check(SteamboatWater.betterNeighbour(flow, hi) == hi, "higher level wins");
+        check(SteamboatWater.betterNeighbour(hi, flow) == hi, "lower level loses");
+        check(SteamboatWater.betterNeighbour(hi, src) == src, "source wins over flow");
+        check(SteamboatWater.betterNeighbour(src, hi) == src, "source kept");
+    }
+
+    /** Lot 4: only the steamboat has paddle wheels. */
+    private static void wheelSpecFlags() {
+        check("Steamboat".equals(Deployables.STEAMBOAT.airship.wheelAnimPrefix), "steamboat has wheels");
+        check(Deployables.AIRSHIP.airship.wheelAnimPrefix == null, "airship has none");
+    }
+
+    private static void markerIgnoresFiller() {
+        check(StructureShape.isMarker(new StructureShape.Cell(0, 5, 4, "Airship_Helm", 0), "Airship_Helm"), "origin is marker");
+        check(!StructureShape.isMarker(new StructureShape.Cell(0, 4, 4, "Airship_Helm", 31744), "Airship_Helm"), "filler is not");
+        check(!StructureShape.isMarker(new StructureShape.Cell(0, 5, 4, "Other", 0), "Airship_Helm"), "other name");
+    }
+
+    /** Lot 2: water surface search in a column. */
+    private static void waterSurfaceSearch() {
+        java.util.function.IntPredicate col = y -> y >= 60 && y <= 64;
+        check(Integer.valueOf(64).equals(DeployPlacement.waterSurfaceY(col::test, 60, 64)), "surface");
+        check(DeployPlacement.waterSurfaceY(col::test, 66, 64) == null, "no water above target");
+        check(DeployPlacement.waterSurfaceY(y -> false, 10, 64) == null, "dry");
+        check(Integer.valueOf(64).equals(DeployPlacement.waterSurfaceY(y -> y >= 60, 60, 64)), "maxY is an absolute height");
+    }
+
+    private static void steamboatFitCheck() {
+        StructureShape s = StructureShape.ofCells(List.of(
+                new StructureShape.Cell(0, -3, 0, "A"), new StructureShape.Cell(0, -4, 0, "A"), new StructureShape.Cell(0, 0, 0, "B")));
+        Vector3i o = new Vector3i(0, 63, 0); // surface 60: layer -3 at y 60 (water top)
+        // water up to y 60, air above
+        check(DeployPlacement.steamboatFit(s, o, Rotation.None, (x, y, z) -> y <= 60 ? 1 : 0) == null, "fit");
+        check("deploy.steamboat.noWater".equals(DeployPlacement.steamboatFit(s, o, Rotation.None, (x, y, z) -> y == 60 ? 2 : y < 60 ? 1 : 0)), "block in hull");
+        check("deploy.steamboat.noWater".equals(DeployPlacement.steamboatFit(s, o, Rotation.None, (x, y, z) -> y < 60 ? 1 : 0)), "air in hull");
+        check("deploy.steamboat.blocked".equals(DeployPlacement.steamboatFit(s, o, Rotation.None, (x, y, z) -> y <= 60 ? 1 : y == 63 ? 2 : 0)), "block above");
+        check("deploy.steamboat.blocked".equals(DeployPlacement.steamboatFit(s, o, Rotation.None, (x, y, z) -> y <= 60 || y == 63 ? 1 : 0)), "water above");
+        // Quarter turn: Ninety sends prefab (x, z) to (z, -x), so the hull cell (2, -3, 0) lands at (0, 60, -2) from the origin.
+        StructureShape t = StructureShape.ofCells(List.of(
+                new StructureShape.Cell(2, -3, 0, "A"), new StructureShape.Cell(0, 0, 0, "B")));
+        Vector3i to = new Vector3i(0, 63, 0);
+        check(DeployPlacement.steamboatFit(t, to, Rotation.Ninety, (x, y, z) -> y <= 60 && x == 0 && z == -2 ? 1 : 0) == null, "turned fit");
+        check("deploy.steamboat.noWater".equals(DeployPlacement.steamboatFit(t, to, Rotation.Ninety,
+                (x, y, z) -> y <= 60 && x == 2 && z == 0 ? 1 : 0)), "turned hull is not at the unturned place");
+        check("deploy.steamboat.noWater".equals(DeployPlacement.steamboatFit(t, to, Rotation.Ninety,
+                (x, y, z) -> x == 0 && z == -2 && y == 60 ? 2 : y <= 60 ? 1 : 0)), "block in turned hull cell");
+    }
+
+    private static void gliderAllowedKinds() {
+        check(!GliderJump.allowedFor(Deployables.STEAMBOAT), "no glider jump from the boat");
+        check(GliderJump.allowedFor(Deployables.AIRSHIP) && GliderJump.allowedFor(Deployables.BALLOON), "glider jump elsewhere");
+    }
+
+    private static void steamboatAnchor() throws Exception {
+        // Deployables.STEAMBOAT.shape() needs the game assets, so the prefab file is read directly: the origin cell of the marker block.
+        var anchors = prefabShape("Steamboat.prefab.json").cells().stream()
+                .filter(c -> "Airship_Helm".equals(c.baseName()) && c.filler() == 0).toList();
+        check(anchors.size() == 1, "one helm origin cell");
+        StructureShape.Cell a = anchors.get(0);
+        check(a.x() == 0 && a.y() == 5 && a.z() == 4, "anchor " + a.x() + "," + a.y() + "," + a.z());
+    }
+
+    private static void steamboatSeats() throws Exception {
+        int n = AirshipPassengers.seats(prefabShape("Steamboat.prefab.json")).size();
+        check(n == 12, "12 seats, got " + n);
+    }
+
     /** T121: the placement helper and the crate table (compared with the crate JSON files). */
     private static void deployPlacement() throws Exception {
         // No target: the player's position. Facing 0 (yaw 0), offset (0, 1, -3), Ninety.
@@ -1234,6 +1354,17 @@ public class TransitTests {
         check(!AirshipLimit.ownsAny(null, java.util.Arrays.asList((UUID) null)), "unowned never counts");
     }
 
+    private static void shipFeatureFlags() {
+        Deployables.AirshipSpec s = Deployables.AIRSHIP.airship;
+        check(s.crew && s.voyage && s.recall && s.ladders && s.onePerPlayer, "airship declares all its features");
+    }
+
+    private static void limitIgnoresOtherShips() {
+        check(AirshipLimit.countsForLimit(Deployables.AIRSHIP), "airship counts");
+        check(!AirshipLimit.countsForLimit(Deployables.TENT), "tent does not count");
+        check(!AirshipLimit.countsForLimit(Deployables.BALLOON), "balloon does not count");
+    }
+
     private static void landingOwnerLimit() {
         UUID p = UUID.randomUUID();
         check(Ownership.landingOwner(Ownership.NONE, p, "Ann", false).owner() == null, "already owns one: stays unowned");
@@ -1290,7 +1421,7 @@ public class TransitTests {
         check(!OwnedMarkerProvider.visibleTo(Ownership.NONE, a), "NONE hidden");
         check(!OwnedMarkerProvider.visibleTo(Ownership.NONE.withShared(true), a), "NONE shared hidden");
         String[][] table = {{"balloon", "Owned_Balloon.png"}, {"balloon_basic", "Owned_Balloon_Basic.png"},
-                {"balloon_transport", "Owned_Balloon_Transport.png"}, {"airship", "Owned_Airship.png"},
+                {"balloon_transport", "Owned_Balloon_Transport.png"}, {"airship", "Owned_Airship.png"}, {"steamboat", "Owned_Steamboat.png"},
                 {"tent", "Owned_Tent.png"}, {"tent_big", "Owned_Tent_Big.png"}};
         String en, fr;
         try {
@@ -1329,6 +1460,186 @@ public class TransitTests {
         // Ninety sends the cell (19, 7, 0) to (0, 7, -19), centre (0.5, 7, -18.5)
         org.joml.Vector3d q = StationMarkerProvider.markerPoint(new Vector3i(100, 64, 200), Rotation.Ninety);
         eq(new org.joml.Vector3d(100.5, 71, 181.5), q);
+    }
+
+    private static void shipKinds() throws Exception {
+        check(Deployables.SHIPS.contains(Deployables.AIRSHIP), "SHIPS has AIRSHIP");
+        check(AirshipManager.spec(Deployables.AIRSHIP) == Deployables.AIRSHIP.airship, "spec(kind)");
+        check(AirshipManager.pivot(Deployables.AIRSHIP).equals(Deployables.AIRSHIP.airship.pivot), "pivot(kind)");
+        boolean threw = false;
+        try { AirshipManager.spec(Deployables.TENT); } catch (IllegalArgumentException e) { threw = true; }
+        check(threw, "spec(non-ship) throws");
+        StructureShape.Cell boatAnchor = prefabShape("Steamboat.prefab.json").cells().stream()
+                .filter(c -> "Airship_Helm".equals(c.baseName()) && c.filler() == 0).findFirst().orElse(null);
+        check(boatAnchor != null, "steamboat helm cell found");
+        check(boatAnchor != null && boatAnchor.x() == 0 && boatAnchor.y() == 5 && boatAnchor.z() == 4, "steamboat anchor at (0, 5, 4)");
+    }
+
+    private static void submergedCells() {
+        // Tank 3 x 2 x 3 (floor y -4, walls y -3, empty centre) closed by a lid at y -2, plus a block at y 0 (above the waterline).
+        List<StructureShape.Cell> cells = new ArrayList<>();
+        for (int x = -1; x <= 1; x++) {
+            for (int z = -1; z <= 1; z++) {
+                cells.add(new StructureShape.Cell(x, -4, z, "Wood_Hardwood_Planks", 0));
+                cells.add(new StructureShape.Cell(x, -2, z, "Wood_Hardwood_Planks", 0));
+                if (x != 0 || z != 0) {
+                    cells.add(new StructureShape.Cell(x, -3, z, "Wood_Hardwood_Planks", 0));
+                }
+            }
+        }
+        cells.add(new StructureShape.Cell(0, 0, 0, "Wood_Hardwood_Planks", 0));
+        StructureShape tank = StructureShape.ofCells(cells);
+        List<org.joml.Vector3i> sub = SteamboatWater.submergedCells(tank, -3);
+        check(sub.size() == 18, "submergedCells counts 9 + 8 + 1 cavity, got " + sub.size());
+        check(sub.contains(new org.joml.Vector3i(0, -3, 0)), "submergedCells has the closed cavity");
+        check(sub.stream().noneMatch(v -> v.y > -3), "submergedCells excludes cells above the waterline");
+        // Without a lid the hold is open to the outside: only blocks count.
+        List<StructureShape.Cell> open = new ArrayList<>();
+        for (StructureShape.Cell c : cells) {
+            if (c.y() != -2) {
+                open.add(c);
+            }
+        }
+        check(SteamboatWater.submergedCells(StructureShape.ofCells(open), -3).size() == 17, "open hold is not a cavity");
+    }
+
+    private static void hullOnWater() {
+        StructureShape s = StructureShape.ofCells(List.of(
+                new StructureShape.Cell(0, -4, 0, "Wood_Hardwood_Planks", 0),
+                new StructureShape.Cell(0, -3, 0, "Wood_Hardwood_Planks", 0),
+                new StructureShape.Cell(0, -2, 0, "Wood_Hardwood_Planks", 0)));
+        AirshipManager.Hull hull = AirshipManager.hullFor(s, new Vector3f(0, 0, 0), -3);
+        check(hull.size() == 3 && hull.wet.length == 3, "hull has 3 cells");
+        int wetCount = 0;
+        for (boolean w : hull.wet) {
+            if (w) {
+                wetCount++;
+            }
+        }
+        check(wetCount == 2, "two cells at or under the waterline are wet, got " + wetCount);
+        // Lake: water at y -4 and -3 for |x|, |z| <= 5, air above, block elsewhere.
+        AirshipManager.CellTest lake = (x, y, z, wet) -> {
+            boolean inside = Math.abs(x) <= 5 && Math.abs(z) <= 5;
+            boolean water = inside && (y == -4 || y == -3);
+            boolean air = inside && y >= -2;
+            return wet ? !water : !air;
+        };
+        AirshipManager.CellTest higher = (x, y, z, wet) -> {
+            boolean inside = Math.abs(x) <= 5 && Math.abs(z) <= 5;
+            boolean water = inside && (y == -4 || y == -3 || y == -2);
+            boolean air = inside && y >= -1;
+            return wet ? !water : !air;
+        };
+        AirshipManager.CellTest unknown = (x, y, z, wet) -> wet;
+        check(AirshipManager.blocked(lake, hull, 0.5, 0, 0.5, 0, 0) == 0, "afloat");
+        check(AirshipManager.blocked(lake, hull, 0.5, 0, 0.5, Math.toRadians(37), 0) == 0, "afloat turned");
+        check(AirshipManager.blocked(lake, hull, 5.6, 0, 0.5, 0, 0) > 0, "shore beside: a corner sample is in the bank");
+        check(AirshipManager.blocked(lake, hull, 0.5, 1, 0.5, 0, 0) > 0, "lifted: wet cell in air");
+        check(AirshipManager.blocked(higher, hull, 0.5, 0, 0.5, 0, 0) > 0, "higher water at the dry layer");
+        check(AirshipManager.blocked(unknown, hull, 0.5, 0, 0.5, 0, 0) > 0, "unloaded wet cell blocks");
+        AirshipManager.Hull dry = AirshipManager.hullFor(s, new Vector3f(0, 0, 0), null);
+        boolean anyWet = false;
+        for (boolean w : dry.wet) {
+            anyWet |= w;
+        }
+        check(!anyWet, "a dry hull has no wet cell");
+        // Dry hull in the same lake: water blocks a dry cell (liquids block), modelled by a test that blocks any water.
+        AirshipManager.CellTest waterBlocks = (x, y, z, wet) -> y == -4 || y == -3;
+        check(AirshipManager.blocked(waterBlocks, dry, 0.5, 0, 0.5, 0, 0) > 0, "water blocks a dry hull");
+    }
+
+    private static void wheelTable() {
+        check(Arrays.equals(PaddleWheels.wheelsFor(false, false, 0), new PaddleWheels.Spin[]{PaddleWheels.Spin.STOP, PaddleWheels.Spin.STOP}), "arrêt");
+        check(Arrays.equals(PaddleWheels.wheelsFor(true, false, 0), new PaddleWheels.Spin[]{PaddleWheels.Spin.FWD_FAST, PaddleWheels.Spin.FWD_FAST}), "avant");
+        check(Arrays.equals(PaddleWheels.wheelsFor(true, false, 1), new PaddleWheels.Spin[]{PaddleWheels.Spin.FWD_SLOW, PaddleWheels.Spin.FWD_FAST}), "avant, virage à gauche");
+        check(Arrays.equals(PaddleWheels.wheelsFor(true, false, -1), new PaddleWheels.Spin[]{PaddleWheels.Spin.FWD_FAST, PaddleWheels.Spin.FWD_SLOW}), "avant, virage à droite");
+        check(Arrays.equals(PaddleWheels.wheelsFor(true, true, 0), new PaddleWheels.Spin[]{PaddleWheels.Spin.REV_SLOW, PaddleWheels.Spin.REV_SLOW}), "arrière");
+        check(Arrays.equals(PaddleWheels.wheelsFor(true, true, 1), new PaddleWheels.Spin[]{PaddleWheels.Spin.REV_SLOW, PaddleWheels.Spin.REV_VERY_SLOW}), "arrière, poupe vers la droite");
+        check(Arrays.equals(PaddleWheels.wheelsFor(true, true, -1), new PaddleWheels.Spin[]{PaddleWheels.Spin.REV_VERY_SLOW, PaddleWheels.Spin.REV_SLOW}), "arrière, poupe vers la gauche");
+        check(Arrays.equals(PaddleWheels.wheelsFor(false, false, 1), new PaddleWheels.Spin[]{PaddleWheels.Spin.REV_SLOW, PaddleWheels.Spin.FWD_SLOW}), "sur place à gauche");
+        check(Arrays.equals(PaddleWheels.wheelsFor(false, false, -1), new PaddleWheels.Spin[]{PaddleWheels.Spin.FWD_SLOW, PaddleWheels.Spin.REV_SLOW}), "sur place à droite");
+    }
+
+    private static void wheelNames() {
+        check("Wheel_Left_FwdFast".equals(PaddleWheels.animationId(false, PaddleWheels.Spin.FWD_FAST)), "nom gauche");
+        check("Wheel_Right_RevVerySlow".equals(PaddleWheels.animationId(true, PaddleWheels.Spin.REV_VERY_SLOW)), "nom droite");
+        check(PaddleWheels.animationId(false, PaddleWheels.Spin.STOP) == null, "arrêt sans nom");
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (PaddleWheels.Spin sp : PaddleWheels.Spin.values()) {
+            if (sp == PaddleWheels.Spin.STOP) {
+                continue;
+            }
+            names.add(PaddleWheels.animationId(false, sp));
+            names.add(PaddleWheels.animationId(true, sp));
+        }
+        check(names.size() == 12, "12 noms distincts");
+        check(PaddleWheels.Spin.FWD_SLOW.periodMs() == 400, "période lente");
+        check(PaddleWheels.Spin.REV_VERY_SLOW.periodMs() == 800, "période très lente");
+    }
+
+    private static void wheelHoldAndCycle() {
+        PaddleWheels.Spin f = PaddleWheels.Spin.FWD_FAST;
+        PaddleWheels.Spin sl = PaddleWheels.Spin.FWD_SLOW;
+        check(PaddleWheels.nextSpin(f, 0, sl, 1000, 1100) == f, "pas stable depuis 300 ms");
+        check(PaddleWheels.nextSpin(f, 0, sl, 1000, 1310) == f, "cycle pas fini");
+        check(PaddleWheels.nextSpin(f, 0, sl, 1000, 1400) == sl, "fin de cycle");
+        check(PaddleWheels.nextSpin(f, 0, sl, 1000, 1390) == sl, "dans la tolérance");
+        check(PaddleWheels.nextSpin(PaddleWheels.Spin.STOP, 0, f, 0, 299) == PaddleWheels.Spin.STOP, "attente 299");
+        check(PaddleWheels.nextSpin(PaddleWheels.Spin.STOP, 0, f, 0, 300) == f, "attente 300");
+        check(PaddleWheels.atCycleEnd(0, 0, 123, 17), "période nulle");
+    }
+
+    private static void steamboatKind() {
+        check(Deployables.SHIPS.equals(List.of(Deployables.AIRSHIP, Deployables.STEAMBOAT)), "SHIPS");
+        check(Deployables.forPrefab("Steamboat.prefab.json") == Deployables.STEAMBOAT, "forPrefab");
+        Deployables.AirshipSpec b = Deployables.STEAMBOAT.airship;
+        check(!b.crew && !b.voyage && !b.recall && !b.ladders && !b.onePerPlayer, "boat flags all false");
+        check(!AirshipLimit.countsForLimit(Deployables.STEAMBOAT), "no boat limit");
+        check(b.pivot.equals(new Vector3f(0, 4, 5)) && "Steamboat_Crate".equals(b.crateItemId), "boat spec");
+        check("Airship_Cloudwork_TurnLeft".equals(Deployables.AIRSHIP.airship.turnLeftModelId), "airship turn model kept");
+        check("Airship_Cloudwork_TurnRight".equals(Deployables.AIRSHIP.airship.turnRightModelId), "airship turn right kept");
+        check(Deployables.AIRSHIP.airship.turnLeftSystems.length == 2 && Deployables.AIRSHIP.airship.turnRightSystems.length == 2, "airship turn systems kept");
+        check("Airship_Burner_Flame".equals(Deployables.AIRSHIP.airship.flameSystemId), "airship flame kept");
+        check("Steamboat".equals(b.turnLeftModelId) && "Steamboat".equals(b.turnRightModelId), "boat turn models");
+        check("Airship_Exhaust_Smoke".equals(b.smokeSystemId) && "Steamboat_Chimney_Smoke_Thick".equals(b.flameSystemId), "boat smoke and flame");
+    }
+
+    /** Cells of a shape that exist with the same block name at the same place in the other shape, over the cell count. */
+    static double commonRatio(StructureShape a, StructureShape b) {
+        java.util.Set<String> other = new java.util.HashSet<>();
+        for (StructureShape.Cell c : b.cells()) other.add(c.x() + "," + c.y() + "," + c.z() + "," + c.name());
+        int n = 0;
+        for (StructureShape.Cell c : a.cells()) if (other.contains(c.x() + "," + c.y() + "," + c.z() + "," + c.name())) n++;
+        return a.cells().isEmpty() ? 0 : (double) n / a.cells().size();
+    }
+
+    private static void shipKindsOrder() throws Exception {
+        StructureShape airship = prefabShape("The_Cloudwork.prefab.json");
+        StructureShape boat = prefabShape("Steamboat.prefab.json");
+        double r1 = commonRatio(airship, boat);
+        double r2 = commonRatio(boat, airship);
+        System.out.println("shipKindsOrder: airship in boat " + r1 + ", boat in airship " + r2);
+        check(r1 < 0.5 && r2 < 0.5, "ships do not confuse: " + r1 + " " + r2);
+    }
+
+    private static void smokeExhaustCells() throws Exception {
+        eq(Set.of(new Vector3i(-1, 5, 12), new Vector3i(1, 5, 12)), Set.copyOf(ShipSmoke.exhaustCells(prefabShape("The_Cloudwork.prefab.json"))));
+        eq(Set.of(new Vector3i(-2, 8, 11), new Vector3i(2, 8, 11)), Set.copyOf(ShipSmoke.exhaustCells(prefabShape("Steamboat.prefab.json"))));
+    }
+
+    private static void smokeLegacyAlias() {
+        check(BalloonManager.legacyAlias("Airship_Exhaust_Pipe", "Metal_Iron_Pipe_Short"), "airship pipe alias");
+        check(BalloonManager.legacyAlias("Steamboat_Chimney_Top", "Metal_Bronze_Pipe_Large_Mouthpiece"), "chimney alias");
+        check(!BalloonManager.legacyAlias("Metal_Iron_Pipe_Short", "Airship_Exhaust_Pipe"), "no inverse airship");
+        check(!BalloonManager.legacyAlias("Metal_Bronze_Pipe_Large_Mouthpiece", "Steamboat_Chimney_Top"), "no inverse chimney");
+    }
+
+    private static void steamboatThickSmoke() throws Exception {
+        String moving = Files.readString(Path.of("Server/Models/Vehicles/Steamboat.json"));
+        String idle = Files.readString(Path.of("Server/Models/Vehicles/Steamboat_Idle.json"));
+        check(moving.contains("Steamboat_Chimney_Smoke_Thick"), "moving model uses thick smoke");
+        check(!idle.contains("Steamboat_Chimney_Smoke_Thick"), "idle model keeps the light smoke");
+        check(Files.exists(Path.of("Server/Particles/Vehicles/Steamboat/Spawners/Steamboat_Chimney_Smoke_Thick_Main.particlespawner")), "thick spawner exists");
     }
 
     private static void deskDecision() {
@@ -1719,7 +2030,10 @@ public class TransitTests {
         check(s.get("deploy.tent") == 2L && s.get("glider.jump") == 1L, "counts");
         check(new ArrayList<>(s.keySet()).equals(List.of("deploy.tent", "glider.jump")), "NAMES order");
         check(c.snapshotAndReset().isEmpty(), "reset after snapshot");
-        check(UsageCounters.NAMES.size() == 19, "19 counters");
+        check(UsageCounters.NAMES.size() == 21, "21 counters");
+        check(UsageCounters.NAMES.contains("deploy.steamboat") && UsageCounters.NAMES.contains("takeoff.steamboat"), "steamboat counters");
+        check(UsageCounters.NAMES.indexOf("deploy.steamboat") == UsageCounters.NAMES.indexOf("deploy.airship") + 1, "deploy order");
+        check(UsageCounters.NAMES.indexOf("takeoff.steamboat") == UsageCounters.NAMES.indexOf("takeoff.airship") + 1, "takeoff order");
     }
 
     static void shutdownFlushSettled() {
@@ -1737,6 +2051,30 @@ public class TransitTests {
         Telemetry.error("balloon.takeoff", new RuntimeException("x"), null, null);
         Telemetry.stop();
         check(true, "no exception without start");
+    }
+
+    static void wheelAnimationsDeclared() throws Exception {
+        for (String suffix : new String[]{"", "_Idle", "_Off"}) {
+            String json = java.nio.file.Files.readString(java.nio.file.Path.of("Server/Models/Vehicles/Steamboat" + suffix + ".json"));
+            for (boolean right : new boolean[]{false, true}) {
+                for (PaddleWheels.Spin spin : PaddleWheels.Spin.values()) {
+                    if (spin == PaddleWheels.Spin.STOP) continue;
+                    String id = PaddleWheels.animationId(right, spin);
+                    check(json.contains("\"" + id + "\""), "Steamboat" + suffix + " declares " + id);
+                    String file = "Common/Items/Vehicles/Steamboat_" + id + ".blockyanim";
+                    check(json.contains("Items/Vehicles/Steamboat_" + id + ".blockyanim"), id + " path declared");
+                    String anim = java.nio.file.Files.readString(java.nio.file.Path.of(file));
+                    check(anim.contains("\"duration\": " + spin.frames()), id + " duration");
+                    check(!java.util.regex.Pattern.compile("\"time\": \\d+\\.").matcher(anim).find(), id + " integer times");
+                    check(anim.contains("\"" + (right ? "Wheel_Right" : "Wheel_Left") + "\""), id + " animates its wheel node");
+                }
+            }
+            check(json.contains("\"BlendingDuration\": 0") && json.contains("\"Looping\": true"), "blending 0 and looping");
+        }
+        for (String part : new String[]{"_Part1", "_Part2"}) {
+            String json = java.nio.file.Files.readString(java.nio.file.Path.of("Server/Models/Vehicles/Steamboat" + part + ".json"));
+            check(!json.contains("AnimationSets"), part + " has no AnimationSets");
+        }
     }
 
     static void usageNamesMatchDescriptor() throws Exception {
@@ -1767,5 +2105,55 @@ public class TransitTests {
         String fp = ErrorThrottle.fingerprint("balloon.takeoff", e);
         check(fp.startsWith("balloon.takeoff|java.lang.IllegalStateException|"), "fingerprint shape");
         check(!fp.contains("Steve"), "fingerprint without message");
+    }
+
+    static void travelTargetReverse() {
+        double cone = Math.toRadians(100);
+        check(!AirshipManager.travelTarget(0.3, 0.0, cone, true).reversing(), "forward");
+        check(Math.abs(AirshipManager.travelTarget(0.3, 0.0, cone, true).heading() - 0.3) < 1e-9, "bow follows");
+        AirshipManager.TravelTarget back = AirshipManager.travelTarget(Math.PI + 0.2, 0.0, cone, true);
+        check(back.reversing() && Math.abs(AirshipMath.wrapPi(back.heading() - 0.2)) < 1e-9, "stern follows: backing right turns right");
+        check(Double.isNaN(AirshipManager.travelTarget(Math.PI + 0.2, 0.0, cone, false).heading()), "airship keeps its heading");
+        check(AirshipManager.travelTarget(Math.PI + 0.2, 0.0, cone, false).reversing(), "airship still reversing");
+    }
+
+    static void pilotSpeedReverse() {
+        check(Math.abs(AirshipManager.pilotHorizontalSpeed(5.16f, false, true, 0.5f) - 2.58f) < 1e-6, "half speed reversing");
+        check(AirshipManager.pilotHorizontalSpeed(5.16f, false, false, 0.5f) == 5.16f, "full speed forward");
+        check(AirshipManager.pilotHorizontalSpeed(5.16f, true, true, 0.5f) == 0f, "dry");
+        check(AirshipManager.pilotHorizontalSpeed(5.16f, false, true, 1f) == 5.16f, "airship factor 1");
+    }
+
+    private static void shipTextKeys() throws Exception {
+        check(Texts.SHIP_KEYS.size() == 27, "27 restes");
+        for (String lang : new String[] {"en-US", "fr-FR"}) {
+            List<String> lines = Files.readAllLines(Path.of("Server/Languages/" + lang + "/server.lang"));
+            for (String l : lines) {
+                check(!l.contains("\u2014"), lang + " : tiret cadratin : " + l);
+            }
+            for (String rest : Texts.SHIP_KEYS) {
+                boolean air = false;
+                String boat = null;
+                for (String l : lines) {
+                    if (l.startsWith("orbis_horizon.chat.airship." + rest + " = ")) {
+                        air = true;
+                    }
+                    if (l.startsWith("orbis_horizon.chat.steamboat." + rest + " = ")) {
+                        boat = l;
+                    }
+                }
+                check(air, lang + " airship." + rest);
+                check(boat != null, lang + " steamboat." + rest);
+                String val = boat.substring(boat.indexOf(" = ") + 3);
+                check(!val.contains("irship") && !val.contains("irigeable"), lang + " steamboat." + rest + " nomme le dirigeable");
+            }
+            for (String id : new String[] {"airship_helm", "airship_engine", "airship_fuel_tank", "airship_stool"}) {
+                for (String l : lines) {
+                    if (l.startsWith("orbis_horizon.items." + id + ".name = ")) {
+                        check(!l.substring(l.indexOf(" = ") + 3).contains("irship") && !l.substring(l.indexOf(" = ") + 3).contains("irigeable"), lang + " nom générique " + id);
+                    }
+                }
+            }
+        }
     }
 }

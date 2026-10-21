@@ -222,11 +222,14 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             }
         }
         // Airship prototype: the shape is read once and the collision hull computed (logged by AirshipManager).
-        StructureShape airship = Deployables.AIRSHIP.shapeOrNull();
-        if (airship != null) {
-            getLogger().at(Level.INFO).log("Dirigeable : %d case(s), repère « %s » en (%d, %d, %d)", airship.cells().size(),
-                    airship.anchor().baseName(), airship.anchor().x(), airship.anchor().y(), airship.anchor().z());
-            AirshipManager.get().warmUp(airship);
+        for (Deployables.Kind shipKind : Deployables.SHIPS) {
+            StructureShape airship = shipKind.shapeOrNull();
+            if (airship != null) {
+                getLogger().at(Level.INFO).log("%s : %d case(s), repère « %s » en (%d, %d, %d)",
+                        AirshipManager.cap(shipKind.airship.logLabel), airship.cells().size(),
+                        airship.anchor().baseName(), airship.anchor().x(), airship.anchor().y(), airship.anchor().z());
+                AirshipManager.get().warmUp(shipKind, airship);
+            }
         }
         // T54: balloon types, with their number of seats (limit of passengers).
         for (Deployables.Kind kind : Deployables.BALLOONS) {

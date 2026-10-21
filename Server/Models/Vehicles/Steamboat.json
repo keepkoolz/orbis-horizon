@@ -1,0 +1,158 @@
+{
+  "Model": "Items/Vehicles/Steamboat.blockymodel",
+  "Texture": "Items/Vehicles/Steamboat_Texture.png",
+  "EyeHeight": 1,
+  "HitBox": {
+    "Max": {
+      "X": 22,
+      "Y": 7,
+      "Z": 22
+    },
+    "Min": {
+      "X": -22,
+      "Y": -9,
+      "Z": -22
+    }
+  },
+  "MinScale": 1,
+  "MaxScale": 1,
+  "Particles": [
+    {
+      "SystemId": "Steamboat_Chimney_Smoke_Thick",
+      "Scale": 1.6,
+      "TargetNodeName": "Exhaust_Left"
+    },
+    {
+      "SystemId": "Steamboat_Chimney_Smoke_Thick",
+      "Scale": 1.6,
+      "TargetNodeName": "Exhaust_Right"
+    },
+    {
+      "SystemId": "Airship_Firebox_Embers",
+      "Scale": 0.6,
+      "TargetNodeName": "Engine_Firebox"
+    }
+  ],
+  "AnimationSets": {
+    "Wheel_Left_FwdFast": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Steamboat_Wheel_Left_FwdFast.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Wheel_Left_FwdSlow": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Steamboat_Wheel_Left_FwdSlow.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Wheel_Left_FwdVerySlow": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Steamboat_Wheel_Left_FwdVerySlow.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Wheel_Left_RevFast": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Steamboat_Wheel_Left_RevFast.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Wheel_Left_RevSlow": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Steamboat_Wheel_Left_RevSlow.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Wheel_Left_RevVerySlow": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Steamboat_Wheel_Left_RevVerySlow.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Wheel_Right_FwdFast": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Steamboat_Wheel_Right_FwdFast.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Wheel_Right_FwdSlow": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Steamboat_Wheel_Right_FwdSlow.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Wheel_Right_FwdVerySlow": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Steamboat_Wheel_Right_FwdVerySlow.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Wheel_Right_RevFast": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Steamboat_Wheel_Right_RevFast.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Wheel_Right_RevSlow": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Steamboat_Wheel_Right_RevSlow.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Wheel_Right_RevVerySlow": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Steamboat_Wheel_Right_RevVerySlow.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    }
+  }
+}

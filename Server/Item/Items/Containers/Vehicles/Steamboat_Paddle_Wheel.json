@@ -1,0 +1,45 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.steamboat_paddle_wheel.name",
+    "Description": "server.orbis_horizon.items.steamboat_paddle_wheel.description"
+  },
+  "PlayerAnimationsId": "Block",
+  "Categories": [
+    "Furniture.Misc"
+  ],
+  "Icon": "Icons/ItemsGenerated/Steamboat_Paddle_Wheel.png",
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": "Block_Secondary"
+  },
+  "BlockType": {
+    "BlockParticleSetId": "Wood",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "CustomModel": "Blocks/Vehicles/Steamboat_Paddle_Wheel.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Vehicles/Steamboat_Paddle_Wheel_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "DrawType": "Model",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Woods"
+      }
+    },
+    "Group": "Wood",
+    "HitboxType": "Steamboat_Paddle_Wheel",
+    "Material": "Solid",
+    "Opacity": "Transparent",
+    "VariantRotation": "NESW"
+  },
+  "Tags": {
+    "Type": [
+      "Furniture"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

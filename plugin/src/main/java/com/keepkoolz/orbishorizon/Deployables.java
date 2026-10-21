@@ -169,7 +169,27 @@ final class Deployables {
     static final Kind AIRSHIP = new Kind(AIRSHIP_KIND, "The_Cloudwork.prefab.json", "Airship_Helm", false,
             AIRSHIP_PLACE_MIN, AIRSHIP_PLACE_MAX,
             "lock.airship.break", "lock.airship.place", null, null,
-            new AirshipSpec("Airship_Cloudwork", "Airship_Cloudwork_Idle", "Airship_Cloudwork_Off", "Airship_Cloudwork_Crate", AIRSHIP_PIVOT));
+            new AirshipSpec("Airship_Cloudwork", "Airship_Cloudwork_Idle", "Airship_Cloudwork_Off", "Airship_Cloudwork_Crate", AIRSHIP_PIVOT,
+                    "Airship_Cloudwork_TurnLeft", "Airship_Cloudwork_TurnRight",
+                    new String[]{"Airship_Burner_Flame_Weak_Left", "Airship_Burner_Flame_Strong_Right"},
+                    new String[]{"Airship_Burner_Flame_Strong_Left", "Airship_Burner_Flame_Weak_Right"},
+                    "Airship_Exhaust_Smoke", "Airship_Burner_Flame",
+                    true, true, true, true, true, null, 1f, false, null, "dirigeable"));
+
+    static final String STEAMBOAT_KIND = "steamboat";
+    /** Steamboat, prefab frame before rotation: pivot = pilot cell, forbidden placement volume = whole prefab box. */
+    static final int[] STEAMBOAT_PIVOT = {0, 4, 5};
+    static final int[] STEAMBOAT_PLACE_MIN = {-7, -4, -15};
+    static final int[] STEAMBOAT_PLACE_MAX = {7, 9, 12};
+
+    /** The steamboat: same helm marker as the airship, no burner, no crew, voyage, recall, ladders nor per-player limit. */
+    static final Kind STEAMBOAT = new Kind(STEAMBOAT_KIND, "Steamboat.prefab.json", "Airship_Helm", false,
+            STEAMBOAT_PLACE_MIN, STEAMBOAT_PLACE_MAX,
+            "lock.steamboat.break", "lock.steamboat.place", null, null,
+            new AirshipSpec("Steamboat", "Steamboat_Idle", "Steamboat_Off", "Steamboat_Crate", STEAMBOAT_PIVOT,
+                    "Steamboat", "Steamboat", new String[]{"Airship_Exhaust_Smoke"}, new String[]{"Airship_Exhaust_Smoke"},
+                    "Airship_Exhaust_Smoke", "Steamboat_Chimney_Smoke_Thick",
+                    false, false, false, false, false, -3, 0.5f, true, "Steamboat", "bateau"));
 
     static final String PUBLIC_KIND = "balloon_public";
 
@@ -240,7 +260,10 @@ final class Deployables {
             STATION_PLACE_MIN, STATION_PLACE_MAX,
             "lock.station.break", "lock.station.place");
 
-    private static final List<Kind> ALL = List.of(BALLOON, BALLOON_BASIC, BALLOON_TRANSPORT, BEDROLL, TENT, TENT_BIG, AIRSHIP,
+    /** Vehicle types flown by AirshipManager (free-heading ships). */
+    static final List<Kind> SHIPS = List.of(AIRSHIP, STEAMBOAT);
+
+    private static final List<Kind> ALL = List.of(BALLOON, BALLOON_BASIC, BALLOON_TRANSPORT, BEDROLL, TENT, TENT_BIG, AIRSHIP, STEAMBOAT,
             BALLOON_PUBLIC, STATION);
 
     /** Tent types, in the order they are logged at startup. */
@@ -325,19 +348,19 @@ final class Deployables {
          * Particle system of the idle smoke at the burner mouths (Metal_Iron_Pipe_Short cells), on the Exhaust_Left and
          * Exhaust_Right nodes of the idle model: cancelled when the ship starts travelling, lands or is removed.
          */
-        volatile String smokeSystemId = "Airship_Exhaust_Smoke";
+        volatile String smokeSystemId;
         /**
          * Particle system of the horizontal burner flames (with the travel smoke at their tips), on the same nodes of the
          * travelling model: cancelled when the ship stops travelling, lands or is removed.
          */
-        volatile String flameSystemId = "Airship_Burner_Flame";
+        volatile String flameSystemId;
 
         /** Models shown while the ship turns: bow swinging to the pilot's left (strong flame on the right burner) or right. */
-        final String turnLeftModelId = "Airship_Cloudwork_TurnLeft";
-        final String turnRightModelId = "Airship_Cloudwork_TurnRight";
+        final String turnLeftModelId;
+        final String turnRightModelId;
         /** Exhaust particle systems (flames and smoke) of the turning models, cancelled when the model goes away. */
-        static final String[] TURN_LEFT_SYSTEMS = {"Airship_Burner_Flame_Weak_Left", "Airship_Burner_Flame_Strong_Right"};
-        static final String[] TURN_RIGHT_SYSTEMS = {"Airship_Burner_Flame_Strong_Left", "Airship_Burner_Flame_Weak_Right"};
+        final String[] turnLeftSystems;
+        final String[] turnRightSystems;
 
         /** Model shown for a thrust state (IDLE, FORWARD, LEFT, RIGHT). */
         String modelFor(AirshipFlight.Thrust t) {
@@ -354,12 +377,55 @@ final class Deployables {
             return switch (t) {
                 case IDLE -> new String[]{smokeSystemId};
                 case FORWARD -> new String[]{flameSystemId};
-                case LEFT -> TURN_LEFT_SYSTEMS;
-                case RIGHT -> TURN_RIGHT_SYSTEMS;
+                case LEFT -> turnLeftSystems;
+                case RIGHT -> turnRightSystems;
             };
         }
 
-        AirshipSpec(String modelId, String idleModelId, String offModelId, String crateItemId, int[] pivot) {
+        /** Feature flags: which airship-only systems a ship kind takes part in. */
+        final boolean crew;
+        final boolean voyage;
+        final boolean recall;
+        final boolean ladders;
+        final boolean onePerPlayer;
+        /** Prefab-frame y of the highest layer under water when afloat (cells with y at or under it are submerged) (null: a dry ship, the airship). */
+        final Integer waterlineY;
+        /** Speed factor when going astern. */
+        final float reverseSpeedFactor;
+        /** True if the stern follows the pilot's course when reversing (a boat), false if the ship turns as in forward. */
+        final boolean sternFollowsInReverse;
+        /** Name of the model that carries the paddle wheel animations (null: no wheels, the airship). */
+        final String wheelAnimPrefix;
+        /** Word used for this ship in server log lines (lower case: "dirigeable", "bateau"). */
+        final String logLabel;
+
+        /** True for a ship that floats on water (it has a waterline). */
+        boolean waterborne() {
+            return waterlineY != null;
+        }
+
+        AirshipSpec(String modelId, String idleModelId, String offModelId, String crateItemId, int[] pivot,
+                    String turnLeftModelId, String turnRightModelId, String[] turnLeftSystems, String[] turnRightSystems,
+                    String smokeSystemId, String flameSystemId,
+                    boolean crew, boolean voyage, boolean recall, boolean ladders, boolean onePerPlayer,
+                    Integer waterlineY, float reverseSpeedFactor, boolean sternFollowsInReverse, String wheelAnimPrefix,
+                    String logLabel) {
+            this.logLabel = logLabel;
+            this.wheelAnimPrefix = wheelAnimPrefix;
+            this.waterlineY = waterlineY;
+            this.reverseSpeedFactor = reverseSpeedFactor;
+            this.sternFollowsInReverse = sternFollowsInReverse;
+            this.turnLeftModelId = turnLeftModelId;
+            this.turnRightModelId = turnRightModelId;
+            this.turnLeftSystems = turnLeftSystems;
+            this.turnRightSystems = turnRightSystems;
+            this.smokeSystemId = smokeSystemId;
+            this.flameSystemId = flameSystemId;
+            this.crew = crew;
+            this.voyage = voyage;
+            this.recall = recall;
+            this.ladders = ladders;
+            this.onePerPlayer = onePerPlayer;
             this.modelId = modelId;
             this.idleModelId = idleModelId;
             this.offModelId = offModelId;

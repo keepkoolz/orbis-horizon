@@ -30,6 +30,10 @@ A flying ship with a whole workshop on board: every workbench you need, beds, ch
 
 You can hire a pilot at any station. Ask them to take you to one of your map markers or to a station and they fly the ship while you sit in the captain's chair, or pick the destination on the chart in the cabin. Parked far away, the airship comes to a station when you call it, and you climb a ladder to board.
 
+### The steamboat
+
+A paddle steamer you set down on a lake, a river or the sea, with a workshop on board like the airship. Fuel the tank, stand at the helm and cast off. It sails on the surface, backs up slowly, and its two paddle wheels turn as it goes. Smoke rises from its chimneys while it is moored, and thickens when it sails. The airship, too, smokes lightly from its rear burners while parked with fuel.
+
 ### Balloon stations
 
 A station is a stone walkway with a landing pad at its end and a little hut for the station master. Name it when you set it up. Talk to the station master, pick a faraway station, and a balloon floats down onto the pad. Climb in, sit on a stool, and when the countdown ends it carries you across the sky on its own while you watch it fly from the outside. You step off on the boarding platform of the other station, with its name across the screen. No fuel to find, nothing to steer. Every station anyone sets up is a stop for everybody.

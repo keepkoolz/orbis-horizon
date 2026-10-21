@@ -1,0 +1,162 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.steamboat_crate.name",
+    "Description": "server.orbis_horizon.items.steamboat_crate.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Steamboat_Crate.png",
+  "PlayerAnimationsId": "Block",
+  "MaxStack": 1,
+  "ItemLevel": 6,
+  "Categories": [
+    "Items.Vehicles"
+  ],
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Cube",
+    "Opacity": "Transparent",
+    "Group": "Wood",
+    "RandomRotation": "YawStep1",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Benches"
+      }
+    },
+    "BlockParticleSetId": "Wood",
+    "Textures": [
+      {
+        "Weight": 1,
+        "Sides": "BlockTextures/Steamboat_Crate_Side.png",
+        "UpDown": "BlockTextures/Furniture_Village_Crate.png"
+      }
+    ],
+    "ParticleColor": "#3f2720",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "TextureComputedColor": "#47291D"
+  },
+  "Interactions": {
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "HotairBalloon_Deploy",
+          "PrefabPath": "Steamboat.prefab.json",
+          "Offset": {
+            "X": 0,
+            "Y": 0,
+            "Z": -12
+          },
+          "RotationOffset": "None",
+          "Force": true,
+          "Next": {
+            "Type": "ModifyInventory",
+            "AdjustHeldItemQuantity": -1
+          }
+        }
+      ]
+    }
+  },
+  "Recipe": {
+    "Input": [
+      {
+        "ItemId": "Ingredient_Bar_Iron",
+        "Quantity": 120
+      },
+      {
+        "ItemId": "Ingredient_Bar_Thorium",
+        "Quantity": 36
+      },
+      {
+        "ItemId": "Ingredient_Bar_Adamantite",
+        "Quantity": 40
+      },
+      {
+        "ItemId": "Ingredient_Charcoal",
+        "Quantity": 60
+      },
+      {
+        "ItemId": "Ingredient_Fire_Essence",
+        "Quantity": 30
+      },
+      {
+        "ItemId": "Ingredient_Bar_Copper",
+        "Quantity": 16
+      },
+      {
+        "ItemId": "Ingredient_Bar_Cobalt",
+        "Quantity": 12
+      },
+      {
+        "ItemId": "Ingredient_Leather_Heavy",
+        "Quantity": 6
+      },
+      {
+        "ItemId": "Bench_WorkBench",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Furnace",
+        "Quantity": 2
+      },
+      {
+        "ItemId": "Bench_Campfire",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Cooking",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Farming",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Furniture",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Tannery",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Salvage",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Armour",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Weapon",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Alchemy",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Bench_Arcane",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Wood_Softwood_Planks",
+        "Quantity": 100
+      },
+      {
+        "ItemId": "Wood_Goldenwood_Planks",
+        "Quantity": 20
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Tinkering"
+        ],
+        "Id": "Workbench",
+        "RequiredTierLevel": 3
+      }
+    ],
+    "TimeSeconds": 5
+  }
+}

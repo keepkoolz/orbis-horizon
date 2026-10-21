@@ -112,6 +112,10 @@ final class AirshipFlight {
     volatile double travelSpeed;
     volatile double travelDir = Double.NaN;
     volatile boolean reversing;
+    /** Waterborne ships: the fixed Y of the pilot (the hull stays on the waterline). NaN for the airship. */
+    double lockedY = Double.NaN;
+    /** The pilot's horizontal flight speed read right after he is put in flight (before dry or reverse scaling). */
+    float baseHorizontalSpeed;
 
     // ---- rotation centre carry (second test of 5 October 2026)
     /** Travel carried by the carry itself in the current sample window (expected, world frame): removed from the measured travel. */
@@ -187,6 +191,8 @@ final class AirshipFlight {
     int turnDir;
     /** The last travel sample was above fuelMoveMin (forward flames). */
     volatile boolean moving;
+    /** Paddle wheel animation state (lot 4), null for a ship without wheels. */
+    PaddleWheels.State wheels;
     /** Absolute heading change (rad) applied since the start of the current sample window. */
     double windowTurn;
     /** The sound effect of the burners (Hotair_Balloon_Burner_Boost) is on the ship entity. */

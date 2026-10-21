@@ -135,6 +135,11 @@ public final class StructureShape {
         return ((long) (x + 512) << 40) | ((long) (y + 512) << 20) | (long) (z + 512);
     }
 
+    /** True when the cell is the origin cell (filler 0) of a block of the given base name. */
+    static boolean isMarker(Cell c, String blockName) {
+        return c.filler() == 0 && blockName.equals(c.baseName());
+    }
+
     public static StructureShape load(String prefabPath) throws IOException {
         return load(prefabPath, ANCHOR_BLOCK, true);
     }
@@ -160,11 +165,12 @@ public final class StructureShape {
                     b.getNumber("z").intValue(), b.getString("name").getValue(),
                     b.containsKey("filler") ? b.getNumber("filler").intValue() : 0);
             cells.add(c);
-            if (anchorBlock.equals(c.baseName())) {
+            // Filler cells of a multi-cell block never serve as anchor or burner: only the origin cell does.
+            if (isMarker(c, anchorBlock)) {
                 anchor = c;
             }
             // With requireBurner the anchor is the burner (the transit balloon's own burner block is its anchor, not the standard one).
-            if ((requireBurner ? anchorBlock : BURNER_BLOCK).equals(c.baseName())) {
+            if (isMarker(c, requireBurner ? anchorBlock : BURNER_BLOCK)) {
                 burner = c;
             }
             if (SEAT_BLOCK.equals(c.baseName())) {

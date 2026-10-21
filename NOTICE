@@ -14,6 +14,7 @@ The following content is not covered by the licence above. It belongs to its aut
 - Prefabs. Server/Prefabs/Hotair_Balloon.prefab.json is based on the "Hot Air Ballon" prefab published on CurseForge (https://www.curseforge.com/hytale/prefabs/hot-air-ballon). Server/Prefabs/Camping_Tent.prefab.json is based on "Desert Base Camp - Tent (Model 2)" (https://www.curseforge.com/hytale/prefabs/desert-base-camp-tent-model-2) and "Desert Base Camp - Tent (Model 1)" (https://www.curseforge.com/hytale/prefabs/desert-base-camp-tent). Both were modified for this mod.
 - Hytale game assets, which belong to Hypixel Studios. This covers the content copied or adapted from the game:
   - the flight model and its texture atlas (Common/Items/Vehicles), generated from the prefab with the game's block textures
+  - the airship helm model and texture (Common/Blocks/Vehicles/Airship_Helm.blockymodel and Airship_Helm_Texture.png), the game's ancient statue and goldenwood fence models and textures put together by scripts/make_helm_model.py
   - the crate icons and side textures (Common/Icons/ItemsGenerated, Common/BlockTextures), drawn from the village crate of the game
   - the flame particle systems and spawners of the small balloon (Server/Particles/Vehicles/Hotair_Balloon_Basic), copied from the game and modified
   - the flamethrower sound effect (Server/Entity/Effects/Hotair_Balloon_Burner_Boost.json), copied from the game and modified

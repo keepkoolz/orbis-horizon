@@ -312,7 +312,7 @@ final class AirshipPassengers {
             PlayerRef pr = store.getComponent(p.ref, PlayerRef.getComponentType());
             if (pr != null) {
                 boolean chair = p.seatBlock != null && p.seatBlock.x == CHAIR[0] && p.seatBlock.y == CHAIR[1] && p.seatBlock.z == CHAIR[2];
-                pr.sendMessage(Texts.t(chair ? "crew.voyage.seatedChair" : "airship.passenger.seated"));
+                pr.sendMessage(chair ? Texts.t("crew.voyage.seatedChair") : Texts.ship(f.kind, "passenger.seated"));
             }
             LOGGER.at(Level.INFO).log("Passager du dirigeable %s : tabouret %s, %s", p.name, p.seatBlock, r.mode);
         } catch (RuntimeException e) {
@@ -371,11 +371,11 @@ final class AirshipPassengers {
             }
             // External view (T124, since 16 October 2026 also for the airship): behind the ship's movement, the body is not mounted and
             // follows by itself, safety teleport beyond PassengerCamera's distance.
-            Vector3f d = new Vector3f(p.seatLocal).sub(Deployables.AIRSHIP.airship.pivot);
+            Vector3f d = new Vector3f(p.seatLocal).sub(AirshipManager.pivot(f.kind));
             // T118: mannequins and hidden body (PassengerSeatView), the external camera is attached to the entity the rider sees.
             PassengerSeatView.sync(store, p, new PassengerSeatView.Ctx(f.shipUuid, f.shipRef, f.observerRef, f.dual, f.pilotUuid,
                     new Vector3f(-d.x, d.y, -d.z), seat, f.seatViews,
-                    new PassengerCamera.Source(Deployables.AIRSHIP, f.pos, PassengerCamera.behindHeading(f.theta)[0], PassengerCamera.behindHeading(f.theta)[1], Math.abs(f.yawRate) > PassengerCamera.TURNING_YAW_RATE)), now);
+                    new PassengerCamera.Source(f.kind, f.pos, PassengerCamera.behindHeading(f.theta)[0], PassengerCamera.behindHeading(f.theta)[1], Math.abs(f.yawRate) > PassengerCamera.TURNING_YAW_RATE)), now);
             PassengerCamera.safetyTeleport(store, p, seat);
             return;
         }
@@ -466,7 +466,7 @@ final class AirshipPassengers {
 
     /** MOUNT: the rider is mounted on the ship entity, offset in the entity's frame (prefab offset with x and z inverted). */
     private void mount(Store<EntityStore> store, AirshipFlight f, Rider r) {
-        Vector3f d = new Vector3f(r.p.seatLocal).sub(Deployables.AIRSHIP.airship.pivot);
+        Vector3f d = new Vector3f(r.p.seatLocal).sub(AirshipManager.pivot(f.kind));
         store.putComponent(r.p.ref, MountedComponent.getComponentType(),
                 new MountedComponent(mountEntity(f), new Vector3f(-d.x, d.y, -d.z), MountController.Minecart));
     }
@@ -570,7 +570,7 @@ final class AirshipPassengers {
                 }
                 PlayerRef pr = store.getComponent(r.p.ref, PlayerRef.getComponentType());
                 if (pr != null) {
-                    pr.sendMessage(Texts.t(f.takeOver ? "airship.passenger.pilotDiedTakeOver" : "airship.passenger.landed"));
+                    pr.sendMessage(f.takeOver ? Texts.t("airship.passenger.pilotDiedTakeOver") : Texts.ship(f.kind, "passenger.landed"));
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Passager du dirigeable %s non reposé proprement", r.p.name);
@@ -593,7 +593,7 @@ final class AirshipPassengers {
                 if (admin == null || !admin.getUuid().equals(r.p.uuid)) {
                     PlayerRef pr = store.getComponent(r.p.ref, PlayerRef.getComponentType());
                     if (pr != null) {
-                        pr.sendMessage(Texts.t("airship.despawn.removedByAdmin"));
+                        pr.sendMessage(Texts.ship(f.kind, "despawn.removedByAdmin"));
                     }
                 }
             } catch (RuntimeException e) {
@@ -673,7 +673,7 @@ final class AirshipPassengers {
         for (Rider r : f.riders) {
             PlayerRef pr = r.p.ref.isValid() ? store.getComponent(r.p.ref, PlayerRef.getComponentType()) : null;
             if (pr != null) {
-                pr.sendMessage(Texts.pilot(key, f.crew).param("dest", dest));
+                pr.sendMessage(Texts.pilot(Texts.shipKey(f.kind, key), f.crew).param("dest", dest));
             }
         }
     }
@@ -683,7 +683,7 @@ final class AirshipPassengers {
         for (Rider r : f.riders) {
             PlayerRef pr = r.p.ref.isValid() ? store.getComponent(r.p.ref, PlayerRef.getComponentType()) : null;
             if (pr != null) {
-                pr.sendMessage(Texts.pilot(key, f.crew));
+                pr.sendMessage(Texts.pilot(Texts.shipKey(f.kind, key), f.crew));
             }
         }
     }

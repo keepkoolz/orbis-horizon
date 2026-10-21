@@ -8,9 +8,9 @@ import java.util.concurrent.atomic.LongAdder;
 /** Anonymous usage counters, one per feature; no player or position data. */
 final class UsageCounters {
     static final List<String> NAMES = List.of(
-            "deploy.balloon", "deploy.balloon_basic", "deploy.balloon_transport", "deploy.airship",
+            "deploy.balloon", "deploy.balloon_basic", "deploy.balloon_transport", "deploy.airship", "deploy.steamboat",
             "deploy.bedroll", "deploy.tent", "deploy.tent_big", "deploy.station",
-            "takeoff.balloon", "takeoff.balloon_basic", "takeoff.balloon_transport", "takeoff.airship",
+            "takeoff.balloon", "takeoff.balloon_basic", "takeoff.balloon_transport", "takeoff.airship", "takeoff.steamboat",
             "airship.voyage", "airship.recall", "airship.pilot_hired", "transit.trip",
             "cage.capture", "glider.jump", "camp.upgrade");
 

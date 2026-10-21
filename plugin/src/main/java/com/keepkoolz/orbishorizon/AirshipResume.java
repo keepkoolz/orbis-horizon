@@ -35,10 +35,24 @@ final class AirshipResume {
     private static volatile Path dir;
 
     /** A flight read back from disk. pivotX/Y/Z: last valid pivot cell (integers), heading in radians. */
-    record Record(UUID id, UUID pilot, String world, int pivotX, int pivotY, int pivotZ, double heading, UUID ship,
+    record Record(UUID id, Deployables.Kind kind, UUID pilot, String world, int pivotX, int pivotY, int pivotZ, double heading, UUID ship,
                   BalloonCargo cargo, AirshipEngines engines, org.joml.Vector3i takeoffOrigin, com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation takeoffRotation,
                   AirshipBenches benches, List<AirshipPassengers.Saved> riders, Ownership ownership, CrewRecord crew, VoyageState voyage,
                   AirshipBenchContents benchContents, RecallState.Saved recall, int[] takeoffRungs) {
+    }
+
+    /** Vehicle type of a file: absent in files written before ships had a type (airship), unknown or non-ship ids are refused. */
+    static Deployables.Kind kindOf(BsonDocument doc) {
+        if (!doc.containsKey("kind")) {
+            return Deployables.AIRSHIP;
+        }
+        String id = doc.getString("kind").getValue();
+        for (Deployables.Kind k : Deployables.SHIPS) {
+            if (k.id.equals(id)) {
+                return k;
+            }
+        }
+        throw new IllegalArgumentException("Unknown ship kind: " + id);
     }
 
     /** Rung cells {x, y, z} as a flat BSON array of ints. */
@@ -84,6 +98,7 @@ final class AirshipResume {
             BsonDocument doc = new BsonDocument();
             doc.put("version", new BsonInt32(VERSION));
             doc.put("id", new BsonString(f.id.toString()));
+            doc.put("kind", new BsonString(f.kind.id));
             if (f.pilotUuid != null && f.pilotRef != null) {
                 doc.put("pilot", new BsonString(f.pilotUuid.toString()));
             }
@@ -196,7 +211,7 @@ final class AirshipResume {
                 if (!worldName.equals(doc.getString("world").getValue())) {
                     continue;
                 }
-                list.add(new Record(UUID.fromString(doc.getString("id").getValue()),
+                list.add(new Record(UUID.fromString(doc.getString("id").getValue()), kindOf(doc),
                         doc.containsKey("pilot") ? UUID.fromString(doc.getString("pilot").getValue()) : null, worldName,
                         doc.getNumber("x").intValue(), doc.getNumber("y").intValue(), doc.getNumber("z").intValue(),
                         doc.getNumber("heading").doubleValue(),

@@ -7,20 +7,20 @@
   "Categories": [
     "Furniture.Doors"
   ],
-  "Icon": "Icons/ItemsGenerated/Furniture_Crude_Window.png",
+  "Icon": "Icons/ItemsGenerated/Furniture_Ancient_Statue.png",
   "Interactions": {
     "Primary": "Block_Primary",
     "Secondary": "Block_Secondary"
   },
   "BlockType": {
     "InteractionHint": "server.orbis_horizon.interactionHints.helmTakeOff",
-    "BlockParticleSetId": "Wood",
-    "BlockSoundSetId": "Wood",
-    "PhysicalMaterialId": "Wood",
-    "CustomModel": "Blocks/Decorative_Sets/Crude/Window.blockymodel",
+    "BlockParticleSetId": "Stone",
+    "BlockSoundSetId": "Stone",
+    "PhysicalMaterialId": "Stone",
+    "CustomModel": "Blocks/Vehicles/Airship_Helm.blockymodel",
     "CustomModelTexture": [
       {
-        "Texture": "Blocks/Decorative_Sets/Crude/Window_Texture.png",
+        "Texture": "Blocks/Vehicles/Airship_Helm_Texture.png",
         "Weight": 1
       }
     ],
@@ -31,25 +31,12 @@
         "GatherType": "Woods"
       }
     },
-    "Group": "Wood",
-    "HitboxType": "Window",
+    "HitboxType": "Airship_Helm",
     "Material": "Solid",
     "Opacity": "Transparent",
-    "ParticleColor": "#63412c",
-    "Supporting": {
-      "Up": [
-        {
-          "FaceType": "Window"
-        }
-      ],
-      "Down": [
-        {
-          "FaceType": "Window"
-        }
-      ]
-    },
-    "VariantRotation": "Wall",
-    "TextureComputedColor": "#614029",
+    "VariantRotation": "NESW",
+    "ParticleColor": "#9f9e81",
+    "TextureComputedColor": "#5C5C3F",
     "Interactions": {
       "Use": {
         "Interactions": [
@@ -65,5 +52,5 @@
       "Furniture"
     ]
   },
-  "ItemSoundSetId": "ISS_Blocks_Wood"
+  "ItemSoundSetId": "ISS_Blocks_Stone"
 }

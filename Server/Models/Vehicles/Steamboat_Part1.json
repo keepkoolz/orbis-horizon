@@ -1,0 +1,19 @@
+{
+  "Model": "Items/Vehicles/Steamboat_Part1.blockymodel",
+  "Texture": "Items/Vehicles/Steamboat_Texture.png",
+  "EyeHeight": 1,
+  "HitBox": {
+    "Max": {
+      "X": 22,
+      "Y": 7,
+      "Z": 22
+    },
+    "Min": {
+      "X": -22,
+      "Y": -9,
+      "Z": -22
+    }
+  },
+  "MinScale": 1,
+  "MaxScale": 1
+}

@@ -99,7 +99,7 @@ final class StructureRemoval {
         }
         // a. All the structure's chunks must be loaded (nothing is removed halfway).
         if (!SectionBlocks.sectionsLoaded(world.getChunkStore(), minX, minY, minZ, maxX, maxY, maxZ)) {
-            return Result.failure(Texts.t(kind.isAirship() ? "airship.approach" : CampTiers.ofKind(kind.id) != null ? "camp.approach" : "tent.approach"));
+            return Result.failure(kind.isAirship() ? Texts.ship(kind, "approach") : Texts.t(CampTiers.ofKind(kind.id) != null ? "camp.approach" : "tent.approach"));
         }
         // a bis. Packing keeps the contents: a chest or bench whose component cannot be read would lose them.
         if (keepContents && !StructureComponents.unreadable(world, shape, origin, rotation).isEmpty()) {

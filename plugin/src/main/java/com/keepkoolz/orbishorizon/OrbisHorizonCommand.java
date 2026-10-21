@@ -14,6 +14,7 @@ public final class OrbisHorizonCommand extends AbstractCommandCollection {
         requireNoPermission();
         addSubCommand(new BalloonCommand());
         addSubCommand(new AirshipCommand());
+        addSubCommand(new SteamboatCommand());
         addSubCommand(new StationCommand());
         addSubCommand(new PreviewCommand());
         addSubCommand(new PassengersCommand());

@@ -49,6 +49,7 @@ final class OwnedMarkerProvider implements WorldMapManager.MarkerProvider {
             case Deployables.BASIC_KIND -> "Owned_Balloon_Basic.png";
             case Deployables.TRANSPORT_KIND -> "Owned_Balloon_Transport.png";
             case Deployables.AIRSHIP_KIND -> "Owned_Airship.png";
+            case Deployables.STEAMBOAT_KIND -> "Owned_Steamboat.png";
             case Deployables.TENT_KIND -> "Owned_Tent.png";
             case Deployables.TENT_BIG_KIND -> "Owned_Tent_Big.png";
             default -> null;
@@ -102,7 +103,7 @@ final class OwnedMarkerProvider implements WorldMapManager.MarkerProvider {
                     if (f.world != world || own.id() == null || !visibleTo(own, viewer)) {
                         continue;
                     }
-                    add(collector, Deployables.AIRSHIP_KIND, own, viewer, new Vector3d(f.pos));
+                    add(collector, f.kind.id, own, viewer, new Vector3d(f.pos));
                 } catch (RuntimeException ex) {
                     logOnce(ex);
                 }

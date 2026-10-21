@@ -1,0 +1,44 @@
+{
+ "duration": 12,
+ "holdLastKeyframe": false,
+ "nodeAnimations": {
+  "Wheel_Left": {
+   "position": [],
+   "orientation": [
+    {
+     "time": 0,
+     "delta": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "w": 1.0
+     },
+     "interpolationType": "linear"
+    },
+    {
+     "time": 6,
+     "delta": {
+      "x": 0.13052619222005157,
+      "y": 0.0,
+      "z": 0.0,
+      "w": 0.9914448613738104
+     },
+     "interpolationType": "linear"
+    },
+    {
+     "time": 12,
+     "delta": {
+      "x": 0.25881904510252074,
+      "y": 0.0,
+      "z": 0.0,
+      "w": 0.9659258262890683
+     },
+     "interpolationType": "linear"
+    }
+   ],
+   "shapeStretch": [],
+   "shapeVisible": [],
+   "shapeUvOffset": []
+  }
+ }
+}

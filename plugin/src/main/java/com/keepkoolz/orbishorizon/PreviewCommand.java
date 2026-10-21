@@ -26,6 +26,7 @@ import com.hypixel.hytale.server.core.util.TargetUtil;
 import org.joml.Matrix4d;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
+import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -45,6 +46,7 @@ final class PreviewCommand extends AbstractCommandCollection {
         addSubCommand(new Show("prefab", true));
         addSubCommand(new Show("box", false));
         addSubCommand(new Clear());
+        addSubCommand(new PlaceWheel());
     }
 
     private static final class Show extends AbstractPlayerCommand {
@@ -121,6 +123,56 @@ final class PreviewCommand extends AbstractCommandCollection {
                 LOGGER.at(Level.WARNING).withCause(e).log("Aperçu non envoyé");
                 ctx.sendMessage(com.hypixel.hytale.server.core.Message.raw("Preview failed: " + e));
             }
+        }
+    }
+
+    /**
+     * Test of 20 October 2026 (paddle wheel): /orbishorizon preview wheel. A player cannot place Steamboat_Paddle_Wheel by hand
+     * (its 2 x 5 x 7 hitbox must be free, it goes 1 block below the target cell). This places it 6 blocks in front of the player,
+     * 4 blocks up, turned like the player, through BlockOperations.setBlock, which writes the filler cells itself, as a prefab will.
+     */
+    private static final class PlaceWheel extends AbstractPlayerCommand {
+        PlaceWheel() {
+            super("wheel", Texts.cmd("preview.desc"));
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
+            if (t == null) {
+                ctx.sendMessage(Texts.t("error.noPosition"));
+                return;
+            }
+            String key = "Steamboat_Paddle_Wheel";
+            int id = BlockType.getAssetMap().getIndex(key);
+            BlockType type = id < 0 ? null : BlockType.getAssetMap().getAsset(id);
+            if (type == null) {
+                ctx.sendMessage(com.hypixel.hytale.server.core.Message.raw("Unknown block " + key));
+                return;
+            }
+            double yaw = t.getRotation().y;
+            Rotation facing = Rotation.closestOfDegrees((float) Math.toDegrees(yaw));
+            int x = (int) Math.floor(t.getPosition().x - Math.sin(yaw) * 6);
+            int y = (int) Math.floor(t.getPosition().y) + 4;
+            int z = (int) Math.floor(t.getPosition().z - Math.cos(yaw) * 6);
+            boolean ok = SectionBlocks.setAt(world.getChunkStore(), x, y, z, id, type, facing.ordinal(), 0, 0);
+            SectionReader reader = new SectionReader(world.getChunkStore());
+            int cells = 0;
+            for (int dx = -3; dx <= 3; dx++) {
+                for (int dy = -3; dy <= 3; dy++) {
+                    for (int dz = -3; dz <= 3; dz++) {
+                        BlockType b = SectionBlocks.typeAt(reader, x + dx, y + dy, z + dz);
+                        if (b != null && key.equals(b.getId())) {
+                            cells++;
+                        }
+                    }
+                }
+            }
+            String msg = "Wheel at " + x + ", " + y + ", " + z + " rotation " + facing + ": set " + ok + ", " + cells
+                    + " wheel cell(s) found (70 expected)";
+            LOGGER.at(Level.INFO).log("Roue d'essai : %s", msg);
+            ctx.sendMessage(com.hypixel.hytale.server.core.Message.raw(msg));
         }
     }
 

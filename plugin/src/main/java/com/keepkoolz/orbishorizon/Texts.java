@@ -2,6 +2,8 @@ package com.keepkoolz.orbishorizon;
 
 import com.hypixel.hytale.server.core.Message;
 
+import java.util.List;
+
 /**
  * Chat messages and command descriptions translated by the client, in the language chosen in its settings
  * (Server/Languages/en-US and fr-FR/server.lang). Message.translation sends the key, not the text: the client
@@ -20,6 +22,27 @@ final class Texts {
     /** Translated chat message, key relative to CHAT. */
     static Message t(String key) {
         return Message.translation(CHAT + key);
+    }
+
+    /** Keys shared by the airship and the steamboat: "airship.<rest>" or "steamboat.<rest>" depending on the ship. */
+    static final List<String> SHIP_KEYS = List.of("takeoff", "fuel.level", "fuel.low", "fuel.critical", "fuel.dry",
+            "fuel.none", "landing.start", "landing.already", "landing.stuck", "landing.noRoom", "landed",
+            "error.alreadyPiloting", "error.notPiloting", "error.noAirship", "error.prefabUnreadable", "error.full",
+            "error.modelMissing", "passenger.seated", "passenger.landed", "passenger.pilotDied", "passenger.pilotLeft",
+            "despawn.none", "despawn.done", "despawn.doneInventoryFull", "despawn.removedByAdmin",
+            "despawn.alreadyLanding", "approach");
+
+    /** Message of a ship: the steamboat text for the steamboat, the airship text otherwise (unknown kind included). */
+    static Message ship(Deployables.Kind kind, String rest) {
+        return t((kind == Deployables.STEAMBOAT ? "steamboat." : "airship.") + rest);
+    }
+
+    /** Key of a ship message given as "airship.<rest>": the steamboat key for the steamboat, the same key otherwise. */
+    static String shipKey(Deployables.Kind kind, String key) {
+        if (kind == Deployables.STEAMBOAT && key.startsWith("airship.") && SHIP_KEYS.contains(key.substring("airship.".length()))) {
+            return "steamboat." + key.substring("airship.".length());
+        }
+        return key;
     }
 
     /** Chat line spoken by the pilot of an airship: the {pilot} parameter is his first name. */

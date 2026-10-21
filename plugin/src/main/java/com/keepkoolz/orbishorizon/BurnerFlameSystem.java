@@ -88,7 +88,10 @@ public final class BurnerFlameSystem extends EntityTickingSystem<ChunkStore> {
         if (engine) {
             boolean glow = BurnerFuel.hasFuel(bench);
             Vector3i enginePos = new Vector3i(p);
-            world.execute(() -> AirshipEngines.setFireboxLit(world, enginePos, glow));
+            world.execute(() -> {
+                AirshipEngines.setFireboxLit(world, enginePos, glow);
+                ShipSmoke.setLit(world, enginePos, glow);
+            });
             return;
         }
         // First pass (block placed or chunk loaded): nothing burns.

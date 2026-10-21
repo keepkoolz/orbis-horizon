@@ -5731,7 +5731,7 @@
       "x": -1,
       "y": 5,
       "z": 12,
-      "name": "Metal_Iron_Pipe_Short",
+      "name": "Airship_Exhaust_Pipe",
       "support": 15
     },
     {
@@ -5879,12 +5879,6 @@
       "y": 7,
       "z": -11,
       "name": "Wood_Softwood_Planks"
-    },
-    {
-      "x": 0,
-      "y": 8,
-      "z": -11,
-      "name": "Wood_Softwood_Beam"
     },
     {
       "x": 0,
@@ -8415,7 +8409,7 @@
       "x": 1,
       "y": 5,
       "z": 12,
-      "name": "Metal_Iron_Pipe_Short",
+      "name": "Airship_Exhaust_Pipe",
       "support": 15
     },
     {

@@ -103,6 +103,19 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
                 transform.getPosition(), transform.getRotation().y, offset, rotationOffset);
         Rotation rotation = placement.rotation();
         Vector3i origin = placement.origin();
+        Deployables.Kind boatKind = Deployables.forPrefab(prefabPath);
+        boolean boat = boatKind != null && Deployables.STEAMBOAT_KIND.equals(boatKind.id);
+        DeployPlacement.CellState waterState = boat ? DeployPlacement.worldState(world) : null;
+        if (boat) {
+            // The steamboat floats: the origin follows the water surface under the targeted block.
+            Vector3i boatOrigin = DeployPlacement.steamboatOrigin(waterState,
+                    target != null ? new Vector3i(target.x, target.y, target.z) : null, origin);
+            if (boatOrigin == null) {
+                refuseBoat(commandBuffer, player, "deploy.steamboat.noWater", context);
+                return;
+            }
+            origin = boatOrigin;
+        }
 
         int flags = (force ? 1 : 0) | 8; // same options as SpawnPrefab
         // T24: the unfolded ladder does not replace the terrain (a slope, a wall). T54: the balloon type is found by the
@@ -130,7 +143,14 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             context.getState().state = InteractionState.Failed;
             return;
         }
-        Vector3i wet = shape != null ? BalloonManager.underLiquid(world, shape, origin, rotation) : null;
+        if (boat && shape != null) {
+            String refusal = DeployPlacement.steamboatFit(shape, origin, rotation, waterState);
+            if (refusal != null) {
+                refuseBoat(commandBuffer, player, refusal, context);
+                return;
+            }
+        }
+        Vector3i wet = shape != null && !boat ? BalloonManager.underLiquid(world, shape, origin, rotation) : null;
         if (wet != null) {
             PlayerRef playerRef = commandBuffer.getComponent(player, PlayerRef.getComponentType());
             if (playerRef != null) {
@@ -151,7 +171,7 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             context.getState().state = InteractionState.Failed;
             return;
         }
-        if (kind.isAirship()) {
+        if (AirshipLimit.countsForLimit(kind)) {
             PlayerRef owner = commandBuffer.getComponent(player, PlayerRef.getComponentType());
             if (owner != null && AirshipLimit.ownsAirship(owner.getUuid())) {
                 owner.sendMessage(Texts.t("airship.error.alreadyOwned"));
@@ -169,6 +189,14 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             // Unreadable shape: placed without terrain protection and without registry entry (logged by shapeOrNull).
             PrefabUtil.paste(buffer, world, origin, rotation, new FastRandom(), flags, 0, commandBuffer);
         }
+    }
+
+    private static void refuseBoat(CommandBuffer<EntityStore> commandBuffer, Ref<EntityStore> player, String key, InteractionContext context) {
+        PlayerRef playerRef = commandBuffer.getComponent(player, PlayerRef.getComponentType());
+        if (playerRef != null) {
+            playerRef.sendMessage(Texts.t(key));
+        }
+        context.getState().state = InteractionState.Failed; // the crate is not consumed
     }
 
     @Override

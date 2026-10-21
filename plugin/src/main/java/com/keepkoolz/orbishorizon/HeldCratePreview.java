@@ -113,6 +113,18 @@ final class HeldCratePreview {
         Vector3i target = TargetUtil.getTargetBlock(ref, REACH, store);
         DeployPlacement.Placement p = DeployPlacement.compute(target, t.getPosition(), t.getRotation().y, crate.offset(), crate.rotationOffset());
         String itemId = heldItemId(store, ref);
+        if (itemId.equals("Steamboat_Crate")) {
+            // Same origin as the real placement: y follows the water surface; no water column, no preview.
+            Vector3i boat = DeployPlacement.steamboatOrigin(DeployPlacement.worldState(world), target, p.origin());
+            if (boat == null) {
+                if (st != null) {
+                    hide(pr);
+                    STATES.remove(id);
+                }
+                return;
+            }
+            p = new DeployPlacement.Placement(boat, p.facing(), p.rotation());
+        }
         if (st == null) {
             st = new State();
             st.ref = ref;

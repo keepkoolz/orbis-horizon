@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.9
+
+A paddle steamer joins the fleet: set it down on a lake, a river or the sea, fuel its tank and cast off.
+
+### Added
+
+- The steamboat: a paddle steamer set down on water from its crate. It sails on the surface, backs up slowly, its paddle wheels turn, and it carries 12 passengers. Nobody can jump off with a glider from it for now.
+- Light smoke rises from the airship's rear burner outlets and the steamboat's chimneys while they are parked with fuel in the tank. The steamboat's smoke thickens when it sails.
+
+### Changed
+
+- The blocks shared by the airship and the steamboat (helm, engine, fuel tank, stool, chair, inkwell, rope ladder) now have general names and descriptions.
+- The airship's helm is now an ancient stone statue holding a golden wheel, facing the bow. It is solid, and you still use the wheel to take off and land.
+
 ## v1.8.5
 
 ### Fixed

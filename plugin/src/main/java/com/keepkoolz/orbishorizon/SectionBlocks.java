@@ -118,6 +118,29 @@ final class SectionBlocks {
         }
     }
 
+    /**
+     * Sets the fluid of a cell and wakes its block section so the fluid flows (path of PlaceFluidInteraction). FluidSection.setFluid
+     * takes world coordinates: it indexes the section with ChunkUtil.indexBlock, which masks each axis with 31. False only if the
+     * section is not loaded.
+     */
+    static boolean setFluidAt(ChunkStore store, int x, int y, int z, int fluidId, byte level) {
+        Ref<ChunkStore> ref = store.getChunkSectionReferenceAtBlock(x, y, z);
+        if (ref == null || !ref.isValid()) {
+            return false;
+        }
+        var chunkStore = store.getStore();
+        var fluids = chunkStore.getComponent(ref,
+                com.hypixel.hytale.server.core.universe.world.chunk.section.FluidSection.getComponentType());
+        var blocks = chunkStore.getComponent(ref,
+                com.hypixel.hytale.server.core.universe.world.chunk.section.BlockSection.getComponentType());
+        if (fluids == null || blocks == null) {
+            return false;
+        }
+        fluids.setFluid(x, y, z, fluidId, level);
+        blocks.setTicking(x, y, z, true);
+        return true;
+    }
+
     /** Changes the interaction state of a block (same call and last argument as the bench upgrade in AirshipBenches). */
     static boolean setStateAt(ChunkStore store, int x, int y, int z, BlockType type, String state) {
         Ref<ChunkStore> ref = store.getChunkSectionReferenceAtBlock(x, y, z);

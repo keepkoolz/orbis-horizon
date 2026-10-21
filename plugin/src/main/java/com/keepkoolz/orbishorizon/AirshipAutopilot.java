@@ -242,7 +242,7 @@ final class AirshipAutopilot {
         }
         try {
             AirshipManager am = AirshipManager.get();
-            AirshipManager.Hull hull = am.hullOf(f.kind.shape());
+            AirshipManager.Hull hull = am.hullOf(f.kind, f.kind.shape());
             double d = Math.min(Math.max(dt, 0), MAX_DT);
             if (v.progressMs == 0) {
                 markProgress(f, v, now);
@@ -342,7 +342,7 @@ final class AirshipAutopilot {
             f.yawAcc = 0;
         }
         // Turn around the ship centre (T66), not around the helm: the pivot cell moves on the arc.
-        am.move(world, f, hull, am.pivotAfterTurn(f.pos, f.theta, f.theta + step), f.theta + step, now);
+        am.move(world, f, hull, am.pivotAfterTurn(f.kind, f.pos, f.theta, f.theta + step), f.theta + step, now);
     }
 
     private static void cruise(Store<EntityStore> store, World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f,

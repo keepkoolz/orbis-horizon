@@ -902,11 +902,17 @@ public final class BalloonManager {
 
     /**
      * Blocks that older ships still hold in a cell whose prefab block was replaced later:
-     * the game's Deco_Map (T148 desk) and the game's crude ladder (rope ladder).
+     * the game's Deco_Map (T148 desk), the game's crude ladder (rope ladder) and the game's pipes (ship smoke blocks).
      */
     static boolean legacyAlias(String prefabName, String worldBase) {
         if ("Airship_Captain_Map_Desk".equals(prefabName)) {
             return worldBase.startsWith("Deco_Map");
+        }
+        if ("Airship_Exhaust_Pipe".equals(prefabName)) {
+            return worldBase.startsWith("Metal_Iron_Pipe_Short");
+        }
+        if ("Steamboat_Chimney_Top".equals(prefabName)) {
+            return worldBase.startsWith("Metal_Bronze_Pipe_Large_Mouthpiece");
         }
         return "Airship_Rope_Ladder".equals(prefabName) && worldBase.startsWith("Furniture_Crude_Ladder");
     }

@@ -1,0 +1,90 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.airship_exhaust_pipe.name",
+    "Description": "server.orbis_horizon.items.airship_exhaust_pipe.description"
+  },
+  "ItemLevel": 10,
+  "MaxStack": 50,
+  "Icon": "Icons/ItemsGenerated/Metal_Iron_Pipe_Short.png",
+  "Categories": [
+    "Blocks.Metal"
+  ],
+  "PlayerAnimationsId": "Item",
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": "Block_Secondary"
+  },
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Structures/Tubes/Short.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Structures/Tubes/Corner_Textures/Metal_Iron.png",
+        "Weight": 1
+      }
+    ],
+    "Group": "Metal",
+    "HitboxType": "Branch_Short",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Rocks"
+      }
+    },
+    "VariantRotation": "NESW",
+    "Support": {
+      "North": [
+        {
+          "FaceType": "Full"
+        },
+        {
+          "FaceType": "Branch"
+        }
+      ]
+    },
+    "BlockParticleSetId": "Metal",
+    "ParticleColor": "#87928e",
+    "BlockSoundSetId": "Metal",
+    "PhysicalMaterialId": "Metal",
+    "IgnoreSupportWhenPlaced": true,
+    "TextureComputedColor": "#7E8684",
+    "State": {
+      "Definitions": {
+        "On": {
+          "Particles": [
+            {
+              "SystemId": "Airship_Exhaust_Smoke",
+              "Scale": 0.6,
+              "PositionOffset": {
+                "Z": 0.5
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Tags": {
+    "Family": [
+      "Iron"
+    ],
+    "Type": [
+      "Metal"
+    ]
+  },
+  "IconProperties": {
+    "Scale": 0.58823,
+    "Rotation": [
+      22.5,
+      45,
+      22.5
+    ],
+    "Translation": [
+      0,
+      -13.5
+    ]
+  },
+  "ItemSoundSetId": "ISS_Items_Metal"
+}

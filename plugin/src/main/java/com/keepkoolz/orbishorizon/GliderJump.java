@@ -102,6 +102,9 @@ final class GliderJump {
             }
         }
         for (AirshipFlight f : AirshipManager.get().flights()) {
+            if (!allowedFor(f.kind)) {
+                continue; // not counted as aboard: a pending jump of such a rider is dropped by processPending
+            }
             for (AirshipPassengers.Rider r : f.riders) {
                 aboard.add(r.p.uuid);
                 if (f.world == world) {
@@ -112,6 +115,11 @@ final class GliderJump {
         // Players no longer aboard start from a fresh baseline when they board again.
         LAST_SLOT.keySet().removeIf(uuid -> !aboard.contains(uuid));
         processPending(store, world, aboard);
+    }
+
+    /** Glider jumps are not offered from every vehicle (decision of 21 October 2026: not from the steamboat for now). */
+    static boolean allowedFor(Deployables.Kind kind) {
+        return kind != Deployables.STEAMBOAT;
     }
 
     /** Countdown of the pending jumps of this world: cancels on every broken condition, shows the title, then jumps. */

@@ -86,7 +86,7 @@ final class StationZone {
 
     private static boolean concerned(String kindId) {
         return Deployables.BALLOON_KIND.equals(kindId) || Deployables.BASIC_KIND.equals(kindId)
-                || Deployables.TRANSPORT_KIND.equals(kindId) || Deployables.AIRSHIP_KIND.equals(kindId)
+                || Deployables.TRANSPORT_KIND.equals(kindId) || Deployables.AIRSHIP_KIND.equals(kindId) || Deployables.STEAMBOAT_KIND.equals(kindId)
                 || Deployables.TENT_KIND.equals(kindId) || Deployables.TENT_BIG_KIND.equals(kindId);
     }
 }
