@@ -5,9 +5,7 @@
   },
   "Icon": "Icons/ItemsGenerated/Deco_Iron_Chain_Small.png",
   "ItemLevel": 2,
-  "Categories": [
-    "Blocks.Deco"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "BlockType": {
     "InteractionHint": "server.orbis_horizon.interactionHints.chainTakeOff",
     "Material": "Empty",

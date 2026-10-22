@@ -4,9 +4,7 @@
     "Description": "server.orbis_horizon.items.hotair_balloon_public_burner.description"
   },
   "Icon": "Icons/ItemsGenerated/Metal_Iron_Pipe_Large_Mouthpiece.png",
-  "Categories": [
-    "Blocks.Metal"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Model",

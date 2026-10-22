@@ -6,9 +6,7 @@
   "ItemLevel": 5,
   "MaxStack": 100,
   "Icon": "Icons/ItemsGenerated/Metal_Iron_Ornate.png",
-  "Categories": [
-    "Blocks.Metal"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "PlayerAnimationsId": "Block",
   "BlockType": {
     "Material": "Solid",
@@ -43,6 +41,7 @@
               "Weight": 1
             }
           ],
+          "AmbientSoundEventId": "SFX_Ship_Engine_Loop",
           "Light": {
             "Color": "#c62"
           },

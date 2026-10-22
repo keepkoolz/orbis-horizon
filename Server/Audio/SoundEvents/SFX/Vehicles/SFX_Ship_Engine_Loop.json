@@ -1,0 +1,55 @@
+{
+  "Layers": [
+    {
+      "Files": [
+        "Sounds/NPC/Intelligent/Goblins/Gobliterator/NPC_Goblin_Gobliterator_Engine_Loop_01.ogg"
+      ],
+      "Looping": true,
+      "RandomSettings": {
+        "MaxStartOffset": 5
+      },
+      "Volume": 0
+    },
+    {
+      "Files": [
+        "Sounds/Environments/Emitters/Goblin/Emit_Goblin_Steam_A_01.ogg",
+        "Sounds/Environments/Emitters/Goblin/Emit_Goblin_Steam_A_02.ogg",
+        "Sounds/Environments/Emitters/Goblin/Emit_Goblin_Steam_A_03.ogg",
+        "Sounds/Environments/Emitters/Goblin/Emit_Goblin_Steam_A_04.ogg",
+        "Sounds/Environments/Emitters/Goblin/Emit_Goblin_Steam_A_05.ogg"
+      ],
+      "Looping": true,
+      "RandomSettings": {
+        "MinPitch": -2,
+        "MaxPitch": 2,
+        "MinVolume": -4,
+        "MaxStartOffset": 4
+      },
+      "RoundRobinHistorySize": 3,
+      "Volume": -14
+    },
+    {
+      "Files": [
+        "Sounds/Environments/Emitters/Goblin/Emit_Goblin_Steam_B_01.ogg",
+        "Sounds/Environments/Emitters/Goblin/Emit_Goblin_Steam_B_02.ogg",
+        "Sounds/Environments/Emitters/Goblin/Emit_Goblin_Steam_B_03.ogg",
+        "Sounds/Environments/Emitters/Goblin/Emit_Goblin_Steam_B_04.ogg",
+        "Sounds/Environments/Emitters/Goblin/Emit_Goblin_Steam_B_05.ogg",
+        "Sounds/Environments/Emitters/Goblin/Emit_Goblin_Steam_B_06.ogg"
+      ],
+      "Looping": true,
+      "RandomSettings": {
+        "MinPitch": -2,
+        "MaxPitch": 2,
+        "MinVolume": -4,
+        "MaxStartOffset": 4
+      },
+      "RoundRobinHistorySize": 4,
+      "Volume": -8
+    }
+  ],
+  "Volume": 0,
+  "PreventSoundInterruption": false,
+  "AudioCategory": "AudioCat_Ambient",
+  "Parent": "SFX_Attn_Moderate"
+}

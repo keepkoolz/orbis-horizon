@@ -1,0 +1,7 @@
+{
+  "ApplicationEffects": {
+    "WorldSoundEventId": "SFX_Ship_Engine_Loop"
+  },
+  "OverlapBehavior": "Overwrite",
+  "Infinite": true
+}

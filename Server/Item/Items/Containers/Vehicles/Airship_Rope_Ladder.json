@@ -4,9 +4,7 @@
     "Description": "server.orbis_horizon.items.airship_rope_ladder.description"
   },
   "PlayerAnimationsId": "Block",
-  "Categories": [
-    "Blocks.Deco"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "Icon": "Icons/ItemsGenerated/Furniture_Kweebec_Ladder.png",
   "IconProperties": {
     "Rotation": [

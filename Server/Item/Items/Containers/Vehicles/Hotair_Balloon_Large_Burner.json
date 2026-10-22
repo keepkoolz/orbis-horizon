@@ -4,12 +4,9 @@
     "Description": "server.orbis_horizon.items.hotair_balloon_large_burner.description"
   },
   "ItemLevel": 2,
-  "Quality": "Common",
   "MaxStack": 10,
   "Icon": "Icons/ItemsGenerated/Metal_Iron_Pipe_Large_Mouthpiece.png",
-  "Categories": [
-    "Blocks.Metal"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "Set": "Metal_Iron",
   "PlayerAnimationsId": "Block",
   "BlockType": {

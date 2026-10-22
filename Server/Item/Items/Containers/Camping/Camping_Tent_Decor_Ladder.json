@@ -4,9 +4,7 @@
     "Description": "server.orbis_horizon.items.camping_tent_decor_ladder.description"
   },
   "PlayerAnimationsId": "Block",
-  "Categories": [
-    "Furniture.Doors"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "Icon": "Icons/ItemsGenerated/Furniture_Kweebec_Ladder.png",
   "IconProperties": {
     "Rotation": [

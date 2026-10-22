@@ -219,5 +219,6 @@
   },
   "MaxStack": 1,
   "ItemLevel": 1,
+  "Quality": "Common",
   "ItemSoundSetId": "ISS_Blocks_Wood"
 }

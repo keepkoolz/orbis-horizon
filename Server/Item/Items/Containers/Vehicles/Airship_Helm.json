@@ -4,9 +4,7 @@
     "Description": "server.orbis_horizon.items.airship_helm.description"
   },
   "PlayerAnimationsId": "Block",
-  "Categories": [
-    "Furniture.Doors"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "Icon": "Icons/ItemsGenerated/Furniture_Ancient_Statue.png",
   "Interactions": {
     "Primary": "Block_Primary",

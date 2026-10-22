@@ -4,9 +4,7 @@
     "Description": "server.orbis_horizon.items.cage_lever.description"
   },
   "Icon": "Icons/ItemsGenerated/Deco_Lever.png",
-  "Categories": [
-    "Blocks.Deco"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "Interactions": {
     "Secondary": "Block_Secondary"
   },

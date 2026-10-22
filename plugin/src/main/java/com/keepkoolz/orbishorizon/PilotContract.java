@@ -36,9 +36,9 @@ final class PilotContract {
 
     static {
         Map<String, Integer> p = new LinkedHashMap<>();
-        p.put(GOLD, 30);
-        p.put(SILVER, 20);
-        p.put(ESSENCE, 10);
+        p.put(GOLD, 50);
+        p.put(SILVER, 35);
+        p.put(ESSENCE, 15);
         PRICE = Collections.unmodifiableMap(p);
     }
 

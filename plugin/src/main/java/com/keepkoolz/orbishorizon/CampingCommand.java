@@ -2,6 +2,9 @@ package com.keepkoolz.orbishorizon;
 
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.entity.entities.player.data.PlayerWorldData;
+import org.joml.Vector3i;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
@@ -24,6 +27,7 @@ public final class CampingCommand extends AbstractCommandCollection {
         requireNoPermission();
         addSubCommand(new Back());
         addSubCommand(new Pack());
+        addSubCommand(new Forget());
     }
 
     /** /orbishorizon camping back on|off: shows or hides the camp pack on players' backs (server setting). */
@@ -68,6 +72,30 @@ public final class CampingCommand extends AbstractCommandCollection {
                 return;
             }
             CampPacker.pack(store, ref, world, e, true);
+        }
+    }
+
+    /** /orbishorizon camping forget x y z: forgets the camp respawn point on this block (menu of the world map). Own points only. */
+    static final class Forget extends AbstractPlayerCommand {
+        private final RequiredArg<Integer> x = withRequiredArg("x", Texts.cmd("camping.forget.x"), ArgTypes.INTEGER);
+        private final RequiredArg<Integer> y = withRequiredArg("y", Texts.cmd("camping.forget.y"), ArgTypes.INTEGER);
+        private final RequiredArg<Integer> z = withRequiredArg("z", Texts.cmd("camping.forget.z"), ArgTypes.INTEGER);
+
+        Forget() {
+            super("forget", Texts.cmd("camping.forget.desc"));
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            Vector3i block = new Vector3i(x.get(ctx), y.get(ctx), z.get(ctx));
+            Player pl = store.getComponent(ref, Player.getComponentType());
+            PlayerWorldData data = pl == null ? null : pl.getPlayerConfigData().getPerWorldData(world.getName());
+            if (data == null || !CampRespawn.forget(player.getUuid(), world.getName(), block)) {
+                ctx.sendMessage(Texts.t("camp.respawnNotFound"));
+                return;
+            }
+            data.setRespawnPoints(CampRespawn.withoutBlock(data.getRespawnPoints(), block));
+            ctx.sendMessage(Texts.t("camp.respawnForgotten"));
         }
     }
 }

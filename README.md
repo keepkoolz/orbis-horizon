@@ -10,7 +10,7 @@ The mod is still in development, and more gear is on the way.
 
 ### Camps
 
-Your camp now fits in a leather backpack that you can see on your back. The sleeping bag is where it starts: a straw bed and a little fire, set up in a second and good for one night. Wake up after a full night and it packs itself away.
+Your camp fits in a leather backpack that you can see on your back. The sleeping bag is where it starts: a straw bed and a little fire, set up in a second and good for one night. Wake up after a full night and it packs itself away.
 
 Upgrade the sleeping bag into the Small tent: a bed, a campfire, a stool, a lantern and a little chest outside. Upgrade that into the Large tent, a proper base camp for two with chests to keep what you found along the way. Every upgrade keeps what you left inside.
 
@@ -32,7 +32,7 @@ You can hire a pilot at any station. Ask them to take you to one of your map mar
 
 ### The steamboat
 
-A paddle steamer you set down on a lake, a river or the sea, with a workshop on board like the airship. Fuel the tank, stand at the helm and cast off. It sails on the surface, backs up slowly, and its two paddle wheels turn as it goes. Smoke rises from its chimneys while it is moored, and thickens when it sails. The airship, too, smokes lightly from its rear burners while parked with fuel.
+A paddle steamer you set down on a lake, a river or the sea, with a workshop on board like the airship. Fuel the tank, stand at the helm and cast off. It sails on the surface, backs up slowly, and its two paddle wheels turn and splash as it goes, to the rumble of its steam engine. Smoke rises from its chimneys while it is moored, and thickens when it sails. The airship, too, smokes lightly from its rear burners while parked with fuel.
 
 ### Balloon stations
 
@@ -40,7 +40,7 @@ A station is a stone walkway with a landing pad at its end and a little hut for 
 
 ## Before you set off
 
-- Everything is crafted at the Explorer's workbench, an explorer's desk with its own tabs. Upgrade it and plans and little models of what you can build appear on top of it, down to a balloon floating above the bench. Each vehicle is a single recipe, with no parts to make first.
+- Everything is crafted at the Explorer's workbench, an explorer's desk with its own tabs. Upgrade it and plans and little models of what you can build appear on top of it, down to a balloon floating above the bench.
 - Hold a crate and you see where the structure will go, block by block, before you set it up.
 - Pack a camp and what you left in its chests and campfire travels in the pack, ready for your next camp. The small tent has a chest outside for your things.
 - Once set up, a tent, balloon, airship or station is locked, so nobody breaks it by accident. Beds, chests, burners and seats still work.

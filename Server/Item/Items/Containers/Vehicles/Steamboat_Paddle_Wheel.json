@@ -4,9 +4,7 @@
     "Description": "server.orbis_horizon.items.steamboat_paddle_wheel.description"
   },
   "PlayerAnimationsId": "Block",
-  "Categories": [
-    "Furniture.Misc"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "Icon": "Icons/ItemsGenerated/Steamboat_Paddle_Wheel.png",
   "Interactions": {
     "Primary": "Block_Primary",

@@ -384,7 +384,7 @@
     {
       "x": -2,
       "y": 0,
-      "z": 0,
+      "z": 1,
       "name": "Camping_Pack_Placed_Tent_Big"
     }
   ],
@@ -749,7 +749,7 @@
     {
       "x": -2,
       "y": 0,
-      "z": 0,
+      "z": 1,
       "name": "Empty",
       "level": 0
     }

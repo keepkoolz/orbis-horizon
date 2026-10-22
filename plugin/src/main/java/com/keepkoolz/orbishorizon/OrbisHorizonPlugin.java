@@ -190,6 +190,11 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             } catch (RuntimeException e) {
                 getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des véhicules non enregistrés");
             }
+            try {
+                RespawnPointMarkerProvider.register(event.getWorld());
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des lieux de réveil non enregistrés");
+            }
         });
         getEventRegistry().registerGlobal(StartWorldEvent.class, event -> {
             BalloonManager.get().recoverWorld(event.getWorld());
@@ -264,6 +269,11 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 OwnedMarkerProvider.register(world);
             } catch (RuntimeException e) {
                 getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des véhicules non enregistrés pour %s", world.getName());
+            }
+            try {
+                RespawnPointMarkerProvider.register(world);
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des lieux de réveil non enregistrés pour %s", world.getName());
             }
             // One failing resume must never stop the plugin: StartWorldEvent calls them again when the world is ready.
             try {

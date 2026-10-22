@@ -4,12 +4,9 @@
     "Description": "server.orbis_horizon.items.airship_burner_outlet.description"
   },
   "ItemLevel": 5,
-  "Quality": "Common",
   "MaxStack": 10,
   "Icon": "Icons/ItemsGenerated/Airship_Burner_Outlet.png",
-  "Categories": [
-    "Blocks.Metal"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "Set": "Metal_Iron",
   "PlayerAnimationsId": "Block",
   "BlockType": {

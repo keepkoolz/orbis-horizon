@@ -4,9 +4,7 @@
     "Description": "server.orbis_horizon.items.airship_inkwell.description"
   },
   "Icon": "Icons/ItemsGenerated/Deco_Inkwell.png",
-  "Categories": [
-    "Blocks.Deco"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "Interactions": {
     "Secondary": "Block_Secondary"
   },

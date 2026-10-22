@@ -4,9 +4,7 @@
     "Description": "server.orbis_horizon.items.hotair_balloon_brazier.description"
   },
   "Icon": "Icons/ItemsGenerated/Deco_Campfire.png",
-  "Categories": [
-    "Blocks.Deco"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Model",

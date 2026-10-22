@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.9.2
+
+### Added
+
+- The steamboat's paddle wheels now splash: each paddle hitting the water plays a water sound, faster when the wheels turn faster.
+- The steamboat and the airship engine now run with a steam engine sound whenever the fuel tank has fuel, docked or underway.
+- You can forget a camp respawn point from the world map: open the menu of its house icon and choose "Forget this respawn point". It works even after the camp is packed.
+
+### Fixed
+
+- Sleeping in a camp no longer replaces your bed's respawn point, and claiming a bed no longer replaces your camp respawn point, even when they are close to each other. You come back to whichever is nearest to where you fell.
+
+### Changed
+
+- The mod's technical blocks (vehicle parts, placed packs, station decorations) no longer show in the creative library or search. They can still be obtained with `/give`.
+- Crafted items now show a quality matching the Explorer's workbench tier they need: uncommon (green) for tier 1, rare (blue) for tier 2, legendary (gold) for tier 3. The large tent is the exception and stays rare, and the Explorer's workbench itself is common, like the game's other workbenches.
+- The pilot contract now costs 50 gold bars, 35 silver bars and 15 concentrated life essences (was 30, 20 and 10).
+- The pack left on the ground at a camp is now half its size, and the large tent's pack sits in front of the tent wall, next to the entrance.
+
 ## v1.9.1
 
 Explorers get their own workbench: every camp pack and vehicle crate is now crafted there, and its look grows with each tier.

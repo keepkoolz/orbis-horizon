@@ -4,6 +4,11 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.protocol.AnimationSlot;
+import com.hypixel.hytale.protocol.SoundCategory;
+import com.hypixel.hytale.server.core.asset.type.soundevent.config.SoundEvent;
+import com.hypixel.hytale.server.core.universe.world.SoundUtil;
+import org.joml.Vector3d;
+import org.joml.Vector3f;
 import com.hypixel.hytale.protocol.packets.entities.PlayAnimation;
 import com.hypixel.hytale.server.core.entity.AnimationUtils;
 import com.hypixel.hytale.server.core.modules.entity.tracker.EntityTrackerSystems;
@@ -128,7 +133,54 @@ final class PaddleWheels {
         final long[] wantedSince = {0, 0};
         /** Per tracked entity, the viewers and when each is due its replay (Long.MAX_VALUE: served). */
         final Map<Ref<EntityStore>, Map<Ref<EntityStore>, Long>> viewers = new HashMap<>();
+        /** Per wheel, when the last splash was played. */
+        final long[] lastSplash = {Long.MIN_VALUE, Long.MIN_VALUE};
         long lastLogMs;
+    }
+
+    static final String SPLASH_ID = "SFX_Steamboat_Paddle_Splash";
+    /** Splash points in the prefab frame (cell coordinates, y at the waterline), left wheel (-x) then right wheel (+x). */
+    private static final double[][] SPLASH_LOCAL = {{-6, -2.5, 2}, {6, -2.5, 2}};
+    private static int splashIndex = Integer.MIN_VALUE;
+    private static boolean splashWarned;
+
+    /** True when the cycle running since startMs has begun after the last splash: one splash per paddle, at the start of each cycle. */
+    static boolean splashDue(long periodMs, long startMs, long lastSplashMs, long nowMs) {
+        if (periodMs <= 0 || nowMs < startMs) {
+            return false;
+        }
+        long cycleStart = startMs + (nowMs - startMs) / periodMs * periodMs;
+        return lastSplashMs < cycleStart;
+    }
+
+    private static int splashIndex() {
+        if (splashIndex == Integer.MIN_VALUE) {
+            int idx = SoundEvent.getAssetMap().getIndex(SPLASH_ID);
+            if (idx <= 0 && !splashWarned) {
+                splashWarned = true;
+                LOGGER.at(Level.WARNING).log("Roues à aubes : son " + SPLASH_ID + " introuvable, pas d'éclaboussure");
+            }
+            splashIndex = idx;
+        }
+        return splashIndex;
+    }
+
+    private static void playSplashes(Store<EntityStore> store, AirshipFlight f, State st, long nowMs) {
+        for (int i = 0; i < 2; i++) {
+            Spin sp = st.cur[i];
+            if (sp == Spin.STOP || !splashDue(sp.periodMs(), st.start[i], st.lastSplash[i], nowMs)) {
+                continue;
+            }
+            st.lastSplash[i] = nowMs;
+            int idx = splashIndex();
+            if (idx <= 0) {
+                continue;
+            }
+            Vector3f pv = AirshipManager.pivot(f.kind);
+            double[] l = SPLASH_LOCAL[i];
+            Vector3d p = AirshipMath.rotateY(l[0] - pv.x, l[1] - pv.y, l[2] - pv.z, f.theta, new Vector3d()).add(f.pos);
+            SoundUtil.playSoundEvent3d(idx, SoundCategory.SFX, p.x, p.y, p.z, store);
+        }
     }
 
     private static AnimationSlot slot(int wheel) {
@@ -169,6 +221,7 @@ final class PaddleWheels {
                     apply(store, f.observerRef, i, next);
                 }
             }
+            playSplashes(store, f, st, nowMs);
             serveViewers(store, st, f.shipRef, nowMs);
             serveViewers(store, st, f.observerRef, nowMs);
         } catch (RuntimeException e) {
@@ -192,6 +245,7 @@ final class PaddleWheels {
                     apply(store, f.shipRef, i, st.cur[i]);
                     apply(store, f.observerRef, i, st.cur[i]);
                     st.start[i] = nowMs;
+                    st.lastSplash[i] = nowMs;
                 }
             }
             // The replay above goes out at once, but the ModelUpdate of putModel is queued and sent later in the tick: it may wipe

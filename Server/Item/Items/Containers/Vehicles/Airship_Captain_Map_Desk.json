@@ -4,9 +4,7 @@
     "Description": "server.orbis_horizon.items.airship_captain_map_desk.description"
   },
   "Icon": "Icons/ItemsGenerated/Deco_Map.png",
-  "Categories": [
-    "Blocks.Deco"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "Interactions": {
     "Primary": "Block_Primary",
     "Secondary": "Block_Secondary"

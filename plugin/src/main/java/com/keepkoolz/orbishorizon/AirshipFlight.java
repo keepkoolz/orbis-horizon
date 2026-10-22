@@ -197,6 +197,8 @@ final class AirshipFlight {
     double windowTurn;
     /** The sound effect of the burners (Hotair_Balloon_Burner_Boost) is on the ship entity. */
     volatile boolean roar;
+    /** Ship engine loop sound (Ship_Engine effect) is on: the flight has engines and is not dry. */
+    volatile boolean engineSound;
     /** Rest turn: the ship turns toward the pilot's head yaw. restSinceMs: when the head first left the dead zone (0 = not). */
     volatile boolean restActive;
     long restSinceMs;

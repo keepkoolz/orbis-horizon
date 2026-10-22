@@ -4280,20 +4280,25 @@ public final class BalloonManager {
      * airship). Returns false only when adding failed. Never throws.
      */
     boolean applyRoarEffect(Store<EntityStore> store, Ref<EntityStore> ref, boolean on) {
+        return applyLoopEffect(store, ref, on, BOOST_EFFECT);
+    }
+
+    /** Same as applyRoarEffect for any infinite sound effect of the mod (for example the ship engine loop). Never throws. */
+    boolean applyLoopEffect(Store<EntityStore> store, Ref<EntityStore> ref, boolean on, String effectId) {
         try {
             EffectControllerComponent ec = store.getComponent(ref, EffectControllerComponent.getComponentType());
             if (ec == null) {
                 return !on;
             }
             if (on) {
-                EntityEffect effect = EntityEffect.getAssetMap().getAsset(BOOST_EFFECT);
+                EntityEffect effect = EntityEffect.getAssetMap().getAsset(effectId);
                 if (effect == null) {
-                    LOGGER.at(Level.WARNING).log("Effet %s introuvable : pas de son de lance-flammes", BOOST_EFFECT);
+                    LOGGER.at(Level.WARNING).log("Effet %s introuvable : pas de son", effectId);
                     return false;
                 }
                 return ec.addEffect(ref, effect, store);
             } else {
-                int index = EntityEffect.getAssetMap().getIndex(BOOST_EFFECT);
+                int index = EntityEffect.getAssetMap().getIndex(effectId);
                 if (index != Integer.MIN_VALUE) {
                     ec.removeEffect(ref, index, RemovalBehavior.COMPLETE, store);
                 }

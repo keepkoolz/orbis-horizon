@@ -7,9 +7,7 @@
   "PlayerAnimationsId": "Block",
   "MaxStack": 1,
   "ItemLevel": 1,
-  "Categories": [
-    "Furniture.Containers"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Cube",

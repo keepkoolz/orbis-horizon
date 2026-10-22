@@ -1,0 +1,26 @@
+{
+  "AudioCategory": "AudioCat_BlockSounds",
+  "Layers": [
+    {
+      "Files": [
+        "Sounds/PlayerActions/Footsteps/Block_Steps_Misc/Water_Splash_Medium_01.ogg",
+        "Sounds/PlayerActions/Footsteps/Block_Steps_Misc/Water_Splash_Medium_02.ogg",
+        "Sounds/PlayerActions/Footsteps/Block_Steps_Misc/Water_Splash_Medium_03.ogg",
+        "Sounds/PlayerActions/Footsteps/Block_Steps_Misc/Water_Splash_Medium_04.ogg",
+        "Sounds/PlayerActions/Footsteps/Block_Steps_Misc/Water_Splash_Medium_05.ogg"
+      ],
+      "RandomSettings": {
+        "MinPitch": -1.8240371213405997,
+        "MaxPitch": 1.6500422849992202,
+        "MinVolume": -5.936
+      },
+      "StartDelay": 0.1,
+      "Volume": -1,
+      "Looping": false
+    }
+  ],
+  "PreventSoundInterruption": true,
+  "MaxInstance": 6,
+  "Volume": 1.0,
+  "Parent": "SFX_Attn_Moderate"
+}

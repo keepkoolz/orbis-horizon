@@ -91,7 +91,7 @@ final class CampTiers {
         return switch (t) {
             case BEDROLL -> new Vector3i(3, 0, 0);
             case TENT -> new Vector3i(-2, 0, 2);
-            case TENT_BIG -> new Vector3i(-2, 0, 0);
+            case TENT_BIG -> new Vector3i(-2, 0, 1);
         };
     }
 }

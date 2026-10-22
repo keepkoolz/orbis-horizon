@@ -6,9 +6,7 @@
   "ItemLevel": 10,
   "MaxStack": 50,
   "Icon": "Icons/ItemsGenerated/Metal_Iron_Pipe_Short.png",
-  "Categories": [
-    "Blocks.Metal"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "PlayerAnimationsId": "Item",
   "Interactions": {
     "Primary": "Block_Primary",

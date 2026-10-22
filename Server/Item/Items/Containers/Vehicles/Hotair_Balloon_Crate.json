@@ -7,6 +7,7 @@
   "PlayerAnimationsId": "Block",
   "MaxStack": 1,
   "ItemLevel": 4,
+  "Quality": "Legendary",
   "Categories": [
     "Items.Vehicles"
   ],

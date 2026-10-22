@@ -1271,6 +1271,7 @@ final class AirshipManager {
             PassengerSeatView.remove(store, r.p); // T118
         }
         PassengerSeatView.drain(store, f.seatViews);
+        setEngineSound(store, f, false); // the end of the loop plays before the entity goes
         VehicleParts.removeAll(store, f.parts);
         f.parts = null;
         f.wheels = null;
@@ -1537,6 +1538,33 @@ final class AirshipManager {
         Ref<EntityStore> observer = f.observerRef;
         if (observer != null && observer.isValid()) {
             BalloonManager.get().applyRoarEffect(store, observer, on);
+        }
+    }
+
+    static final String ENGINE_EFFECT = "Ship_Engine";
+
+    /** The engine runs while the flight has engines and is not dry (pilot or not). */
+    static boolean engineSoundWanted(boolean hasEngines, boolean dry) {
+        return hasEngines && !dry;
+    }
+
+    /** Engine sound: the Ship_Engine effect (infinite) on the ship entity and the observer entity. No-op if unchanged. Never throws. */
+    private void setEngineSound(Store<EntityStore> store, AirshipFlight f, boolean on) {
+        if (f.engineSound == on) {
+            return;
+        }
+        f.engineSound = on;
+        try {
+            if (f.shipRef != null && f.shipRef.isValid()
+                    && !BalloonManager.get().applyLoopEffect(store, f.shipRef, on, ENGINE_EFFECT) && on) {
+                f.engineSound = false;
+            }
+            Ref<EntityStore> observer = f.observerRef;
+            if (observer != null && observer.isValid()) {
+                BalloonManager.get().applyLoopEffect(store, observer, on, ENGINE_EFFECT);
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Son du moteur : changement d'état impossible");
         }
     }
 
@@ -2011,6 +2039,7 @@ final class AirshipManager {
         }
         followLights(store, f);
         flickerFirebox(store, f, now);
+        setEngineSound(store, f, engineSoundWanted(f.engines != null, f.dry));
         PaddleWheels.update(store, f, now);
         if (now - f.lastResumeMs >= RESUME_INTERVAL_MS) {
             f.lastResumeMs = now;
@@ -3226,6 +3255,7 @@ final class AirshipManager {
         }
         setFireboxColor(store, f, null); // T58: the dark firebox of the off model has no light
         setRoar(store, f, false);
+        setEngineSound(store, f, false);
         cancelSmoke(f);
     }
 
@@ -3867,7 +3897,7 @@ final class AirshipManager {
                         + "%s, %s, travel speed %.2f b/s (burns above %.2f)", f.engines.entryCount(), f.engines.remainingSeconds(),
                 travelSecondsLeft(f), fuelFactor, f.engines.fuelItems(), f.burning ? "burning" : "not burning",
                 f.dry ? "DRY (horizontal speed 0)" : "fuelled", f.travelSpeed, fuelMoveMin)
-                + ", thrust state " + f.thrust + " (model " + f.modelId + "), burner sound " + (f.roar ? "on" : "off")
+                + ", thrust state " + f.thrust + " (model " + f.modelId + "), burner sound " + (f.roar ? "on" : "off") + ", engine sound " + (f.engineSound ? "on" : "off")
                 + ", moving " + f.moving + ", turn flame direction " + (f.turnDir > 0 ? "left" : f.turnDir < 0 ? "right" : "none")
                 + ", rest turn " + (restTurn ? "enabled" : "disabled") + ", rest turn active " + f.restActive
                 + String.format(Locale.ROOT, " (dead zone %.0f deg, hold %d ms, stop %.1f deg), turnFuelMin %.2f deg/s",

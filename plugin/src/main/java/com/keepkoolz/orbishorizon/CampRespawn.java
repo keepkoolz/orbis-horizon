@@ -8,6 +8,7 @@ import com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnP
 import com.hypixel.hytale.server.core.entity.entities.player.data.PlayerWorldData;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.meta.state.RespawnBlock;
 import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.bson.BsonArray;
@@ -430,8 +431,43 @@ final class CampRespawn {
         return POINTS.get(key(player, world));
     }
 
+    /** True when this block is the recorded camp point of this player in this world. Thread-safe (map thread). */
+    static boolean isCampBlock(UUID player, String world, Vector3i block) {
+        Point p = campPoint(player, world);
+        return p != null && block != null && p.block().equals(block);
+    }
+
+    /** Forgets the camp point of this player and world when it sits on this block: it will never be put back. True if it was. */
+    static boolean forget(UUID player, String world, Vector3i block) {
+        synchronized (CampRespawn.class) {
+            Point p = POINTS.get(key(player, world));
+            if (p == null || block == null || !p.block().equals(block)) {
+                return false;
+            }
+            POINTS.remove(key(player, world));
+        }
+        save();
+        return true;
+    }
+
+    /** The points without the one on this block (pure, tested). Null stays null. */
+    static PlayerRespawnPointData[] withoutBlock(PlayerRespawnPointData[] points, Vector3i block) {
+        if (points == null) {
+            return null;
+        }
+        List<PlayerRespawnPointData> out = new ArrayList<>();
+        for (PlayerRespawnPointData q : points) {
+            if (q != null && q.getBlockPosition() != null && q.getBlockPosition().equals(block)) {
+                continue;
+            }
+            out.add(q);
+        }
+        return out.toArray(new PlayerRespawnPointData[0]);
+    }
+
     /** Called every tick of each world: after the delay, teleports a player the game did not send to their camp point. Never throws. */
     static void tick(Store<EntityStore> store, World world) {
+        guardTick(world);
         if (WATCH.isEmpty()) {
             return;
         }
@@ -450,6 +486,157 @@ final class CampRespawn {
             }
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Campement : réapparition non vérifiée");
+        }
+    }
+
+    // ---- guard: camp points and game bed points never replace each other ----
+    //
+    // The game's bed interaction (BedInteraction, also used by our camp beds) opens a claim page when the bed is not owned by the
+    // player. Validating it (RespawnPointPage.setRespawnPointForPlayer) removes every saved point within RadiusLimitRespawnPoint
+    // blocks (OverrideNearbyRespawnPointPage) or the one the player picks (SelectOverrideRespawnPointPage), clears the owner of
+    // the removed beds, then appends its own point. A mod cannot intercept those pages, so once a second we compare each online
+    // player's points with the last snapshot and put back what the game removed through a camp.
+
+    private static final long GUARD_PERIOD_MS = 1000L;
+    private static final Map<String, Long> GUARD_AT = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, PlayerRespawnPointData[]> SNAPSHOT = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static boolean hasBlock(PlayerRespawnPointData[] points, Vector3i block) {
+        if (points != null) {
+            for (PlayerRespawnPointData q : points) {
+                if (q != null && block.equals(q.getBlockPosition())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Points to put back (pure, tested). prev is the last snapshot (null on first sight), cur the current points, camp the recorded
+     * camp point (null if none). Rules: the camp point is put back whenever it is missing (it only disappears through the game's
+     * override, since packing and forgetting are handled elsewhere: forgetting removes the record). A game point that vanished
+     * is put back when, in the same change, a point appeared on a camp bed (the claim of a camp bed), and its own bed still exists.
+     * Points on a camp bed that are not the recorded camp point are left alone (onLieDown replaces them at bedtime).
+     */
+    static List<PlayerRespawnPointData> pointsToRestore(PlayerRespawnPointData[] prev, PlayerRespawnPointData[] cur, Point camp,
+                                                        Predicate<Vector3i> isCampBed, Predicate<Vector3i> bedStillThere) {
+        List<PlayerRespawnPointData> out = new ArrayList<>();
+        if (camp != null && !hasBlock(cur, camp.block())) {
+            out.add(new PlayerRespawnPointData(new Vector3i(camp.block()), new Vector3d(camp.pos()), camp.name(), camp.yaw()));
+        }
+        if (prev == null || cur == null) {
+            return out;
+        }
+        boolean campClaimed = false;
+        for (PlayerRespawnPointData q : cur) {
+            if (q != null && q.getBlockPosition() != null && !hasBlock(prev, q.getBlockPosition()) && isCampBed.test(q.getBlockPosition())) {
+                campClaimed = true;
+                break;
+            }
+        }
+        if (!campClaimed) {
+            return out;
+        }
+        for (PlayerRespawnPointData q : prev) {
+            if (q == null || q.getBlockPosition() == null || hasBlock(cur, q.getBlockPosition())) {
+                continue;
+            }
+            if (camp != null && camp.block().equals(q.getBlockPosition())) {
+                continue; // already handled above
+            }
+            if (isCampBed.test(q.getBlockPosition()) || !bedStillThere.test(q.getBlockPosition())) {
+                continue; // a camp point (replaced by design) or a broken bed
+            }
+            out.add(q);
+        }
+        return out;
+    }
+
+    private static void guardTick(World world) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = GUARD_AT.get(world.getName());
+            if (last != null && now - last < GUARD_PERIOD_MS) {
+                return;
+            }
+            GUARD_AT.put(world.getName(), now);
+            for (PlayerRef pr : world.getPlayerRefs()) {
+                guardPlayer(world, pr);
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Campement : surveillance des points de réapparition en échec");
+        }
+    }
+
+    private static void guardPlayer(World world, PlayerRef pr) {
+        try {
+            Ref<EntityStore> ref = pr.getReference();
+            if (ref == null || !ref.isValid()) {
+                return;
+            }
+            Player pl = ref.getStore().getComponent(ref, Player.getComponentType());
+            PlayerWorldData data = pl == null ? null : pl.getPlayerConfigData().getPerWorldData(world.getName());
+            if (data == null) {
+                return;
+            }
+            String k = key(pr.getUuid(), world.getName());
+            PlayerRespawnPointData[] cur = data.getRespawnPoints();
+            Point camp = campPoint(pr.getUuid(), world.getName());
+            if (camp == null && !SNAPSHOT.containsKey(k)) {
+                SNAPSHOT.put(k, copyOf(cur));
+                return;
+            }
+            List<PlayerRespawnPointData> back = pointsToRestore(SNAPSHOT.get(k), cur, camp, b -> isCampBed(world, b),
+                    b -> SectionBlocks.blockComponent(world.getChunkStore(), RespawnBlock.getComponentType(), b.x, b.y, b.z) != null);
+            if (!back.isEmpty()) {
+                List<PlayerRespawnPointData> next = new ArrayList<>();
+                if (cur != null) {
+                    for (PlayerRespawnPointData q : cur) {
+                        if (q != null) {
+                            next.add(q);
+                        }
+                    }
+                }
+                for (PlayerRespawnPointData q : back) {
+                    next.add(q);
+                    RespawnBlock rb = SectionBlocks.blockComponent(world.getChunkStore(), RespawnBlock.getComponentType(),
+                            q.getBlockPosition().x, q.getBlockPosition().y, q.getBlockPosition().z);
+                    if (rb != null && rb.getOwnerUUID() == null && (camp == null || !camp.block().equals(q.getBlockPosition()))) {
+                        rb.setOwnerUUID(pr.getUuid()); // the game cleared it when it removed the point
+                    }
+                    LOGGER.at(Level.INFO).log("Campement : point de réapparition remis pour %s en %d, %d, %d", pr.getUsername(),
+                            q.getBlockPosition().x, q.getBlockPosition().y, q.getBlockPosition().z);
+                }
+                cur = next.toArray(new PlayerRespawnPointData[0]);
+                data.setRespawnPoints(cur);
+            }
+            SNAPSHOT.put(k, copyOf(cur));
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Campement : points de réapparition non vérifiés");
+        }
+    }
+
+    private static PlayerRespawnPointData[] copyOf(PlayerRespawnPointData[] a) {
+        return a == null ? new PlayerRespawnPointData[0] : a.clone();
+    }
+
+    /** True when this block is a bed cell of a registered camp (bivouac, tent). */
+    private static boolean isCampBed(World world, Vector3i pos) {
+        try {
+            BalloonRegistry.Entry e = BalloonRegistry.find(world, pos);
+            if (e == null || CampTiers.ofKind(e.kind()) == null) {
+                return false;
+            }
+            StructureShape shape = BalloonRegistry.shapeOf(e);
+            if (shape == null) {
+                return false;
+            }
+            Vector3i local = e.rotation().toInverse().rotateYaw(new Vector3i(pos.x - e.x(), pos.y - e.y(), pos.z - e.z()), new Vector3i());
+            StructureShape.Cell cell = shape.inBounds(local.x, local.y, local.z) ? shape.cellAt(local.x, local.y, local.z) : null;
+            return cell != null && cell.baseName().startsWith("Furniture_Crude_Bed");
+        } catch (RuntimeException ex) {
+            return false;
         }
     }
 

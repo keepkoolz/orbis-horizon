@@ -4,9 +4,7 @@
     "Description": "server.orbis_horizon.items.airship_stool.description"
   },
   "PlayerAnimationsId": "Block",
-  "Categories": [
-    "Furniture.Furniture"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "Icon": "Icons/ItemsGenerated/Furniture_Crude_Stool.png",
   "Interactions": {
     "Primary": "Block_Primary",

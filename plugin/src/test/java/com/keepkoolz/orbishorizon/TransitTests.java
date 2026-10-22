@@ -120,6 +120,7 @@ public class TransitTests {
         run("redactedErrorHasNoMessage", TransitTests::redactedErrorHasNoMessage);
         run("travelTargetReverse", TransitTests::travelTargetReverse);
         run("pilotSpeedReverse", TransitTests::pilotSpeedReverse);
+        run("engineSoundRule", TransitTests::engineSoundRule);
         run("campWakeRule", TransitTests::campWakeRule);
         run("campChestForbidden", TransitTests::campChestForbidden);
         run("campChestSplit", TransitTests::campChestSplit);
@@ -180,6 +181,7 @@ public class TransitTests {
         run("campRecipesJson", TransitTests::campRecipesJson);
         run("explorerBenchJson", TransitTests::explorerBenchJson);
         run("recipesOnExplorerBench", TransitTests::recipesOnExplorerBench);
+        run("creativeVisibility", TransitTests::creativeVisibility);
         run("externalView", TransitTests::externalView);
         run("behindHeading", TransitTests::behindHeading);
         run("viewResend", TransitTests::viewResend);
@@ -245,6 +247,8 @@ public class TransitTests {
         run("ashoreDescent", TransitTests::ashoreDescent);
         run("gateRule", TransitTests::gateRule);
         run("campRespawnShouldRescue", TransitTests::campRespawnShouldRescue);
+        run("campRespawnForget", TransitTests::campRespawnForget);
+        run("campRespawnGuard", TransitTests::campRespawnGuard);
         run("campRespawnFreeSpot", TransitTests::campRespawnFreeSpot);
         run("campRespawnOwnersOfBed", TransitTests::campRespawnOwnersOfBed);
         run("campRespawnFileRoundTrip", TransitTests::campRespawnFileRoundTrip);
@@ -258,6 +262,7 @@ public class TransitTests {
         run("shipKindsOrder", TransitTests::shipKindsOrder);
         run("wheelTable", TransitTests::wheelTable);
         run("wheelNames", TransitTests::wheelNames);
+        run("paddleSplashDue", TransitTests::paddleSplashDue);
         run("wheelHoldAndCycle", TransitTests::wheelHoldAndCycle);
         run("shipTextKeys", TransitTests::shipTextKeys);
         System.out.println("TransitTests: " + passed + " OK");
@@ -340,14 +345,14 @@ public class TransitTests {
     }
 
     static void contractMissing() {
-        Map<String, Integer> have = new HashMap<>(Map.of("Ingredient_Bar_Gold", 31, "Ingredient_Bar_Silver", 5));
+        Map<String, Integer> have = new HashMap<>(Map.of("Ingredient_Bar_Gold", 51, "Ingredient_Bar_Silver", 5));
         Map<String, Integer> m = PilotContract.missing(have);
         eq(0, m.get("Ingredient_Bar_Gold"));
-        eq(15, m.get("Ingredient_Bar_Silver"));
-        eq(10, m.get("Ingredient_Life_Essence_Concentrated"));
+        eq(30, m.get("Ingredient_Bar_Silver"));
+        eq(15, m.get("Ingredient_Life_Essence_Concentrated"));
         eq(3, m.size());
-        check(PilotContract.missing(Map.of("Ingredient_Bar_Gold", 30, "Ingredient_Bar_Silver", 20,
-                "Ingredient_Life_Essence_Concentrated", 10)).values().stream().allMatch(v -> v == 0), "exact price is enough");
+        check(PilotContract.missing(Map.of("Ingredient_Bar_Gold", 50, "Ingredient_Bar_Silver", 35,
+                "Ingredient_Life_Essence_Concentrated", 15)).values().stream().allMatch(v -> v == 0), "exact price is enough");
     }
 
     private static void crewBsonRoundTrip() {
@@ -487,6 +492,51 @@ public class TransitTests {
         eq(null, TentContents.fromBson(d, "tent_big"));
         d.put("v", new org.bson.BsonInt32(2));
         eq(null, TentContents.fromBson(d, "tent"));
+    }
+
+    static void campRespawnForget() {
+        org.joml.Vector3i a = new org.joml.Vector3i(1, 2, 3);
+        org.joml.Vector3i b = new org.joml.Vector3i(4, 5, 6);
+        com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData[] pts = {
+                new com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData(a, new org.joml.Vector3d(1, 2, 3), "A", 0f),
+                new com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData(b, new org.joml.Vector3d(4, 5, 6), "B", 0f)};
+        com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData[] left = CampRespawn.withoutBlock(pts, a);
+        eq(1, left.length);
+        eq("B", left[0].getName());
+        eq(2, CampRespawn.withoutBlock(pts, new org.joml.Vector3i(9, 9, 9)).length);
+        eq(null, CampRespawn.withoutBlock(null, a));
+        // Not a recorded camp point: no menu, nothing forgotten.
+        eq(false, RespawnPointMarkerProvider.forgettable(java.util.UUID.randomUUID(), "w", a));
+        eq(false, CampRespawn.forget(java.util.UUID.randomUUID(), "w", a));
+        eq("bed3", RespawnPointMarkerProvider.markerId("bed", 3));
+        eq("orbishorizon camping forget 1 2 3", RespawnPointMarkerProvider.forgetCommand(a));
+    }
+
+    static void campRespawnGuard() {
+        java.util.function.IntFunction<com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData> mk =
+                a -> new com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData(new Vector3i(a, 0, 0), new org.joml.Vector3d(a, 0, 0), "p" + a, 0f);
+        var home = mk.apply(1);
+        var campPt = mk.apply(50);
+        var other = mk.apply(70);
+        var newCamp = mk.apply(90);
+        CampRespawn.Point camp = new CampRespawn.Point(java.util.UUID.randomUUID(), "w", new Vector3i(50, 0, 0),
+                new org.joml.Vector3d(50, 0, 0), "Camp", 0f);
+        java.util.function.Predicate<Vector3i> isCamp = b -> b.x == 50 || b.x == 90;
+        java.util.function.Predicate<Vector3i> there = b -> b.x != 70; // bed 70 was broken
+        // Claiming a game bed removed the camp point: camp put back.
+        var back = CampRespawn.pointsToRestore(new com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData[]{campPt, other}, new com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData[]{home, other}, camp, isCamp, there);
+        eq(1, back.size());
+        eq("Camp", back.get(0).getName());
+        // Claiming a camp bed removed home and a (broken) bed 70: home put back, 70 not.
+        var prev = new com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData[]{home, other};
+        back = CampRespawn.pointsToRestore(prev, new com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData[]{newCamp}, null, isCamp, there);
+        eq(1, back.size());
+        eq("p1", back.get(0).getName());
+        // No camp claim: a vanished game point is the game's business.
+        var cur = new com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData[]{mk.apply(3)};
+        eq(0, CampRespawn.pointsToRestore(prev, cur, null, isCamp, there).size());
+        eq(0, CampRespawn.pointsToRestore(null, cur, null, isCamp, there).size());
+        eq(0, CampRespawn.pointsToRestore(new com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData[]{campPt}, new com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData[]{campPt}, camp, isCamp, there).size());
     }
 
     static void campRespawnShouldRescue() {
@@ -1067,7 +1117,7 @@ public class TransitTests {
         eq(CampTiers.Tier.TENT, CampTiers.ofPlacedBlock("Camping_Pack_Placed_Tent"));
         eq(null, CampTiers.ofPack("Camping_Tent_Crate"));
         eq(new Vector3i(-2, 0, 2), CampTiers.bagCell(CampTiers.Tier.TENT));
-        eq(new Vector3i(-2, 0, 0), CampTiers.bagCell(CampTiers.Tier.TENT_BIG));
+        eq(new Vector3i(-2, 0, 1), CampTiers.bagCell(CampTiers.Tier.TENT_BIG));
         eq(Deployables.BEDROLL, Deployables.forPrefab("Camping_Bedroll.prefab.json"));
     }
 
@@ -1219,6 +1269,41 @@ public class TransitTests {
         return StructureShape.ofCells(cells);
     }
 
+    /** Only the listed items show in the creative library, every other item JSON is hidden. */
+    private static void creativeVisibility() throws Exception {
+        Set<String> visible = Set.of("Orbis_Explorer_Bench", "Camping_Pack_Bedroll", "Camping_Pack_Tent",
+                "Camping_Pack_Tent_Big", "Hotair_Balloon_Crate", "Hotair_Balloon_Basic_Crate",
+                "Hotair_Balloon_Transport_Crate", "Airship_Cloudwork_Crate", "Steamboat_Crate",
+                "Balloon_Station_Crate", "Airship_Pilot_Contract");
+        Set<String> found = new java.util.HashSet<>();
+        int hidden = 0;
+        List<Path> files;
+        try (var w = Files.walk(Path.of("Server/Item/Items"))) {
+            files = w.filter(p -> p.toString().endsWith(".json")).toList();
+        }
+        for (Path p : files) {
+            String name = p.getFileName().toString();
+            String id = name.substring(0, name.length() - 5);
+            found.add(id);
+            var root = org.bson.BsonDocument.parse(Files.readString(p));
+            if (visible.contains(id)) {
+                check(root.containsKey("Categories") && !root.getArray("Categories").isEmpty(), "Categories " + id);
+                check(!root.containsKey("Quality")
+                        || !"OrbisHorizon_Hidden".equals(root.getString("Quality").getValue()), "visible quality " + id);
+            } else {
+                check(!root.containsKey("Categories"), "no Categories " + id);
+                eq("OrbisHorizon_Hidden", root.getString("Quality").getValue());
+                hidden++;
+            }
+        }
+        check(found.containsAll(visible), "visible ids exist");
+        eq(32, hidden);
+        var q = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Item/Qualities/OrbisHorizon_Hidden.json")));
+        eq(true, q.getBoolean("HideFromSearch").getValue());
+        eq("server.general.qualities.Common", q.getString("LocalizationKey").getValue());
+        eq(1, q.getNumber("QualityValue").intValue());
+    }
+
     /** The explorer bench item JSON: bench id, categories and texts. */
     private static void explorerBenchJson() throws Exception {
         var root = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Item/Items/Bench/Orbis_Explorer_Bench.json")));
@@ -1343,6 +1428,13 @@ public class TransitTests {
             String name = p.getFileName().toString().replace(".json", "");
             var r = root.getDocument("Recipe");
             var bench = r.getArray("BenchRequirement").get(0).asDocument();
+            String[] qualities = {"Uncommon", "Rare", "Legendary"};
+            // Exceptions: the large tent is tier 3 but only rare, and the
+            // explorer bench is common like the game's own benches.
+            eq(name.equals("Camping_Pack_Tent_Big") ? "Rare"
+                    : name.equals("Orbis_Explorer_Bench") ? "Common"
+                    : qualities[bench.getInt32("RequiredTierLevel").getValue() - 1],
+                    root.getString("Quality").getValue());
             if (name.equals("Orbis_Explorer_Bench")) {
                 eq("Workbench", bench.getString("Id").getValue());
                 continue;
@@ -1719,6 +1811,17 @@ public class TransitTests {
         check(Arrays.equals(PaddleWheels.wheelsFor(true, true, -1), new PaddleWheels.Spin[]{PaddleWheels.Spin.REV_VERY_SLOW, PaddleWheels.Spin.REV_SLOW}), "arrière, poupe vers la gauche");
         check(Arrays.equals(PaddleWheels.wheelsFor(false, false, 1), new PaddleWheels.Spin[]{PaddleWheels.Spin.REV_SLOW, PaddleWheels.Spin.FWD_SLOW}), "sur place à gauche");
         check(Arrays.equals(PaddleWheels.wheelsFor(false, false, -1), new PaddleWheels.Spin[]{PaddleWheels.Spin.FWD_SLOW, PaddleWheels.Spin.REV_SLOW}), "sur place à droite");
+    }
+
+    private static void paddleSplashDue() {
+        long never = Long.MIN_VALUE;
+        check(PaddleWheels.splashDue(200, 1000, never, 1000), "premier coup de pale dès le départ");
+        check(!PaddleWheels.splashDue(200, 1000, 1000, 1150), "pas deux fois dans le même cycle");
+        check(PaddleWheels.splashDue(200, 1000, 1000, 1200), "cycle suivant");
+        check(PaddleWheels.splashDue(200, 1000, 1000, 1390), "retard : un seul coup dû");
+        check(!PaddleWheels.splashDue(200, 1000, 1390, 1399), "déjà joué dans ce cycle");
+        check(!PaddleWheels.splashDue(0, 1000, never, 1500), "roue arrêtée");
+        check(!PaddleWheels.splashDue(200, 1000, never, 900), "avant le départ");
     }
 
     private static void wheelNames() {
@@ -2276,6 +2379,12 @@ public class TransitTests {
         check(back.reversing() && Math.abs(AirshipMath.wrapPi(back.heading() - 0.2)) < 1e-9, "stern follows: backing right turns right");
         check(Double.isNaN(AirshipManager.travelTarget(Math.PI + 0.2, 0.0, cone, false).heading()), "airship keeps its heading");
         check(AirshipManager.travelTarget(Math.PI + 0.2, 0.0, cone, false).reversing(), "airship still reversing");
+    }
+
+    static void engineSoundRule() {
+        check(AirshipManager.engineSoundWanted(true, false), "engines and fuel: runs");
+        check(!AirshipManager.engineSoundWanted(true, true), "dry: silent");
+        check(!AirshipManager.engineSoundWanted(false, false), "no engines: silent");
     }
 
     static void pilotSpeedReverse() {

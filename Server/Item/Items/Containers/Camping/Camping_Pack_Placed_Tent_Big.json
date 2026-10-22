@@ -4,14 +4,13 @@
     "Description": "server.orbis_horizon.items.camping_pack_placed_tent_big.description"
   },
   "Icon": "Icons/ItemsGenerated/Camping_Pack_Tent_Big.png",
-  "Categories": [
-    "Items.Tools"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "BlockType": {
     "Material": "Empty",
     "DrawType": "Model",
     "Opacity": "Transparent",
     "CustomModel": "Items/Camping/Camping_Pack_Placed.blockymodel",
+    "CustomModelScale": 0.5,
     "CustomModelTexture": [
       {
         "Texture": "Items/Camping/Camping_Pack_Tent_Big_Texture.png",

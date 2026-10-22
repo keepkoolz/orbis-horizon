@@ -5,9 +5,7 @@
   },
   "Icon": "Icons/ItemsGenerated/Metal_Iron_Pipe_Large_Mouthpiece.png",
   "ItemLevel": 2,
-  "Categories": [
-    "Blocks.Metal"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Model",

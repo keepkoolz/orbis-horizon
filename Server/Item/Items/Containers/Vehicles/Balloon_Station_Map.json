@@ -4,6 +4,7 @@
     "Description": "server.orbis_horizon.items.balloon_station_map.description"
   },
   "Icon": "Icons/ItemsGenerated/Deco_Map.png",
+  "Quality": "OrbisHorizon_Hidden",
   "BlockType": {
     "Material": "Empty",
     "DrawType": "Model",

@@ -6,9 +6,7 @@
   "Icon": "Icons/ItemsGenerated/Camping_Tent_Big_Crate_Empty.png",
   "PlayerAnimationsId": "Block",
   "MaxStack": 1,
-  "Categories": [
-    "Furniture.Containers"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Cube",

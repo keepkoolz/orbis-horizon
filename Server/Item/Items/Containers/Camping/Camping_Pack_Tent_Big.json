@@ -9,6 +9,7 @@
   "PlayerAnimationsId": "Block",
   "MaxStack": 1,
   "ItemLevel": 3,
+  "Quality": "Rare",
   "Categories": [
     "Items.Tools"
   ],

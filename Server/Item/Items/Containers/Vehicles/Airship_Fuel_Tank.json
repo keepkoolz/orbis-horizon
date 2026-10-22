@@ -5,9 +5,7 @@
   },
   "Icon": "Icons/ItemsGenerated/Metal_Iron_Pipe_Large_Corner.png",
   "ItemLevel": 5,
-  "Categories": [
-    "Blocks.Metal"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Model",

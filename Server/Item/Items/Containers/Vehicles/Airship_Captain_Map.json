@@ -4,6 +4,7 @@
     "Description": "server.orbis_horizon.items.airship_captain_map.description"
   },
   "Icon": "Icons/ItemsGenerated/Tool_Map.png",
+  "Quality": "OrbisHorizon_Hidden",
   "Model": "Items/Consumables/Scrolls/Map.blockymodel",
   "Texture": "Items/Consumables/Scrolls/Map_Wood.png",
   "PlayerAnimationsId": "Block",

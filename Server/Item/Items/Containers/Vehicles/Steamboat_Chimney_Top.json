@@ -6,9 +6,7 @@
   "ItemLevel": 15,
   "MaxStack": 50,
   "Icon": "Icons/ItemsGenerated/Metal_Bronze_Pipe_Large_Mouthpiece.png",
-  "Categories": [
-    "Blocks.Metal"
-  ],
+  "Quality": "OrbisHorizon_Hidden",
   "PlayerAnimationsId": "Block",
   "BlockType": {
     "Material": "Solid",
