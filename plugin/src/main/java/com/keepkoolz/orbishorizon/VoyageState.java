@@ -50,6 +50,18 @@ final class VoyageState {
     double windowZ;
     double windowTheta;
 
+    /** Sailing state of a steamboat voyage (BoatAutopilot), null for the airship. Never written in toBson. */
+    volatile ShuttleState water;
+    /** Steamboat: rotation centre column {x, z} and heading where it was moored at departure (a pose known to fit). */
+    int[] homeColumn;
+    double homeTheta = Double.NaN;
+    /** Steamboat backing off (no landing fits): the points still to try, the current one first; null when not backing off. */
+    java.util.ArrayDeque<int[]> backoff;
+    /** Steamboat: no back-off point fits, the riders (captain included) were put on the surface; the boat keeps trying alone. */
+    boolean ridersReleased;
+    /** Steamboat: last "no mooring fits" log line (logged once, then at most every NO_MOORING_LOG_MS). */
+    long noMooringLogMs;
+
     /** The captain jumped or died during the voyage (T152): the ship sinks to a mooring height and lowers one ladder on this side. */
     volatile boolean ashore;
     /** Ladder side (+1 or -1 in the prefab frame) chosen for the captain ashore. */

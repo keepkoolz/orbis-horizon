@@ -38,7 +38,7 @@ final class AirshipResume {
     record Record(UUID id, Deployables.Kind kind, UUID pilot, String world, int pivotX, int pivotY, int pivotZ, double heading, UUID ship,
                   BalloonCargo cargo, AirshipEngines engines, org.joml.Vector3i takeoffOrigin, com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation takeoffRotation,
                   AirshipBenches benches, List<AirshipPassengers.Saved> riders, Ownership ownership, CrewRecord crew, VoyageState voyage,
-                  AirshipBenchContents benchContents, RecallState.Saved recall, int[] takeoffRungs) {
+                  AirshipBenchContents benchContents, RecallState.Saved recall, int[] takeoffRungs, WaterLog water) {
     }
 
     /** Vehicle type of a file: absent in files written before ships had a type (airship), unknown or non-ship ids are refused. */
@@ -51,6 +51,9 @@ final class AirshipResume {
             if (k.id.equals(id)) {
                 return k;
             }
+        }
+        if (Deployables.STEAMBOAT_PUBLIC.id.equals(id)) {
+            return Deployables.STEAMBOAT_PUBLIC;
         }
         throw new IllegalArgumentException("Unknown ship kind: " + id);
     }
@@ -91,8 +94,8 @@ final class AirshipResume {
     /** Writes (or replaces) the resume file. Never throws. */
     static synchronized void write(AirshipFlight f, boolean durable) {
         Path d = dir;
-        if (d == null) {
-            return;
+        if (d == null || f.shuttle != null) {
+            return; // the shuttle is never put back in blocks from a resume file (its crash recovery is separate)
         }
         try {
             BsonDocument doc = new BsonDocument();
@@ -136,6 +139,10 @@ final class AirshipResume {
             f.ownership.writeTo(doc); // keys absent in older files: read back as NONE
             if (f.crew != null) {
                 doc.put("crew", f.crew.toBson()); // T133: optional NPC pilot
+            }
+            WaterLog wl = f.water;
+            if (wl != null && !wl.isEmpty()) {
+                doc.put("water", wl.toBson()); // boat log, absent in older files
             }
             if (f.voyage != null) {
                 doc.put("voyage", f.voyage.toBson()); // T140: optional, the voyage is not resumed (the ship is put down)
@@ -234,7 +241,8 @@ final class AirshipResume {
                         // Absent in older files: no bench contents.
                         AirshipBenchContents.fromBson(doc),
                         doc.containsKey("recall") ? RecallState.Saved.fromBson(doc.getDocument("recall")) : null,
-                        rungsFromBson(doc)));
+                        rungsFromBson(doc),
+                        doc.containsKey("water") ? WaterLog.fromBson(doc.getDocument("water")) : null));
             } catch (IOException | RuntimeException e) {
                 LOGGER.at(Level.SEVERE).withCause(e).log("Fichier de reprise de dirigeable illisible : %s", p);
                 try {

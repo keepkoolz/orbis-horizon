@@ -1,0 +1,1791 @@
+{
+  "version": 8,
+  "blockIdVersion": 11,
+  "anchorX": 0,
+  "anchorY": 0,
+  "anchorZ": 0,
+  "blocks": [
+    {
+      "x": -2,
+      "y": 1,
+      "z": -3,
+      "name": "*Wood_Softwood_Stairs_State_Definitions_Corner_Right",
+      "rotation": 8
+    },
+    {
+      "x": -2,
+      "y": 2,
+      "z": -3,
+      "name": "Wood_Apple_Branch_Long",
+      "support": 15
+    },
+    {
+      "x": -2,
+      "y": 3,
+      "z": -3,
+      "name": "Wood_Apple_Branch_Long",
+      "support": 15
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": -3,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 3
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": -2,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 9
+    },
+    {
+      "x": -2,
+      "y": 3,
+      "z": -2,
+      "name": "Furniture_Kweebec_Lantern_Ceiling"
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": -2,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 3
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": -1,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 9
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": -1,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 3
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 0,
+      "name": "Wood_Softwood_Planks_Half"
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": 0,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 3
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 1,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 9
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": 1,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 3
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 2,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 9
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": 2,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 3
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 3,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 9
+    },
+    {
+      "x": -2,
+      "y": 3,
+      "z": 3,
+      "name": "Furniture_Kweebec_Lantern_Ceiling"
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": 3,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 3
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 4,
+      "name": "*Wood_Softwood_Stairs_State_Definitions_Corner_Left",
+      "rotation": 10
+    },
+    {
+      "x": -2,
+      "y": 2,
+      "z": 4,
+      "name": "Wood_Apple_Branch_Long",
+      "support": 15
+    },
+    {
+      "x": -2,
+      "y": 3,
+      "z": 4,
+      "name": "Wood_Apple_Branch_Long",
+      "support": 15
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": 4,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": -4,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 9
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": -4,
+      "name": "*Wood_Softwood_Roof_Hollow_State_Definitions_Corner_Right",
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": -3,
+      "name": "Wood_Softwood_Planks_Half"
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": -3,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 1,
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": -2,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": -2,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 1,
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": -1,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": -1,
+      "name": "Furniture_Tavern_Stool",
+      "rotation": 1
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": -1,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 1,
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 0,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": 0,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 1,
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 1,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 1,
+      "name": "Furniture_Tavern_Stool",
+      "rotation": 1
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": 1,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 1,
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 2,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 2,
+      "name": "Furniture_Tavern_Stool",
+      "rotation": 2
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": 2,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 1,
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 3,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 3,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 6
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": 3,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 1,
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 4,
+      "name": "Wood_Softwood_Planks"
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": 4,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 1,
+      "rotation": 3
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 5,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 10
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": 5,
+      "name": "*Wood_Softwood_Roof_Hollow_State_Definitions_Corner_Left",
+      "rotation": 3
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": -5,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": -4,
+      "name": "Wood_Softwood_Stairs"
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": -4,
+      "name": "Wood_Softwood_Roof_Hollow",
+      "rotation": 2
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -3,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": -3,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": -3,
+      "name": "Wood_Softwood_Roof_Flat",
+      "rotation": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -2,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": -2,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": -2,
+      "name": "Wood_Softwood_Roof_Flat",
+      "rotation": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -1,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": -1,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": -1,
+      "name": "Wood_Softwood_Roof_Flat",
+      "rotation": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 0,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": 0,
+      "name": "Wood_Softwood_Roof_Flat",
+      "rotation": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 1,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 1,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": 1,
+      "name": "Wood_Softwood_Roof_Flat",
+      "rotation": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 2,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 2,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": 2,
+      "name": "Wood_Softwood_Roof_Flat",
+      "rotation": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 3,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 3,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": 3,
+      "name": "Wood_Softwood_Roof_Flat",
+      "rotation": 3
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 4,
+      "name": "Metal_Goblin_Iron_Pipe_Large_Corner",
+      "support": 15,
+      "rotation": 10
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 4,
+      "name": "*Airship_Engine_State_Definitions_On"
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "z": 4,
+      "name": "Metal_Bronze_Pipe_Large_Mouthpiece",
+      "support": 15
+    },
+    {
+      "x": 0,
+      "y": 3,
+      "z": 4,
+      "name": "Metal_Bronze_Pipe_Long",
+      "support": 15
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 4,
+      "name": "Metal_Bronze_Pipe_Long",
+      "support": 15
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": 4,
+      "name": "Metal_Bronze_Pipe_Long",
+      "support": 15
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 5,
+      "name": "Steamboat_Propeller"
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 5,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 10
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 5,
+      "name": "Wood_Softwood_Roof_Hollow"
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": -4,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 11
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": -4,
+      "name": "*Wood_Softwood_Roof_Hollow_State_Definitions_Corner_Left",
+      "rotation": 1
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": -3,
+      "name": "Wood_Softwood_Planks_Half"
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": -3,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 31,
+      "rotation": 1
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": -2,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": -2,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 31,
+      "rotation": 1
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": -1,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": -1,
+      "name": "Furniture_Tavern_Stool",
+      "rotation": 3
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": -1,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 31,
+      "rotation": 1
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 0,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": 0,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 31,
+      "rotation": 1
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 1,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 1,
+      "name": "Furniture_Tavern_Stool",
+      "rotation": 2
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": 1,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 31,
+      "rotation": 1
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 2,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 2,
+      "name": "Furniture_Tavern_Stool",
+      "rotation": 2
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": 2,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 31,
+      "rotation": 1
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 3,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 8
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 3,
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 6
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": 3,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 31,
+      "rotation": 1
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 4,
+      "name": "Wood_Softwood_Planks"
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": 4,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "filler": 31,
+      "rotation": 1
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 5,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 10
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": 5,
+      "name": "*Wood_Softwood_Roof_Hollow_State_Definitions_Corner_Right",
+      "rotation": 1
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": -3,
+      "name": "*Wood_Softwood_Stairs_State_Definitions_Corner_Left",
+      "rotation": 8
+    },
+    {
+      "x": 2,
+      "y": 2,
+      "z": -3,
+      "name": "Wood_Apple_Branch_Long",
+      "support": 15
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "z": -3,
+      "name": "Wood_Apple_Branch_Long",
+      "support": 15
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": -3,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 1
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": -2,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 11
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "z": -2,
+      "name": "Furniture_Kweebec_Lantern_Ceiling"
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": -2,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 1
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": -1,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 11
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": -1,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 1
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 0,
+      "name": "Wood_Softwood_Planks_Half"
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": 0,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 1
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 1,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 11
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": 1,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 1
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 2,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 11
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": 2,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 1
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 3,
+      "name": "Wood_Softwood_Stairs",
+      "rotation": 11
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "z": 3,
+      "name": "Furniture_Kweebec_Lantern_Ceiling"
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": 3,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 1
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 4,
+      "name": "*Wood_Softwood_Stairs_State_Definitions_Corner_Right",
+      "rotation": 10
+    },
+    {
+      "x": 2,
+      "y": 2,
+      "z": 4,
+      "name": "Wood_Apple_Branch_Long",
+      "support": 15
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "z": 4,
+      "name": "Wood_Apple_Branch_Long",
+      "support": 15
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": 4,
+      "name": "Wood_Softwood_Roof_Shallow",
+      "rotation": 1
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": -2,
+      "name": "Airship_Helm",
+      "filler": 31744
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "z": -2,
+      "name": "Airship_Helm"
+    }
+  ],
+  "fluids": [
+    {
+      "x": -2,
+      "y": 1,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 2,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 3,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 3,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 3,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 2,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 3,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -2,
+      "y": 4,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": -4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": -4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": 4,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": -5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": -4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": -4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 3,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 5,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 5,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": -4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": -4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 2,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 2,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    }
+  ]
+}

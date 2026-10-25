@@ -154,6 +154,10 @@ final class AirshipAutopilot {
         if (v == null || f.landing || f.finishing || v.stopped || v.ashore) {
             return false;
         }
+        if (!AirshipManager.spec(f.kind).ladders) {
+            stop(f, "crew.voyage.captainGone"); // no ladder to lower (the steamboat): the ship stops where it is
+            return true;
+        }
         try {
             // Same recall guards as stop(): a recall flight is handled by the recall, no ashore phase.
             if (AirshipRecall.approachStopped(f) || AirshipRecall.retryLeave(f) || AirshipRecall.divertToLeave(f)) {
@@ -273,6 +277,11 @@ final class AirshipAutopilot {
         }
     }
 
+    /** Whether a refused landing climbs a few blocks before the next try: never for a ship afloat. Pure. */
+    static boolean climbsOnRetry(boolean waterborne) {
+        return !waterborne;
+    }
+
     /** Called by AirshipManager when a landing of a voyage was refused: climb a few blocks and try again, then land where it is. */
     static void onLandingRefused(AirshipFlight f) {
         VoyageState v = f.voyage;
@@ -280,9 +289,14 @@ final class AirshipAutopilot {
             return;
         }
         v.retries++;
-        v.retryY = f.pos.y + VoyageState.RETRY_CLIMB;
+        // A boat keeps its waterline: no climb, the next try waits for the landing backoff (LANDING_RETRY_MS).
+        v.retryY = climbsOnRetry(AirshipManager.spec(f.kind).waterborne()) ? f.pos.y + VoyageState.RETRY_CLIMB : f.pos.y;
         v.phase = VoyageState.Phase.RETRY;
         v.progressMs = 0;
+        if (v.backoff != null && v.retries >= ShipVoyage.BACKOFF_RETRIES) {
+            ShipVoyage.backOff(f); // a boat backing off: this point does not fit either, on to the next one
+            return;
+        }
         if (v.retries >= VoyageState.MAX_RETRIES) {
             LOGGER.at(Level.INFO).log("Voyage : %d atterrissages refusés, pose sur place", v.retries);
             if (!v.forcedTried) {
@@ -290,6 +304,10 @@ final class AirshipAutopilot {
                 if (AirshipManager.get().landImmediately(f)) {
                     return;
                 }
+            }
+            if (v.water != null) {
+                ShipVoyage.backOff(f); // a boat cannot climb out: it sails back along its route to a place that fits
+                return;
             }
             v.retries = VoyageState.MAX_RETRIES - 1; // nothing fits here: keep trying, but only every backoff period
         }
@@ -330,6 +348,15 @@ final class AirshipAutopilot {
             v.phase = VoyageState.Phase.CRUISE;
             return;
         }
+        yawStep(world, am, hull, f, err, dt, now);
+    }
+
+    /**
+     * One tick of the yaw controller of the player-piloted ship toward a heading error (radians): the rate ramps up and brakes
+     * before the target, the last step snaps on it. The ship turns around its centre (T66), so the pivot moves on the arc. Every
+     * pose goes through AirshipManager.move. Also used by the maritime shuttle (BoatAutopilot).
+     */
+    static void yawStep(World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f, double err, double dt, long now) {
         double maxRate = Math.toRadians(am.maxYawRateDeg);
         double accel = Math.toRadians(am.yawAccelDeg);
         double desired = Math.signum(err) * Math.min(maxRate, am.brakingRate(Math.abs(err), accel));
@@ -457,7 +484,7 @@ final class AirshipAutopilot {
     // ------------------------------------------------------------------ fuel and progress
 
     /** Feeds the pilot's travel sample (distance, turn) to AirshipManager.burnFuel every 250 ms, like the player-piloted ship. */
-    private static void fuelWindow(Store<EntityStore> store, AirshipManager am, AirshipFlight f, VoyageState v, long now) {
+    static void fuelWindow(Store<EntityStore> store, AirshipManager am, AirshipFlight f, VoyageState v, long now) {
         if (now - v.windowMs < WINDOW_MS) {
             return;
         }
@@ -500,6 +527,8 @@ final class AirshipAutopilot {
     /** Name of the voyage or recall phase of a flight, or null (telemetry only). */
     static String phaseOf(AirshipFlight f) {
         if (f == null) return null;
+        ShuttleState sh = f.shuttle;
+        if (sh != null && sh.phase != null) return sh.phase.name();
         VoyageState v = f.voyage;
         if (v != null && v.phase != null) return v.phase.name();
         RecallState r = f.recall;

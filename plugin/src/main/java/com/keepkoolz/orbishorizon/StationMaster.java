@@ -63,7 +63,7 @@ final class StationMaster {
     /** World position (feet) of the master of a station: centre of its prefab cell, rotated with the station. Pure. */
     static Vector3d masterPoint(TransitNetwork.Station s) {
         Vector3d logical = new Vector3d(s.origin.x + 0.5, s.origin.y, s.origin.z + 0.5);
-        int[] p = Deployables.STATION_MASTER_POS;
+        int[] p = StationSpec.of(s.kind).masterPos();
         Vector3d out = BalloonManager.prefabPoint(logical, s.rotation, new Vector3f(p[0], p[1], p[2]));
         return out.add(0, 0.05, 0);
     }
@@ -110,11 +110,20 @@ final class StationMaster {
      */
     static void registerOrphans(World world) {
         for (BalloonRegistry.Entry e : BalloonRegistry.entriesOfKind(world, Deployables.STATION_KIND)) {
+            registerOrphan(world, e, Deployables.STATION_KIND);
+        }
+        for (BalloonRegistry.Entry e : BalloonRegistry.entriesOfKind(world, Deployables.BOAT_STATION_KIND)) {
+            registerOrphan(world, e, Deployables.BOAT_STATION_KIND);
+        }
+    }
+
+    private static void registerOrphan(World world, BalloonRegistry.Entry e, String kind) {
+        {
             org.joml.Vector3i origin = new org.joml.Vector3i(e.x(), e.y(), e.z());
             if (TransitNetwork.get().at(world.getName(), origin) == null) {
                 LOGGER.at(Level.INFO).log("Station posée en (%d, %d, %d) sans nom : enregistrée avec un nom automatique",
                         origin.x, origin.y, origin.z);
-                DeployStationInteraction.completeRegistration(world, origin, e.rotation(), e.owner(), null, null);
+                DeployStationInteraction.completeRegistration(world, origin, e.rotation(), e.owner(), null, null, kind);
             }
         }
     }
@@ -167,7 +176,7 @@ final class StationMaster {
         interactions.setInteractionId(InteractionType.Use, ROOT_INTERACTION_ID);
         interactions.setInteractionHint(HINT);
         store.putComponent(ref, DisplayNameComponent.getComponentType(),
-                new DisplayNameComponent(Texts.t("transit.master.name").param("station", s.name)));
+                new DisplayNameComponent(Texts.t(StationSpec.of(s.kind).masterNameKey()).param("station", s.name)));
     }
 
     /** Master NPC of a station, found by UUID, or null. */
@@ -418,22 +427,18 @@ final class StationMaster {
 
     // ------------------------------------------------------------------ facing
 
-    /**
-     * Prefab point the master looks at: the foot of the station stairs (the first step is the row of Rock_Stone_Brick_Stairs at
-     * x = 6, z -2 to 2, y = 0 of the prefab of 11 October 2026), so that he faces the players who come up to the station.
-     */
-    private static final Vector3f STAIRS_FOOT = new Vector3f(5, 0, 0);
-
+    /** A rotation holding only a yaw. */
     private static Rotation3f yawRotation(float yaw) {
         Rotation3f r = new Rotation3f();
         r.setYaw(yaw);
         return r;
     }
 
-    /** World yaw of a master facing the foot of the stairs of his station (forward = (-sin yaw, -cos yaw)). Pure. */
+    /** World yaw of a master facing the look point of his station (StationSpec.masterLook) (forward = (-sin yaw, -cos yaw)). Pure. */
     static float facingYaw(TransitNetwork.Station s) {
         Vector3d logical = new Vector3d(s.origin.x + 0.5, s.origin.y, s.origin.z + 0.5);
-        Vector3d foot = BalloonManager.prefabPoint(logical, s.rotation, STAIRS_FOOT);
+        float[] look = StationSpec.of(s.kind).masterLook();
+        Vector3d foot = BalloonManager.prefabPoint(logical, s.rotation, new Vector3f(look[0], look[1], look[2]));
         Vector3d me = masterPoint(s);
         return (float) Math.atan2(-(foot.x - me.x), -(foot.z - me.z));
     }

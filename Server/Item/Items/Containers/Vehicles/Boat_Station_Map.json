@@ -1,0 +1,57 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.boat_station_map.name",
+    "Description": "server.orbis_horizon.items.boat_station_map.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Deco_Map.png",
+  "BlockType": {
+    "Material": "Empty",
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Miscellaneous/Map.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Miscellaneous/Map_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "Group": "Wood",
+    "HitboxType": "Balloon_Station_Map",
+    "VariantRotation": "Wall",
+    "Flags": {},
+    "Gathering": {
+      "Soft": {
+        "IsWeaponBreakable": false
+      }
+    },
+    "BlockParticleSetId": "Stone",
+    "TextureComputedColor": "#D4CB9C",
+    "Support": {
+      "Down": [
+        {
+          "FaceType": "Full"
+        }
+      ],
+      "Up": [
+        {
+          "FaceType": "Full"
+        }
+      ]
+    }
+  },
+  "PlayerAnimationsId": "Item",
+  "IconProperties": {
+    "Scale": 0.695,
+    "Translation": [
+      -0.895,
+      -3.895
+    ],
+    "Rotation": [
+      30.945,
+      51.195,
+      22.5
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood",
+  "Quality": "OrbisHorizon_Hidden"
+}

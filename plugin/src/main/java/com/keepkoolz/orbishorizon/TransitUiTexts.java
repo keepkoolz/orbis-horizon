@@ -17,9 +17,10 @@ final class TransitUiTexts {
         return Message.translation("server.orbis_horizon.ui." + key);
     }
 
-    static void destinations(UICommandBuilder cmd) {
-        cmd.set("#TitleText.Text", m("dest.title"));
+    static void destinations(UICommandBuilder cmd, String titleKey) {
+        cmd.set("#TitleText.Text", m(titleKey));
         cmd.set("#CloseButton.Text", m("close"));
+        cmd.set("#FarePrice.Text", m("fare.price"));
         cmd.set("#HireButton.Text", m("crew.hire"));
         cmd.set("#RecallButton.Text", m("crew.recall"));
         cmd.set("#HirePrice.Text", m("crew.hirePrice")

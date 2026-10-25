@@ -1,0 +1,42 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.steamboat_propeller.name",
+    "Description": "server.orbis_horizon.items.steamboat_propeller.description"
+  },
+  "PlayerAnimationsId": "Block",
+  "Quality": "OrbisHorizon_Hidden",
+  "Icon": "Icons/ItemsGenerated/Steamboat_Propeller.png",
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": "Block_Secondary"
+  },
+  "BlockType": {
+    "BlockParticleSetId": "Wood",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "CustomModel": "Blocks/Vehicles/Steamboat_Propeller.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Vehicles/Steamboat_Propeller_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "DrawType": "Model",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Woods"
+      }
+    },
+    "Group": "Wood",
+    "HitboxType": "Steamboat_Propeller",
+    "Material": "Empty",
+    "Opacity": "Transparent"
+  },
+  "Tags": {
+    "Type": [
+      "Furniture"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

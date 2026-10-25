@@ -57,16 +57,18 @@ final class DeployPlacement {
     }
 
     /**
-     * Steamboat placement check. Prefab layers y <= -3 are the hull under the waterline and must be water, layers y >= -2
-     * must be empty (no block, no liquid). Every cell is tested, filler cells included.
+     * Steamboat placement check. Prefab layers at or under the steamboat's waterline (y <= -2 since 25 October 2026, -3 before)
+     * are the hull under water and must be water, the layers above must be empty (no block, no liquid). Every cell is tested,
+     * filler cells included.
      * @return null if the boat fits, otherwise the refusal key
      */
     static String steamboatFit(StructureShape shape, Vector3i origin, Rotation rotation, CellState state) {
         boolean blocked = false;
+        int waterline = Deployables.STEAMBOAT.airship.waterlineY;
         for (StructureShape.Cell c : shape.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             int st = state.at(p.x, p.y, p.z);
-            if (c.y() <= -3) {
+            if (c.y() <= waterline) {
                 if (st != 1) {
                     return "deploy.steamboat.noWater";
                 }
@@ -97,7 +99,7 @@ final class DeployPlacement {
     }
 
     /**
-     * Steamboat origin: the crate's computed origin with y replaced by surface + 3 (prefab layer -3 lands on the highest water
+     * Steamboat origin: the crate's computed origin with y replaced by surface + 2 (the waterline layer -2 lands on the highest water
      * cell). The search column is the targeted block's x,z (the computed origin's when nothing is targeted), starting just above
      * the targeted block. If the targeted block is itself water, the search starts at its y so aiming at the surface works.
      * @return the origin, or null when there is no water column (refusal deploy.steamboat.noWater)
@@ -111,7 +113,31 @@ final class DeployPlacement {
         if (surface == null) {
             return null;
         }
-        return new Vector3i(computed.x, surface + 3, computed.z);
+        return new Vector3i(computed.x, surface - Deployables.STEAMBOAT.airship.waterlineY, computed.z);
+    }
+
+    /**
+     * Boat station origin: x and z as computed, y snapped to the water surface under the pier end (prefab cell
+     * BOAT_STATION_PIER_END), so the prefab water surface (y -1) lands on the real one: origin.y = surface + 1.
+     * The column is scanned downward from 3 above to 10 below the computed y: air is skipped, the first water cell starts the
+     * climb to the surface, any other block or liquid stops the search.
+     * @return the origin, or null when there is no water there (refusal deploy.steamboat.noWater)
+     */
+    static Vector3i boatStationOrigin(CellState state, Vector3i computed, Rotation rotation) {
+        Vector3i end = rotation.rotateYaw(new Vector3i(Deployables.BOAT_STATION_PIER_END[0], Deployables.BOAT_STATION_PIER_END[1],
+                Deployables.BOAT_STATION_PIER_END[2]), new Vector3i());
+        int cx = computed.x + end.x, cz = computed.z + end.z;
+        for (int y = computed.y + 3; y >= computed.y - 10; y--) {
+            int st = state.at(cx, y, cz);
+            if (st == 1) {
+                Integer surface = waterSurfaceY(yy -> state.at(cx, yy, cz) == 1, y, BalloonManager.WORLD_MAX_Y);
+                return surface == null ? null : new Vector3i(computed.x, surface + 1, computed.z);
+            }
+            if (st != 0) {
+                return null;
+            }
+        }
+        return null;
     }
 
     /** Placement parameters of one crate, as written in its JSON (Interactions.Secondary). */
@@ -131,6 +157,7 @@ final class DeployPlacement {
             Map.entry("Camping_Tent_Crate", new Crate("Camping_Tent.prefab.json", new Vector3i(0, 1, -3), Rotation.Ninety)),
             Map.entry("Camping_Tent_Big_Crate", new Crate("Camping_Tent_Big.prefab.json", new Vector3i(0, 1, -1), Rotation.OneEighty)),
             Map.entry("Balloon_Station_Crate", new Crate("Balloon_Landing_zone.prefab.json", new Vector3i(0, 1, 0), Rotation.Ninety)),
+            Map.entry("Boat_Station_Crate", new Crate("Boat_Station.prefab.json", new Vector3i(0, 1, 0), Rotation.OneEighty)),
             // T153: the camp packs. Same values as the legacy tent crates; the sleeping bag is shifted by one block in X so the
             // 3 x 3 camp is centred on the targeted block once turned.
             Map.entry("Camping_Pack_Bedroll", new Crate("Camping_Bedroll.prefab.json", new Vector3i(-1, 1, 0), Rotation.Ninety)),

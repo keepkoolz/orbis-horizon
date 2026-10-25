@@ -213,9 +213,22 @@ final class PassengerSeatView {
     /** Creates an auxiliary entity mounted on the given entity. Model and skin null: invisible (camera anchor). Returns null on failure. */
     static Ref<EntityStore> spawn(Store<EntityStore> store, Model model, UUID uuid, Vector3d pos, Ref<EntityStore> mountOn,
                                           Vector3f mountOffset, PlayerSkinComponent skin) {
+        return spawnImpl(store, model, uuid, pos, new Rotation3f(), true, mountOn, mountOffset, skin);
+    }
+
+    /** Creates an entity that is not mounted on anything, turned to a yaw (the pilot of the moored shuttle). Null on failure. */
+    static Ref<EntityStore> spawnStandalone(Store<EntityStore> store, Model model, UUID uuid, Vector3d pos, float yaw,
+                                            PlayerSkinComponent skin) {
+        Rotation3f r = new Rotation3f();
+        r.setYaw(yaw);
+        return spawnImpl(store, model, uuid, pos, r, false, null, new Vector3f(), skin);
+    }
+
+    private static Ref<EntityStore> spawnImpl(Store<EntityStore> store, Model model, UUID uuid, Vector3d pos, Rotation3f rotation,
+                                              boolean mount, Ref<EntityStore> mountOn, Vector3f mountOffset, PlayerSkinComponent skin) {
         try {
             Holder<EntityStore> holder = EntityStore.REGISTRY.newHolder();
-            holder.addComponent(TransformComponent.getComponentType(), new TransformComponent(new Vector3d(pos), new Rotation3f()));
+            holder.addComponent(TransformComponent.getComponentType(), new TransformComponent(new Vector3d(pos), rotation));
             holder.addComponent(UUIDComponent.getComponentType(), new UUIDComponent(uuid));
             if (model != null) {
                 holder.addComponent(ModelComponent.getComponentType(), new ModelComponent(model));
@@ -231,8 +244,10 @@ final class PassengerSeatView {
             if (ref == null) {
                 return null;
             }
-            store.putComponent(ref, MountedComponent.getComponentType(),
-                    new MountedComponent(mountOn, new Vector3f(mountOffset), MountController.Minecart));
+            if (mount) { // a null mountOn still fails here for the callers that mount (no free-floating ghost)
+                store.putComponent(ref, MountedComponent.getComponentType(),
+                        new MountedComponent(mountOn, new Vector3f(mountOffset), MountController.Minecart));
+            }
             return ref;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Entité de vue de siège impossible (%s)", model == null ? "ancre" : "mannequin");

@@ -7,6 +7,7 @@ $C.@Container {
   #Content {
     LayoutMode: Top;
     $C.@TextButton #VoyageButton { Text: ""; Anchor: (Bottom: 8, Height: 44); }
+    $C.@TextButton #NoteStopButton { Text: ""; Anchor: (Bottom: 8, Height: 44); }
     $C.@TextButton #TakeHelmButton { Text: ""; Anchor: (Bottom: 8, Height: 44); }
     $C.@TextButton #ReturnHelmButton { Text: ""; Anchor: (Bottom: 8, Height: 44); }
     Group #List { FlexWeight: 1; LayoutMode: TopScrolling; ScrollbarStyle: $C.@DefaultScrollbarStyle; }

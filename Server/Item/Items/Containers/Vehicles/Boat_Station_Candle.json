@@ -1,0 +1,58 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.boat_station_candle.name",
+    "Description": "server.orbis_horizon.items.boat_station_candle.description"
+  },
+  "PlayerAnimationsId": "Torch",
+  "IconProperties": {
+    "Rotation": [
+      21.4,
+      41.6,
+      14.6
+    ],
+    "Scale": 0.4,
+    "Translation": [
+      0.6,
+      -20.4
+    ]
+  },
+  "BlockType": {
+    "BlockParticleSetId": "Wood",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "CustomModel": "Blocks/Decorative_Sets/Kweebec/Candle.blockymodel",
+    "CustomModelScale": 1,
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Decorative_Sets/Kweebec/Candle_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "DrawType": "Model",
+    "Flags": {},
+    "Gathering": {
+      "Soft": {
+        "IsWeaponBreakable": false
+      }
+    },
+    "HitboxType": "Balloon_Station_Map",
+    "Light": {
+      "Color": "#dcb"
+    },
+    "Material": "Empty",
+    "Opacity": "Transparent",
+    "ParticleColor": "#633625",
+    "Particles": [
+      {
+        "SystemId": "Kweebec_Lantern",
+        "TargetEntityPart": "PrimaryItem"
+      }
+    ],
+    "RandomRotation": "YawStep1",
+    "TextureComputedColor": "#795F1B"
+  },
+  "Icon": "Icons/ItemsGenerated/Furniture_Kweebec_Candle.png",
+  "Scale": 1.5,
+  "ItemSoundSetId": "ISS_Blocks_Wood",
+  "Quality": "OrbisHorizon_Hidden"
+}

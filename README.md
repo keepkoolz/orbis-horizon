@@ -1,6 +1,6 @@
 ![Orbis Origin](images/logo/orbis-horizon-header-3.jpg)
 
-Orbis Horizon is an adventure mod for Hytale about leaving home behind. You build your gear at the workbench, carry it in a crate, and set it up wherever the road takes you. A tent for the night, a hot air balloon to cross the valley, an airship once the world starts to feel small, and balloon stations that fly you from one place to the next.
+Orbis Horizon is an adventure mod for Hytale about leaving home behind. You build your gear at the workbench, carry it in a crate, and set it up wherever the road takes you. A tent for the night, a hot air balloon to cross the valley, an airship once the world starts to feel small, a steamboat for the lakes and the sea, and stations that carry you from one place to the next by air or by water.
 
 When it's time to move on, the camp folds back into its pack and the balloon lands wherever you choose.
 
@@ -21,7 +21,7 @@ Wherever you sleep, that is where you come back if the road is unkind, even afte
 Fill the burner with fuel, climb into the basket, pull the chain, and the ground drops away. You fly freely as long as the burner has something to burn. Pull the chain again to stop, on the ground or right there in the sky. If the fuel runs out, the balloon sinks gently back to earth.
 
 - The small balloon is for travelling alone.
-- The large balloon takes your friends along on its stools and carries chests full of supplies.
+- The large balloon takes your friends along on its stools and carries chests full of supplies. It can have a pilot too, who flies you to a map marker or a station while you enjoy the view.
 - The animal transport balloon has an iron cage hanging under its basket. Lower it onto a meadow, lure an animal in with its favourite food, close the cage and fly your new livestock home.
 
 ### The Cloudwork airship
@@ -34,13 +34,21 @@ You can hire a pilot at any station. Ask them to take you to one of your map mar
 
 A paddle steamer you set down on a lake, a river or the sea, with a workshop on board like the airship. Fuel the tank, stand at the helm and cast off. It sails on the surface, backs up slowly, and its two paddle wheels turn and splash as it goes, to the rumble of its steam engine. Smoke rises from its chimneys while it is moored, and thickens when it sails. The airship, too, smokes lightly from its rear burners while parked with fuel.
 
+Hire a pilot and the steamboat learns the way. Ask them to note the places you like as you sail, and later to take you back to one of them, or to a boat station you have already reached. The boat only goes where it has already been.
+
 ### Balloon stations
 
 A station is a stone walkway with a landing pad at its end and a little hut for the station master. Name it when you set it up. Talk to the station master, pick a faraway station, and a balloon floats down onto the pad. Climb in, sit on a stool, and when the countdown ends it carries you across the sky on its own while you watch it fly from the outside. You step off on the boarding platform of the other station, with its name across the screen. No fuel to find, nothing to steer. Every station anyone sets up is a stop for everybody.
 
+### Boat stations
+
+A boat station is a wooden pier on a shore with its own station master. Pick another boat station and a small shuttle boat comes alongside the pier. Step aboard during the countdown and it sails you there along the water.
+
+Each trip, by balloon or by boat, costs a ticket paid in life essences by the traveller who picks the destination. If the trip never happens, the ticket is refunded.
+
 ## Before you set off
 
-- Everything is crafted at the Explorer's workbench, an explorer's desk with its own tabs. Upgrade it and plans and little models of what you can build appear on top of it, down to a balloon floating above the bench.
+- Everything is crafted at the Explorer's workbench, an explorer's desk with its own tabs. Upgrade it and plans and little models of what you can build appear on top of it, down to a balloon floating above the bench. Its Gear tab holds a diving outfit for exploring under water.
 - Hold a crate and you see where the structure will go, block by block, before you set it up.
 - Pack a camp and what you left in its chests and campfire travels in the pack, ready for your next camp. The small tent has a chest outside for your things.
 - Once set up, a tent, balloon, airship or station is locked, so nobody breaks it by accident. Beds, chests, burners and seats still work.

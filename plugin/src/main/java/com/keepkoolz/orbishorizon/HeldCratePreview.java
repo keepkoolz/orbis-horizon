@@ -10,6 +10,7 @@ import com.hypixel.hytale.protocol.packets.interface_.EditorBlocksChange;
 import com.hypixel.hytale.protocol.packets.interface_.FluidChange;
 import com.hypixel.hytale.protocol.packets.player.HideTriggerVolumePastePrefabPreview;
 import com.hypixel.hytale.protocol.packets.player.ShowTriggerVolumePastePrefabPreview;
+import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.InventoryComponent;
@@ -125,6 +126,18 @@ final class HeldCratePreview {
             }
             p = new DeployPlacement.Placement(boat, p.facing(), p.rotation());
         }
+        if (itemId.equals("Boat_Station_Crate")) {
+            // Same origin as the real placement: y follows the water surface under the pier end; no water, no preview.
+            Vector3i station = DeployPlacement.boatStationOrigin(DeployPlacement.worldState(world), p.origin(), p.rotation());
+            if (station == null) {
+                if (st != null) {
+                    hide(pr);
+                    STATES.remove(id);
+                }
+                return;
+            }
+            p = new DeployPlacement.Placement(station, p.facing(), p.rotation());
+        }
         if (st == null) {
             st = new State();
             st.ref = ref;
@@ -134,7 +147,12 @@ final class HeldCratePreview {
         if (itemId.equals(st.itemId) && p.origin().equals(st.origin) && p.rotation() == st.rotation) {
             return;
         }
-        EditorBlocksChange blocks = encoded(crate.prefabPath(), p.rotation());
+        BiomeWood.Wood wood = null;
+        if (itemId.equals("Boat_Station_Crate")) {
+            // Read only when the origin, rotation or item changed (this point is only reached then).
+            wood = BiomeWood.woodAt(world, p.origin().x, p.origin().z, false);
+        }
+        EditorBlocksChange blocks = encoded(crate.prefabPath(), p.rotation(), wood);
         if (blocks == null) {
             return;
         }
@@ -168,8 +186,9 @@ final class HeldCratePreview {
      * The prefab turned like PrefabUtil.paste turns it (BlockSelection.rotate(Y, degrees) and Rotation use the same convention,
      * checked on a block: Ninety sends (x, z) to (z, -x) in both), in its network form. Null if the prefab is unreadable.
      */
-    private static EditorBlocksChange encoded(String prefabPath, Rotation rotation) {
-        String key = prefabPath + "#" + rotation.getDegrees();
+    private static EditorBlocksChange encoded(String prefabPath, Rotation rotation, BiomeWood.Wood wood) {
+        boolean remap = wood != null && !wood.equals(BiomeWood.DEFAULT);
+        String key = prefabPath + "#" + rotation.getDegrees() + (remap ? "#" + wood.species() : "");
         EditorBlocksChange cached = CACHE.get(key);
         if (cached != null) {
             return cached;
@@ -186,12 +205,42 @@ final class HeldCratePreview {
                 sel = sel.rotate(Axis.Y, rotation.getDegrees());
             }
             EditorBlocksChange pkt = sel.toPacket();
+            if (remap) {
+                pkt = remapped(pkt, wood);
+            }
             CACHE.put(key, pkt);
             return pkt;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Aperçu : prefab %s non encodé", prefabPath);
             return null;
         }
+    }
+
+    /** Copy of the packet whose wood block ids are renamed to the biome wood (the cached unmapped packet is left untouched). */
+    private static EditorBlocksChange remapped(EditorBlocksChange src, BiomeWood.Wood wood) {
+        if (src.blocksChange == null) {
+            return src;
+        }
+        Map<Integer, Integer> ids = new java.util.HashMap<>();
+        BlockChange[] out = new BlockChange[src.blocksChange.length];
+        for (int i = 0; i < out.length; i++) {
+            BlockChange b = new BlockChange(src.blocksChange[i]);
+            b.block = ids.computeIfAbsent(b.block, id -> {
+                BlockType type =
+                        BlockType.getAssetMap().getAsset(id);
+                if (type == null) {
+                    return id;
+                }
+                String name = BiomeWood.remap(type.getId(), wood);
+                int renamed = name.equals(type.getId()) ? id
+                        : BlockType.getAssetMap().getIndex(name);
+                return renamed < 0 ? id : renamed;
+            });
+            out[i] = b;
+        }
+        EditorBlocksChange copy = new EditorBlocksChange(src);
+        copy.blocksChange = out;
+        return copy;
     }
 
     private static void hide(PlayerRef pr) {

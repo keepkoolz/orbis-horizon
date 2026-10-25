@@ -1,0 +1,59 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.boat_station_treasure.name",
+    "Description": "server.orbis_horizon.items.boat_station_treasure.description"
+  },
+  "BlockType": {
+    "DrawType": "Model",
+    "CustomModel": "Blocks/Dungeons/Treasure_Object.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Dungeons/Treasure_Pile_Texture.png",
+        "Weight": 1
+      },
+      {
+        "Texture": "Blocks/Dungeons/Treasure_Pile_Texture2.png",
+        "Weight": 1
+      }
+    ],
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "SoftBlocks"
+      }
+    },
+    "BlockParticleSetId": "Coins",
+    "BlockSoundSetId": "Coins",
+    "PhysicalMaterialId": "Metal",
+    "VariantRotation": "NESW",
+    "Material": "Empty",
+    "Opacity": "Semitransparent",
+    "RandomRotation": "YawStep1",
+    "ParticleColor": "#ffd848",
+    "Particles": [
+      {
+        "SystemId": "Block_Gem_Sparks",
+        "Color": "#ffce76",
+        "TargetEntityPart": "Entity"
+      }
+    ],
+    "HitboxType": "Balloon_Station_Map",
+    "TextureComputedColor": "#CE8422"
+  },
+  "PlayerAnimationsId": "Block",
+  "IconProperties": {
+    "Scale": 0.6,
+    "Rotation": [
+      358,
+      265,
+      341
+    ],
+    "Translation": [
+      -1,
+      -10
+    ]
+  },
+  "Icon": "Icons/ItemsGenerated/Deco_Scrap_Treasure.png",
+  "ItemSoundSetId": "ISS_Blocks_Wood",
+  "Quality": "OrbisHorizon_Hidden"
+}

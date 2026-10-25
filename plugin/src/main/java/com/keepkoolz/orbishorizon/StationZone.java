@@ -21,8 +21,8 @@ final class StationZone {
     }
 
     static Zone zoneOf(TransitNetwork.Station s) {
-        Vector3d p = StationMarkerProvider.markerPoint(s.origin, s.rotation);
-        return new Zone(s.name, p.x, p.z, s.origin.y + Deployables.STATION_GRASS_Y,
+        Vector3d p = StationMarkerProvider.markerPoint(s);
+        return new Zone(s.name, p.x, p.z, s.origin.y + StationSpec.of(s.kind).zoneBottomY(),
                 (int) p.y + TransitConstants.STATION_ZONE_HEIGHT);
     }
 
@@ -66,6 +66,25 @@ final class StationZone {
             for (Vector3i w : world) {
                 if (cellTouches(z, w.x, w.y, w.z)) {
                     return z.station();
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Like blockingStation for an origin column, ignoring the cylinder height: a cell touches when its square is closer than the radius to the axis. */
+    static String blockingStationColumn(List<Zone> zones, StructureShape s, int x, int z, Rotation rotation) {
+        if (s == null || zones.isEmpty()) {
+            return null;
+        }
+        double r = TransitConstants.STATION_ZONE_RADIUS;
+        for (Zone zn : zones) {
+            for (StructureShape.Cell c : s.cells()) {
+                Vector3i w = c.rotated(rotation).add(new Vector3i(x, 0, z));
+                double dx = zn.cx() - Math.max(w.x, Math.min(zn.cx(), w.x + 1));
+                double dz = zn.cz() - Math.max(w.z, Math.min(zn.cz(), w.z + 1));
+                if (dx * dx + dz * dz < r * r) {
+                    return zn.station();
                 }
             }
         }

@@ -1,0 +1,26 @@
+Group {
+  LayoutMode: Left;
+  Button #Button {
+    FlexWeight: 1;
+    Padding: (Full: 6);
+    LayoutMode: Left;
+    Style: (
+      Hovered: (
+        Background: #000000(0.2),
+      )
+    );
+    Label #Name { Style: (RenderBold: true); FlexWeight: 1; }
+    Label #Dir { Style: (TextColor: #94a7bb); Anchor: (Right: 12); }
+    Label #Dist { Style: (TextColor: #ffffff(0.45), RenderItalics: true); }
+  }
+  Button #Forget {
+    Padding: (Full: 6);
+    Anchor: (Left: 6, Width: 90);
+    Style: (
+      Hovered: (
+        Background: #000000(0.2),
+      )
+    );
+    Label #ForgetText { Style: (TextColor: #ffffff(0.7)); Text: ""; }
+  }
+}

@@ -7,6 +7,7 @@ $C.@Container {
   #Content {
     LayoutMode: Top;
     Label #Status { Style: (RenderBold: true); Anchor: (Bottom: 14); }
+    Label #FarePrice { Style: (TextColor: #ffffff(0.6), RenderItalics: true); Anchor: (Left: 8, Bottom: 10); }
     Label #DepHeader { Style: (RenderBold: true, RenderUppercase: true, TextColor: #94a7bb); Anchor: (Bottom: 6); }
     Label #Queue { Style: (TextColor: #ffffff(0.6), RenderItalics: true); Anchor: (Left: 8, Bottom: 22); }
     Label #Header { Style: (RenderBold: true, RenderUppercase: true, TextColor: #94a7bb); Anchor: (Bottom: 6); }

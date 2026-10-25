@@ -1,6 +1,7 @@
 package com.keepkoolz.orbishorizon;
 
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
+import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
 
@@ -76,6 +77,20 @@ public class TransitTests {
         check(threw, "unknown kind refused");
     }
 
+    static void registryKeepsWater() {
+        WaterLog w = new WaterLog();
+        w.record(1, 1); w.record(9, 1);
+        w.addStop(40, 62, 0, Rotation.None, 41, 1);
+        BalloonRegistry.Entry e = new BalloonRegistry.Entry("w", 1, 62, 3, Rotation.None, Deployables.STEAMBOAT_KIND, null, 0, false,
+                List.of(), null, null, false, null, null, List.of(), null, w);
+        BalloonRegistry.Entry back = BalloonRegistry.entryFromBson(BalloonRegistry.entryToBson(e));
+        eq(w.size(), back.water().size());
+        eq(1, back.water().stops().size());
+        BalloonRegistry.Entry old = BalloonRegistry.entryFromBson(BalloonRegistry.entryToBson(
+                new BalloonRegistry.Entry("w", 1, 62, 3, Rotation.None, Deployables.STEAMBOAT_KIND, null)));
+        eq(null, old.water());
+    }
+
     static void laddersRoundTrip() {
         ShipLadder.Saved s = new ShipLadder.Saved(-1, ShipLadder.Phase.RAISING, new int[] {10, 60, 5, 10, 59, 5});
         ShipLadder.Saved back = ShipLadder.Saved.fromBson(s.toBson());
@@ -111,6 +126,11 @@ public class TransitTests {
     }
 
     public static void main(String[] args) throws Exception {
+        run("balloonCrewSpec", TransitTests::balloonCrewSpec);
+        run("balloonNoCrewUnchanged", TransitTests::balloonNoCrewUnchanged);
+        run("balloonResumeKeepsCrew", TransitTests::balloonResumeKeepsCrew);
+        run("hireBlockRule", TransitTests::hireBlockRule);
+        run("pilotOwnedByOther", TransitTests::pilotOwnedByOther);
         run("usageCountersSnapshot", TransitTests::usageCountersSnapshot);
         run("errorThrottleWindow", TransitTests::errorThrottleWindow);
         run("telemetryWithoutBeacon", TransitTests::telemetryWithoutBeacon);
@@ -135,6 +155,7 @@ public class TransitTests {
         run("ladderCaught", TransitTests::ladderCaught);
         run("ladderColumnCheck", TransitTests::ladderColumnCheck);
         run("raiseSkipsForeign", TransitTests::raiseSkipsForeign);
+        run("registryKeepsWater", TransitTests::registryKeepsWater);
         run("laddersRoundTrip", TransitTests::laddersRoundTrip);
         run("resumeKindRead", TransitTests::resumeKindRead);
         run("nameRules", TransitTests::nameRules);
@@ -143,6 +164,15 @@ public class TransitTests {
         run("tentContentsMissing", TransitTests::tentContentsMissing);
         run("tentContentsVersion", TransitTests::tentContentsVersion);
         run("stationFileRoundTrip", TransitTests::stationFileRoundTrip);
+        run("fareChoice", TransitTests::fareChoice);
+        run("refundsFileRoundTrip", TransitTests::refundsFileRoundTrip);
+        run("refundsTakeOnce", TransitTests::refundsTakeOnce);
+        run("refundsCorruptKept", TransitTests::refundsCorruptKept);
+        run("paymentsRoundTrip", TransitTests::paymentsRoundTrip);
+        run("paymentsOldFile", TransitTests::paymentsOldFile);
+        run("paymentsRemovedWithQueue", TransitTests::paymentsRemovedWithQueue);
+        run("stationsOfKind", TransitTests::stationsOfKind);
+        run("stationDistanceSameKind", TransitTests::stationDistanceSameKind);
         run("corruptFileIsKept", TransitTests::corruptFileIsKept);
         run("grassLayerCells", TransitTests::grassLayerCells);
         run("settingsRoundTrip", TransitTests::settingsRoundTrip);
@@ -153,6 +183,9 @@ public class TransitTests {
         run("holdingPoints", TransitTests::holdingPoints);
         run("rerouteTarget", TransitTests::rerouteTarget);
         run("returnStation", TransitTests::returnStation);
+        run("shuttleReturnStation", TransitTests::shuttleReturnStation);
+        run("shuttleRedirectTargets", TransitTests::shuttleRedirectTargets);
+        run("boatApproachGiveUp", TransitTests::boatApproachGiveUp);
         run("leaveSpot", TransitTests::leaveSpot);
         run("followNoTeleportLoop", TransitTests::followNoTeleportLoop);
         run("randomSeatYawRange", TransitTests::randomSeatYawRange);
@@ -161,10 +194,17 @@ public class TransitTests {
         run("transitViewYaw", TransitTests::transitViewYaw);
         run("groundCageRemaining", TransitTests::groundCageRemaining);
         run("deployPlacement", TransitTests::deployPlacement);
+        run("boatStationRoomRule", TransitTests::boatStationRoomRule);
         run("waterSurfaceSearch", TransitTests::waterSurfaceSearch);
         run("steamboatFitCheck", TransitTests::steamboatFitCheck);
+        run("steamboatWaterlineLayer", TransitTests::steamboatWaterlineLayer);
         run("gliderAllowedKinds", TransitTests::gliderAllowedKinds);
         run("steamboatAnchor", TransitTests::steamboatAnchor);
+        run("steamboatCrewSpec", TransitTests::steamboatCrewSpec);
+        run("crewOptionsWithoutVoyage", TransitTests::crewOptionsWithoutVoyage);
+        run("boatCrewOrders", TransitTests::boatCrewOrders);
+        run("boatStationBerth", TransitTests::boatStationBerth);
+        run("steamboatPublicPrefab", TransitTests::steamboatPublicPrefab);
         run("steamboatSeats", TransitTests::steamboatSeats);
         run("markerIgnoresFiller", TransitTests::markerIgnoresFiller);
         run("wheelSpecFlags", TransitTests::wheelSpecFlags);
@@ -182,13 +222,23 @@ public class TransitTests {
         run("explorerBenchJson", TransitTests::explorerBenchJson);
         run("recipesOnExplorerBench", TransitTests::recipesOnExplorerBench);
         run("creativeVisibility", TransitTests::creativeVisibility);
+        run("oxygenHud", TransitTests::oxygenHud);
+        run("boatStationPrefab", TransitTests::boatStationPrefab);
+        run("helmetHaircut", TransitTests::helmetHaircut);
         run("externalView", TransitTests::externalView);
         run("behindHeading", TransitTests::behindHeading);
         run("viewResend", TransitTests::viewResend);
         run("protectionRules", TransitTests::protectionRules);
         run("protectedFileRoundTrip", TransitTests::protectedFileRoundTrip);
         run("registryOwnershipRoundTrip", TransitTests::registryOwnershipRoundTrip);
+        run("registryWoodRoundTrip", TransitTests::registryWoodRoundTrip);
+        run("boatStationShapeOfWood", TransitTests::boatStationShapeOfWood);
         run("stationMarkerPoint", TransitTests::stationMarkerPoint);
+        run("balloonVoyageRefusal", TransitTests::balloonVoyageRefusal);
+        run("balloonLandingCandidates", TransitTests::balloonLandingCandidates);
+        run("balloonLandingCandidatesAllBlocked", TransitTests::balloonLandingCandidatesAllBlocked);
+        run("balloonVoyageStopOnce", TransitTests::balloonVoyageStopOnce);
+        run("balloonCruiseCeiling", TransitTests::balloonCruiseCeiling);
         run("stationZoneCell", TransitTests::stationZoneCell);
         run("stationZoneCorner", TransitTests::stationZoneCorner);
         run("stationZoneOtherWorld", TransitTests::stationZoneOtherWorld);
@@ -199,6 +249,7 @@ public class TransitTests {
         run("gliderExitLocal", TransitTests::gliderExitLocal);
         run("airshipLimitCounts", TransitTests::airshipLimitCounts);
         run("shipFeatureFlags", TransitTests::shipFeatureFlags);
+        run("airshipCrewSpecUnchanged", TransitTests::airshipCrewSpecUnchanged);
         run("limitIgnoresOtherShips", TransitTests::limitIgnoresOtherShips);
         run("walkLegsAisle", TransitTests::walkLegsAisle);
         run("staleEntryUnknownIsPresent", TransitTests::staleEntryUnknownIsPresent);
@@ -221,7 +272,9 @@ public class TransitTests {
         run("voyageTrip", TransitTests::voyageTrip);
         run("departureRefusal", TransitTests::departureRefusal);
         run("captainMapPhase", TransitTests::captainMapPhase);
+        run("voyageIncludesBoatStations", TransitTests::voyageIncludesBoatStations);
         run("mapHolderRule", TransitTests::mapHolderRule);
+        run("voyageCaptainRule", TransitTests::voyageCaptainRule);
         run("autopilotLookAhead", TransitTests::autopilotLookAhead);
         run("voyageStateBson", TransitTests::voyageStateBson);
         run("recallSpawnPoint", TransitTests::recallSpawnPoint);
@@ -262,10 +315,110 @@ public class TransitTests {
         run("shipKindsOrder", TransitTests::shipKindsOrder);
         run("wheelTable", TransitTests::wheelTable);
         run("wheelNames", TransitTests::wheelNames);
+        run("propellerRules", TransitTests::propellerRules);
+        run("propellerNames", TransitTests::propellerNames);
+        run("propellerWater", TransitTests::propellerWater);
+        run("propellerAnimationsDeclared", TransitTests::propellerAnimationsDeclared);
+        run("helmRules", TransitTests::helmRules);
+        run("helmAnimationFiles", TransitTests::helmAnimationFiles);
+        run("helmDeclared", TransitTests::helmDeclared);
         run("paddleSplashDue", TransitTests::paddleSplashDue);
         run("wheelHoldAndCycle", TransitTests::wheelHoldAndCycle);
         run("shipTextKeys", TransitTests::shipTextKeys);
+        run("stationSpecPoints", TransitTests::stationSpecPoints);
+        run("boatStationOrigin", TransitTests::boatStationOrigin);
+        run("biomeWoodLookup", TransitTests::biomeWoodLookup);
+        run("chooseSpecies", TransitTests::chooseSpecies);
+        run("woodRemap", TransitTests::woodRemap);
+        run("shortcutOpenWater", TransitTests::shortcutOpenWater);
+        run("shortcutKeepsUnknown", TransitTests::shortcutKeepsUnknown);
+        run("shortcutAroundLand", TransitTests::shortcutAroundLand);
+        run("shortcutDogLeg", TransitTests::shortcutDogLeg);
+        run("waterRouteOpenLake", TransitTests::waterRouteOpenLake);
+        run("waterRouteIsland", TransitTests::waterRouteIsland);
+        run("waterRouteSCurve", TransitTests::waterRouteSCurve);
+        run("waterRouteNarrow", TransitTests::waterRouteNarrow);
+        run("waterRouteSeparateLakes", TransitTests::waterRouteSeparateLakes);
+        run("waterRouteNeedsData", TransitTests::waterRouteNeedsData);
+        run("waterRouteBerthNearShore", TransitTests::waterRouteBerthNearShore);
+        run("waterRouteNegativeOffset", TransitTests::waterRouteNegativeOffset);
+        run("waterRouteResumedSame", TransitTests::waterRouteResumedSame);
+        run("waterRouteTooLong", TransitTests::waterRouteTooLong);
+        run("waterRouteTurnClearance", TransitTests::waterRouteTurnClearance);
+        run("waterRouteAvoid", TransitTests::waterRouteAvoid);
+        run("waterRouteFreeStart", TransitTests::waterRouteFreeStart);
+        run("waterRouteTurnData", TransitTests::waterRouteTurnData);
+        run("boatLookAhead", TransitTests::boatLookAhead);
+        run("boatDetour", TransitTests::boatDetour);
+        run("paddleSlideWheels", TransitTests::paddleSlideWheels);
+        run("boatRoutesFileRoundTrip", TransitTests::boatRoutesFileRoundTrip);
+        run("boatRoutesInvalidate", TransitTests::boatRoutesInvalidate);
+        run("berthPivotRotation", TransitTests::berthPivotRotation);
+        run("mooredPilot", TransitTests::mooredPilot);
+        run("berthCentreRotation", TransitTests::berthCentreRotation);
+        run("boatDropPoints", TransitTests::boatDropPoints);
+        run("boatQuayRules", TransitTests::boatQuayRules);
+        run("voyageEndAction", TransitTests::voyageEndAction);
+        run("waterLogLineFill", TransitTests::waterLogLineFill);
+        run("waterLogUPath", TransitTests::waterLogUPath);
+        run("waterLogStops", TransitTests::waterLogStops);
+        run("waterLogRoundTrip", TransitTests::waterLogRoundTrip);
+        run("waterLogEmptyStart", TransitTests::waterLogEmptyStart);
+        run("reachedStationsDropRemoved", TransitTests::reachedStationsDropRemoved);
+        run("waterLogStationTarget", TransitTests::waterLogStationTarget);
+        run("boatBackoffAction", TransitTests::boatBackoffAction);
+        run("boatRouteLeg", TransitTests::boatRouteLeg);
+        run("boatRoutesOldVersion", TransitTests::boatRoutesOldVersion);
+        run("boatAutopilotHeading", TransitTests::boatAutopilotHeading);
+        run("boatAutopilotReached", TransitTests::boatAutopilotReached);
+        run("boatAutopilotSpeed", TransitTests::boatAutopilotSpeed);
+        run("boatAutopilotHeadingChange", TransitTests::boatAutopilotHeadingChange);
+        run("boatBerthManoeuvre", TransitTests::boatBerthManoeuvre);
+        run("shuttleFuellessRules", TransitTests::shuttleFuellessRules);
+        run("boatDestinations", TransitTests::boatDestinations);
+        run("boatGoalOfStop", TransitTests::boatGoalOfStop);
+        run("shipLandingRetryNeverClimbs", TransitTests::shipLandingRetryNeverClimbs);
+        run("boatBackoffPoints", TransitTests::boatBackoffPoints);
         System.out.println("TransitTests: " + passed + " OK");
+    }
+
+    private static void biomeWoodLookup() {
+        String birch = BiomeWood.speciesOf("Zone1_Tier1", "Forest_Birch");
+        check(birch != null, "Forest_Birch has no species");
+        eq(birch, BiomeWood.speciesOf("Zone1_Tier1", "Tile.Forest_Birch"));
+        eq(birch, BiomeWood.speciesOf("Zone1_Tier1", "Custom.Forest_Birch"));
+        eq("Palm", BiomeWood.speciesOf("Zone2_Shore", "Beach_Palm"));
+        check(BiomeWood.speciesOf("Nowhere", "Nothing") == null, "unknown key");
+        eq(BiomeWood.DEFAULT, BiomeWood.woodOf(null));
+        eq(new BiomeWood.Wood("Birch", "Lightwood"), BiomeWood.woodOf("Birch"));
+        eq(new BiomeWood.Wood("Azure", "Hardwood"), BiomeWood.woodOf("Azure"));
+        List<String> families = List.of("Hardwood", "Softwood", "Lightwood", "Darkwood", "Redwood", "Goldenwood",
+                "Drywood", "Greenwood", "Tropicalwood", "Blackwood", "Deadwood");
+        for (String f : BiomeWoodTable.FAMILY.values()) {
+            check(families.contains(f), "unknown family " + f);
+        }
+    }
+
+    private static void chooseSpecies() {
+        eq("Birch", BiomeWood.chooseSpecies(java.util.Arrays.asList(null, "Oak", "Birch", "Birch")));
+        eq("Oak", BiomeWood.chooseSpecies(java.util.Arrays.asList("Oak", "Birch")));
+        check(BiomeWood.chooseSpecies(java.util.Arrays.asList((String) null, null)) == null, "no sample");
+    }
+
+    private static void woodRemap() {
+        var w = new BiomeWood.Wood("Birch", "Lightwood");
+        eq("Wood_Birch_Trunk", BiomeWood.remap("Wood_Ash_Trunk", w, x -> true));
+        eq("Wood_Lightwood_Planks_Half", BiomeWood.remap("Wood_Hardwood_Planks_Half", w, x -> true));
+        eq("Wood_Lightwood_Roof_Shallow", BiomeWood.remap("Wood_Hardwood_Roof_Shallow", w, x -> true));
+        eq("*Wood_Lightwood_Stairs_State_Definitions_Corner",
+                BiomeWood.remap("*Wood_Hardwood_Stairs_State_Definitions_Corner", w, x -> true));
+        eq("Boat_Station_Gate", BiomeWood.remap("Boat_Station_Gate", w, x -> true));
+        eq("Furniture_Village_Crate", BiomeWood.remap("Furniture_Village_Crate", w, x -> true));
+        eq("Wood_Hardwood_Planks", BiomeWood.remap("Wood_Hardwood_Planks", BiomeWood.DEFAULT, x -> true));
+        // Fallback: a variant that does not exist keeps its Hardwood name (shared by world, preview and registry).
+        eq("Wood_Hardwood_Beam", BiomeWood.remap("Wood_Hardwood_Beam", w, x -> false));
+        eq("Wood_Birch_Trunk", BiomeWood.remap("Wood_Ash_Trunk", w, x -> x.equals("Wood_Birch_Trunk")));
+        eq("Wood_Ash_Trunk", BiomeWood.remap("Wood_Ash_Trunk", w, x -> false));
     }
 
     private static void pilotGenderAndName() {
@@ -304,6 +457,15 @@ public class TransitTests {
     }
 
     interface Test { void run() throws Exception; }
+
+    private static void pilotOwnedByOther() {
+        java.util.UUID mine = java.util.UUID.randomUUID(), theirs = java.util.UUID.randomUUID(), orphan = java.util.UUID.randomUUID();
+        java.util.Set<java.util.UUID> others = java.util.Set.of(theirs);
+        check(AirshipCrew.ownedByOther(theirs, others), "pilot of another entry is excluded");
+        check(!AirshipCrew.ownedByOther(mine, others), "own pilot is kept");
+        check(!AirshipCrew.ownedByOther(orphan, others), "orphan is kept");
+        check(!AirshipCrew.ownedByOther(null, others), "no uuid is kept");
+    }
 
     private static void run(String name, Test t) {
         try {
@@ -409,6 +571,19 @@ public class TransitTests {
         eq("airship.error.full", AirshipAutopilot.departureRefusalKey(true, 16, 15, false));
     }
 
+    private static void voyageIncludesBoatStations() {
+        TransitNetwork.Station balloon = new TransitNetwork.Station("Gare", "w", new Vector3i(0, 64, 0), Rotation.None, null, null,
+                new java.util.ArrayList<>(), Deployables.STATION_KIND);
+        TransitNetwork.Station boat = new TransitNetwork.Station("Port", "w", new Vector3i(400, 62, 0), Rotation.None, null, null,
+                new java.util.ArrayList<>(), Deployables.BOAT_STATION_KIND);
+        java.util.List<VoyagePlanner.Destination> d = VoyagePlanner.stationDestinations(java.util.List.of(balloon, boat), -300, 0);
+        eq(2, d.size());
+        VoyagePlanner.Destination port = d.stream().filter(x -> x.name().equals("Port")).findFirst().orElseThrow();
+        eq(VoyagePlanner.Kind.STATION, port.kind());
+        Vector3d pad = StationMarkerProvider.markerPoint(boat);
+        check(Math.abs(Math.hypot(port.x() - pad.x, port.z() - pad.z) - VoyagePlanner.ARRIVAL_DISTANCE) < 1e-6, "arrival at 70 from the pier");
+    }
+
     private static void captainMapPhase() {
         eq(-1, CaptainMap.phase(0, 499));
         eq(3, CaptainMap.phase(0, 500));
@@ -417,6 +592,16 @@ public class TransitTests {
         eq(1, CaptainMap.phase(0, 2500));
         eq(1, CaptainMap.phase(0, 3499));
         eq(0, CaptainMap.phase(0, 3500));
+    }
+
+    private static void voyageCaptainRule() {
+        java.util.UUID cap = java.util.UUID.randomUUID();
+        BalloonFlight f = BalloonFlight.forTest(Deployables.BALLOON);
+        check(!BalloonManager.isVoyageCaptain(f, cap), "no voyage");
+        f.voyage = new BalloonVoyage("M", VoyagePlanner.Kind.MARKER, 0, 0, 100, cap, 0L);
+        check(BalloonManager.isVoyageCaptain(f, cap) && !BalloonManager.isVoyageCaptain(f, java.util.UUID.randomUUID()), "captain");
+        check(BalloonVoyage.captainAboard(java.util.List.of(cap), cap) && !BalloonVoyage.captainAboard(java.util.List.of(), cap)
+                && !BalloonVoyage.captainAboard(java.util.List.of(cap), null), "captain watchdog");
     }
 
     private static void mapHolderRule() {
@@ -448,10 +633,10 @@ public class TransitTests {
 
     private static void crewPostPoint() {
         BalloonRegistry.Entry none = new BalloonRegistry.Entry("w", 100, 64, 200, Rotation.None, "airship", null);
-        org.joml.Vector3d p = AirshipCrew.postPoint(none, AirshipCrew.HELM);
+        org.joml.Vector3d p = AirshipCrew.postPoint(none, Deployables.crewOf(Deployables.AIRSHIP_KIND).helm());
         check(Math.abs(p.x - 100.5) < 1e-6 && Math.abs(p.y - 72.05) < 1e-6 && Math.abs(p.z - 190.5) < 1e-6, "helm None " + p);
         BalloonRegistry.Entry flip = new BalloonRegistry.Entry("w", 100, 64, 200, Rotation.OneEighty, "airship", null);
-        org.joml.Vector3d q = AirshipCrew.postPoint(flip, AirshipCrew.HELM);
+        org.joml.Vector3d q = AirshipCrew.postPoint(flip, Deployables.crewOf(Deployables.AIRSHIP_KIND).helm());
         check(Math.abs(q.x - 100.5) < 1e-6 && Math.abs(q.y - 72.05) < 1e-6 && Math.abs(q.z - 210.5) < 1e-6, "helm OneEighty " + q);
     }
 
@@ -572,6 +757,24 @@ public class TransitTests {
         CampRespawn.load(dir);
         check(Files.exists(dir.resolve("camp-respawn.json.bad")), "corrupt file renamed .bad");
         check(!Files.exists(dir.resolve("camp-respawn.json")), "corrupt file moved away");
+    }
+
+    private static void balloonNoCrewUnchanged() {
+        // Deployables.BALLOON.shape() needs the game assets: the four stools of the prefab, built by hand.
+        StructureShape s = StructureShape.ofCells(List.of(
+                new StructureShape.Cell(-1, 9, 7, "Furniture_Crude_Stool"), new StructureShape.Cell(1, 9, 7, "Furniture_Crude_Stool"),
+                new StructureShape.Cell(-1, 9, 9, "Furniture_Crude_Stool"), new StructureShape.Cell(1, 9, 9, "Furniture_Crude_Stool")));
+        eq(4, BalloonManager.freeSeats(s, null).size());
+        eq(3, BalloonManager.freeSeats(s, new int[]{1, 9, 9}).size());
+        check(AirshipCrew.helmRefusalKey(null, AirshipCrew.CrewState.ABSENT) == null, "no pilot: chain never refused");
+    }
+
+    private static void balloonResumeKeepsCrew() {
+        CrewRecord crew = new CrewRecord(java.util.UUID.randomUUID(), 42L, CrewRecord.Post.STOOL);
+        org.bson.BsonDocument d = BalloonResume.crewToBson(crew);
+        CrewRecord back = BalloonResume.crewFromBson(d);
+        check(back != null && back.uuid().equals(crew.uuid()) && back.post() == CrewRecord.Post.STOOL, "crew round trip");
+        check(BalloonResume.crewFromBson(null) == null, "absent key");
     }
 
     private static void eq(Object expected, Object actual) {
@@ -740,9 +943,9 @@ public class TransitTests {
     }
 
     static void rerouteTarget() {
-        TransitNetwork.Station a = new TransitNetwork.Station("A", "w", new Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
-        TransitNetwork.Station b = new TransitNetwork.Station("B", "w", new Vector3i(500, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
-        TransitNetwork.Station c = new TransitNetwork.Station("C", "w", new Vector3i(100, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
+        TransitNetwork.Station a = new TransitNetwork.Station("A", "w", new Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.STATION_KIND);
+        TransitNetwork.Station b = new TransitNetwork.Station("B", "w", new Vector3i(500, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.STATION_KIND);
+        TransitNetwork.Station c = new TransitNetwork.Station("C", "w", new Vector3i(100, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.STATION_KIND);
         org.joml.Vector3d here = new org.joml.Vector3d(450, 110, 0);
         eq(a, TransitAutopilot.rerouteTarget(List.of(a, b), "A", here)); // departure still there: back to it
         eq(b, TransitAutopilot.rerouteTarget(List.of(b, c), "A", here)); // departure removed: nearest
@@ -757,14 +960,61 @@ public class TransitTests {
     }
 
     static void returnStation() {
-        TransitNetwork.Station a = new TransitNetwork.Station("A", "w", new Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
-        TransitNetwork.Station b = new TransitNetwork.Station("B", "w", new Vector3i(500, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
-        TransitNetwork.Station c = new TransitNetwork.Station("C", "w", new Vector3i(900, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
+        TransitNetwork.Station a = new TransitNetwork.Station("A", "w", new Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.STATION_KIND);
+        TransitNetwork.Station b = new TransitNetwork.Station("B", "w", new Vector3i(500, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.STATION_KIND);
+        TransitNetwork.Station c = new TransitNetwork.Station("C", "w", new Vector3i(900, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.STATION_KIND);
         org.joml.Vector3d here = new org.joml.Vector3d(480, 110, 0); // right above B, the destination
         eq(a, TransitAutopilot.returnStation(List.of(a, b, c), "A", "B", here)); // departure still there: back to it
         eq(c, TransitAutopilot.returnStation(List.of(b, c), "A", "B", here)); // departure removed: nearest other than the destination
         eq(b, TransitAutopilot.returnStation(List.of(b), "A", "B", here)); // the destination only if it is the last one
         eq(null, TransitAutopilot.returnStation(List.of(), "A", "B", here)); // nothing left: the ground
+    }
+
+    static void shuttleReturnStation() {
+        TransitNetwork.Station a = boatStation("A", 0);
+        TransitNetwork.Station b = boatStation("B", 500);
+        TransitNetwork.Station c = boatStation("C", 900);
+        TransitNetwork.Station balloon = new TransitNetwork.Station("N", "w", new Vector3i(470, 64, 0), Rotation.None, null, null,
+                new java.util.ArrayList<>(), Deployables.STATION_KIND); // a balloon station right next to the destination
+        org.joml.Vector3d here = new org.joml.Vector3d(480, 63, 0);
+        eq(a, BoatQuay.returnStation(List.of(a, b, c, balloon), "A", "B", here)); // departure still there: back to it
+        eq(c, BoatQuay.returnStation(List.of(b, c, balloon), "A", "B", here)); // departure removed: nearest boat station but the destination
+        eq(b, BoatQuay.returnStation(List.of(b, balloon), "A", "B", here)); // the destination only if it is the last boat station
+        eq(null, BoatQuay.returnStation(List.of(balloon), "A", "B", here)); // balloon stations never count: the surface
+        eq(null, BoatQuay.returnStation(List.of(), "A", "B", here));
+    }
+
+    static void boatApproachGiveUp() {
+        BoatQuay.Quay q = new BoatQuay.Quay();
+        for (int i = 0; i < BoatQuay.MAX_APPROACH_TRIES - 1; i++) {
+            q.approach();
+            q.approachFailed(1000L * i, 30_000L);
+            check(!q.shouldGiveUp(), "still trying after " + (i + 1) + " failure(s)");
+        }
+        q.approach();
+        q.approachFailed(100_000L, 30_000L);
+        check(q.shouldGiveUp(), "gives up after the cap");
+        q.docked(200_000L); // a successful docking resets the count
+        check(!q.shouldGiveUp(), "docking resets the failures");
+    }
+
+    static void shuttleRedirectTargets() {
+        TransitNetwork.Station a = boatStation("A", 0);
+        TransitNetwork.Station b = boatStation("B", 500);
+        TransitNetwork.Station c = boatStation("C", 900);
+        TransitNetwork.Station d = boatStation("D", 600);
+        TransitNetwork.Station balloon = new TransitNetwork.Station("N", "w", new Vector3i(470, 64, 0), Rotation.None, null, null,
+                new java.util.ArrayList<>(), Deployables.STATION_KIND);
+        org.joml.Vector3d here = new org.joml.Vector3d(480, 63, 0);
+        // departure first, then the others from the nearest, never the removed one nor a balloon station
+        eq(List.of(a, d, c), BoatQuay.redirectTargets(List.of(c, a, b, d, balloon), "A", "B", here));
+        eq(List.of(d, c), BoatQuay.redirectTargets(List.of(c, b, d), "A", "B", here)); // departure gone: nearest first
+        eq(List.of(), BoatQuay.redirectTargets(List.of(b, balloon), "A", "B", here)); // none left: the rescue
+    }
+
+    private static TransitNetwork.Station boatStation(String name, int x) {
+        return new TransitNetwork.Station(name, "w", new Vector3i(x, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(),
+                Deployables.BOAT_STATION_KIND);
     }
 
     static void holdingPoints() {
@@ -774,7 +1024,7 @@ public class TransitTests {
         eq(0, TransitAutopilot.holdIndexFor(List.of(a, b), a));
         eq(1, TransitAutopilot.holdIndexFor(List.of(a, b), b));
         eq(2, TransitAutopilot.holdIndexFor(List.of(a, b), c)); // not registered yet: behind the others
-        TransitNetwork.Station s = new TransitNetwork.Station("Port Sud", "w", new Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
+        TransitNetwork.Station s = new TransitNetwork.Station("Port Sud", "w", new Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.STATION_KIND);
         eq(0, StationQueue.registerArrival(s, a));
         eq(1, StationQueue.registerArrival(s, b));
         eq(0, StationQueue.registerArrival(s, a)); // idempotent
@@ -810,7 +1060,7 @@ public class TransitTests {
     }
 
     static void reservationIsExclusive() {
-        TransitNetwork.Station s = new TransitNetwork.Station("Port Nord", "w", new org.joml.Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
+        TransitNetwork.Station s = new TransitNetwork.Station("Port Nord", "w", new org.joml.Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.STATION_KIND);
         UUID a = UUID.randomUUID();
         UUID b = UUID.randomUUID();
         eq(true, StationMaster.reserve(s, a));
@@ -843,6 +1093,40 @@ public class TransitTests {
         } finally {
             deleteAll(dir);
         }
+    }
+
+    static void registryWoodRoundTrip() throws Exception {
+        Path dir = Files.createTempDirectory("registry-wood");
+        try {
+            BalloonRegistry.init(dir);
+            org.joml.Vector3i o = new org.joml.Vector3i(1, 2, 3);
+            com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation rot =
+                    com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None;
+            BalloonRegistry.addNamed("w", o, rot, Deployables.BOAT_STATION_KIND, Ownership.of(java.util.UUID.randomUUID(), "Paul"));
+            eq(null, BalloonRegistry.entriesOfNameForTest("w").get(0).wood());
+            BalloonRegistry.setWoodNamed("w", o, rot, Deployables.BOAT_STATION_KIND, "Birch");
+            BalloonRegistry.init(dir);
+            eq("Birch", BalloonRegistry.entriesOfNameForTest("w").get(0).wood());
+            // The wood does not count in equality.
+            BalloonRegistry.Entry a = new BalloonRegistry.Entry("w", 1, 2, 3, rot, "boat_station", null);
+            eq(true, a.equals(BalloonRegistry.entriesOfNameForTest("w").get(0)));
+        } finally {
+            BalloonRegistry.init(Files.createTempDirectory("registry-wood-reset"));
+        }
+    }
+
+    static void boatStationShapeOfWood() {
+        StructureShape base = StructureShape.ofCells(java.util.List.of(
+                new StructureShape.Cell(0, 0, 0, "Wood_Ash_Trunk"),
+                new StructureShape.Cell(1, 0, 0, "Wood_Hardwood_Planks"),
+                new StructureShape.Cell(2, 0, 0, "Rock_Stone")));
+        StructureShape birch = BalloonRegistry.remapShape(base, BiomeWood.woodOf("Birch"), x -> true);
+        eq("Wood_Birch_Trunk", birch.cells().get(0).name());
+        for (StructureShape.Cell c : birch.cells()) {
+            eq(false, c.name().contains("Ash_Trunk"));
+        }
+        eq("Rock_Stone", birch.cells().get(2).name());
+        eq("Wood_Ash_Trunk", BalloonRegistry.remapShape(base, BiomeWood.DEFAULT, x -> true).cells().get(0).name());
     }
 
     static void registryOwnershipRoundTrip() throws Exception {
@@ -971,10 +1255,14 @@ public class TransitTests {
         UUID master = UUID.randomUUID();
         UUID owner = UUID.randomUUID();
         TransitNetwork.Station s = new TransitNetwork.Station("Port Nord", "default", new Vector3i(10, 64, -20),
-                Rotation.Ninety, master, owner, new java.util.ArrayList<>(List.of("Gare Sud", "Plaine")));
+                Rotation.Ninety, master, owner, new java.util.ArrayList<>(List.of("Gare Sud", "Plaine")), Deployables.STATION_KIND);
+        TransitNetwork.Station boat = new TransitNetwork.Station("Quai Est", "default", new Vector3i(50, 62, 8),
+                Rotation.None, null, owner, new java.util.ArrayList<>(), Deployables.BOAT_STATION_KIND);
         net.add(s);
+        net.add(boat);
         net.save();
         net.remove(s);
+        net.remove(boat);
         eq(0, net.stations("default").size());
         net.load(dir);
         TransitNetwork.Station r = net.byName("default", "port nord");
@@ -987,6 +1275,170 @@ public class TransitTests {
         eq(owner, r.owner);
         eq(List.of("Gare Sud", "Plaine"), r.queue);
         eq(r, net.at("default", new Vector3i(10, 64, -20)));
+        eq(Deployables.STATION_KIND, r.kind);
+        eq(Deployables.BOAT_STATION_KIND, net.byName("default", "Quai Est").kind);
+        // A document without "kind" (written before boat stations) is a balloon station.
+        Path f = dir.resolve("stations.json");
+        Files.writeString(f, Files.readString(f).replace("\"kind\": \"station\", ", "").replace("\"kind\": \"station\"", "\"x0\": 0"));
+        net.load(dir);
+        eq(Deployables.STATION_KIND, net.byName("default", "Port Nord").kind);
+    }
+
+    static void fareChoice() {
+        UUID p = UUID.randomUUID();
+        eq(new TransitFare.Payment(p, TransitFare.ESSENCE, 100), TransitFare.choose(p, 100, 1));
+        eq(new TransitFare.Payment(p, TransitFare.ESSENCE, 100), TransitFare.choose(p, 250, 0));
+        eq(new TransitFare.Payment(p, TransitFare.CONCENTRATED, 1), TransitFare.choose(p, 99, 1));
+        eq(null, TransitFare.choose(p, 99, 0));
+        eq(null, TransitFare.choose(p, 0, 0));
+    }
+
+    private static TransitNetwork.Station fareStation(String name, String... queue) {
+        return new TransitNetwork.Station(name, "default", new Vector3i(0, 64, 0), Rotation.None, null, null,
+                new java.util.ArrayList<>(List.of(queue)), Deployables.STATION_KIND);
+    }
+
+    static void refundsFileRoundTrip() throws Exception {
+        Path dir = Files.createTempDirectory("refund-test");
+        try {
+            TransitFare.loadRefunds(dir);
+            UUID u = UUID.randomUUID();
+            TransitFare.Payment a = new TransitFare.Payment(u, TransitFare.ESSENCE, 100);
+            TransitFare.Payment b = new TransitFare.Payment(u, TransitFare.CONCENTRATED, 1);
+            TransitFare.refund(a, "Nord");
+            TransitFare.refund(b, "Sud");
+            TransitFare.loadRefunds(dir);
+            eq(List.of(a, b), TransitFare.takeRefunds(u));
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
+    static void refundsTakeOnce() throws Exception {
+        Path dir = Files.createTempDirectory("refund-test");
+        try {
+            TransitFare.loadRefunds(dir);
+            UUID u = UUID.randomUUID();
+            TransitFare.refund(new TransitFare.Payment(u, TransitFare.ESSENCE, 100), "Nord");
+            eq(1, TransitFare.takeRefunds(u).size());
+            eq(0, TransitFare.takeRefunds(u).size());
+            TransitFare.loadRefunds(dir);
+            eq(0, TransitFare.takeRefunds(u).size());
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
+    static void refundsCorruptKept() throws Exception {
+        Path dir = Files.createTempDirectory("refund-test");
+        try {
+            Files.writeString(dir.resolve("refunds.json"), "{garbage");
+            TransitFare.loadRefunds(dir);
+            eq("{garbage", Files.readString(dir.resolve("refunds.json.bad")));
+            eq(0, TransitFare.takeRefunds(UUID.randomUUID()).size());
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
+    private static void deleteTree(Path dir) throws Exception {
+        try (var w = Files.walk(dir)) {
+            w.sorted(java.util.Comparator.reverseOrder()).forEach(f -> f.toFile().delete());
+        }
+    }
+
+    static void paymentsRoundTrip() throws Exception {
+        Path dir = Files.createTempDirectory("transit-test");
+        try {
+            TransitNetwork net = TransitNetwork.get();
+            net.load(dir);
+            UUID payer = UUID.randomUUID();
+            TransitNetwork.Station a = fareStation("A");
+            TransitNetwork.Station b = fareStation("B");
+            b.origin.x = 200;
+            net.add(a);
+            net.add(b);
+            TransitFare.Payment pay = new TransitFare.Payment(payer, TransitFare.ESSENCE, 100);
+            eq(StationQueue.EnqueueResult.ADDED, net.queueEnqueue(a, "Gare Sud", pay));
+            eq(StationQueue.EnqueueResult.ADDED, net.queueEnqueue(a, "Plaine"));
+            eq(StationQueue.EnqueueResult.ADDED, net.queueEnqueue(b, "Gare Sud"));
+            net.save();
+            net.load(dir);
+            TransitNetwork.Station ra = net.byName("default", "A");
+            TransitNetwork.Station rb = net.byName("default", "B");
+            eq(List.of("Gare Sud", "Plaine"), ra.queue);
+            eq(1, ra.payments.size());
+            eq(pay, ra.payments.get("gare sud"));
+            eq(0, rb.payments.size());
+            eq(List.of("Gare Sud"), rb.queue);
+        } finally {
+            deleteAll(dir);
+        }
+    }
+
+    static void paymentsOldFile() throws Exception {
+        Path dir = Files.createTempDirectory("transit-test");
+        try {
+            TransitNetwork net = TransitNetwork.get();
+            net.load(dir);
+            net.add(fareStation("A", "Gare Sud"));
+            net.save();
+            if (Files.readString(dir.resolve("stations.json")).contains("payments")) throw new AssertionError("empty table written");
+            net.load(dir);
+            TransitNetwork.Station r = net.byName("default", "A");
+            eq(List.of("Gare Sud"), r.queue);
+            eq(0, r.payments.size());
+        } finally {
+            deleteAll(dir);
+        }
+    }
+
+    static void paymentsRemovedWithQueue() throws Exception {
+        Path dir = Files.createTempDirectory("transit-test");
+        try {
+            TransitNetwork net = TransitNetwork.get();
+            net.load(dir);
+            UUID payer = UUID.randomUUID();
+            TransitNetwork.Station s = fareStation("A");
+            net.add(s);
+            TransitFare.Payment pay = new TransitFare.Payment(payer, TransitFare.CONCENTRATED, 1);
+            net.queueEnqueue(s, "Gare Sud", pay);
+            eq(pay, net.queueRemoveFirst(s, "gare sud"));
+            eq(null, net.queueRemoveFirst(s, "Gare Sud"));
+            net.queueEnqueue(s, "Plaine", pay);
+            eq(List.of(pay), net.queueRemoveAll(s, "PLAINE"));
+            eq(List.of(), net.queueRemoveAll(s, "Plaine"));
+            net.queueEnqueue(s, "Port", pay);
+            eq(1, net.takeAllPayments(s).size());
+            eq(0, net.takeAllPayments(s).size());
+        } finally {
+            deleteAll(dir);
+        }
+    }
+
+    static void stationsOfKind() {
+        TransitNetwork net = TransitNetwork.get();
+        net.load(Path.of("/nonexistent-orbis-test"));
+        TransitNetwork.Station a = new TransitNetwork.Station("A", "w", new Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.STATION_KIND);
+        TransitNetwork.Station b = new TransitNetwork.Station("B", "w", new Vector3i(100, 62, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.BOAT_STATION_KIND);
+        TransitNetwork.Station c = new TransitNetwork.Station("C", "other", new Vector3i(0, 62, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.BOAT_STATION_KIND);
+        net.add(a); net.add(b); net.add(c);
+        try {
+            eq(List.of(b), net.stations("w", Deployables.BOAT_STATION_KIND));
+            eq(List.of(a), net.stations("w", Deployables.STATION_KIND));
+            eq(2, net.stations("w").size());
+        } finally {
+            net.remove(a); net.remove(b); net.remove(c);
+        }
+    }
+
+    static void stationDistanceSameKind() {
+        TransitNetwork.Station balloon = new TransitNetwork.Station("A", "w", new Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.STATION_KIND);
+        TransitNetwork.Station boat = new TransitNetwork.Station("B", "w", new Vector3i(0, 64, 10), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.BOAT_STATION_KIND);
+        Vector3i origin = new Vector3i(0, 64, 0);
+        eq(null, DeployStationInteraction.tooClose(List.of(balloon), Deployables.BOAT_STATION_KIND, new Vector3i(0, 64, 10), 64));
+        eq(boat, DeployStationInteraction.tooClose(List.of(balloon, boat), Deployables.BOAT_STATION_KIND, origin, 64));
+        eq(balloon, DeployStationInteraction.tooClose(List.of(balloon, boat), Deployables.STATION_KIND, new Vector3i(0, 64, 10), 64));
     }
 
     private static void quartersByCloseness() {
@@ -1013,6 +1465,10 @@ public class TransitTests {
     private static void wheelSpecFlags() {
         check("Steamboat".equals(Deployables.STEAMBOAT.airship.wheelAnimPrefix), "steamboat has wheels");
         check(Deployables.AIRSHIP.airship.wheelAnimPrefix == null, "airship has none");
+        check(Deployables.STEAMBOAT.airship.propellerAnimPrefix == null && Deployables.AIRSHIP.airship.propellerAnimPrefix == null,
+                "steamboat and airship have no propeller");
+        check("Propeller".equals(Deployables.STEAMBOAT_PUBLIC.airship.propellerAnimPrefix)
+                && Deployables.STEAMBOAT_PUBLIC.airship.wheelAnimPrefix == null, "shuttle: one propeller, no wheels");
     }
 
     private static void markerIgnoresFiller() {
@@ -1032,23 +1488,37 @@ public class TransitTests {
 
     private static void steamboatFitCheck() {
         StructureShape s = StructureShape.ofCells(List.of(
-                new StructureShape.Cell(0, -3, 0, "A"), new StructureShape.Cell(0, -4, 0, "A"), new StructureShape.Cell(0, 0, 0, "B")));
-        Vector3i o = new Vector3i(0, 63, 0); // surface 60: layer -3 at y 60 (water top)
+                new StructureShape.Cell(0, -2, 0, "A"), new StructureShape.Cell(0, -3, 0, "A"), new StructureShape.Cell(0, 0, 0, "B")));
+        Vector3i o = new Vector3i(0, 62, 0); // surface 60: waterline layer -2 at y 60 (water top)
         // water up to y 60, air above
         check(DeployPlacement.steamboatFit(s, o, Rotation.None, (x, y, z) -> y <= 60 ? 1 : 0) == null, "fit");
         check("deploy.steamboat.noWater".equals(DeployPlacement.steamboatFit(s, o, Rotation.None, (x, y, z) -> y == 60 ? 2 : y < 60 ? 1 : 0)), "block in hull");
         check("deploy.steamboat.noWater".equals(DeployPlacement.steamboatFit(s, o, Rotation.None, (x, y, z) -> y < 60 ? 1 : 0)), "air in hull");
-        check("deploy.steamboat.blocked".equals(DeployPlacement.steamboatFit(s, o, Rotation.None, (x, y, z) -> y <= 60 ? 1 : y == 63 ? 2 : 0)), "block above");
-        check("deploy.steamboat.blocked".equals(DeployPlacement.steamboatFit(s, o, Rotation.None, (x, y, z) -> y <= 60 || y == 63 ? 1 : 0)), "water above");
-        // Quarter turn: Ninety sends prefab (x, z) to (z, -x), so the hull cell (2, -3, 0) lands at (0, 60, -2) from the origin.
+        check("deploy.steamboat.blocked".equals(DeployPlacement.steamboatFit(s, o, Rotation.None, (x, y, z) -> y <= 60 ? 1 : y == 62 ? 2 : 0)), "block above");
+        check("deploy.steamboat.blocked".equals(DeployPlacement.steamboatFit(s, o, Rotation.None, (x, y, z) -> y <= 60 || y == 62 ? 1 : 0)), "water above");
+        // Quarter turn: Ninety sends prefab (x, z) to (z, -x), so the hull cell (2, -2, 0) lands at (0, 60, -2) from the origin.
         StructureShape t = StructureShape.ofCells(List.of(
-                new StructureShape.Cell(2, -3, 0, "A"), new StructureShape.Cell(0, 0, 0, "B")));
-        Vector3i to = new Vector3i(0, 63, 0);
+                new StructureShape.Cell(2, -2, 0, "A"), new StructureShape.Cell(0, 0, 0, "B")));
+        Vector3i to = new Vector3i(0, 62, 0);
         check(DeployPlacement.steamboatFit(t, to, Rotation.Ninety, (x, y, z) -> y <= 60 && x == 0 && z == -2 ? 1 : 0) == null, "turned fit");
         check("deploy.steamboat.noWater".equals(DeployPlacement.steamboatFit(t, to, Rotation.Ninety,
                 (x, y, z) -> y <= 60 && x == 2 && z == 0 ? 1 : 0)), "turned hull is not at the unturned place");
         check("deploy.steamboat.noWater".equals(DeployPlacement.steamboatFit(t, to, Rotation.Ninety,
                 (x, y, z) -> x == 0 && z == -2 && y == 60 ? 2 : y <= 60 ? 1 : 0)), "block in turned hull cell");
+    }
+
+    /** 25 October 2026: the steamboat sits one block lower (waterline -2), nothing that lets water in or keeps it out (rope ladder) stays under it and the hold is dry. */
+    private static void steamboatWaterlineLayer() throws Exception {
+        check(Deployables.STEAMBOAT.airship.waterlineY == -2, "waterline layer -2");
+        StructureShape shape = prefabShape("Steamboat.prefab.json");
+        for (StructureShape.Cell c : shape.cells()) {
+            if (c.y() <= -2) {
+                check(!c.baseName().contains("Window") && !c.baseName().contains("Trapdoor"), "no window or trapdoor under water: " + c.x() + "," + c.y() + "," + c.z());
+                check(!"Steamboat_Paddle_Wheel".equals(c.baseName()), "no paddle wheel cell under water: " + c.x() + "," + c.y() + "," + c.z());
+                check(!"Airship_Rope_Ladder".equals(c.baseName()), "no rope ladder under water: " + c.x() + "," + c.y() + "," + c.z());
+            }
+        }
+        check(SteamboatWater.submergedCells(shape, -2).contains(new Vector3i(0, -2, 0)), "the hold at the waterline is a closed cavity");
     }
 
     private static void gliderAllowedKinds() {
@@ -1065,9 +1535,160 @@ public class TransitTests {
         check(a.x() == 0 && a.y() == 5 && a.z() == 4, "anchor " + a.x() + "," + a.y() + "," + a.z());
     }
 
+    private static void steamboatCrewSpec() throws Exception {
+        Deployables.CrewSpec c = Deployables.crewOf(Deployables.STEAMBOAT_KIND);
+        check(c != null, "steamboat has a crew spec");
+        check(java.util.Arrays.equals(Deployables.STEAMBOAT_PIVOT, c.helm()), "helm is the pivot");
+        check(c.door() == null, "no door");
+        check(java.util.Arrays.equals(new int[]{0, 2, 7}, c.desk()), "desk in the crew spec");
+        // The prefab file is read directly (StructureShape needs no game assets here): block name per origin cell.
+        java.util.Map<String, String> cells = new java.util.HashMap<>();
+        for (StructureShape.Cell cell : prefabShape("Steamboat.prefab.json").cells()) {
+            cells.put(cell.x() + "," + cell.y() + "," + cell.z(), cell.baseName());
+        }
+        eq("Furniture_Village_Chair", cells.get("0,4,8"));
+        eq("Airship_Chair", cells.get("0,1,8"));
+        eq("Airship_Captain_Map_Desk", cells.get("0,2,7"));
+        check(!cells.containsKey("0,4,6") && !cells.containsKey("0,4,7"), "straight walk from the helm to the chair");
+        eq(0, c.walk().legs(new double[]{0, 4, 5}, CrewRecord.Post.STOOL).size());
+        check(Deployables.voyageOf(Deployables.STEAMBOAT_KIND) && Deployables.voyageOf(Deployables.AIRSHIP_KIND), "voyage flags");
+        check(Deployables.crewOf(Deployables.STEAMBOAT_PUBLIC_KIND) == null, "the shuttle has no pilot spec");
+    }
+
+    private static void boatCrewOrders() {
+        eq(List.of(AirshipVoyagePage.CrewOrder.VOYAGE, AirshipVoyagePage.CrewOrder.NOTE_STOP, AirshipVoyagePage.CrewOrder.TAKE_HELM),
+                AirshipVoyagePage.crewOptions(AirshipCrew.CrewState.AT_HELM, true, true));
+        eq(List.of(AirshipVoyagePage.CrewOrder.RETURN_HELM), AirshipVoyagePage.crewOptions(AirshipCrew.CrewState.SEATED, true, true));
+        check(AirshipVoyagePage.keepsLog(Deployables.STEAMBOAT_KIND) && !AirshipVoyagePage.keepsLog(Deployables.AIRSHIP_KIND), "log only on water");
+    }
+
+    private static void crewOptionsWithoutVoyage() {
+        eq(List.of(AirshipVoyagePage.CrewOrder.TAKE_HELM), AirshipVoyagePage.crewOptions(AirshipCrew.CrewState.AT_HELM, false));
+        eq(List.of(AirshipVoyagePage.CrewOrder.VOYAGE, AirshipVoyagePage.CrewOrder.TAKE_HELM),
+                AirshipVoyagePage.crewOptions(AirshipCrew.CrewState.AT_HELM, true));
+        eq(List.of(AirshipVoyagePage.CrewOrder.RETURN_HELM), AirshipVoyagePage.crewOptions(AirshipCrew.CrewState.SEATED, false));
+    }
+
+    /** The shuttle berth: the small hull placed by the berth constants fits against the pier of the boat station, step to deck. */
+    private static void boatStationBerth() throws Exception {
+        // 25 October 2026: the player steamboat has its own mooring rules (crate, DeployPlacement.steamboatFit), the berth constants
+        // are the shuttle's, so only the shuttle prefab is checked against them.
+        boatBerth("Steamboat_Public.prefab.json");
+    }
+
+    private static void boatBerth(String boatFile) throws Exception {
+        StructureShape station = prefabShape("Boat_Station.prefab.json");
+        StructureShape boat = prefabShape(boatFile);
+        int[] o = Deployables.BOAT_STATION_BERTH_ORIGIN;
+        Rotation rot = Deployables.BOAT_STATION_BERTH_ROTATION;
+        check(o[1] == -1, "berth origin y is the water surface (waterline layer 0 lands on it)");
+        check(Deployables.STEAMBOAT_PUBLIC.airship.waterlineY == 0, "waterline is the floor layer");
+        Set<String> taken = new java.util.HashSet<>();
+        Set<String> deck = new java.util.HashSet<>();
+        for (StructureShape.Cell c : station.cells()) {
+            taken.add(c.x() + "," + c.y() + "," + c.z());
+            if (c.y() == 0 && "Wood_Hardwood_Planks_Half".equals(c.baseName())) deck.add(c.x() + "," + c.z());
+        }
+        List<Vector3i> steps = new ArrayList<>();
+        for (StructureShape.Cell c : boat.cells()) {
+            Vector3i r = c.rotated(rot);
+            Vector3i w = new Vector3i(r.x + o[0], c.y() + o[1], r.z + o[2]);
+            check(w.z >= 6, "every boat cell has station z >= 6, got " + w);
+            check(!taken.contains(w.x + "," + w.y + "," + w.z), "boat cell overlaps the station at " + w);
+            if (c.y() <= 0) check(w.y <= -1, "hull under the waterline stays in the water surface layer, cell " + w);
+            if (c.y() == 1 && Math.abs(c.x()) == 2 && c.z() == 0) {
+                check("Wood_Softwood_Planks_Half".equals(c.baseName()), "boarding step is a half plank");
+                steps.add(w);
+            }
+        }
+        eq(2, steps.size());
+        boolean touches = false;
+        for (Vector3i l : steps) {
+            check(l.y == 0, "boarding step at the pier deck height, got " + l);
+            for (int[] d : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+                int dx = l.x + d[0], dz = l.z + d[1];
+                if (deck.contains(dx + "," + dz) && !taken.contains(dx + ",1," + dz) && !taken.contains(dx + ",2," + dz)) touches = true;
+            }
+        }
+        check(touches, "a boarding step is next to a free deck cell of the pier");
+    }
+
+    /** The shuttle prefab (small boat, 127 blocks): benches, one helm, one chimney, one propeller, no wheel, no ladder, hull above the floor. */
+    private static void steamboatPublicPrefab() throws Exception {
+        var root = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Prefabs", "Steamboat_Public.prefab.json")));
+        Map<String, String> cells = new java.util.HashMap<>();
+        int helms = 0, minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE,
+                minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+        for (var e : root.getArray("blocks")) {
+            var b = e.asDocument();
+            int x = b.getInt32("x").getValue(), y = b.getInt32("y").getValue(), z = b.getInt32("z").getValue();
+            String n = b.getString("name").getValue();
+            cells.put(x + "," + y + "," + z, n);
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+            minZ = Math.min(minZ, z);
+            maxZ = Math.max(maxZ, z);
+            if ("Airship_Helm".equals(n) && !b.containsKey("filler")) helms++;
+            check(!"Steamboat_Paddle_Wheel".equals(n) && !"Airship_Rope_Ladder".equals(n) && !"Ship_Wheel".equals(n), "no wheel, ladder or decor wheel: " + n);
+            check(!"Airship_Fuel_Tank".equals(n), "no fuel tank: " + n);
+        }
+        eq(127, cells.size());
+        int[] mn = Deployables.STEAMBOAT_PUBLIC_PLACE_MIN, mx = Deployables.STEAMBOAT_PUBLIC_PLACE_MAX;
+        // The last prefab block is at z 5, the place box keeps z 6 (no block there: it keeps the lake water).
+        check(minX == mn[0] && minY == mn[1] && minZ == mn[2] && maxX == mx[0] && maxY == mx[1] && maxZ + 1 == mx[2],
+                "place box is the prefab box plus the empty cell z 6: " + minX + "," + minY + "," + minZ + " to " + maxX + "," + maxY + "," + maxZ);
+        check(minX == -2 && maxX == 2 && minY == 0 && minZ == -5 && maxZ == 5, "centred on x, floor at y 0");
+        eq("Steamboat_Propeller", cells.get("0,0,5")); // the shaft and propeller block, replaces the beam and the window
+        check(!cells.containsKey("0,0,6"), "no window behind the propeller: the water stays out of the hull only");
+        check(helms == 1, "one helm origin, got " + helms);
+        eq("Airship_Helm", cells.get("0,2,-2"));
+        eq("Airship_Helm", cells.get("0,1,-2"));
+        eq("*Airship_Engine_State_Definitions_On", cells.get("0,1,4")); // the lit firebox block, no fuel tank anywhere
+        check(new StructureShape.Cell(0, 1, 4, cells.get("0,1,4")).baseName().equals(AirshipEngines.ENGINE_BLOCK),
+                "the lit firebox is the engine block for the flight light");
+        eq("Wood_Softwood_Planks_Half", cells.get("2,1,0"));
+        eq("Wood_Softwood_Planks_Half", cells.get("-2,1,0"));
+        int n = AirshipPassengers.seats(prefabShape("Steamboat_Public.prefab.json")).size();
+        check(n == 6, "6 tavern stools = 6 seats, got " + n);
+        // Fluids: only Empty entries, one per block cell (the cells the boat replaces in the water).
+        Set<String> fluids = new java.util.HashSet<>();
+        for (var e : root.getArray("fluids")) {
+            var f = e.asDocument();
+            boolean propeller = f.getInt32("x").getValue() == 0 && f.getInt32("y").getValue() == 0 && f.getInt32("z").getValue() == 5;
+            // The propeller cell holds a water source (the block is Material Empty), every other entry is Empty.
+            check(propeller ? "Water_Source".equals(f.getString("name").getValue()) && f.getInt32("level").getValue() == 1
+                    : "Empty".equals(f.getString("name").getValue()), "fluid entry " + f);
+            fluids.add(f.getInt32("x").getValue() + "," + f.getInt32("y").getValue() + "," + f.getInt32("z").getValue());
+        }
+        eq(cells.keySet(), fluids);
+        Deployables.AirshipSpec sp = Deployables.STEAMBOAT_PUBLIC.airship;
+        check(Deployables.forPrefab("Steamboat_Public.prefab.json") == Deployables.STEAMBOAT_PUBLIC, "forPrefab");
+        check(!Deployables.SHIPS.contains(Deployables.STEAMBOAT_PUBLIC), "not in SHIPS");
+        check(sp.fuelless && !Deployables.STEAMBOAT.airship.fuelless && !Deployables.AIRSHIP.airship.fuelless, "fuelless flag");
+        check(sp.waterborne() && sp.crateItemId == null && sp.wheelAnimPrefix == null && "Propeller".equals(sp.propellerAnimPrefix) && sp.waterlineY == 0,
+                "spec: propeller, no wheels, waterline 0");
+        check(cells.containsKey("0,0,-1") && !cells.containsKey("0,1,-1") && !cells.containsKey("0,2,-1")
+                && Deployables.STEAMBOAT_PUBLIC_PIVOT[0] == 0 && Deployables.STEAMBOAT_PUBLIC_PIVOT[1] == 1
+                && Deployables.STEAMBOAT_PUBLIC_PIVOT[2] == -1, "pivot behind the helm: floor below, two free cells above");
+        var kind = AirshipResume.kindOf(new org.bson.BsonDocument("kind", new org.bson.BsonString("steamboat_public")));
+        check(kind == Deployables.STEAMBOAT_PUBLIC, "kindOf accepts the shuttle");
+    }
+
     private static void steamboatSeats() throws Exception {
         int n = AirshipPassengers.seats(prefabShape("Steamboat.prefab.json")).size();
         check(n == 12, "12 seats, got " + n);
+    }
+
+    /** Boat station room rule: the posts (prefab y below 0) may stand in the lake bed or the water, the deck and above must be free. */
+    private static void boatStationRoomRule() {
+        check(DeployStationInteraction.boatCellAllowed(-3, true, true), "post in the lake bed");
+        check(DeployStationInteraction.boatCellAllowed(-1, false, true), "post in the water");
+        check(!DeployStationInteraction.boatCellAllowed(0, false, true), "deck in the water");
+        check(!DeployStationInteraction.boatCellAllowed(0, true, false), "deck in a block");
+        check(DeployStationInteraction.boatCellAllowed(1, false, false), "free cell");
+        check(DeployPlacement.CRATES.containsKey("Boat_Station_Crate"), "boat crate in the table");
     }
 
     /** T121: the placement helper and the crate table (compared with the crate JSON files). */
@@ -1270,11 +1891,68 @@ public class TransitTests {
     }
 
     /** Only the listed items show in the creative library, every other item JSON is hidden. */
+    /** Cleaned boat station prefab: no terrain, no fluids, extended posts, decor blocks swapped. */
+    private static void boatStationPrefab() throws Exception {
+        var root = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Prefabs/Boat_Station.prefab.json")));
+        check(!root.containsKey("fluids") || root.getArray("fluids").isEmpty(), "no fluids");
+        java.util.Set<String> banned = java.util.Set.of("Rock_Stone", "Soil_Gravel_Sand_White", "Soil_Sand", "Rock_Calcite",
+                "Ore_Copper_Stone", "Empty", "Deco_Map", "Deco_Inkwell", "Furniture_Kweebec_Candle", "Deco_Coral_Shell_Swirly",
+                "Deco_Treasure", "Wood_Hardwood_Fence_Gate");
+        java.util.Map<String, java.util.List<org.bson.BsonDocument>> byName = new java.util.HashMap<>();
+        java.util.Set<String> cells = new java.util.HashSet<>();
+        for (var e : root.getArray("blocks")) {
+            var b = e.asDocument();
+            String n = b.getString("name").getValue();
+            check(!banned.contains(n), "banned block " + n);
+            byName.computeIfAbsent(n, k -> new java.util.ArrayList<>()).add(b);
+            cells.add(b.getInt32("x").getValue() + "," + b.getInt32("y").getValue() + "," + b.getInt32("z").getValue());
+        }
+        java.util.Set<String> trunks = new java.util.HashSet<>();
+        for (var t : byName.getOrDefault("Wood_Ash_Trunk", java.util.List.of()))
+            trunks.add(t.getInt32("x").getValue() + "," + t.getInt32("y").getValue() + "," + t.getInt32("z").getValue());
+        int[][] posts = {{-1, 6, -8}, {-1, 10, -10}, {4, 6, -7}, {4, 10, -9}};
+        for (int[] p : posts) {
+            for (int y = p[2]; y <= 0; y++) check(trunks.contains(p[0] + "," + y + "," + p[1]), "post " + p[0] + "," + p[1] + " y=" + y);
+            check(!trunks.contains(p[0] + "," + (p[2] - 1) + "," + p[1]), "post bottom " + p[0] + "," + p[1]);
+        }
+        Object[][] decor = {{"Boat_Station_Map", -3, 1, 5, 1}, {"Boat_Station_Inkwell", -3, 1, 4, 0}, {"Boat_Station_Candle", -4, 1, 3, 0},
+                {"Boat_Station_Shell", -5, 1, 5, 0}, {"Boat_Station_Treasure", -4, 1, 6, 0}, {"Boat_Station_Gate", -5, 0, 4, 3}};
+        for (Object[] d : decor) {
+            var l = byName.get((String) d[0]);
+            check(l != null && l.size() == 1, "exactly one " + d[0]);
+            var b = l.get(0);
+            eq((int) d[1], b.getInt32("x").getValue());
+            eq((int) d[2], b.getInt32("y").getValue());
+            eq((int) d[3], b.getInt32("z").getValue());
+            eq((int) d[4], b.containsKey("rotation") ? b.getInt32("rotation").getValue() : 0);
+        }
+        for (String c : new String[] {"-4,0,4", "-4,0,5", "-4,1,4", "-4,1,5"}) check(!cells.contains(c), "station master cell " + c + " free");
+    }
+
+    private static void oxygenHud() throws Exception {
+        check(!OxygenHud.wanted(100f), "100 is the game's own bar");
+        check(!OxygenHud.wanted(100.4f), "float noise");
+        check(OxygenHud.wanted(101f), "above 100");
+        check(OxygenHud.wanted(600f), "diving mask");
+        check(OxygenHud.fraction(50f, 200f) == 0.25f, "fraction");
+        check(OxygenHud.fraction(-5f, 200f) == 0f, "fraction below 0");
+        check(OxygenHud.fraction(300f, 200f) == 1f, "fraction above 1");
+        check(OxygenHud.fraction(5f, 0f) == 0f, "fraction with no maximum");
+        String ui = Files.readString(Path.of("Common/UI/Custom/" + OxygenHud.UI_FILE));
+        check(ui.contains("#OxygenBar"), "bar id in the .ui file");
+        for (String line : ui.split("\n")) {
+            int i = line.indexOf("%server");
+            check(i < 0 || !line.substring(i).split("[\\s;]")[0].contains("_"), "no % key with underscore: " + line);
+        }
+        check(Files.exists(Path.of("Common/UI/Custom/Hud/OrbisHorizon_OxygenFill.png")), "fill texture");
+    }
+
     private static void creativeVisibility() throws Exception {
         Set<String> visible = Set.of("Orbis_Explorer_Bench", "Camping_Pack_Bedroll", "Camping_Pack_Tent",
                 "Camping_Pack_Tent_Big", "Hotair_Balloon_Crate", "Hotair_Balloon_Basic_Crate",
                 "Hotair_Balloon_Transport_Crate", "Airship_Cloudwork_Crate", "Steamboat_Crate",
-                "Balloon_Station_Crate", "Airship_Pilot_Contract");
+                "Balloon_Station_Crate", "Boat_Station_Crate", "Airship_Pilot_Contract",
+                "Ship_Wheel");
         Set<String> found = new java.util.HashSet<>();
         int hidden = 0;
         List<Path> files;
@@ -1297,7 +1975,7 @@ public class TransitTests {
             }
         }
         check(found.containsAll(visible), "visible ids exist");
-        eq(32, hidden);
+        eq(39, hidden);
         var q = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Item/Qualities/OrbisHorizon_Hidden.json")));
         eq(true, q.getBoolean("HideFromSearch").getValue());
         eq("server.general.qualities.Common", q.getString("LocalizationKey").getValue());
@@ -1312,9 +1990,11 @@ public class TransitTests {
         eq("OrbisHorizon_Bench", bench.getString("Id").getValue());
         eq("Crafting", bench.getString("Type").getValue());
         var cats = bench.getArray("Categories");
-        eq(2, cats.size());
+        eq(3, cats.size());
         eq("OrbisHorizon_Camp", cats.get(0).asDocument().getString("Id").getValue());
         eq("OrbisHorizon_Transport", cats.get(1).asDocument().getString("Id").getValue());
+        eq("OrbisHorizon_Gear", cats.get(2).asDocument().getString("Id").getValue());
+        eq("Icons/CraftingCategories/OrbisHorizon/Gear.png", cats.get(2).asDocument().getString("Icon").getValue());
         var tiers = bench.getArray("TierLevels");
         eq(3, tiers.size());
         double[] red = {0, 0.15, 0.3};
@@ -1330,7 +2010,7 @@ public class TransitTests {
                 z.stream().forEach(en -> zipNames.add(en.getName().substring(en.getName().lastIndexOf('/') + 1)));
             }
         }
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 3; i++) {
             String icon = cats.get(i).asDocument().getString("Icon").getValue();
             // The game refuses tab icons outside Icons/CraftingCategories/ (asset validation fails and the mod does not load).
             check(icon.startsWith("Icons/CraftingCategories/"), "category icon under Icons/CraftingCategories " + icon);
@@ -1415,6 +2095,7 @@ public class TransitTests {
         table.put("Airship_Cloudwork_Crate", new Object[] {tr, 3});
         table.put("Steamboat_Crate", new Object[] {tr, 3});
         table.put("Balloon_Station_Crate", new Object[] {tr, 3});
+        table.put("Boat_Station_Crate", new Object[] {tr, 3});
         java.util.List<Path> files;
         try (var w = Files.walk(Path.of("Server/Item/Items"))) {
             files = w.filter(p -> p.toString().endsWith(".json")).toList();
@@ -1450,7 +2131,7 @@ public class TransitTests {
                 piles += (in.asDocument().getInt32("Quantity").getValue() + 99) / 100;
             }
             check(piles <= 40, name + " piles");
-            if (name.equals("Balloon_Station_Crate")) {
+            if (name.equals("Balloon_Station_Crate") || name.equals("Boat_Station_Crate")) {
                 check(r.getBoolean("KnowledgeRequired").getValue(), "station knowledge");
             }
             if (name.equals("Hotair_Balloon_Transport_Crate")) {
@@ -1468,6 +2149,25 @@ public class TransitTests {
             }
         }
         eq(table.size(), seen);
+        // Standalone recipes for the game's own diving armour: the quality rule above does not apply
+        // (the items belong to the game and keep their own quality).
+        int gear = 0;
+        try (var w = Files.list(Path.of("Server/Item/Recipes/OrbisHorizon"))) {
+            for (Path p : w.filter(f -> f.toString().endsWith(".json")).toList()) {
+                var root = org.bson.BsonDocument.parse(Files.readString(p));
+                var bench = root.getArray("BenchRequirement").get(0).asDocument();
+                eq("OrbisHorizon_Bench", bench.getString("Id").getValue());
+                eq("OrbisHorizon_Gear", bench.getArray("Categories").get(0).asString().getValue());
+                eq(2, bench.getInt32("RequiredTierLevel").getValue());
+                int piles = 0;
+                for (var in : root.getArray("Input")) {
+                    piles += (in.asDocument().getInt32("Quantity").getValue() + 99) / 100;
+                }
+                check(piles <= 40, p.getFileName() + " piles");
+                gear++;
+            }
+        }
+        eq(4, gear);
     }
 
     /** T156: the pack recipes match the spec, the lower pack comes first, ids exist, piles <= 40, legacy crates have no recipe. */
@@ -1549,6 +2249,43 @@ public class TransitTests {
         check(chest, "chest at (1, 0, 3)");
     }
 
+    private static void balloonVoyageRefusal() {
+        eq("crew.voyage.noCaptain", BalloonVoyage.departureRefusalKey(false, 0, 3, true));
+        check(BalloonVoyage.departureRefusalKey(true, 2, 3, true) == null, "captain plus 2 on 3 seats");
+        eq("error.balloonFull", BalloonVoyage.departureRefusalKey(true, 3, 3, true));
+        eq("crew.voyage.handsFull", BalloonVoyage.departureRefusalKey(true, 0, 3, false));
+    }
+
+    private static void balloonLandingCandidates() {
+        List<int[]> c = BalloonVoyage.landingCandidates(100.5, 0.5, 0.5, 0.5); // coming from the west
+        eq(9, c.size());
+        check(c.get(0)[0] == 100 && c.get(0)[1] == 0, "destination first");
+        check(c.get(4)[0] == 84 && c.get(4)[1] == 0, "16 blocks back last of the back row");
+        for (int[] p : c) {
+            check(Math.hypot(p[0] + 0.5 - 100.5, p[1] + 0.5 - 0.5) <= 16.5, "within 16 blocks");
+        }
+    }
+
+    private static void balloonLandingCandidatesAllBlocked() {
+        StructureShape s = StructureShape.ofCells(List.of(new StructureShape.Cell(0, 9, 8, "A"), new StructureShape.Cell(12, 30, 20, "B")));
+        List<int[]> c = BalloonVoyage.landingCandidates(0.5, 0.5, 100.5, 0.5);
+        List<StationZone.Zone> zones = List.of(new StationZone.Zone("A", 0, 0, -1000, 1000));
+        check(BalloonVoyage.firstClear(zones, s, Rotation.None, c) == null, "every candidate in the zone");
+        check(BalloonVoyage.firstClear(List.of(), s, Rotation.None, c) == c.get(0), "no zone: destination");
+    }
+
+    private static void balloonVoyageStopOnce() {
+        BalloonVoyage v = new BalloonVoyage("M", VoyagePlanner.Kind.MARKER, 0, 0, 120, java.util.UUID.randomUUID(), 0L);
+        check(v.stop(), "first stop");
+        check(!v.stop(), "second stop ignored");
+        check(v.phase == BalloonVoyage.Phase.DESCEND && v.stopped, "descends");
+    }
+
+    private static void balloonCruiseCeiling() {
+        eq(160, BalloonVoyage.cruiseY(120, Integer.MIN_VALUE, 319, 36)); // 120 + 40
+        eq(273, BalloonVoyage.cruiseY(260, Integer.MIN_VALUE, 319, 36)); // 319 - 10 - 36
+    }
+
     private static void stationZoneCell() {
         StationZone.Zone z = new StationZone.Zone("Gare", 0.5, 0.5, 9, 76);
         check(StationZone.cellTouches(z, 31, 20, 0), "inside radius");
@@ -1607,9 +2344,22 @@ public class TransitTests {
         check(!AirshipLimit.ownsAny(null, java.util.Arrays.asList((UUID) null)), "unowned never counts");
     }
 
+    private static void airshipCrewSpecUnchanged() {
+        Deployables.CrewSpec c = Deployables.crewOf(Deployables.AIRSHIP_KIND);
+        check(c != null, "airship has a crew spec");
+        check(java.util.Arrays.equals(new int[]{0, 8, -10}, c.helm()), "helm");
+        check(java.util.Arrays.equals(new int[]{-2, 8, 4}, c.rest()), "rest");
+        check(java.util.Arrays.equals(new int[]{0, 8, 2}, c.door()), "door");
+        check(java.util.Arrays.equals(new int[]{0, 8, 9}, c.captainSeat()), "captain chair");
+        check(java.util.Arrays.equals(new int[]{0, 9, 8}, c.desk()), "desk");
+        eq(4, c.walk().legs(new double[]{-2, 8, 4}, CrewRecord.Post.HELM).size());
+        eq(null, Deployables.crewOf(Deployables.STEAMBOAT_PUBLIC_KIND));
+        eq(null, Deployables.crewOf(Deployables.BASIC_KIND));
+    }
+
     private static void shipFeatureFlags() {
         Deployables.AirshipSpec s = Deployables.AIRSHIP.airship;
-        check(s.crew && s.voyage && s.recall && s.ladders && s.onePerPlayer, "airship declares all its features");
+        check(s.hasCrew() && s.voyage && s.recall && s.ladders && s.onePerPlayer, "airship declares all its features");
     }
 
     private static void limitIgnoresOtherShips() {
@@ -1623,6 +2373,32 @@ public class TransitTests {
         check(Ownership.landingOwner(Ownership.NONE, p, "Ann", false).owner() == null, "already owns one: stays unowned");
         check(p.equals(Ownership.landingOwner(Ownership.NONE, p, "Ann", true).owner()), "free: becomes owner");
         check(Ownership.landingOwner(Ownership.NONE, p, "Ann", false).id() != null, "always an id");
+    }
+
+    /** Under armour that hides the haircut, the game swaps it for the generic haircut of the same length (HaircutFallbacks). */
+    private static void helmetHaircut() {
+        check("Morning".equals(SkinAttachments.helmetHaircutId("Morning", false, true, "Short")), "not hidden: own haircut");
+        check("GenericShort".equals(SkinAttachments.helmetHaircutId("Morning", true, true, "Short")), "hidden, needs generic: GenericShort");
+        check("GenericLong".equals(SkinAttachments.helmetHaircutId("Braid", true, true, "Long")), "hidden, long: GenericLong");
+        check("Puffy".equals(SkinAttachments.helmetHaircutId("Puffy", true, false, "Short")), "hidden, fits under armour: own haircut");
+        check("Morning".equals(SkinAttachments.helmetHaircutId("Morning", true, true, null)), "no hair type: own haircut");
+    }
+
+    private static void balloonCrewSpec() {
+        Deployables.CrewSpec c = Deployables.crewOf(Deployables.BALLOON_KIND);
+        check(c != null, "large balloon has a crew spec");
+        check(java.util.Arrays.equals(new int[]{0, 9, 8}, c.helm()) && java.util.Arrays.equals(new int[]{1, 9, 9}, c.rest()), "posts");
+        check(c.door() == null && c.desk() == null && c.captainSeat() == null, "no door, desk or fixed seat");
+        check(Deployables.crewOf(Deployables.BASIC_KIND) == null && Deployables.crewOf(Deployables.TRANSPORT_KIND) == null, "no pilot");
+        check(Deployables.voyageOf(Deployables.BALLOON_KIND) && !Deployables.voyageOf(Deployables.BASIC_KIND), "voyage flag");
+        check(Deployables.voyageOf(Deployables.AIRSHIP_KIND), "airship unchanged");
+    }
+
+    private static void hireBlockRule() {
+        check(AirshipHireInteraction.isHireBlock("Hotair_Balloon_Chain", Deployables.BALLOON_KIND), "chain hires");
+        check(!AirshipHireInteraction.isHireBlock("Airship_Helm", Deployables.BALLOON_KIND), "helm id on a balloon");
+        check(AirshipHireInteraction.isHireBlock("Airship_Helm", Deployables.AIRSHIP_KIND), "airship helm");
+        check(!AirshipHireInteraction.isHireBlock("Hotair_Balloon_Chain", Deployables.BASIC_KIND), "small balloon has no pilot");
     }
 
     private static void check(boolean ok, String what) {
@@ -1707,12 +2483,46 @@ public class TransitTests {
         check(Ownership.NONE.owner() == null, "no owner is refused by the command even for an op");
     }
 
+    private static TransitNetwork.Station testStation(String kind) {
+        return new TransitNetwork.Station("S", "w", new Vector3i(100, 64, 200), Rotation.Ninety, null, null,
+                new java.util.ArrayList<>(), kind);
+    }
+
     static void stationMarkerPoint() {
-        org.joml.Vector3d p = StationMarkerProvider.markerPoint(new Vector3i(100, 64, 200), Rotation.None);
-        eq(new org.joml.Vector3d(119.5, 71, 200.5), p);
         // Ninety sends the cell (19, 7, 0) to (0, 7, -19), centre (0.5, 7, -18.5)
-        org.joml.Vector3d q = StationMarkerProvider.markerPoint(new Vector3i(100, 64, 200), Rotation.Ninety);
-        eq(new org.joml.Vector3d(100.5, 71, 181.5), q);
+        eq(new org.joml.Vector3d(100.5, 71, 181.5), StationMarkerProvider.markerPoint(testStation(Deployables.STATION_KIND)));
+    }
+
+    static void stationSpecPoints() {
+        TransitNetwork.Station balloon = testStation(Deployables.STATION_KIND);
+        // Ninety sends (x, z) to (z, -x): master (4, 0, 7) -> (7, 0, -4), marker (19, 7, 0) -> (0, 7, -19)
+        eq(new org.joml.Vector3d(107.5, 64.05, 196.5), StationMaster.masterPoint(balloon));
+        eq(new org.joml.Vector3d(100.5, 71, 181.5), StationMarkerProvider.markerPoint(balloon));
+        TransitNetwork.Station boat = testStation(Deployables.BOAT_STATION_KIND);
+        // master (-4, 0, 5) -> (5, 0, 4), marker (1, 0, 8) -> (8, 0, -1)
+        eq(new org.joml.Vector3d(105.5, 64.05, 204.5), StationMaster.masterPoint(boat));
+        eq(new org.joml.Vector3d(108.5, 64, 199.5), StationMarkerProvider.markerPoint(boat));
+        check(StationSpec.of("unknown") == StationSpec.BALLOON, "unknown kind uses the balloon spec");
+        check(StationSpec.of(Deployables.BOAT_STATION_KIND).soilLayerY() == null, "boat station has no soil layer");
+        eq(64 - 10, StationZone.zoneOf(boat).bottomY());
+        eq(64 + Deployables.STATION_GRASS_Y, StationZone.zoneOf(balloon).bottomY());
+    }
+
+    static void boatStationOrigin() {
+        TransitNetwork.Station boat = testStation(Deployables.BOAT_STATION_KIND);
+        // marker (1, 0, 8) -> (8, 0, -1) with Ninety, feet one block up
+        eq(new org.joml.Vector3d(108.5, 65.1, 199.5), StationSpec.teleportPoint(boat));
+        eq(TransitAutopilot.dropPoints(testStation(Deployables.STATION_KIND).origin, Rotation.Ninety, 1).get(0),
+                StationSpec.teleportPoint(testStation(Deployables.STATION_KIND)));
+        // pier end (1, 0, 11) with Ninety -> (11, 0, -1); computed origin (100, 70, 200) -> column (111, 199)
+        org.joml.Vector3i computed = new org.joml.Vector3i(100, 70, 200);
+        // water surface at y 66 (bank higher than the water): origin y = 67
+        DeployPlacement.CellState lake = (x, y, z) -> x == 111 && z == 199 ? (y <= 66 && y >= 60 ? 1 : (y < 60 ? 2 : 0)) : 2;
+        eq(new org.joml.Vector3i(100, 67, 200), DeployPlacement.boatStationOrigin(lake, computed, Rotation.Ninety));
+        DeployPlacement.CellState dry = (x, y, z) -> y < 64 ? 2 : 0;
+        check(DeployPlacement.boatStationOrigin(dry, computed, Rotation.Ninety) == null, "no water: refused");
+        DeployPlacement.CellState walled = (x, y, z) -> 2;
+        check(DeployPlacement.boatStationOrigin(walled, computed, Rotation.Ninety) == null, "solid column: refused");
     }
 
     private static void shipKinds() throws Exception {
@@ -1824,6 +2634,48 @@ public class TransitTests {
         check(!PaddleWheels.splashDue(200, 1000, never, 900), "avant le départ");
     }
 
+    /** The shuttle's propeller: forward at full speed, astern slowly, slowly forward when turning in place, otherwise still. */
+    private static void propellerRules() {
+        PaddleWheels.Spin f = PaddleWheels.Spin.FWD_FAST, sl = PaddleWheels.Spin.FWD_SLOW, st = PaddleWheels.Spin.STOP;
+        check(PaddleWheels.propellerFor(true, false, 0) == f, "avant");
+        check(PaddleWheels.propellerFor(true, false, 1) == f && PaddleWheels.propellerFor(true, false, -1) == f, "avant en virage");
+        check(PaddleWheels.propellerFor(true, true, 0) == PaddleWheels.Spin.REV_SLOW, "arrière");
+        check(PaddleWheels.propellerFor(false, false, 1) == sl && PaddleWheels.propellerFor(false, false, -1) == sl, "sur place");
+        check(PaddleWheels.propellerFor(false, false, 0) == st, "arrêt");
+        PaddleWheels.State shuttle = new PaddleWheels.State("Propeller");
+        check(shuttle.count() == 1 && new PaddleWheels.State().count() == 2, "un seul nœud pour la navette, deux roues sinon");
+        check("Propeller_FwdFast".equals(shuttle.animationId(0, f)) && shuttle.animationId(0, st) == null, "nom de l'hélice");
+        check("Wheel_Right_FwdFast".equals(new PaddleWheels.State().animationId(1, f)), "noms des roues inchangés");
+        // The hold and cycle-end rules are the wheels' (same nextSpin): a change waits 300 ms and the end of the cycle.
+        check(PaddleWheels.nextSpin(f, 0, st, 1000, 1100) == f && PaddleWheels.nextSpin(f, 0, st, 1000, 1400) == st, "arrêt à la fin du cycle");
+        // The shuttle is fuelless, pilotless and without engines: its propeller turns, unless off or landing.
+        check(!PaddleWheels.still(false, false, false, false, true, true, true), "navette en route : l'hélice tourne");
+    }
+
+    /** The propeller cell is waterlogged: kept by drain, in the prefab's submerged cells, the block is Material Empty. */
+    private static void propellerWater() throws Exception {
+        StructureShape shape = prefabShape("Steamboat_Public.prefab.json");
+        List<Vector3i> kept = SteamboatWater.waterloggedCells(shape, 0);
+        eq(1, kept.size());
+        check(kept.get(0).x == 0 && kept.get(0).y == 0 && kept.get(0).z == 5, "waterlogged cell is (0, 0, 5)");
+        check(SteamboatWater.submergedCells(shape, 0).contains(new Vector3i(0, 0, 5)), "the propeller cell is submerged (flooded after removal)");
+        check(!SteamboatWater.submergedCells(shape, 0).contains(new Vector3i(0, 0, 6)), "cell z 6 is outside the hull: never drained");
+        check(SteamboatWater.waterloggedCells(shape, -1).isEmpty(), "above the waterline nothing is kept");
+        check(SteamboatWater.waterloggedCells(prefabShape("Steamboat.prefab.json"), -3).isEmpty(), "the steamboat has no waterlogged block");
+        var item = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Item/Items/Containers/Vehicles/Steamboat_Propeller.json")));
+        eq("Empty", item.getDocument("BlockType").getString("Material").getValue());
+    }
+
+    private static void propellerNames() {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (PaddleWheels.Spin sp : new PaddleWheels.Spin[]{PaddleWheels.Spin.FWD_FAST, PaddleWheels.Spin.FWD_SLOW,
+                PaddleWheels.Spin.REV_FAST, PaddleWheels.Spin.REV_SLOW}) {
+            names.add(PaddleWheels.propellerAnimationId("Propeller", sp));
+        }
+        check(names.size() == 4, "4 noms distincts");
+        check(PaddleWheels.Spin.FWD_FAST.periodMs() == 200 && PaddleWheels.Spin.REV_SLOW.periodMs() == 400, "périodes");
+    }
+
     private static void wheelNames() {
         check("Wheel_Left_FwdFast".equals(PaddleWheels.animationId(false, PaddleWheels.Spin.FWD_FAST)), "nom gauche");
         check("Wheel_Right_RevVerySlow".equals(PaddleWheels.animationId(true, PaddleWheels.Spin.REV_VERY_SLOW)), "nom droite");
@@ -1857,7 +2709,7 @@ public class TransitTests {
         check(Deployables.SHIPS.equals(List.of(Deployables.AIRSHIP, Deployables.STEAMBOAT)), "SHIPS");
         check(Deployables.forPrefab("Steamboat.prefab.json") == Deployables.STEAMBOAT, "forPrefab");
         Deployables.AirshipSpec b = Deployables.STEAMBOAT.airship;
-        check(!b.crew && !b.voyage && !b.recall && !b.ladders && !b.onePerPlayer, "boat flags all false");
+        check(b.hasCrew() && b.voyage && !b.recall && !b.ladders && !b.onePerPlayer, "boat has a pilot and voyages but no recall, ladders, limit");
         check(!AirshipLimit.countsForLimit(Deployables.STEAMBOAT), "no boat limit");
         check(b.pivot.equals(new Vector3f(0, 4, 5)) && "Steamboat_Crate".equals(b.crateItemId), "boat spec");
         check("Airship_Cloudwork_TurnLeft".equals(Deployables.AIRSHIP.airship.turnLeftModelId), "airship turn model kept");
@@ -1930,7 +2782,7 @@ public class TransitTests {
         StructureShape s = StructureShape.ofCells(List.of(
                 new StructureShape.Cell(-2, 8, 4, "Airship_Stool"), new StructureShape.Cell(2, 8, 9, "Airship_Stool"),
                 new StructureShape.Cell(1, 4, 5, "Airship_Stool"), new StructureShape.Cell(0, 0, 0, "Wood_Softwood_Planks")));
-        Vector3i stool = new Vector3i(AirshipCrew.STOOL[0], AirshipCrew.STOOL[1], AirshipCrew.STOOL[2]);
+        Vector3i stool = new Vector3i(Deployables.crewOf(Deployables.AIRSHIP_KIND).rest()[0], Deployables.crewOf(Deployables.AIRSHIP_KIND).rest()[1], Deployables.crewOf(Deployables.AIRSHIP_KIND).rest()[2]);
         int all = AirshipPassengers.seats(s).size();
         eq(all - 1, AirshipPassengers.seats(s, Set.of(stool)).size());
     }
@@ -2139,7 +2991,7 @@ public class TransitTests {
     }
 
     static void quayRecallBlocks() {
-        TransitNetwork.Station s = new TransitNetwork.Station("Port Recall", "w", new org.joml.Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>());
+        TransitNetwork.Station s = new TransitNetwork.Station("Port Recall", "w", new org.joml.Vector3i(0, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.STATION_KIND);
         UUID f = UUID.randomUUID();
         eq(true, StationQueue.beginRecall(s, f));
         eq(StationQueue.QuayState.RECALL, StationQueue.state(s));
@@ -2294,7 +3146,8 @@ public class TransitTests {
         check(s.get("deploy.tent") == 2L && s.get("glider.jump") == 1L, "counts");
         check(new ArrayList<>(s.keySet()).equals(List.of("deploy.tent", "glider.jump")), "NAMES order");
         check(c.snapshotAndReset().isEmpty(), "reset after snapshot");
-        check(UsageCounters.NAMES.size() == 21, "21 counters");
+        check(UsageCounters.NAMES.size() == 24, "24 counters");
+        check(UsageCounters.NAMES.contains("transit.boatTrip"), "boat trip counter");
         check(UsageCounters.NAMES.contains("deploy.steamboat") && UsageCounters.NAMES.contains("takeoff.steamboat"), "steamboat counters");
         check(UsageCounters.NAMES.indexOf("deploy.steamboat") == UsageCounters.NAMES.indexOf("deploy.airship") + 1, "deploy order");
         check(UsageCounters.NAMES.indexOf("takeoff.steamboat") == UsageCounters.NAMES.indexOf("takeoff.airship") + 1, "takeoff order");
@@ -2339,6 +3192,143 @@ public class TransitTests {
             String json = java.nio.file.Files.readString(java.nio.file.Path.of("Server/Models/Vehicles/Steamboat" + part + ".json"));
             check(!json.contains("AnimationSets"), part + " has no AnimationSets");
         }
+    }
+
+    /** The shuttle models declare the four propeller animations, and the files match the Java frame counts and the node name. */
+    static void propellerAnimationsDeclared() throws Exception {
+        for (String suffix : new String[]{"", "_Idle", "_Off"}) {
+            String json = java.nio.file.Files.readString(java.nio.file.Path.of("Server/Models/Vehicles/Steamboat_Public" + suffix + ".json"));
+            for (PaddleWheels.Spin spin : new PaddleWheels.Spin[]{PaddleWheels.Spin.FWD_FAST, PaddleWheels.Spin.FWD_SLOW,
+                    PaddleWheels.Spin.REV_FAST, PaddleWheels.Spin.REV_SLOW}) {
+                String id = PaddleWheels.propellerAnimationId(Deployables.STEAMBOAT_PUBLIC.airship.propellerAnimPrefix, spin);
+                String path = "Items/Vehicles/Steamboat_Public_" + id + ".blockyanim";
+                check(json.contains("\"" + id + "\"") && json.contains(path), "Steamboat_Public" + suffix + " declares " + id);
+                String anim = java.nio.file.Files.readString(java.nio.file.Path.of("Common/" + path));
+                check(anim.contains("\"duration\": " + spin.frames()), id + " duration");
+                check(!java.util.regex.Pattern.compile("\"time\": \\d+\\.").matcher(anim).find(), id + " integer times");
+                check(anim.contains("\"Propeller\""), id + " animates the Propeller node");
+            }
+            check(!json.contains("Wheel_"), "Steamboat_Public" + suffix + " has no wheel animation");
+        }
+        String model = java.nio.file.Files.readString(java.nio.file.Path.of("Common/Items/Vehicles/Steamboat_Public.blockymodel"));
+        check(model.contains("\"name\":\"Propeller\""), "the flying model has a node named Propeller");
+    }
+
+    /** Animated helm: target step, one step at a time toward it, names, and the flag of every ship. */
+    static void helmRules() {
+        check(ShipHelm.targetFor(false, 0) == 0, "tout droit : centre");
+        check(ShipHelm.targetFor(false, -1) == 4, "virage à droite : demi-tour à droite");
+        check(ShipHelm.targetFor(false, 1) == -4, "virage à gauche : demi-tour à gauche");
+        check(ShipHelm.targetFor(true, -1) == 0 && ShipHelm.targetFor(true, 1) == 0, "navire arrêté : centre");
+        check(ShipHelm.heldTurn(-1, 1, 0, 5000) == -1, "virage en cours : son sens, même inverse du précédent");
+        check(ShipHelm.heldTurn(0, -1, 1000, 1000 + ShipHelm.RELEASE_MS - 1) == -1, "pause entre deux crans : virage gardé");
+        check(ShipHelm.heldTurn(0, -1, 1000, 1000 + ShipHelm.RELEASE_MS) == 0, "virage fini : retour au centre");
+        check(ShipHelm.heldTurn(0, 0, 0, 10) == 0, "jamais tourné : centre");
+        check(ShipHelm.nextToward(0, 4) == 1 && ShipHelm.nextToward(3, 4) == 4 && ShipHelm.nextToward(4, 4) == 4, "montée vers la droite");
+        check(ShipHelm.nextToward(0, -4) == -1 && ShipHelm.nextToward(-3, 0) == -2 && ShipHelm.nextToward(4, 0) == 3, "descente et retour");
+        int step = 0, moves = 0;
+        while (step != 4) {
+            step = ShipHelm.nextToward(step, 4);
+            moves++;
+        }
+        check(moves == 4 && ShipHelm.degrees(step) == 180, "4 pas de 45 degrés jusqu'au demi-tour");
+        step = 4;
+        moves = 0;
+        while (step != -4) {
+            step = ShipHelm.nextToward(step, -4);
+            moves++;
+        }
+        check(moves == 8, "de butée à butée : 8 pas");
+        check("0".equals(ShipHelm.stepName(0)) && "P3".equals(ShipHelm.stepName(3)) && "M4".equals(ShipHelm.stepName(-4)), "noms de pas");
+        check("Helm_Pose_P2".equals(ShipHelm.poseId(2)) && "Helm_Pose_M1".equals(ShipHelm.poseId(-1)), "noms de pose");
+        check("Helm_Step_P1_P2".equals(ShipHelm.stepId(1, 2)) && "Helm_Step_M1_0".equals(ShipHelm.stepId(-1, 0)), "noms de transition");
+        check(ShipHelm.ROTATE_MS == 250, "un pas dure 250 ms");
+        check(!ShipHelm.transitionDone(1000, 1200) && ShipHelm.transitionDone(1000, 1233) && ShipHelm.transitionDone(1000, 1300),
+                "fin d'un pas : 250 ms moins la tolérance");
+        ShipHelm.State st = new ShipHelm.State();
+        check(st.displayId() == null, "rien de joué au départ (pose de repos)");
+        st.played = true;
+        st.step = 2;
+        check("Helm_Pose_P2".equals(st.displayId()), "pose courante");
+        st.running = true;
+        st.from = 2;
+        st.to = 3;
+        check("Helm_Pose_P3".equals(st.displayId()), "pose d'arrivée d'une transition en cours");
+        for (Deployables.AirshipSpec sp : new Deployables.AirshipSpec[]{Deployables.AIRSHIP.airship, Deployables.STEAMBOAT.airship,
+                Deployables.STEAMBOAT_PUBLIC.airship}) {
+            check(sp.helmAnimated, "la barre est animée sur " + sp.modelId);
+        }
+    }
+
+    /** The 25 shared animation files exist, with the frame counts and the rotation sign the plugin assumes. */
+    static void helmAnimationFiles() throws Exception {
+        int files = 0;
+        for (int a = -ShipHelm.MAX_STEP; a <= ShipHelm.MAX_STEP; a++) {
+            String pose = java.nio.file.Files.readString(java.nio.file.Path.of("Common/Items/Vehicles/" + ShipHelm.poseId(a) + ".blockyanim"));
+            files++;
+            check(pose.contains("\"Helm\"") && pose.contains("\"duration\": 12"), ShipHelm.poseId(a) + " anime le nœud Helm sur 12 images");
+            check(!java.util.regex.Pattern.compile("\"time\": \\d+\\.").matcher(pose).find(), ShipHelm.poseId(a) + " temps entiers");
+            for (int b : new int[]{a - 1, a + 1}) {
+                if (Math.abs(b) > ShipHelm.MAX_STEP) {
+                    continue;
+                }
+                String id = ShipHelm.stepId(a, b);
+                String anim = java.nio.file.Files.readString(java.nio.file.Path.of("Common/Items/Vehicles/" + id + ".blockyanim"));
+                files++;
+                int total = ShipHelm.ROTATE_FRAMES + ShipHelm.HOLD_FRAMES;
+                check(anim.contains("\"duration\": " + total), id + " dure " + total + " images");
+                check(anim.contains("\"time\": " + ShipHelm.ROTATE_FRAMES + ",") && anim.contains("\"time\": " + total + ","),
+                        id + " : clés à la fin de la rotation et de l'arrêt");
+                check(!java.util.regex.Pattern.compile("\"time\": \\d+\\.").matcher(anim).find(), id + " temps entiers");
+            }
+        }
+        check(files == 25, "9 poses et 16 transitions, " + files + " trouvés");
+        // Sign: the pose of step +4 (a right turn) is a half turn, its quaternion z is +-1 and w ~ 0, step +1 has the sign of RIGHT_SIGN.
+        String p1 = java.nio.file.Files.readString(java.nio.file.Path.of("Common/Items/Vehicles/Helm_Pose_P1.blockyanim"));
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"z\": (-?[0-9.E-]+)").matcher(p1);
+        check(m.find() && Math.signum(Double.parseDouble(m.group(1))) == ShipHelm.RIGHT_SIGN, "sens de la barre à droite = RIGHT_SIGN");
+        double half = Math.sin(Math.toRadians(ShipHelm.degrees(1)) / 2);
+        check(Math.abs(Math.abs(Double.parseDouble(m.group(1))) - half) < 1e-6, "pose P1 : 45 degrés");
+        String p4 = java.nio.file.Files.readString(java.nio.file.Path.of("Common/Items/Vehicles/Helm_Pose_P4.blockyanim"));
+        java.util.regex.Matcher m4 = java.util.regex.Pattern.compile("\"z\": (-?[0-9.E-]+)").matcher(p4);
+        check(m4.find() && Math.abs(Math.abs(Double.parseDouble(m4.group(1))) - 1) < 1e-6, "pose P4 : demi-tour");
+    }
+
+    /** The node Helm is in part 0 of the three flight models (and in no other part), every model JSON declares all 25 animations. */
+    static void helmDeclared() throws Exception {
+        for (String model : new String[]{"Airship_Cloudwork", "Steamboat", "Steamboat_Public"}) {
+            String part0 = java.nio.file.Files.readString(java.nio.file.Path.of("Common/Items/Vehicles/" + model + ".blockymodel"));
+            check(part0.contains("\"name\":\"Helm\""), model + " : nœud Helm dans la partie 0");
+            check(part0.contains("Airship_Helm_"), model + " : bloc de la barre dans la partie 0");
+            for (int k = 1; k < 4; k++) {
+                java.nio.file.Path other = java.nio.file.Path.of("Common/Items/Vehicles/" + model + "_Part" + k + ".blockymodel");
+                if (java.nio.file.Files.exists(other)) {
+                    check(!java.nio.file.Files.readString(other).contains("\"name\":\"Helm\""), model + " partie " + k + " sans nœud Helm");
+                }
+            }
+            for (String suffix : new String[]{"", "_Idle", "_Off", "_TurnLeft", "_TurnRight"}) {
+                java.nio.file.Path path = java.nio.file.Path.of("Server/Models/Vehicles/" + model + suffix + ".json");
+                if (!java.nio.file.Files.exists(path)) {
+                    check(suffix.startsWith("_Turn") && !model.equals("Airship_Cloudwork"), model + suffix + " existe");
+                    continue;
+                }
+                String json = java.nio.file.Files.readString(path);
+                for (int a = -ShipHelm.MAX_STEP; a <= ShipHelm.MAX_STEP; a++) {
+                    check(json.contains("\"" + ShipHelm.poseId(a) + "\"") && json.contains("Items/Vehicles/" + ShipHelm.poseId(a) + ".blockyanim"),
+                            model + suffix + " déclare " + ShipHelm.poseId(a));
+                    for (int b : new int[]{a - 1, a + 1}) {
+                        if (Math.abs(b) <= ShipHelm.MAX_STEP) {
+                            check(json.contains("\"" + ShipHelm.stepId(a, b) + "\""), model + suffix + " déclare " + ShipHelm.stepId(a, b));
+                        }
+                    }
+                }
+            }
+        }
+        // The roues and the propeller sets are merged with the helm's, not replaced.
+        check(java.nio.file.Files.readString(java.nio.file.Path.of("Server/Models/Vehicles/Steamboat.json")).contains("\"Wheel_Left_FwdFast\""),
+                "Steamboat garde ses animations de roues");
+        check(java.nio.file.Files.readString(java.nio.file.Path.of("Server/Models/Vehicles/Steamboat_Public_Idle.json")).contains("\"Propeller_FwdFast\""),
+                "la navette garde ses animations d'hélice");
     }
 
     static void usageNamesMatchDescriptor() throws Exception {
@@ -2425,5 +3415,788 @@ public class TransitTests {
                 }
             }
         }
+    }
+
+    // ---- WaterRoute ----
+
+    private static char[][] waterMap(char fill) {
+        char[][] m = new char[120][120];
+        for (char[] row : m) {
+            java.util.Arrays.fill(row, fill);
+        }
+        return m;
+    }
+
+    private static void waterRect(char[][] m, int x0, int x1, int z0, int z1, char c) {
+        for (int x = x0; x <= x1; x++) {
+            for (int z = z0; z <= z1; z++) {
+                m[x][z] = c;
+            }
+        }
+    }
+
+    private static WaterRoute.ColumnProbe waterProbe(char[][] m) {
+        return (x, z) -> {
+            if (x < 0 || z < 0 || x >= 120 || z >= 120) {
+                return WaterRoute.Cell.BLOCKED;
+            }
+            char c = m[x][z];
+            return c == '.' ? WaterRoute.Cell.WATER : c == '?' ? WaterRoute.Cell.UNKNOWN : WaterRoute.Cell.BLOCKED;
+        };
+    }
+
+    private static WaterRoute.Search waterSearch(char[][] m, int fx, int fz, int tx, int tz) {
+        return new WaterRoute.Search(waterProbe(m), fx, fz, tx, tz, 0, 0, 119, 119);
+    }
+
+    private static double landDistance(char[][] m, double px, double pz) {
+        double best = 1e9;
+        for (int x = 0; x < 120; x++) {
+            for (int z = 0; z < 120; z++) {
+                if (m[x][z] == '#') {
+                    best = Math.min(best, Math.hypot(x - px, z - pz));
+                }
+            }
+        }
+        return best;
+    }
+
+    private static void waterRouteOpenLake() {
+        char[][] m = waterMap('.');
+        WaterRoute.Search s = waterSearch(m, 20, 60, 100, 60);
+        check(s.step(100000) == WaterRoute.Status.FOUND, "lac ouvert trouvé");
+        check(s.waypoints().size() == 1, "un seul point : " + s.waypoints().size());
+        int[] w = s.waypoints().get(0);
+        check(w[0] == 100 && w[1] == 60, "arrivée exacte");
+    }
+
+    private static void waterRouteIsland() {
+        char[][] m = waterMap('.');
+        waterRect(m, 45, 75, 45, 75, '#');
+        WaterRoute.Search s = waterSearch(m, 20, 60, 100, 60);
+        check(s.step(100000) == WaterRoute.Status.FOUND, "île contournée");
+        check(s.waypoints().size() > 1, "plusieurs points");
+        int px = 20;
+        int pz = 60;
+        for (int[] w : s.waypoints()) {
+            check(landDistance(m, w[0], w[1]) >= 8, "point à moins de 8 blocs de la terre");
+            for (int i = 0; i <= 40; i++) {
+                double x = px + (w[0] - px) * i / 40.0;
+                double z = pz + (w[1] - pz) * i / 40.0;
+                check(landDistance(m, x, z) >= 7, "segment à moins de 7 blocs de la terre");
+            }
+            px = w[0];
+            pz = w[1];
+        }
+    }
+
+    private static void waterRouteSCurve() {
+        char[][] m = waterMap('#');
+        waterRect(m, 5, 100, 10, 29, '.');
+        waterRect(m, 81, 100, 10, 69, '.');
+        waterRect(m, 5, 100, 50, 69, '.');
+        waterRect(m, 5, 24, 50, 109, '.');
+        waterRect(m, 5, 100, 90, 109, '.');
+        WaterRoute.Search s = waterSearch(m, 15, 19, 80, 99);
+        check(s.step(100000) == WaterRoute.Status.FOUND, "rivière en S");
+        check(s.waypoints().size() >= 3, "plusieurs points : " + s.waypoints().size());
+        int[] last = s.waypoints().get(s.waypoints().size() - 1);
+        check(last[0] == 80 && last[1] == 99, "arrivée exacte");
+    }
+
+    private static void waterRouteNarrow() {
+        char[][] m = waterMap('#');
+        waterRect(m, 5, 40, 20, 99, '.');
+        waterRect(m, 80, 115, 20, 99, '.');
+        waterRect(m, 41, 79, 54, 65, '.');
+        check(waterSearch(m, 20, 60, 100, 60).step(100000) == WaterRoute.Status.NO_ROUTE, "chenal de 12 : NO_ROUTE");
+        waterRect(m, 41, 79, 50, 69, '.');
+        check(waterSearch(m, 20, 60, 100, 60).step(100000) == WaterRoute.Status.FOUND, "chenal de 20 : FOUND");
+    }
+
+    private static void waterRouteSeparateLakes() {
+        char[][] m = waterMap('#');
+        waterRect(m, 5, 40, 20, 99, '.');
+        waterRect(m, 80, 115, 20, 99, '.');
+        check(waterSearch(m, 20, 60, 100, 60).step(100000) == WaterRoute.Status.NO_ROUTE, "lacs séparés");
+    }
+
+    private static void waterRouteNeedsData() {
+        char[][] m = waterMap('.');
+        waterRect(m, 60, 60, 0, 119, '?');
+        WaterRoute.Search s = waterSearch(m, 20, 60, 100, 60);
+        check(s.step(100000) == WaterRoute.Status.NEED_DATA, "colonne inconnue");
+        int[] miss = s.missingColumn();
+        check(miss != null && miss[0] == 60, "colonne manquante signalée");
+        waterRect(m, 60, 60, 0, 119, '.');
+        check(s.step(100000) == WaterRoute.Status.FOUND, "reprise après données");
+    }
+
+    private static void boatRoutesFileRoundTrip() throws Exception {
+        Path dir = Files.createTempDirectory("boatroutes");
+        Path f = dir.resolve("boat-routes.json");
+        BoatRoutes.Book b = new BoatRoutes.Book();
+        b.load(f);
+        b.addStation("w", "A", List.of("A", "B", "C"));
+        b.resolve("w", "A", "B", BoatRoutes.RouteState.FOUND, List.of(new int[] {10, -20}, new int[] {30, 40}, new int[] {-5, 7}));
+        b.resolve("w", "A", "C", BoatRoutes.RouteState.NONE, List.of());
+        BoatRoutes.Book c = new BoatRoutes.Book();
+        c.load(f);
+        BoatRoutes.Route ab = c.get("w", "A", "B");
+        check(ab != null && ab.state() == BoatRoutes.RouteState.FOUND && ab.points().size() == 3, "route trouvée relue");
+        check(ab.points().get(2)[0] == -5 && ab.points().get(2)[1] == 7, "points relus");
+        BoatRoutes.Route ba = c.get("w", "B", "A");
+        check(ba != null && ba.state() == BoatRoutes.RouteState.FOUND && ba.points().get(0)[0] == -5, "route retour inversée");
+        BoatRoutes.Route ac = c.get("w", "A", "C");
+        check(ac != null && ac.state() == BoatRoutes.RouteState.NONE && ac.points().isEmpty(), "route absente relue");
+        Files.writeString(f, "not json");
+        BoatRoutes.Book d = new BoatRoutes.Book();
+        d.load(f);
+        check(d.get("w", "A", "B") == null && Files.exists(dir.resolve("boat-routes.json.bad")), "fichier illisible renommé");
+    }
+
+    private static void boatRoutesInvalidate() {
+        BoatRoutes.Book b = new BoatRoutes.Book();
+        b.addStation("w", "A", List.of("A"));
+        check(b.nextComputing("w") == null, "une seule station : rien à calculer");
+        b.addStation("w", "B", List.of("A", "B"));
+        check(b.get("w", "A", "B").state() == BoatRoutes.RouteState.COMPUTING, "A vers B en calcul");
+        check(b.get("w", "B", "A").state() == BoatRoutes.RouteState.COMPUTING, "B vers A en calcul");
+        b.resolve("w", "A", "B", BoatRoutes.RouteState.FOUND, List.of(new int[] {1, 1}));
+        b.addStation("w", "C", List.of("A", "B", "C"));
+        check(b.get("w", "A", "B").state() == BoatRoutes.RouteState.FOUND, "paire sans C gardée");
+        check(b.get("w", "A", "C").state() == BoatRoutes.RouteState.COMPUTING, "paires de C en calcul");
+        b.removeStation("w", "C");
+        check(b.get("w", "A", "C") == null && b.get("w", "C", "B") == null, "paires de C oubliées");
+        check(b.get("w", "A", "B") != null && b.nextComputing("w") == null, "A et B gardées");
+        check(b.nextComputing("other") == null, "autre monde");
+    }
+
+    private static void mooredPilot() {
+        for (Rotation r : new Rotation[] {Rotation.None, Rotation.Ninety, Rotation.OneEighty, Rotation.TwoSeventy}) {
+            TransitNetwork.Station s = new TransitNetwork.Station("S", "w", new Vector3i(100, 64, 200), r, null, null,
+                    new ArrayList<>(), Deployables.BOAT_STATION_KIND);
+            // Helm: the pivot cell of the prefab, turned by the berth rotation around the berth origin (cell centre in x and z).
+            Vector3i o = BoatRoutes.berthOrigin(s);
+            org.joml.Vector3f pv = AirshipManager.pivot(Deployables.STEAMBOAT_PUBLIC);
+            Vector3d rot = AirshipMath.rotateY(pv.x, pv.y, pv.z, BoatRoutes.berthRotation(s).getRadians(), new Vector3d());
+            Vector3d p = MooredPilot.helmPoint(s);
+            check(Math.abs(p.x - (o.x + Math.round(rot.x) + 0.5)) < 1e-6 && Math.abs(p.z - (o.z + Math.round(rot.z) + 0.5)) < 1e-6
+                    && Math.abs(p.y - (o.y + Math.round(rot.y))) < 1e-6, "pivot du prefab tourné, rotation " + r + " : " + p);
+            // Facing: forward (-sin yaw, -cos yaw) is the bow of the prefab (0, 0, -1) turned by the berth rotation, whatever the station's.
+            double yaw = MooredPilot.facingYaw(s);
+            Vector3d bow = AirshipMath.rotateY(0, 0, -1, BoatRoutes.berthRotation(s).getRadians(), new Vector3d());
+            near(bow.x, -Math.sin(yaw));
+            near(bow.z, -Math.cos(yaw));
+            java.util.UUID id = MooredPilot.uuidFor("w", o);
+            check(id.equals(MooredPilot.uuidFor("w", new Vector3i(o.x, o.y, o.z))), "identifiant stable : un reste est retrouvé");
+            check(!id.equals(MooredPilot.uuidFor("w", new Vector3i(o.x + 1, o.y, o.z))), "un identifiant par ponton");
+            check(!id.equals(MooredPilot.uuidFor("autre", o)), "un identifiant par monde");
+        }
+    }
+
+    private static void berthPivotRotation() {
+        TransitNetwork.Station s = new TransitNetwork.Station("S", "w", new Vector3i(100, 64, 200), Rotation.Ninety, null, null,
+                new ArrayList<>(), Deployables.BOAT_STATION_KIND);
+        // Berth origin {1, -1, 14} turned by Ninety (x, z) -> (z, -x) = (14, -1), plus the origin: (114, 63, 199).
+        eq(new Vector3i(114, 63, 199), BoatRoutes.berthOrigin(s));
+        eq(Rotation.OneEighty, BoatRoutes.berthRotation(s));
+        // Pivot {0, 1, -1} turned by OneEighty = (0, 1, 1): cell (114, 64, 200), centre (114.5, 64, 200.5).
+        Vector3d p = BoatRoutes.berthPivot(s);
+        check(p.x == 114.5 && p.y == 64 && p.z == 200.5, "pivot " + p);
+        check(Math.abs(BoatRoutes.berthTheta(s) - Math.PI) < 1e-6, "cap");
+        eq(63, BoatRoutes.surfaceY(s));
+        check(!BoatRoutes.tooFar(new Vector3i(0, 0, 0), new Vector3i(1000, 0, 1000)), "1414 blocs : cherché");
+        check(BoatRoutes.tooFar(new Vector3i(0, 0, 0), new Vector3i(1100, 0, 1100)), "1556 blocs : coupé");
+    }
+
+    private static void waterRouteTooLong() {
+        char[][] m = waterMap('.');
+        check(waterSearch(m, 20, 60, 100, 60).withMaxLength(50).step(100000) == WaterRoute.Status.NO_ROUTE, "trop long");
+        check(waterSearch(m, 20, 60, 100, 60).step(100000) == WaterRoute.Status.FOUND, "longueur par défaut");
+    }
+
+    private static void waterRouteBerthNearShore() {
+        char[][] m = waterMap('.');
+        waterRect(m, 0, 119, 0, 57, '#'); // long shoreline, water from z = 58
+        WaterRoute.Search s = waterSearch(m, 20, 60, 100, 60);
+        check(s.step(100000) == WaterRoute.Status.FOUND, "appontements près de la rive");
+        for (int[] w : s.waypoints()) {
+            boolean far = Math.hypot(w[0] - 20, w[1] - 60) > 16 && Math.hypot(w[0] - 100, w[1] - 60) > 16;
+            if (far) {
+                check(landDistance(m, w[0], w[1]) >= 8, "marge pleine loin des extrémités");
+            }
+        }
+    }
+
+    private static void waterRouteNegativeOffset() {
+        char[][] m = waterMap('.');
+        waterRect(m, 45, 75, 45, 75, '#');
+        // Same island map, shifted by (-300, -500), even to keep the node grid aligned: box and coordinates are negative.
+        WaterRoute.ColumnProbe base = waterProbe(m);
+        WaterRoute.ColumnProbe shifted = (x, z) -> base.at(x + 300, z + 500);
+        WaterRoute.Search s = new WaterRoute.Search(shifted, -280, -440, -200, -440, -300, -500, -181, -381);
+        check(s.step(100000) == WaterRoute.Status.FOUND, "coordonnées négatives");
+        WaterRoute.Search plain = waterSearch(m, 20, 60, 100, 60);
+        plain.step(100000);
+        check(plain.waypoints().size() == s.waypoints().size(), "même nombre de points");
+        for (int i = 0; i < s.waypoints().size(); i++) {
+            check(s.waypoints().get(i)[0] + 300 == plain.waypoints().get(i)[0]
+                && s.waypoints().get(i)[1] + 500 == plain.waypoints().get(i)[1], "point décalé " + i);
+        }
+    }
+
+    private static void waterRouteResumedSame() {
+        char[][] m = waterMap('.');
+        waterRect(m, 45, 75, 45, 75, '#');
+        WaterRoute.Search whole = waterSearch(m, 20, 60, 100, 60);
+        check(whole.step(100000) == WaterRoute.Status.FOUND, "recherche continue");
+        waterRect(m, 30, 30, 0, 119, '?');
+        WaterRoute.Search cut = waterSearch(m, 20, 60, 100, 60);
+        check(cut.step(100000) == WaterRoute.Status.NEED_DATA, "interrompue");
+        waterRect(m, 30, 30, 0, 119, '.');
+        check(cut.step(100000) == WaterRoute.Status.FOUND, "reprise");
+        check(cut.missingColumn() == null, "colonne manquante remise à zéro");
+        check(cut.waypoints().size() == whole.waypoints().size(), "même nombre de points");
+        for (int i = 0; i < cut.waypoints().size(); i++) {
+            check(java.util.Arrays.equals(cut.waypoints().get(i), whole.waypoints().get(i)), "même point " + i);
+        }
+    }
+
+    /** The ship turns on the spot at each waypoint: far from the ends, the corners keep the whole turning circle clear. */
+    private static void waterRouteTurnClearance() {
+        char[][] m = waterMap('.');
+        waterRect(m, 45, 75, 45, 75, '#');
+        WaterRoute.Search s = waterSearch(m, 20, 60, 100, 60);
+        check(s.step(100000) == WaterRoute.Status.FOUND, "île contournée");
+        List<int[]> w = s.waypoints();
+        for (int i = 0; i < w.size() - 1; i++) {
+            boolean far = Math.hypot(w.get(i)[0] - 20, w.get(i)[1] - 60) > 40 && Math.hypot(w.get(i)[0] - 100, w.get(i)[1] - 60) > 40;
+            if (far) {
+                check(landDistance(m, w.get(i)[0], w.get(i)[1]) >= WaterRoute.TURN_CLEARANCE - 1, "coin à moins du cercle de rotation de la terre");
+            }
+        }
+    }
+
+    private static void waterRouteAvoid() {
+        char[][] m = waterMap('.');
+        check(waterSearch(m, 20, 60, 100, 60).avoiding(java.util.Set.of()).step(100000) == WaterRoute.Status.FOUND, "sans colonne à éviter");
+        WaterRoute.Search plain = waterSearch(m, 20, 60, 100, 60);
+        plain.step(100000);
+        check(plain.waypoints().size() == 1, "ligne droite sans obstacle");
+        WaterRoute.Search s = waterSearch(m, 20, 60, 100, 60).avoiding(java.util.Set.of(WaterRoute.columnKey(60, 60)));
+        check(s.step(100000) == WaterRoute.Status.FOUND, "route avec colonne à éviter");
+        check(s.waypoints().size() > 1, "la route contourne la colonne : " + s.waypoints().size());
+    }
+
+    /** An unloaded column in a turn circle is asked for a few times, then counts as not clear: the search ends (no endless NEED_DATA). */
+    private static void waterRouteTurnData() {
+        char[][] m = waterMap('.');
+        waterRect(m, 45, 75, 45, 75, '#');
+        m[50][8] = '?';
+        m[50][112] = '?';
+        WaterRoute.Search s = waterSearch(m, 20, 60, 100, 60);
+        WaterRoute.Status st = WaterRoute.Status.RUNNING;
+        int calls = 0;
+        while ((st == WaterRoute.Status.NEED_DATA || st == WaterRoute.Status.RUNNING) && calls++ < 200) {
+            st = s.step(100000);
+        }
+        check(st == WaterRoute.Status.FOUND, "route trouvée malgré une colonne jamais chargée : " + st);
+        check(calls < 100, "pas d'attente sans fin : " + calls);
+    }
+
+    private static void waterRouteFreeStart() {
+        char[][] m = waterMap('.');
+        waterRect(m, 22, 24, 55, 65, '#');
+        check(waterSearch(m, 20, 60, 100, 60).step(100000) == WaterRoute.Status.FOUND, "départ normal : le taper laisse passer");
+        WaterRoute.Search s = waterSearch(m, 20, 60, 100, 60).withFreeStart();
+        check(s.step(100000) == WaterRoute.Status.FOUND, "départ libre : un bateau bloqué par le côté peut repartir");
+        WaterRoute.Search a = waterSearch(m, 20, 60, 100, 60).withFreeStart()
+                .avoiding(java.util.Set.of(WaterRoute.columnKey(21, 60)));
+        check(a.step(100000) == WaterRoute.Status.FOUND, "départ libre avec colonne interdite : encore une route");
+    }
+
+    private static void boatLookAhead() {
+        // Heading north (-z): an obstacle disc around (50, 70).
+        BoatAutopilot.PoseTest t = (x, z, th) -> Math.hypot(x - 50, z - 70) < 10;
+        double[] hit = BoatAutopilot.blockedAhead(t, 50.5, 100.5, new int[] {50, 40}, new int[] {50, 0});
+        check(hit != null && hit[0] == 24, "obstacle vu à 24 blocs");
+        check(BoatAutopilot.blockedAhead(t, 50.5, 100.5, new int[] {50, 90}, new int[] {50, 0}) == null, "waypoint avant l'obstacle, rien ne gêne");
+        // The final leg is scanned too (next null): the obstacle at 24 blocs is seen while the berth guard only cuts the last 12.
+        check(BoatAutopilot.blockedAhead(t, 50.5, 100.5, new int[] {50, 20}, null) != null, "dernier tronçon scruté");
+        BoatAutopilot.PoseTest free = (x, z, th) -> false;
+        check(BoatAutopilot.blockedAhead(free, 50.5, 100.5, new int[] {50, 40}, null) == null, "voie libre");
+        // Last waypoint (berth point): poses closer than END_GUARD to it are not judged.
+        BoatAutopilot.PoseTest nearEnd = (x, z, th) -> z < 52;
+        check(BoatAutopilot.blockedAhead(nearEnd, 50.5, 70.5, new int[] {50, 50}, null) == null, "zone du dernier point ignorée");
+        // Corner: the turn at the waypoint is judged with the next heading.
+        BoatAutopilot.PoseTest corner = (x, z, th) -> Math.abs(x - 50.5) < 0.1 && Math.abs(z - 80.5) < 0.1 && Math.abs(th) > 0.5;
+        check(BoatAutopilot.blockedAhead(corner, 50.5, 100.5, new int[] {50, 80}, new int[] {10, 80}) != null, "virage au point jugé");
+        // A turn blocked only partway (the logged failure): ends free, an intermediate heading blocked.
+        BoatAutopilot.PoseTest mid = (x, z, th) -> Math.abs(th - 0.5) < 0.1;
+        check(BoatAutopilot.turnBlocked(mid, 0, 0, 0, 1.0), "virage bloqué à mi-course");
+        check(!BoatAutopilot.turnBlocked(mid, 0, 0, 0, 0.3), "virage libre");
+    }
+
+    private static void boatDetour() {
+        BoatAutopilot.PoseTest t = (x, z, th) -> Math.hypot(x - 50, z - 70) < 10;
+        int[] wp = {50, 40};
+        check(BoatAutopilot.detour(t, 50.5, 100.5, AirshipAutopilot.headingTo(0, -1), wp, 24, 0) == null, "3 blocs de côté : encore dans l'obstacle");
+        double[] d = null;
+        int found = -1;
+        for (int n = 0; n < BoatAutopilot.MAX_SHIFT_TRIES && d == null; n++) {
+            d = BoatAutopilot.detour(t, 50.5, 100.5, AirshipAutopilot.headingTo(0, -1), wp, 24, n);
+            found = n;
+        }
+        check(d != null, "un déport libre existe");
+        check(Math.abs(d[0] - 50.5) >= 6, "déport latéral d'au moins 6 blocs : " + d[0]);
+        check(Math.abs(d[0] - Math.floor(d[0]) - 0.5) < 1e-9 && Math.abs(d[1] - Math.floor(d[1]) - 0.5) < 1e-9, "centre de colonne");
+        check(d[1] < 100.5 - 30, "le point est au-delà de l'obstacle : " + d[1]);
+        check(found >= 2, "un déport de plus de 3 blocs : " + found);
+        check(BoatAutopilot.detour(t, 50.5, 100.5, AirshipAutopilot.headingTo(0, -1), wp, 24, BoatAutopilot.MAX_SHIFT_TRIES) == null, "hors liste");
+        BoatAutopilot.PoseTest wall = (x, z, th) -> z < 90 && z > 50;
+        for (int n = 0; n < BoatAutopilot.MAX_SHIFT_TRIES; n++) {
+            check(BoatAutopilot.detour(wall, 50.5, 100.5, AirshipAutopilot.headingTo(0, -1), wp, 12, n) == null, "mur sans passage : aucun déport");
+        }
+    }
+
+    private static void paddleSlideWheels() {
+        PaddleWheels.Spin[] w = PaddleWheels.slideWheels();
+        check(w[0] == PaddleWheels.Spin.FWD_SLOW && w[1] == PaddleWheels.Spin.FWD_SLOW, "glissade : deux roues lentes en avant");
+        check(!java.util.Arrays.equals(w, PaddleWheels.wheelsFor(false, false, 0)), "différent de l'arrêt");
+    }
+
+    private static void boatAutopilotHeading() {
+        // Waypoints are pivot columns: the target is the column centre (x + 0.5, z + 0.5). Bow = (-sin theta, -cos theta).
+        near(0.0, BoatAutopilot.targetHeading(10.5, 20.5, new int[] {10, 0})); // straight to -z
+        near(Math.PI / 2, BoatAutopilot.targetHeading(10.5, 20.5, new int[] {0, 20})); // to -x
+        near(-Math.PI / 2, BoatAutopilot.targetHeading(10.5, 20.5, new int[] {30, 20})); // to +x
+        near(Math.PI, Math.abs(BoatAutopilot.targetHeading(10.5, 20.5, new int[] {10, 40}))); // to +z
+        double h = BoatAutopilot.targetHeading(0.5, 0.5, new int[] {7, -9});
+        near(AirshipAutopilot.headingTo(7, -9), h);
+    }
+
+    private static void boatAutopilotReached() {
+        int[] wp = {10, 10};
+        check(BoatAutopilot.reached(10.5, 10.5, wp, BoatAutopilot.WAYPOINT_RADIUS), "on the point");
+        check(BoatAutopilot.reached(13.4, 10.5, wp, BoatAutopilot.WAYPOINT_RADIUS), "2.9 blocks away");
+        check(!BoatAutopilot.reached(13.6, 10.5, wp, BoatAutopilot.WAYPOINT_RADIUS), "3.1 blocks away");
+        near(3.0, BoatAutopilot.WAYPOINT_RADIUS);
+    }
+
+    /** Pre-berth point, route trimming and turning-circle clearance of the sideways berthing manoeuvre. */
+    private static void boatBerthManoeuvre() {
+        int s = BoatRoutes.BERTH_STANDOFF;
+        org.joml.Vector3i berth = new org.joml.Vector3i(100, 60, 200);
+        // the pre-berth point lies along the station's +z axis, rotated with the station
+        org.joml.Vector3i p0 = BoatRoutes.preBerthCell(com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None, berth, s);
+        check(p0.x == 100 && p0.z == 200 + s && p0.y == 60, "rotation None: +z");
+        org.joml.Vector3i p90 = BoatRoutes.preBerthCell(com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.Ninety, berth, s);
+        check(Math.abs(p90.x - 100) == s && p90.z == 200 && Integer.signum(p90.x - 100) == Integer.signum(
+                com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.Ninety.rotateYaw(new org.joml.Vector3i(0, 0, 1),
+                        new org.joml.Vector3i()).x), "rotation Ninety: along x, signed");
+        // turning circle of the hull (corner of the prefab box around the rotation centre) stays clear of the pier edge
+        int[] mn = Deployables.STEAMBOAT_PUBLIC_PLACE_MIN;
+        int[] mx = Deployables.STEAMBOAT_PUBLIC_PLACE_MAX;
+        double rx = Math.max(Math.abs(mn[0]), Math.abs(mx[0])) + 0.5;
+        double rz = Math.max(Math.abs(mn[2]), Math.abs(mx[2])) + 0.5;
+        double radius = Math.hypot(rx, rz);
+        double berthZ = Deployables.BOAT_STATION_BERTH_ORIGIN[2];
+        double pierEdge = Deployables.BOAT_STATION_PIER_END[2] + 1;
+        check(berthZ + s - radius >= pierEdge + 1, "turning circle clear of the pier by a block (radius " + radius + ")");
+        // arrival route: waypoints nearer than the standoff are dropped, the pre-berth point ends the route
+        org.joml.Vector3i pre = new org.joml.Vector3i(100, 60, 200 + s);
+        java.util.List<int[]> route = java.util.List.of(new int[] {100, 300}, new int[] {100, 230}, new int[] {100, 200 + s - 2},
+                new int[] {100, 200 + s - 4}, new int[] {100, 200});
+        java.util.List<int[]> in = BoatRoutes.arriveRoute(route, berth, pre, s);
+        check(in.size() == 3, "arrive: 2 far waypoints + pre-berth, got " + in.size());
+        check(in.get(2)[0] == 100 && in.get(2)[1] == 200 + s, "arrive: ends at the pre-berth point");
+        java.util.List<int[]> in2 = BoatRoutes.arriveRoute(java.util.List.of(new int[] {100, 300}, new int[] {100, 200 + s}, new int[] {100, 200}),
+                berth, pre, s);
+        check(in2.size() == 2, "arrive: no duplicate pre-berth point");
+        // departure route: starts at the pre-berth point, nearer waypoints dropped
+        java.util.List<int[]> out = BoatRoutes.departRoute(java.util.List.of(new int[] {100, 200}, new int[] {100, 200 + s - 2}, new int[] {100, 230},
+                new int[] {100, 300}), berth, pre, s);
+        check(out.size() == 3 && out.get(0)[1] == 200 + s && out.get(1)[1] == 230, "depart: pre-berth first, then the far waypoints");
+        java.util.List<int[]> out2 = BoatRoutes.departRoute(java.util.List.of(new int[] {100, 200 + s}, new int[] {100, 300}), berth, pre, s);
+        check(out2.size() == 2, "depart: no duplicate pre-berth point");
+        // abandoning the sideways arrival resumes at the first dropped waypoint
+        check(BoatRoutes.firstDropped(route, in) == 2, "resume at the first dropped waypoint (got " + BoatRoutes.firstDropped(route, in) + ")");
+        check(BoatRoutes.firstDropped(route, java.util.List.of(new int[] {1, 1})) == 0, "resume index never negative");
+        // a voyage list keeps both ends: departure slide-out then arrival at the destination pre-berth point
+        org.joml.Vector3i dest = new org.joml.Vector3i(100, 60, 900);
+        org.joml.Vector3i destPre = new org.joml.Vector3i(100, 60, 900 + s);
+        java.util.List<int[]> voyage = java.util.List.of(new int[] {100, 200}, new int[] {100, 300}, new int[] {100, 880}, new int[] {100, 900});
+        java.util.List<int[]> both = BoatRoutes.arriveRoute(BoatRoutes.departRoute(voyage, berth, pre, s), dest, destPre, s);
+        check(both.get(0)[1] == 200 + s, "voyage: starts at the departure pre-berth point");
+        check(both.get(both.size() - 1)[1] == 900 + s, "voyage: ends at the arrival pre-berth point");
+        check(both.size() == 4, "voyage: pre, 300, 880, arrival pre (" + both.size() + ")");
+        // the seaward sign is pinned for every rotation: pre-berth direction = from the pier end toward the berth, rotated
+        int lateral = Deployables.BOAT_STATION_BERTH_ORIGIN[2] - Deployables.BOAT_STATION_PIER_END[2];
+        for (com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation r : com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.values()) {
+            org.joml.Vector3i want = r.rotateYaw(new org.joml.Vector3i(0, 0, lateral), new org.joml.Vector3i());
+            org.joml.Vector3i got = BoatRoutes.preBerthCell(r, new org.joml.Vector3i(), s);
+            check(Integer.signum(got.x) == Integer.signum(want.x) && Integer.signum(got.z) == Integer.signum(want.z), "seaward sign " + r);
+        }
+        // slide: half the sailing speed, never under the minimum
+        near(2.58, BoatAutopilot.slideSpeed(50, 5.16));
+        near(BoatAutopilot.MIN_SPEED, BoatAutopilot.slideSpeed(0, 5.16));
+    }
+
+    private static void boatAutopilotSpeed() {
+        near(5.16, BoatAutopilot.sailSpeed(100, 5.16));
+        near(5.16, BoatAutopilot.sailSpeed(12, 5.16));
+        check(BoatAutopilot.sailSpeed(6, 5.16) < 5.16, "slower in the last 12 blocks");
+        check(BoatAutopilot.sailSpeed(3, 5.16) < BoatAutopilot.sailSpeed(6, 5.16), "slower still nearer");
+        near(0.5, BoatAutopilot.sailSpeed(0, 5.16));
+        near(0.5, BoatAutopilot.sailSpeed(0.2, 5.16));
+        near(0.3, BoatAutopilot.sailSpeed(50, 0.3)); // never above the full speed
+    }
+
+    private static void shuttleFuellessRules() {
+        // Engine sound: the fuelless shuttle always runs, the players' ships keep their rule.
+        check(AirshipManager.engineSoundWanted(false, false, true), "shuttle without engines: runs");
+        check(AirshipManager.engineSoundWanted(false, true, true), "shuttle never dry");
+        check(AirshipManager.engineSoundWanted(true, false, false), "steamboat fuelled: runs");
+        check(!AirshipManager.engineSoundWanted(true, true, false), "steamboat dry: silent");
+        check(!AirshipManager.engineSoundWanted(false, false, false), "no engines: silent");
+        // Wheels: pilotless without engines still turn for the shuttle, never for the players' ships.
+        check(!PaddleWheels.still(false, false, false, false, true, true, true), "shuttle sailing: wheels turn");
+        check(PaddleWheels.still(false, true, false, false, true, true, true), "shuttle off: still");
+        check(PaddleWheels.still(false, false, true, false, true, true, true), "shuttle landing: still");
+        check(PaddleWheels.still(false, false, false, true, true, false, false), "steamboat pilotless: still");
+        check(PaddleWheels.still(false, false, false, false, false, false, false), "steamboat without engines: still");
+        check(PaddleWheels.still(true, false, false, true, false, false, false), "steamboat dry: still");
+        check(!PaddleWheels.still(false, false, false, true, false, false, false), "steamboat piloted and fuelled: turns");
+        check(!PaddleWheels.still(false, false, false, true, true, false, true), "steamboat voyage (NPC pilot): wheels turn");
+        check(PaddleWheels.still(true, false, false, true, true, false, true), "steamboat voyage dry: still");
+        check(PaddleWheels.still(false, false, true, true, true, false, true), "steamboat voyage landing: still");
+    }
+
+    private static void berthCentreRotation() {
+        TransitNetwork.Station s = new TransitNetwork.Station("S", "w", new Vector3i(100, 64, 200), Rotation.Ninety, null, null,
+                new ArrayList<>(), Deployables.BOAT_STATION_KIND);
+        // Station Ninety at (100, 64, 200): berth origin {1, -1, 14} -> (114, 63, 199), boat rotation OneEighty, theta = pi.
+        // Pivot (0, 1, -1) turned -> (0, 1, 1): cell (114, 64, 200), pivot (114.5, 64, 200.5). Centre = prefab (0, z 0) at the pivot
+        // height: cell (114, 64, 199), centre (114.5, 64, 199.5).
+        org.joml.Vector3d p = BoatRoutes.berthPivot(s);
+        check(Math.abs(p.x - 114.5) < 1e-6 && Math.abs(p.z - 200.5) < 1e-6, "pivot " + p);
+        org.joml.Vector3d c = BoatRoutes.berthCentre(s);
+        check(Math.abs(c.x - 114.5) < 1e-6 && Math.abs(c.y - 64) < 1e-6 && Math.abs(c.z - 199.5) < 1e-6, "centre " + c);
+        eq(new Vector3i(114, 64, 199), BoatRoutes.berthCentreCell(s));
+        // Turning keeps the centre fixed: the pivot is found back from the centre at the berth heading.
+        org.joml.Vector3d back = AirshipManager.get().pivotFromCenter(Deployables.STEAMBOAT_PUBLIC, c, BoatRoutes.berthTheta(s));
+        check(back.distance(p) < 1e-6, "pivot from centre " + back);
+        // Station None: berth origin {1, -1, 14} -> (101, 63, 214), boat rotation Ninety ((x, z) -> (z, -x)), theta = pi / 2.
+        // Pivot (0, 1, -1) -> (-1, 1, 0): cell (100, 64, 214), pivot (100.5, 64, 214.5). Centre = origin column: (101.5, 64, 214.5).
+        TransitNetwork.Station n = new TransitNetwork.Station("N", "w", new Vector3i(100, 64, 200), Rotation.None, null, null,
+                new ArrayList<>(), Deployables.BOAT_STATION_KIND);
+        eq(Rotation.Ninety, BoatRoutes.berthRotation(n));
+        org.joml.Vector3d pn = BoatRoutes.berthPivot(n);
+        check(Math.abs(pn.x - 100.5) < 1e-6 && Math.abs(pn.z - 214.5) < 1e-6, "Ninety berth pivot " + pn);
+        org.joml.Vector3d cn = BoatRoutes.berthCentre(n);
+        check(Math.abs(cn.x - 101.5) < 1e-6 && Math.abs(cn.y - 64) < 1e-6 && Math.abs(cn.z - 214.5) < 1e-6, "Ninety berth centre " + cn);
+        check(AirshipManager.get().pivotFromCenter(Deployables.STEAMBOAT_PUBLIC, cn, BoatRoutes.berthTheta(n)).distance(pn) < 1e-6,
+                "Ninety pivot from centre");
+    }
+
+    private static void boatDropPoints() throws Exception {
+        StructureShape station = prefabShape("Boat_Station.prefab.json");
+        float[][] pts = Deployables.BOAT_STATION_DROP_POINTS;
+        check(pts.length == 12, "12 drop points, got " + pts.length);
+        Set<String> seen = new java.util.HashSet<>();
+        for (float[] p : pts) {
+            int x = Math.round(p[0]);
+            int z = Math.round(p[2]);
+            check(Math.abs(p[0] - x) < 1e-6 && Math.abs(p[2] - z) < 1e-6, "whole cell x, z " + java.util.Arrays.toString(p));
+            check(seen.add(x + "," + z), "distinct point " + x + "," + z);
+            StructureShape.Cell deck = station.cellAt(x, 0, z);
+            check(deck != null && "Wood_Hardwood_Planks_Half".equals(deck.baseName()), "deck half plank under " + x + "," + z);
+            check(Math.abs(p[1] - 0.6f) < 1e-6, "feet on the deck top plus 0.1, got " + p[1]);
+            check(station.cellAt(x, 1, z) == null && station.cellAt(x, 2, z) == null, "two free cells above " + x + "," + z);
+        }
+        // World conversion: whole cell rotated with the station, then the cell centre.
+        List<org.joml.Vector3d> w = BoatQuay.dropPoints(new Vector3i(100, 64, 200), Rotation.None);
+        check(w.size() == 12, "12 world points");
+        near(100 + pts[0][0] + 0.5, w.get(0).x);
+        near(64 + 0.6, w.get(0).y);
+        near(200 + pts[0][2] + 0.5, w.get(0).z);
+    }
+
+    private static void waterLogLineFill() {
+        WaterLog w = new WaterLog();
+        w.record(1, 1);          // cell (0, 0)
+        w.record(11, 5);         // cell (5, 2): skipped cells added along the line
+        eq(6, w.size());
+        check(w.contains(0, 0) && w.contains(5, 2) && w.contains(3, 1), "8-connected line");
+        w.forgetLastPosition();
+        w.record(41, 41);        // new line: only this cell
+        eq(7, w.size());
+    }
+
+    private static void waterLogUPath() {
+        WaterLog w = new WaterLog();
+        w.record(1, 1); w.record(1, 41); w.record(41, 41); w.record(41, 1); // a U: down, across, up
+        List<int[]> p = w.path(1, 1, 41, 1, java.util.Set.of());
+        check(!p.isEmpty(), "path found");
+        for (int[] pt : p) check(w.contains(WaterLog.gridOf(pt[0]), WaterLog.gridOf(pt[1])), "path stays on the log");
+        check(p.stream().anyMatch(pt -> pt[1] >= 39), "the path goes round the bottom of the U");
+        check(w.path(1, 1, 41, 1, java.util.Set.of(WaterLog.cell(10, 20))).isEmpty(), "U cut at its bottom: no path");
+        List<int[]> c = WaterLog.collapse(p);
+        check(c.size() >= 4 && c.size() <= 6, "start, the corners (a corner may be cut diagonally), goal");
+        check(java.util.Arrays.equals(p.get(0), c.get(0)) && java.util.Arrays.equals(p.get(p.size() - 1), c.get(c.size() - 1)), "ends kept");
+    }
+
+    private static void waterLogStops() {
+        WaterLog w = new WaterLog();
+        eq("1", w.nextStopNumber());
+        eq(null, w.addStop(0, 62, 0, Rotation.None, 0, 0));
+        eq("crew.stop.tooClose", w.addStop(20, 62, 0, Rotation.None, 20, 0));
+        eq(null, w.addStop(40, 62, 0, Rotation.None, 40, 0));
+        check(w.contains(WaterLog.gridOf(40), WaterLog.gridOf(0)), "a stop's cell is logged");
+        check(w.forgetStop("1"), "forget");
+        eq("1", w.nextStopNumber()); // smallest free number
+    }
+
+    private static void waterLogRoundTrip() {
+        WaterLog w = new WaterLog();
+        w.record(1, 1); w.record(9, 1);
+        w.addStop(40, 62, 0, Rotation.Ninety, 41, 3);
+        w.addReached(100, 61, 7);
+        WaterLog back = WaterLog.fromBson(w.toBson());
+        eq(w.size(), back.size());
+        eq(Rotation.Ninety, back.stops().get(0).rotation());
+        eq(41, back.stops().get(0).cx());
+        eq(new WaterLog.Reached(100, 61, 7), back.reached().get(0));
+        eq(0, WaterLog.fromBson(new org.bson.BsonDocument()).size());
+    }
+
+    private static void waterLogEmptyStart() {
+        WaterLog w = new WaterLog();
+        eq(List.of(), w.path(1, 1, 41, 1, java.util.Set.of()));
+        eq(null, w.stationTarget(0, 0, 0, 0));
+    }
+
+    private static void reachedStationsDropRemoved() {
+        WaterLog w = new WaterLog();
+        w.addReached(1, 2, 3);
+        w.addReached(4, 5, 6);
+        w.dropReachedNotIn(java.util.Set.of(new WaterLog.Reached(4, 5, 6)));
+        eq(List.of(new WaterLog.Reached(4, 5, 6)), w.reached());
+    }
+
+    private static void waterLogStationTarget() {
+        WaterLog w = new WaterLog();
+        w.record(1, 1); w.record(121, 1); // a straight run from the station to 120 blocks east
+        int[] t = w.stationTarget(10, 0, 0, 0);
+        check(t != null && Math.hypot(t[0], t[1]) >= WaterLog.STATION_STANDOFF, "outside the zone and the hull reach");
+        check(Math.hypot(t[0], t[1]) < WaterLog.STATION_STANDOFF + 3, "nearest such cell to the pier");
+        eq(TransitConstants.STATION_ZONE_RADIUS + 20, WaterLog.STATION_STANDOFF); // the hull (about 17.2 blocks) never reaches the zone
+        check(Math.hypot(7.5, 15.5) + 2 <= WaterLog.HULL_REACH, "hull corner plus margin within the reach");
+        check(Math.hypot(t[0], t[1]) - Math.hypot(7.5, 15.5) >= TransitConstants.STATION_ZONE_RADIUS, "any heading keeps the hull out");
+    }
+
+    private static void boatBackoffAction() {
+        eq(ShipVoyage.BackoffAction.SAIL_BACK, ShipVoyage.backoffAction(true, false));
+        eq(ShipVoyage.BackoffAction.RELEASE_RIDERS, ShipVoyage.backoffAction(false, false)); // queue exhausted: riders set down once
+        eq(ShipVoyage.BackoffAction.KEEP_TRYING, ShipVoyage.backoffAction(false, true));     // then the boat keeps trying alone
+        eq(ShipVoyage.BackoffAction.SAIL_BACK, ShipVoyage.backoffAction(true, true));
+    }
+
+    private static void voyageEndAction() {
+        eq(BoatAutopilot.EndAction.END_SHUTTLE, BoatAutopilot.endAction(true));
+        eq(BoatAutopilot.EndAction.LAND_IN_PLACE, BoatAutopilot.endAction(false));
+        ShuttleState st = new ShuttleState(null, null, List.of(new int[]{0, 0}), ShuttleState.Phase.SAIL, 0);
+        check(Double.isNaN(st.goalTheta) && st.router == null, "a shuttle has no goal heading and no router");
+    }
+
+    private static void boatQuayRules() {
+        BoatQuay.Quay q = new BoatQuay.Quay();
+        long t = 1_000_000L;
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        UUID c = UUID.randomUUID();
+        eq(BoatQuay.QuayState.FREE, q.state);
+        check(!q.canApproach(t, false), "nothing queued: no approach");
+        check(q.canApproach(t, true), "free and queued: approach");
+        q.approach();
+        eq(BoatQuay.QuayState.APPROACH, q.state);
+        check(!q.canApproach(t, true), "approach under way");
+        check(!q.tryArrive(a, t), "an arrival waits while the quay is taken");
+        q.docked(t);
+        eq(BoatQuay.QuayState.DOCKED, q.state);
+        check(!q.departureDue(t + TransitConstants.COUNTDOWN_SECONDS * 1000L - 1), "countdown running");
+        check(q.departureDue(t + TransitConstants.COUNTDOWN_SECONDS * 1000L), "countdown over");
+        q.departing();
+        eq(BoatQuay.QuayState.DEPARTING, q.state);
+        long cleared = t + 60_000L;
+        q.cleared(cleared);
+        eq(BoatQuay.QuayState.FREE, q.state);
+        long gap = TransitConstants.QUAY_GAP_SECONDS * 1000L;
+        check(!q.canApproach(cleared + gap - 1, true), "10 s gap after a departure");
+        check(!q.tryArrive(a, cleared + gap - 1), "no arrival in the gap either");
+        // The arrival registered in the gap waits; a second one waits behind it.
+        eq(0, q.register(a));
+        eq(1, q.register(b));
+        eq(0, q.register(a));
+        check(!q.canApproach(cleared + gap, true), "an arrival has priority over a new approach");
+        check(!q.tryArrive(b, cleared + gap), "the second arrival waits for the first");
+        check(q.tryArrive(a, cleared + gap), "first arrival takes the quay");
+        eq(BoatQuay.QuayState.ARRIVING, q.state);
+        check(q.tryArrive(a, cleared + gap), "idempotent for the holder");
+        eq(0, q.order(b));
+        eq(1, q.register(c));
+        check(!q.tryArrive(b, cleared + gap), "quay held by the first arrival");
+        long left = cleared + 120_000L;
+        q.endArrival(a, left);
+        eq(BoatQuay.QuayState.FREE, q.state);
+        check(!q.tryArrive(b, left + gap - 1), "gap after the arrival left");
+        check(!q.tryArrive(c, left + gap), "third waits for the second");
+        check(q.tryArrive(b, left + gap), "second arrival takes the quay after the gap");
+        q.endArrival(b, left + gap);
+        q.endArrival(c, left + gap); // forgotten in the waiting line
+        check(!q.arrivalPending(), "nothing pending");
+        check(q.canApproach(left + 2 * gap, true), "approach again");
+        q.approach();
+        q.approachFailed(left + 2 * gap, 30_000L);
+        eq(BoatQuay.QuayState.FREE, q.state);
+        check(!q.canApproach(left + 2 * gap + 29_999L, true), "failed approach retried after 30 s");
+        check(q.canApproach(left + 2 * gap + 30_000L, true), "failed approach retried");
+    }
+
+    private static void boatRouteLeg() {
+        List<int[]> route = List.of(new int[]{0, 0}, new int[]{10, 0}, new int[]{10, 50});
+        List<int[]> leg = BoatQuay.leg(route, 40);
+        check(leg.size() == 3, "leg points " + leg.size());
+        eq(0, leg.get(0)[0]);
+        eq(10, leg.get(2)[0]);
+        eq(30, leg.get(2)[1]);
+        near(60.0, BoatQuay.pathLength(route));
+        // Shorter route than the leg: the whole route.
+        List<int[]> all = BoatQuay.leg(route, 500);
+        check(all.size() == 3 && all.get(2)[1] == 50, "whole route");
+        // Remaining path from a point toward a waypoint index.
+        near(5.0 + 50.0, BoatQuay.remaining(route, 1, 5.5, 0.5));
+        List<int[]> rev = BoatQuay.reversed(route);
+        eq(10, rev.get(0)[0]);
+        eq(50, rev.get(0)[1]);
+        eq(0, rev.get(2)[0]);
+    }
+
+    private static void boatRoutesOldVersion() throws Exception {
+        Path dir = Files.createTempDirectory("boatroutesv1");
+        Path f = dir.resolve("boat-routes.json");
+        Files.writeString(f, "{\"version\": 1, \"routes\": [{\"world\": \"w\", \"from\": \"A\", \"to\": \"B\", "
+                + "\"state\": \"FOUND\", \"points\": [[1, 2], [3, 4]]}]}");
+        BoatRoutes.Book b = new BoatRoutes.Book();
+        b.load(f);
+        check(b.get("w", "A", "B") == null, "version 1 discarded");
+        b.ensure("w", "A", "B");
+        check(b.get("w", "A", "B").state() == BoatRoutes.RouteState.COMPUTING, "pair computed again");
+        Files.writeString(f, "{\"routes\": []}");
+        BoatRoutes.Book c = new BoatRoutes.Book();
+        c.load(f);
+        check(c.get("w", "A", "B") == null && !Files.exists(dir.resolve("boat-routes.json.bad")), "missing version discarded, not .bad");
+        c.resolve("w", "A", "B", BoatRoutes.RouteState.NONE, List.of());
+        check(Files.readString(f).contains("\"version\": " + BoatRoutes.VERSION), "written as the current version");
+        Files.writeString(f, "{\"version\": 2, \"routes\": [{\"world\": \"w\", \"from\": \"A\", \"to\": \"B\", "
+                + "\"state\": \"FOUND\", \"points\": [[1, 2], [3, 4]]}]}");
+        BoatRoutes.Book d = new BoatRoutes.Book();
+        d.load(f);
+        check(d.get("w", "A", "B") == null, "routes of version 2 (old clearance) are recomputed");
+    }
+
+    private static void boatAutopilotHeadingChange() {
+        near(Math.toRadians(4), BoatAutopilot.headingChange(Math.toRadians(178), Math.toRadians(-178))); // across +-pi
+        near(Math.toRadians(4), BoatAutopilot.headingChange(Math.toRadians(-178), Math.toRadians(178)));
+        near(0.5, BoatAutopilot.headingChange(1.0, 1.5));
+        near(0.0, BoatAutopilot.headingChange(0.3, 0.3 + 2 * Math.PI)); // a full turn is no change
+    }
+
+    private static void shortcutOpenWater() {
+        List<int[]> path = new java.util.ArrayList<>();
+        for (int x = 1; x <= 81; x += 2) path.add(new int[]{x, 1 + (x % 4 == 1 ? 0 : 2)}); // zigzag on open water
+        ShipVoyage.Shortcut s = new ShipVoyage.Shortcut(path, box -> (x, z) -> WaterRoute.Cell.WATER);
+        while (!s.step(10)) { }
+        eq(2, s.result().size());
+    }
+
+    private static void shortcutKeepsUnknown() {
+        List<int[]> path = List.of(new int[]{1, 1}, new int[]{41, 1}, new int[]{41, 41});
+        ShipVoyage.Shortcut s = new ShipVoyage.Shortcut(path, box -> (x, z) -> x > 20 && z > 20 ? WaterRoute.Cell.UNKNOWN : WaterRoute.Cell.WATER);
+        while (!s.step(10)) { }
+        eq(3, s.result().size()); // no straight line through unknown columns: the corner stays
+    }
+
+    private static void shortcutAroundLand() {
+        List<int[]> path = List.of(new int[]{1, 1}, new int[]{1, 61}, new int[]{61, 61}, new int[]{61, 1}); // a U round an island
+        ShipVoyage.Shortcut s = new ShipVoyage.Shortcut(path,
+                box -> (x, z) -> x > 15 && x < 45 && z < 45 ? WaterRoute.Cell.BLOCKED : WaterRoute.Cell.WATER);
+        while (!s.step(10)) { }
+        eq(4, s.result().size()); // the island is never crossed
+    }
+
+    private static void shortcutDogLeg() {
+        // A dog-leg round an island: the turning point must survive the final collapse (deltas share signs, not a straight line).
+        List<int[]> path = List.of(new int[]{1, 1}, new int[]{11, 61}, new int[]{71, 71});
+        ShipVoyage.Shortcut s = new ShipVoyage.Shortcut(path,
+                box -> (x, z) -> x > 20 && x < 60 && z > 10 && z < 55 ? WaterRoute.Cell.BLOCKED : WaterRoute.Cell.WATER);
+        while (!s.step(10)) { }
+        eq(3, s.result().size());
+        check(java.util.Arrays.equals(new int[]{11, 61}, s.result().get(1)), "the turning point is kept");
+        eq(3, WaterLog.collapse(path).size());
+        List<int[]> run = List.of(new int[]{1, 1}, new int[]{3, 3}, new int[]{5, 5}, new int[]{7, 5});
+        eq(3, WaterLog.collapse(run).size()); // a straight run is merged, the turn kept
+        eq(3, WaterLog.collapse(List.of(new int[]{1, 1}, new int[]{5, 1}, new int[]{3, 1})).size()); // going back is a turn
+    }
+
+    private static void boatDestinations() {
+        WaterLog w = new WaterLog();
+        w.record(1, 1); w.record(201, 1);
+        w.addStop(10, 62, 0, Rotation.None, 11, 1);     // too close to the boat at (0, 0)
+        w.addStop(100, 62, 0, Rotation.None, 101, 1);
+        TransitNetwork.Station port = new TransitNetwork.Station("Port", "w", new Vector3i(200, 62, 0), Rotation.None, null, null,
+                new java.util.ArrayList<>(), Deployables.BOAT_STATION_KIND);
+        TransitNetwork.Station gone = new TransitNetwork.Station("Gone", "w", new Vector3i(150, 62, 0), Rotation.None, null, null,
+                new java.util.ArrayList<>(), Deployables.BOAT_STATION_KIND);
+        w.addReached(200, 62, 0);
+        w.addReached(150, 62, 0);
+        List<VoyagePlanner.Destination> d = ShipVoyage.destinations(w, List.of(port), 0, 0, s -> new double[]{s.origin.x, s.origin.z, s.origin.x, s.origin.z});
+        eq(2, d.size());
+        eq(VoyagePlanner.Kind.STOP, d.get(0).kind());
+        eq(VoyagePlanner.Kind.STATION, d.get(1).kind());
+        eq("Port", d.get(1).name());
+        eq(1, w.reached().size()); // the removed station is dropped
+    }
+
+    private static void boatGoalOfStop() {
+        WaterLog w = new WaterLog();
+        w.addStop(100, 62, 0, Rotation.Ninety, 101, 5);
+        VoyagePlanner.Destination d = new VoyagePlanner.Destination("1", VoyagePlanner.Kind.STOP, 101, 5, 62);
+        double[] g = ShipVoyage.goalOf(w, d, null, null);
+        eq(101.0, g[0]);
+        eq(5.0, g[1]);
+        eq(Rotation.Ninety.getRadians(), g[2]);
+    }
+
+    private static void shipLandingRetryNeverClimbs() {
+        // Pure rule used by onLandingRefused: a waterborne ship keeps its height.
+        check(!AirshipAutopilot.climbsOnRetry(true), "a boat never climbs to retry");
+        check(AirshipAutopilot.climbsOnRetry(false), "an airship climbs to retry");
+    }
+
+    private static void boatBackoffPoints() {
+        List<int[]> wps = List.of(new int[]{0, 0}, new int[]{10, 0}, new int[]{20, 0}, new int[]{30, 0});
+        // Sailing to index 2 (passed 0 and 1): nearest previous first, then the departure point.
+        List<int[]> b = ShipVoyage.backoffPoints(wps, 2, new int[]{-1, 0});
+        eq(3, b.size());
+        eq(10, b.get(0)[0]);
+        eq(0, b.get(1)[0]);
+        eq(-1, b.get(2)[0]);
+        // The departure point equal to the first waypoint is not repeated.
+        eq(2, ShipVoyage.backoffPoints(wps, 2, new int[]{0, 0}).size());
+        // Nothing sailed yet: only the departure point.
+        eq(1, ShipVoyage.backoffPoints(wps, 0, new int[]{-1, 0}).size());
+        eq(0, ShipVoyage.backoffPoints(wps, 0, null).size());
     }
 }

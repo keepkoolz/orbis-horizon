@@ -119,7 +119,7 @@ final class GliderJump {
 
     /** Glider jumps are not offered from every vehicle (decision of 21 October 2026: not from the steamboat for now). */
     static boolean allowedFor(Deployables.Kind kind) {
-        return kind != Deployables.STEAMBOAT;
+        return kind != Deployables.STEAMBOAT && kind != Deployables.STEAMBOAT_PUBLIC;
     }
 
     /** Countdown of the pending jumps of this world: cancels on every broken condition, shows the title, then jumps. */

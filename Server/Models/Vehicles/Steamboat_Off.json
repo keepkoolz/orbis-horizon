@@ -136,6 +136,256 @@
           "BlendingDuration": 0
         }
       ]
+    },
+    "Helm_Pose_M4": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Pose_M4.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Pose_M3": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Pose_M3.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Pose_M2": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Pose_M2.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Pose_M1": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Pose_M1.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Pose_0": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Pose_0.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Pose_P1": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Pose_P1.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Pose_P2": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Pose_P2.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Pose_P3": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Pose_P3.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Pose_P4": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Pose_P4.blockyanim",
+          "Looping": true,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_M4_M3": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_M4_M3.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_M3_M4": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_M3_M4.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_M3_M2": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_M3_M2.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_M2_M3": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_M2_M3.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_M2_M1": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_M2_M1.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_M1_M2": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_M1_M2.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_M1_0": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_M1_0.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_0_M1": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_0_M1.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_0_P1": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_0_P1.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_P1_0": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_P1_0.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_P1_P2": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_P1_P2.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_P2_P1": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_P2_P1.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_P2_P3": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_P2_P3.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_P3_P2": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_P3_P2.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_P3_P4": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_P3_P4.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
+    },
+    "Helm_Step_P4_P3": {
+      "Animations": [
+        {
+          "Animation": "Items/Vehicles/Helm_Step_P4_P3.blockyanim",
+          "Looping": false,
+          "Speed": 1,
+          "BlendingDuration": 0
+        }
+      ]
     }
   }
 }

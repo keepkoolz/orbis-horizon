@@ -1,6 +1,7 @@
 package com.keepkoolz.orbishorizon;
 
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
 
 import org.joml.Vector3f;
 
@@ -36,11 +37,14 @@ final class Deployables {
     private static final float[] BALLOON_NACELLE_MIN = {-2.0f, 8.5f, 6.0f};
     private static final float[] BALLOON_NACELLE_MAX = {2.0f, 12.0f, 10.0f};
 
+    /** Posts of the NPC pilot of the large balloon: at the pivot, resting on a stool, no door, no desk, no fixed captain seat. */
+    static final CrewSpec BALLOON_CREW = new CrewSpec(new int[]{0, 9, 8}, new int[]{1, 9, 9}, null, null, null, AirshipCrew::straightLegs);
+
     static final Kind BALLOON = new Kind(BALLOON_KIND, "Hotair_Balloon.prefab.json", StructureShape.ANCHOR_BLOCK, true,
             PLACE_MIN, PLACE_MAX,
             "lock.balloon.break", "lock.balloon.place",
             new BalloonSpec("Hotair_Balloon", "Hotair_Balloon_Crate", BALLOON_PIVOT, BALLOON_NACELLE_MIN, BALLOON_NACELLE_MAX,
-                    "Campfire_New_Cartoon", "Flamethrower"));
+                    "Campfire_New_Cartoon", "Flamethrower", null, BALLOON_CREW, true));
 
     static final String BASIC_KIND = "balloon_basic";
 
@@ -174,7 +178,9 @@ final class Deployables {
                     new String[]{"Airship_Burner_Flame_Weak_Left", "Airship_Burner_Flame_Strong_Right"},
                     new String[]{"Airship_Burner_Flame_Strong_Left", "Airship_Burner_Flame_Weak_Right"},
                     "Airship_Exhaust_Smoke", "Airship_Burner_Flame",
-                    true, true, true, true, true, null, 1f, false, null, "dirigeable"));
+                    true, true, true, true, null, 1f, false, null, null, "dirigeable", false,
+                    new CrewSpec(new int[]{0, 8, -10}, new int[]{-2, 8, 4}, new int[]{0, 8, 2}, new int[]{0, 8, 9}, new int[]{0, 9, 8},
+                            AirshipCrew::walkLegs)));
 
     static final String STEAMBOAT_KIND = "steamboat";
     /** Steamboat, prefab frame before rotation: pivot = pilot cell, forbidden placement volume = whole prefab box. */
@@ -182,14 +188,35 @@ final class Deployables {
     static final int[] STEAMBOAT_PLACE_MIN = {-7, -4, -15};
     static final int[] STEAMBOAT_PLACE_MAX = {7, 9, 12};
 
-    /** The steamboat: same helm marker as the airship, no burner, no crew, voyage, recall, ladders nor per-player limit. */
+    /** The steamboat: same helm marker as the airship, no burner, a pilot and voyages but no recall, ladders nor per-player limit. */
     static final Kind STEAMBOAT = new Kind(STEAMBOAT_KIND, "Steamboat.prefab.json", "Airship_Helm", false,
             STEAMBOAT_PLACE_MIN, STEAMBOAT_PLACE_MAX,
             "lock.steamboat.break", "lock.steamboat.place", null, null,
             new AirshipSpec("Steamboat", "Steamboat_Idle", "Steamboat_Off", "Steamboat_Crate", STEAMBOAT_PIVOT,
                     "Steamboat", "Steamboat", new String[]{"Airship_Exhaust_Smoke"}, new String[]{"Airship_Exhaust_Smoke"},
                     "Airship_Exhaust_Smoke", "Steamboat_Chimney_Smoke_Thick",
-                    false, false, false, false, false, -3, 0.5f, true, "Steamboat", "bateau"));
+                    true, false, false, false, -2, 0.5f, true, "Steamboat", null, "bateau", false,
+                    new CrewSpec(STEAMBOAT_PIVOT, new int[]{0, 4, 8}, null, new int[]{0, 1, 8}, new int[]{0, 2, 7}, AirshipCrew::straightLegs)));
+
+    static final String STEAMBOAT_PUBLIC_KIND = "steamboat_public";
+    /**
+     * Public shuttle boat (boat stations), prefab frame before rotation, a small boat of 127 blocks (x -2..2, y 0..5, z -5..6, bow
+     * toward -z) with 6 tavern stools, one chimney, one stern propeller and no paddle wheels, ladders or hull under the floor (the floor of half planks
+     * is y 0). The volume keeps z 6 although the last block is at z 5: cell z 6 has no block and keeps the lake water. Pivot = (0, 1, -1), the pilot cell right behind the helm (helm at (0, 2, -2), filler (0, 1, -2)), with the floor
+     * under it and the cells above free, the same relation to the helm as STEAMBOAT_PIVOT. Forbidden volume = whole prefab box.
+     */
+    static final int[] STEAMBOAT_PUBLIC_PIVOT = {0, 1, -1};
+    static final int[] STEAMBOAT_PUBLIC_PLACE_MIN = {-2, 0, -5};
+    static final int[] STEAMBOAT_PUBLIC_PLACE_MAX = {2, 5, 6};
+
+    /** The shuttle: a driverless small boat (no crate, crew, voyage, recall, ladders, paddle wheels, one propeller), burns no fuel (wired by the shuttle autopilot). */
+    static final Kind STEAMBOAT_PUBLIC = new Kind(STEAMBOAT_PUBLIC_KIND, "Steamboat_Public.prefab.json", "Airship_Helm", false,
+            STEAMBOAT_PUBLIC_PLACE_MIN, STEAMBOAT_PUBLIC_PLACE_MAX,
+            "lock.steamboat.break", "lock.steamboat.place", null, null,
+            new AirshipSpec("Steamboat_Public", "Steamboat_Public_Idle", "Steamboat_Public_Off", null, STEAMBOAT_PUBLIC_PIVOT,
+                    "Steamboat_Public", "Steamboat_Public", new String[]{"Airship_Exhaust_Smoke"}, new String[]{"Airship_Exhaust_Smoke"},
+                    "Airship_Exhaust_Smoke", "Steamboat_Chimney_Smoke_Thick",
+                    false, false, false, false, 0, 0.5f, true, null, "Propeller", "navette", true, null));
 
     static final String PUBLIC_KIND = "balloon_public";
 
@@ -260,13 +287,61 @@ final class Deployables {
             STATION_PLACE_MIN, STATION_PLACE_MAX,
             "lock.station.break", "lock.station.place");
 
+    static final String BOAT_STATION_KIND = "boat_station";
+
+    /**
+     * Boat station (shore kiosk and pier), prefab frame of Boat_Station.prefab.json, whole cells, before rotation. The pier deck
+     * (Wood_Hardwood_Planks_Half, y 0) is x 0..3, z 5..11; the original terrain water surface is y -1. Master NPC cell inside the
+     * kiosk, looking toward the shore end of the pier; the marker cell is the middle of the pier.
+     */
+    static final int[] BOAT_STATION_MASTER_POS = {-4, 0, 5};
+    static final float[] BOAT_STATION_MASTER_LOOK = {2f, 0f, 5f};
+    static final int[] BOAT_STATION_MARKER_CELL = {1, 0, 8};
+    /** Last deck cell of the pier on the water side: the column where the water surface is read. */
+    static final int[] BOAT_STATION_PIER_END = {1, 0, 11};
+    /**
+     * Berth of the shuttle (Steamboat_Public.prefab.json) in the station frame. Found by brute force over the 4 rotations and
+     * origins near the pier (search of 25 October 2026, not kept): no hull cell on a station block, every cell at station z >= 6
+     * (the water side of the prefab, the kiosk is on the shore at z 1..7), and the boarding step of the hull (the half plank
+     * Wood_Softwood_Planks_Half in the gap of each gunwale, prefab (+-2, 1, 0)) right against a deck half plank of the pier at the
+     * same height. Only berths across the end of the pier qualify (the lantern posts at x -1 and 4, z 6 and 10 are in the way of a
+     * boat moored along the pier). The shuttle lies across the end of the pier with its side to it (quarter turn, long axis along x,
+     * bow toward the station -x), its step at world (1, 0, 12) next to the last deck cell (1, 0, 11): the passengers walk from the
+     * pier onto the boat without a ladder. Hull at station z 12..16, closest of the valid berths to the pier end (the other ones
+     * only shift it by one column, or turn it the other way round). Origin y = -1: the waterline layer (prefab y 0, the floor) lands
+     * on the water surface y -1. The world rotation of the boat is the station rotation plus BOAT_STATION_BERTH_ROTATION.
+     */
+    static final int[] BOAT_STATION_BERTH_ORIGIN = {1, -1, 14};
+    /**
+     * Drop points of the shuttle passengers arriving at a boat station: the shore half of the pier deck (Wood_Hardwood_Planks_Half
+     * at y 0, x 0..3, z 6..8), away from the boarding step at the water end. Station frame, whole cells (the cell centre +0.5 is added
+     * when converted), feet on the top of the half plank plus 0.1. Every cell has two free cells above. Two points per seat (12).
+     */
+    static final float[][] BOAT_STATION_DROP_POINTS = {
+            {0f, 0.6f, 6f}, {1f, 0.6f, 6f}, {2f, 0.6f, 6f}, {3f, 0.6f, 6f},
+            {0f, 0.6f, 7f}, {1f, 0.6f, 7f}, {2f, 0.6f, 7f}, {3f, 0.6f, 7f},
+            {0f, 0.6f, 8f}, {1f, 0.6f, 8f}, {2f, 0.6f, 8f}, {3f, 0.6f, 8f}};
+    static final Rotation BOAT_STATION_BERTH_ROTATION = Rotation.Ninety;
+    private static final int[] BOAT_STATION_PLACE_MIN = {-6, -10, 1};
+    private static final int[] BOAT_STATION_PLACE_MAX = {5, 3, 11};
+
+    /** The boat station: marker = Boat_Station_Map, no burner, locked like the tents. */
+    static final Kind BOAT_STATION = new Kind(BOAT_STATION_KIND, "Boat_Station.prefab.json", "Boat_Station_Map", false,
+            BOAT_STATION_PLACE_MIN, BOAT_STATION_PLACE_MAX,
+            "lock.boatStation.break", "lock.boatStation.place");
+
     /** Vehicle types flown by AirshipManager (free-heading ships). */
     static final List<Kind> SHIPS = List.of(AIRSHIP, STEAMBOAT);
 
     private static final List<Kind> ALL = List.of(BALLOON, BALLOON_BASIC, BALLOON_TRANSPORT, BEDROLL, TENT, TENT_BIG, AIRSHIP, STEAMBOAT,
-            BALLOON_PUBLIC, STATION);
+            STEAMBOAT_PUBLIC, BALLOON_PUBLIC, STATION, BOAT_STATION);
 
     /** Tent types, in the order they are logged at startup. */
+    /** Every structure kind. */
+    static List<Kind> all() {
+        return ALL;
+    }
+
     static final List<Kind> TENTS = List.of(BEDROLL, TENT, TENT_BIG);
 
     /** Balloon types (T54), in the order recognition tries them. They share the same anchor burner. */
@@ -313,6 +388,9 @@ final class Deployables {
          * cage that rests on the ground. Its _Off variant is shown. Generated by the transport_nocage profile of prefab_to_model.py.
          */
         final String groundModelId;
+        /** Posts of the NPC pilot (null except for the large balloon) and whether the pilot can take the captain on voyages. */
+        final CrewSpec crewSpec;
+        final boolean voyage;
 
         BalloonSpec(String modelId, String crateItemId, int[] pivot, float[] nacelleMin, float[] nacelleMax,
                     String flameSystem, String boostSystem) {
@@ -321,6 +399,13 @@ final class Deployables {
 
         BalloonSpec(String modelId, String crateItemId, int[] pivot, float[] nacelleMin, float[] nacelleMax,
                     String flameSystem, String boostSystem, String groundModelId) {
+            this(modelId, crateItemId, pivot, nacelleMin, nacelleMax, flameSystem, boostSystem, groundModelId, null, false);
+        }
+
+        BalloonSpec(String modelId, String crateItemId, int[] pivot, float[] nacelleMin, float[] nacelleMax,
+                    String flameSystem, String boostSystem, String groundModelId, CrewSpec crewSpec, boolean voyage) {
+            this.crewSpec = crewSpec;
+            this.voyage = voyage;
             this.groundModelId = groundModelId;
             this.flameSystem = flameSystem;
             this.boostSystem = boostSystem;
@@ -383,11 +468,12 @@ final class Deployables {
         }
 
         /** Feature flags: which airship-only systems a ship kind takes part in. */
-        final boolean crew;
         final boolean voyage;
         final boolean recall;
         final boolean ladders;
         final boolean onePerPlayer;
+        /** Posts of the NPC pilot on this ship, null for a ship without a pilot. */
+        final CrewSpec crewSpec;
         /** Prefab-frame y of the highest layer under water when afloat (cells with y at or under it are submerged) (null: a dry ship, the airship). */
         final Integer waterlineY;
         /** Speed factor when going astern. */
@@ -396,8 +482,22 @@ final class Deployables {
         final boolean sternFollowsInReverse;
         /** Name of the model that carries the paddle wheel animations (null: no wheels, the airship). */
         final String wheelAnimPrefix;
+        /**
+         * Name of the stern propeller node (null: no propeller). The shuttle has one propeller instead of two wheels: its animations
+         * are the model's AnimationSets keys "<prefix>_<Spin>" (see PaddleWheels.propellerAnimationId).
+         */
+        final String propellerAnimPrefix;
+        /** True when the flight model has the animated "Helm" node (the helm block turns with the ship, see ShipHelm). All ships. */
+        final boolean helmAnimated = true;
         /** Word used for this ship in server log lines (lower case: "dirigeable", "bateau"). */
         final String logLabel;
+        /** True for a ship that burns no fuel (the public shuttle): the engine and the tank are not used. */
+        final boolean fuelless;
+
+        /** True for a ship that can have an NPC pilot. */
+        boolean hasCrew() {
+            return crewSpec != null;
+        }
 
         /** True for a ship that floats on water (it has a waterline). */
         boolean waterborne() {
@@ -407,11 +507,14 @@ final class Deployables {
         AirshipSpec(String modelId, String idleModelId, String offModelId, String crateItemId, int[] pivot,
                     String turnLeftModelId, String turnRightModelId, String[] turnLeftSystems, String[] turnRightSystems,
                     String smokeSystemId, String flameSystemId,
-                    boolean crew, boolean voyage, boolean recall, boolean ladders, boolean onePerPlayer,
+                    boolean voyage, boolean recall, boolean ladders, boolean onePerPlayer,
                     Integer waterlineY, float reverseSpeedFactor, boolean sternFollowsInReverse, String wheelAnimPrefix,
-                    String logLabel) {
+                    String propellerAnimPrefix, String logLabel, boolean fuelless, CrewSpec crewSpec) {
+            this.crewSpec = crewSpec;
             this.logLabel = logLabel;
+            this.fuelless = fuelless;
             this.wheelAnimPrefix = wheelAnimPrefix;
+            this.propellerAnimPrefix = propellerAnimPrefix;
             this.waterlineY = waterlineY;
             this.reverseSpeedFactor = reverseSpeedFactor;
             this.sternFollowsInReverse = sternFollowsInReverse;
@@ -421,7 +524,6 @@ final class Deployables {
             this.turnRightSystems = turnRightSystems;
             this.smokeSystemId = smokeSystemId;
             this.flameSystemId = flameSystemId;
-            this.crew = crew;
             this.voyage = voyage;
             this.recall = recall;
             this.ladders = ladders;
@@ -432,6 +534,37 @@ final class Deployables {
             this.crateItemId = crateItemId;
             this.pivot = new Vector3f(pivot[0], pivot[1], pivot[2]);
         }
+    }
+
+    /** Where an NPC pilot stands, rests and walks on a ship, and where the captain sits during a voyage (prefab frame). */
+    record CrewSpec(int[] helm, int[] rest, int[] door, int[] captainSeat, int[] desk, WalkPlan walk) {
+        /** Steps (prefab frame, block units) from a position to a post, excluding the post itself. */
+        interface WalkPlan {
+            List<double[]> legs(double[] from, CrewRecord.Post target);
+        }
+    }
+
+    /** Whether the NPC pilot of a vehicle type can take the captain on voyages (false for an unknown type). */
+    static boolean voyageOf(String kindId) {
+        for (Kind k : ALL) {
+            if (k.id.equals(kindId)) {
+                if (k.airship != null) {
+                    return k.airship.voyage;
+                }
+                return k.balloon != null && k.balloon.voyage;
+            }
+        }
+        return false;
+    }
+
+    /** Crew spec of a vehicle type, or null (unknown type, no pilot). */
+    static CrewSpec crewOf(String kindId) {
+        for (Kind k : ALL) {
+            if (k.id.equals(kindId)) {
+                return k.crew();
+            }
+        }
+        return null;
     }
 
     /**
@@ -480,6 +613,11 @@ final class Deployables {
         final AirshipSpec airship;
         private volatile StructureShape shape;
         private boolean warned;
+
+        /** Posts of the NPC pilot of this type, or null if it has none. */
+        CrewSpec crew() {
+            return airship != null ? airship.crewSpec : balloon != null ? balloon.crewSpec : null;
+        }
 
         Kind(String id, String prefabPath, String anchorBlock, boolean requireBurner, int[] placeMin, int[] placeMax,
              String messageBreak, String messagePlace) {

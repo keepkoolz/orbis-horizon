@@ -81,6 +81,8 @@ final class AirshipPassengers {
         /** Cell where the passenger stands on landing (free neighbour of the stool), prefab frame, floor height included. */
         final Vector3f exitLocal;
         volatile Mode mode;
+        /** A stranded entry (return to the departure pier) was written for this rider: deleted when he is released (shuttle). */
+        volatile boolean stranded;
         /** Flight settings changed (forced flight at zero speed): to be restored at the end. */
         boolean hover;
         boolean velActive;
@@ -119,9 +121,10 @@ final class AirshipPassengers {
 
     /**
      * Blocks whose every cell is one passenger seat: the collision-free Airship_Stool (T79), the game stool of airships placed
-     * before T79 and the tavern bench (2 cells, 2 seats in the game).
+     * before T79, the tavern bench (2 cells, 2 seats in the game) and the tavern stool of the small shuttle (1 cell, 1 seat).
      */
-    static final java.util.Set<String> SEAT_BLOCKS = java.util.Set.of("Airship_Stool", StructureShape.SEAT_BLOCK, "Furniture_Tavern_Bench");
+    static final java.util.Set<String> SEAT_BLOCKS = java.util.Set.of("Airship_Stool", StructureShape.SEAT_BLOCK, "Furniture_Tavern_Bench",
+            "Furniture_Tavern_Stool");
 
     /**
      * Passenger seats of the ship: every cell (origin and filler) of a seat block, sorted by z then x. A tavern bench gives 2
@@ -189,12 +192,15 @@ final class AirshipPassengers {
         return list;
     }
 
-    /** Cell of the captain's chair in the prefab (its filler cell (0, 9, 9) is never a seat). */
-    static final int[] CHAIR = {0, 8, 9};
-
     /** Rider for the captain on the chair during a voyage: built by hand, the chair is not one of the passenger seats. */
-    Rider chairRider(StructureShape s, BalloonManager.Occupant o) {
-        StructureShape.Cell c = new StructureShape.Cell(CHAIR[0], CHAIR[1], CHAIR[2], "Airship_Chair", 0);
+    Rider chairRider(Deployables.Kind kind, StructureShape s, BalloonManager.Occupant o) {
+        // The captain's chair (its filler cell above is never a seat) is the captainSeat of the crew spec.
+        Deployables.CrewSpec crewSpec = AirshipManager.spec(kind).crewSpec;
+        if (crewSpec == null || crewSpec.captainSeat() == null) {
+            return null; // no crew spec: no captain's chair
+        }
+        int[] chairCell = crewSpec.captainSeat();
+        StructureShape.Cell c = new StructureShape.Cell(chairCell[0], chairCell[1], chairCell[2], "Airship_Chair", 0);
         Mode m = mode;
         BalloonFlight.PassengerMode legacy = m == Mode.MOUNT ? BalloonFlight.PassengerMode.MOUNT
                 : m == Mode.CAMERA ? BalloonFlight.PassengerMode.CAMERA : BalloonFlight.PassengerMode.TELEPORT;
@@ -311,7 +317,9 @@ final class AirshipPassengers {
             BalloonManager.get().applyPose(store, p, now);
             PlayerRef pr = store.getComponent(p.ref, PlayerRef.getComponentType());
             if (pr != null) {
-                boolean chair = p.seatBlock != null && p.seatBlock.x == CHAIR[0] && p.seatBlock.y == CHAIR[1] && p.seatBlock.z == CHAIR[2];
+                Deployables.CrewSpec cs = Deployables.crewOf(f.kind.id);
+                boolean chair = cs != null && p.seatBlock != null && p.seatBlock.x == cs.captainSeat()[0] && p.seatBlock.y == cs.captainSeat()[1]
+                        && p.seatBlock.z == cs.captainSeat()[2];
                 pr.sendMessage(chair ? Texts.t("crew.voyage.seatedChair") : Texts.ship(f.kind, "passenger.seated"));
             }
             LOGGER.at(Level.INFO).log("Passager du dirigeable %s : tabouret %s, %s", p.name, p.seatBlock, r.mode);
@@ -527,6 +535,10 @@ final class AirshipPassengers {
 
     /** Undoes everything the flight changed on a rider (mount, velocity, flight settings, pose), without moving them. */
     private static void release(Store<EntityStore> store, Rider r) {
+        if (r.stranded) {
+            r.stranded = false;
+            BalloonResume.deleteStranded(r.p.uuid);
+        }
         try {
             if (!r.p.ref.isValid()) {
                 return;
@@ -579,6 +591,73 @@ final class AirshipPassengers {
         f.riders.clear();
     }
 
+    /** A shuttle could not leave: every rider prepared for it is released where he is. */
+    void releaseAll(Store<EntityStore> store, List<Rider> riders) {
+        for (Rider r : riders) {
+            release(store, r);
+        }
+    }
+
+    /** A shuttle flight ends without a landing: every rider is released and put on the surface under his seat. */
+    void releaseAll(Store<EntityStore> store, AirshipFlight f) {
+        for (Rider r : f.riders) {
+            try {
+                if (!r.p.ref.isValid()) {
+                    continue;
+                }
+                release(store, r);
+                if (!BalloonManager.isDead(store, r.p.ref)) {
+                    BalloonManager.putOnGround(store, f.world, r.p.ref, manager.shipPoint(f, r.p.seatLocal));
+                }
+            } catch (RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Passager de la navette %s non libéré proprement", r.p.name);
+            }
+        }
+        f.riders.clear();
+    }
+
+    /**
+     * Shuttle arrival: every rider is released and teleported on these points (spread over them, one tick later in CAMERA mode, as
+     * the transit balloon's drop). Returns the players set down (dead riders are released only). The riders list is cleared.
+     */
+    List<PlayerRef> releaseAt(Store<EntityStore> store, AirshipFlight f, List<Vector3d> points) {
+        List<PlayerRef> out = new ArrayList<>();
+        int i = 0;
+        for (Rider r : f.riders) {
+            try {
+                if (!r.p.ref.isValid()) {
+                    continue;
+                }
+                release(store, r);
+                if (BalloonManager.isDead(store, r.p.ref) || points.isEmpty()) {
+                    continue;
+                }
+                Vector3d spot = new Vector3d(points.get(i++ % points.size()));
+                TransformComponent st = store.getComponent(r.p.ref, TransformComponent.getComponentType());
+                if (st != null) {
+                    st.setPosition(spot); // also now: a deferred teleport can be lost at a server shutdown
+                }
+                if (r.mode == Mode.CAMERA) {
+                    f.world.execute(() -> { // the camera was reset by release, the teleport goes out one tick later
+                        if (r.p.ref.isValid()) {
+                            teleport(store, r.p.ref, spot);
+                        }
+                    });
+                } else {
+                    teleport(store, r.p.ref, spot);
+                }
+                PlayerRef pr = store.getComponent(r.p.ref, PlayerRef.getComponentType());
+                if (pr != null) {
+                    out.add(pr);
+                }
+            } catch (RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Passager de la navette %s non déposé proprement", r.p.name);
+            }
+        }
+        f.riders.clear();
+        return out;
+    }
+
     /** Removal by an administrator: every rider is released and put on the ground under their seat. */
     void dropAll(Store<EntityStore> store, AirshipFlight f, PlayerRef admin) {
         for (Rider r : f.riders) {
@@ -618,6 +697,23 @@ final class AirshipPassengers {
             Vector3d back = r.p.boardPos;
             t.setPosition(BalloonManager.groundBelow(f.world, back != null ? back : manager.shipPoint(f, r.p.seatLocal)));
         }
+    }
+
+    /**
+     * Shuttle rider who leaves the game (disconnect, server stop): released, put on this spot (a pier point of the departure station)
+     * and saved there with a stranded entry, applied when he arrives in the world (never an instant arrival). Never throws.
+     */
+    void dropOneAt(Store<EntityStore> store, AirshipFlight f, Rider r, Vector3d spot) {
+        f.riders.remove(r);
+        if (!r.p.ref.isValid()) {
+            return;
+        }
+        release(store, r);
+        TransformComponent t = store.getComponent(r.p.ref, TransformComponent.getComponentType());
+        if (t != null) {
+            t.setPosition(spot);
+        }
+        BalloonResume.writeStranded(r.p.uuid, f.world.getName(), spot.x, spot.y, spot.z);
     }
 
     /**

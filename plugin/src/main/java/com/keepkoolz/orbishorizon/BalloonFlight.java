@@ -42,6 +42,10 @@ final class BalloonFlight {
     final List<PassengerSeatView.State> seatViews = new CopyOnWriteArrayList<>();
     /** T119: standing mannequin of the pilot (dual rendering only). */
     volatile PilotMannequin.State pilotMan;
+    /** NPC pilot of the large balloon (read from the registry entry at take-off), null without one. */
+    volatile CrewRecord crew;
+    /** Seated mannequin of the NPC pilot during the flight. */
+    volatile AirshipCrew.Mannequin crewMan;
     /** Model parts (nodes beyond the client's per-entity limit), null if the type has none or the setting is off. */
     volatile VehicleParts.Group parts;
     /** T82: dual rendering is active for this flight (set at take-off, cleared when the flight collapses to a single entity). */
@@ -319,6 +323,8 @@ final class BalloonFlight {
 
     /** Transit flight data (public transport between stations), null for an ordinary balloon. */
     volatile TransitFlight transit;
+    /** NPC pilot voyage of the large balloon (flown by BalloonVoyage.step), null for every other flight. */
+    volatile BalloonVoyage voyage;
 
     BalloonFlight(UUID pilotUuid, Ref<EntityStore> pilotRef, World world, Rotation rotation, Deployables.Kind kind) {
         this.kind = kind;
@@ -326,6 +332,11 @@ final class BalloonFlight {
         this.pilotRef = pilotRef;
         this.world = world;
         this.rotation = rotation;
+    }
+
+    /** Test-only flight without a world (no pilot, no rotation). */
+    static BalloonFlight forTest(Deployables.Kind kind) {
+        return new BalloonFlight(java.util.UUID.randomUUID(), null, null, Rotation.None, kind);
     }
 
     /** Pilotless flight: the entity is moved by the server, nobody is mounted on it. */

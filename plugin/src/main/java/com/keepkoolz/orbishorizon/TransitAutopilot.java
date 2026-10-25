@@ -39,7 +39,7 @@ final class TransitAutopilot {
     private static final long AHEAD_INTERVAL_MS = 250;
     private static final double AHEAD_SPACING = 2.0;
     /** Distance at which the balloon is considered above the target point. */
-    private static final double ARRIVED = 0.3;
+    static final double ARRIVED = 0.3;
     /** Rough duration used for the "landing in N s" message when the quay is not docked (departure climb), in seconds. */
     private static final int HOLD_CLEAR_SECONDS = 15;
     /** Rough duration of one balloon cycle on the quay, per arrival waiting ahead (countdown plus departure), in seconds. */
@@ -171,7 +171,7 @@ final class TransitAutopilot {
         switch (t.phase) {
             case CLIMB -> {
                 climbing = true;
-                boolean blocked = moveVertical(world, s, f, f.descentSpeed * dt, now);
+                boolean blocked = moveVertical(world, s, f, t, f.descentSpeed * dt, now, true);
                 if (f.entityPos.y >= t.cruiseY || stuck(t, blocked, now)) {
                     if (dest == null) {
                         // Nowhere to go: back on the departure platform (the rerouting of removed stations is Task 9).
@@ -197,7 +197,7 @@ final class TransitAutopilot {
             case DESCEND -> {
                 if (t.groundLanding) {
                     // No station left to go to: straight down until a block or liquid stops the balloon, then the passengers are set down.
-                    boolean blocked = moveVertical(world, s, f, -f.descentSpeed * dt, now);
+                    boolean blocked = moveVertical(world, s, f, t, -f.descentSpeed * dt, now, true);
                     if (blocked || f.entityPos.y <= 1) {
                         BalloonManager.get().groundTransitPassengers(store, f);
                         finish(store, world, f, t);
@@ -206,7 +206,7 @@ final class TransitAutopilot {
                     break;
                 }
                 Vector3i dock = dest != null ? StationQueue.dockOrigin(dest) : null;
-                boolean blocked = moveVertical(world, s, f, -f.descentSpeed * dt, now);
+                boolean blocked = moveVertical(world, s, f, t, -f.descentSpeed * dt, now, true);
                 if (dock == null || f.entityPos.y <= dock.y || blocked) {
                     if (dock != null && f.entityPos.y < dock.y) {
                         f.entityPos.y = dock.y;
@@ -220,7 +220,7 @@ final class TransitAutopilot {
                     break;
                 }
                 climbing = true;
-                boolean blocked = moveVertical(world, s, f, f.descentSpeed * dt, now);
+                boolean blocked = moveVertical(world, s, f, t, f.descentSpeed * dt, now, true);
                 if (f.entityPos.y >= t.vanishY || stuck(t, blocked, now)) {
                     finish(store, world, f, t);
                     return;
@@ -283,10 +283,10 @@ final class TransitAutopilot {
                 holdMessage(store, f, t, dest, now);
                 int idx = StationQueue.holdOrder(dest, f.pilotUuid);
                 Vector3d hp = holdingPoint(pad, t.comingFrom != null ? t.comingFrom : f.entityPos, idx);
-                return flyToward(world, s, f, t, hp.x, hp.z, dt, now);
+                return flyToward(world, s, f, t, hp.x, hp.z, dt, now, true);
             }
         }
-        boolean climbing = flyToward(world, s, f, t, pad.x, pad.z, dt, now);
+        boolean climbing = flyToward(world, s, f, t, pad.x, pad.z, dt, now, true);
         if (t.claimed && Math.hypot(pad.x - f.entityPos.x, pad.z - f.entityPos.z) < ARRIVED) {
             t.setPhase(TransitFlight.Phase.DESCEND, now);
         }
@@ -314,8 +314,8 @@ final class TransitAutopilot {
      * One tick toward (tx, tz) at the cruise height. Returns true while climbing to clear an obstacle. Order: obstacle seen ahead (climb,
      * stop advancing, keep the new height), unloaded chunks ahead (wait up to CHUNK_WAIT_SECONDS then advance cell by cell), then advance.
      */
-    private static boolean flyToward(World world, StructureShape s, BalloonFlight f, TransitFlight t, double tx, double tz, double dt,
-                                     long now) {
+    static boolean flyToward(World world, StructureShape s, BalloonFlight f, TransitFlight t, double tx, double tz, double dt,
+                             long now, boolean ignoreHeight) {
         double dx = tx - f.entityPos.x;
         double dz = tz - f.entityPos.z;
         double dist = Math.hypot(dx, dz);
@@ -327,10 +327,10 @@ final class TransitAutopilot {
         double uz = dz / dist;
         if (now - t.lastAheadMs >= AHEAD_INTERVAL_MS) {
             t.lastAheadMs = now;
-            lookAhead(world, s, f, t, ux, uz, Math.min(f.cruiseSpeed * AHEAD_SECONDS, dist));
+            lookAhead(world, s, f, t, ux, uz, Math.min(f.cruiseSpeed * AHEAD_SECONDS, dist), ignoreHeight);
         }
         if (t.aheadBlocked) {
-            boolean blocked = moveVertical(world, s, f, f.descentSpeed * dt, now);
+            boolean blocked = moveVertical(world, s, f, t, f.descentSpeed * dt, now, ignoreHeight);
             t.cruiseY = Math.max(t.cruiseY, f.entityPos.y);
             return !blocked;
         }
@@ -347,7 +347,7 @@ final class TransitAutopilot {
         // Eased arrival: full speed, slowing over the last blocks so the passengers' follow velocity does not jump.
         double speed = Math.min(f.cruiseSpeed, Math.max(0.5, dist * 2));
         double step = Math.min(speed * dt, dist);
-        if (moveHorizontal(world, s, f, ux * step, uz * step)) {
+        if (moveHorizontal(world, s, f, ux * step, uz * step, ignoreHeight)) {
             t.lastProgressMs = now;
         } else {
             t.aheadBlocked = true; // the next cell is not free: climb on the next ticks, the look-ahead re-tests in 250 ms
@@ -356,7 +356,8 @@ final class TransitAutopilot {
     }
 
     /** Tests the flight shape along the direction (every AHEAD_SPACING blocks up to maxDist) and sets aheadBlocked and aheadUnloaded. */
-    private static void lookAhead(World world, StructureShape s, BalloonFlight f, TransitFlight t, double ux, double uz, double maxDist) {
+    private static void lookAhead(World world, StructureShape s, BalloonFlight f, TransitFlight t, double ux, double uz, double maxDist,
+                                  boolean ignoreHeight) {
         boolean blocked = false;
         boolean unloaded = false;
         int[] ext = extent(s, f, t);
@@ -368,7 +369,7 @@ final class TransitAutopilot {
                 unloaded = true;
                 break;
             }
-            if (BalloonManager.collision(world, s, cell, f.rotation, true) != null) {
+            if (BalloonManager.collision(world, s, cell, f.rotation, ignoreHeight) != null) {
                 blocked = true;
                 break;
             }
@@ -407,15 +408,14 @@ final class TransitAutopilot {
      * Moves the entity vertically by dy blocks (continuous), testing each new cell crossed with the flight shape (cells above the
      * construction limit are free). Stops exactly at the last free cell. Returns true if a block stopped the move. Progress time is updated.
      */
-    private static boolean moveVertical(World world, StructureShape s, BalloonFlight f, double dy, long now) {
-        TransitFlight t = f.transit;
+    static boolean moveVertical(World world, StructureShape s, BalloonFlight f, TransitFlight t, double dy, long now, boolean ignoreHeight) {
         double y = f.entityPos.y + dy;
         int cell = f.lastCheckedOrigin.y;
         boolean blocked = false;
         if (dy >= 0) {
             while (y >= cell + 1) {
                 Vector3i next = new Vector3i(f.lastCheckedOrigin).add(0, 1, 0);
-                if (BalloonManager.collision(world, s, next, f.rotation, true) != null) {
+                if (BalloonManager.collision(world, s, next, f.rotation, ignoreHeight) != null) {
                     blocked = true;
                     y = cell + 0.999;
                     break;
@@ -426,7 +426,7 @@ final class TransitAutopilot {
         } else {
             while (y < cell) {
                 Vector3i next = new Vector3i(f.lastCheckedOrigin).add(0, -1, 0);
-                if (BalloonManager.collision(world, s, next, f.rotation, true) != null) {
+                if (BalloonManager.collision(world, s, next, f.rotation, ignoreHeight) != null) {
                     blocked = true;
                     y = cell;
                     break;
@@ -443,14 +443,14 @@ final class TransitAutopilot {
     }
 
     /** Moves the entity horizontally (continuous). If the move enters a new origin cell, that cell must be free: otherwise nothing moves. */
-    private static boolean moveHorizontal(World world, StructureShape s, BalloonFlight f, double dx, double dz) {
+    private static boolean moveHorizontal(World world, StructureShape s, BalloonFlight f, double dx, double dz, boolean ignoreHeight) {
         double nx = f.entityPos.x + dx;
         double nz = f.entityPos.z + dz;
         int cx = (int) Math.floor(nx);
         int cz = (int) Math.floor(nz);
         if (cx != f.lastCheckedOrigin.x || cz != f.lastCheckedOrigin.z) {
             Vector3i next = new Vector3i(cx, f.lastCheckedOrigin.y, cz);
-            if (BalloonManager.collision(world, s, next, f.rotation, true) != null) {
+            if (BalloonManager.collision(world, s, next, f.rotation, ignoreHeight) != null) {
                 return false;
             }
             f.lastCheckedOrigin.set(next);
@@ -484,7 +484,7 @@ final class TransitAutopilot {
         beginVanish(f, t, now);
     }
 
-    private static void welcome(PlayerRef pr, TransitNetwork.Station dest) {
+    static void welcome(PlayerRef pr, TransitNetwork.Station dest) {
         try {
             pr.sendMessage(Texts.t("transit.arrival.welcome").param("name", dest.name));
             // The station name is a proper noun chosen by a player, not translatable text.

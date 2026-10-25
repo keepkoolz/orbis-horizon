@@ -48,7 +48,21 @@ final class BalloonRegistry {
      */
     record Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
                  java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall,
-                 java.util.List<ShipLadder.Saved> ladders) {
+                 java.util.List<ShipLadder.Saved> ladders, String wood, WaterLog water) {
+        /** An entry without a water log (everything but a boat with a log). */
+        Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
+              java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall,
+              java.util.List<ShipLadder.Saved> ladders, String wood) {
+            this(world, x, y, z, rotation, kind, owner, descent, open, animals, id, ownerName, shared, crew, recall, ladders, wood, null);
+        }
+
+        /** An entry without a wood species (the prefab as it is). */
+        Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
+              java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall,
+              java.util.List<ShipLadder.Saved> ladders) {
+            this(world, x, y, z, rotation, kind, owner, descent, open, animals, id, ownerName, shared, crew, recall, ladders, null);
+        }
+
         /** An entry without rope ladders (retracted). */
         Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
               java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall) {
@@ -181,10 +195,28 @@ final class BalloonRegistry {
     static StructureShape shapeOf(Entry e) {
         Deployables.Kind kind = kindOf(e);
         StructureShape base = kind == null ? null : kind.shapeOrNull();
+        if (base != null && e.wood() != null && Deployables.BOAT_STATION_KIND.equals(e.kind())) {
+            return BOAT_WOOD_SHAPES.computeIfAbsent(e.wood(), w -> remapShape(base, BiomeWood.woodOf(w)));
+        }
         if (base == null || !TransportCage.isTransport(kind)) {
             return base;
         }
         return TransportCage.shapeFor(base, e.descent(), e.open());
+    }
+
+    private static final java.util.Map<String, StructureShape> BOAT_WOOD_SHAPES = new ConcurrentHashMap<>();
+
+    /** The shape with every block name passed through BiomeWood.remap (same positions, fillers and rotations of the prefab). */
+    static StructureShape remapShape(StructureShape base, BiomeWood.Wood wood) {
+        return remapShape(base, wood, BiomeWood::blockExists);
+    }
+
+    static StructureShape remapShape(StructureShape base, BiomeWood.Wood wood, java.util.function.Predicate<String> exists) {
+        java.util.List<StructureShape.Cell> cells = new java.util.ArrayList<>(base.cells().size());
+        for (StructureShape.Cell c : base.cells()) {
+            cells.add(new StructureShape.Cell(c.x(), c.y(), c.z(), BiomeWood.remap(c.name(), wood, exists), c.filler()));
+        }
+        return base.withCells(cells);
     }
 
     /**
@@ -229,7 +261,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, old.crew, recall, old.ladders);
+                old.animals, old.id, old.ownerName, old.shared, old.crew, recall, old.ladders, old.wood, old.water);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -249,7 +281,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, descent, open, old.animals,
-                old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders);
+                old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         cageDirty = true;
@@ -269,7 +301,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, java.util.List.copyOf(ladders));
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, java.util.List.copyOf(ladders), old.wood, old.water);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         cageDirty = true;
@@ -289,7 +321,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                java.util.List.copyOf(animals), old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders);
+                java.util.List.copyOf(animals), old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -297,16 +329,55 @@ final class BalloonRegistry {
     }
 
     /**
-     * Sets the NPC pilot (T133) of a placed airship, written at once. A null crew removes the pilot. Returns the new
+     * Sets the NPC pilot (T133) of a placed ship of the given kind, written at once. A null crew removes the pilot. Returns the new
      * entry, null if not registered.
      */
-    static synchronized Entry setCrew(World world, Vector3i origin, Rotation rotation, CrewRecord crew) {
-        Entry old = get(world, origin, rotation, Deployables.AIRSHIP_KIND);
+    static synchronized Entry setCrew(World world, Vector3i origin, Rotation rotation, String kindId, CrewRecord crew) {
+        Entry old = get(world, origin, rotation, kindId);
         if (old == null) {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, crew, old.recall, old.ladders);
+                old.animals, old.id, old.ownerName, old.shared, crew, old.recall, old.ladders, old.wood, old.water);
+        ENTRIES.remove(old);
+        ENTRIES.add(next);
+        save();
+        return next;
+    }
+
+    /** Sets the water log of a placed boat, written at once. Null if not registered. The log is stored as given: pass a copy. */
+    static synchronized Entry setWater(World world, Vector3i origin, Rotation rotation, String kindId, WaterLog water) {
+        Entry old = get(world, origin, rotation, kindId);
+        if (old == null) {
+            return null;
+        }
+        Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, water);
+        ENTRIES.remove(old);
+        ENTRIES.add(next);
+        save();
+        return next;
+    }
+
+    /** Sets the wood species of a placed boat station, written at once. Null if not registered. */
+    static synchronized Entry setWood(World world, Vector3i origin, Rotation rotation, String kind, String wood) {
+        return setWoodNamed(world.getName(), origin, rotation, kind, wood);
+    }
+
+    /** Same as setWood with the world name (also used by tests). */
+    static synchronized Entry setWoodNamed(String worldName, Vector3i origin, Rotation rotation, String kind, String wood) {
+        Entry old = null;
+        for (Entry e : ENTRIES) {
+            if (e.world.equals(worldName) && e.x == origin.x && e.y == origin.y && e.z == origin.z && e.rotation == rotation
+                    && e.kind.equals(kind)) {
+                old = e;
+            }
+        }
+        if (old == null) {
+            return null;
+        }
+        Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, wood, old.water);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -383,7 +454,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, shared, old.crew, old.recall, old.ladders);
+                old.animals, old.id, old.ownerName, shared, old.crew, old.recall, old.ladders, old.wood, old.water);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -586,6 +657,12 @@ final class BalloonRegistry {
         if (e.recall != null) {
             d.put("recall", e.recall.toBson());
         }
+        if (e.wood != null) {
+            d.put("wood", new BsonString(e.wood));
+        }
+        if (e.water != null && !e.water.isEmpty()) {
+            d.put("water", e.water.toBson());
+        }
         if (!e.ladders.isEmpty()) {
             org.bson.BsonArray a = new org.bson.BsonArray();
             for (ShipLadder.Saved l : e.ladders) {
@@ -622,7 +699,9 @@ final class BalloonRegistry {
                 d.containsKey("crew") ? CrewRecord.fromBson(d.getDocument("crew")) : null,
                 // T145: recall mark of an airship waiting above a station, absent otherwise.
                 d.containsKey("recall") ? Recall.fromBson(d.getDocument("recall")) : null,
-                d.containsKey("ladders") ? laddersFromBson(d.getArray("ladders")) : java.util.List.of());
+                d.containsKey("ladders") ? laddersFromBson(d.getArray("ladders")) : java.util.List.of(),
+                d.containsKey("wood") ? d.getString("wood").getValue() : null,
+                d.containsKey("water") ? WaterLog.fromBson(d.getDocument("water")) : null);
     }
 
     private static void load() {

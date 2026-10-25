@@ -44,14 +44,16 @@ final class StationNamePage extends InteractiveCustomUIPage<StationNamePage.Data
     private final World world;
     private final Vector3i origin;
     private final Rotation rotation;
+    private final String kind;
     private boolean done;
     private final long openedMs = System.currentTimeMillis();
 
-    StationNamePage(PlayerRef player, World world, Vector3i origin, Rotation rotation) {
+    StationNamePage(PlayerRef player, World world, Vector3i origin, Rotation rotation, String kind) {
         super(player, CustomPageLifetime.CanDismiss, Data.CODEC);
         this.world = world;
         this.origin = origin;
         this.rotation = rotation;
+        this.kind = kind;
         OPEN.put(player.getUuid(), this);
     }
 
@@ -114,7 +116,7 @@ final class StationNamePage extends InteractiveCustomUIPage<StationNamePage.Data
         }
         done = true;
         OPEN.remove(playerRef.getUuid(), this);
-        DeployStationInteraction.completeRegistration(world, origin, rotation, playerRef.getUuid(), name, playerRef);
+        DeployStationInteraction.completeRegistration(world, origin, rotation, playerRef.getUuid(), name, playerRef, kind);
     }
 
     /**

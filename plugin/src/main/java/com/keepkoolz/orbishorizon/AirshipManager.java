@@ -214,6 +214,26 @@ final class AirshipManager {
         return flights.containsKey(pilot);
     }
 
+    /** T5 of lot 3: the voyages of this world seen by the captain's map. */
+    List<CaptainMap.VoyageView> voyageViews(World world) {
+        List<CaptainMap.VoyageView> out = new ArrayList<>();
+        for (AirshipFlight f : flights()) {
+            if (f.world != world || f.voyage == null) {
+                continue;
+            }
+            UUID captain = f.voyage.captain;
+            Ref<EntityStore> ref = null;
+            for (AirshipPassengers.Rider r : f.riders) {
+                if (r.p.uuid.equals(captain)) {
+                    ref = r.p.ref;
+                }
+            }
+            out.add(new CaptainMap.VoyageView(captain, ref, f.pos, f.crew, f.voyage.ridersReleased,
+                    () -> AirshipAutopilot.stop(f, CaptainMap.STOP_KEY)));
+        }
+        return out;
+    }
+
     /** The flights in progress. */
     Iterable<AirshipFlight> flights() {
         return flights.values();
@@ -313,6 +333,41 @@ final class AirshipManager {
         SectionReader reader = new SectionReader(world.getChunkStore());
         return blocked((x, y, z, wet) -> wet ? !SteamboatWater.isWaterCell(reader, x, y, z) : BalloonManager.blocksBalloon(reader, x, y, z),
                 h, px, py, pz, theta, limit);
+    }
+
+    /**
+     * First world cell refusing this hull pose, as {x, y, z, wet (1 = a cell under the waterline that is not water)}, or null when the pose is
+     * free. For logs and for the cells a shuttle route must avoid; same samples and tests as {@link #blocked}.
+     */
+    static int[] firstBlockingCell(World world, Hull h, double px, double py, double pz, double theta, int allowed) {
+        SectionReader reader = new SectionReader(world.getChunkStore());
+        int[][] hit = new int[1][];
+        int[] seen = new int[1];
+        blocked((x, y, z, wet) -> {
+            boolean b = wet ? !SteamboatWater.isWaterCell(reader, x, y, z) : BalloonManager.blocksBalloon(reader, x, y, z);
+            if (b && ++seen[0] == allowed + 1) {
+                hit[0] = new int[] {x, y, z, wet ? 1 : 0}; // the first cell beyond the ones the hull may already touch
+            }
+            return b;
+        }, h, px, py, pz, theta, allowed);
+        return hit[0];
+    }
+
+    /** Text of a blocking cell of {@link #firstBlockingCell} for the log: the world block (or liquid) found there. */
+    static String describeCell(World world, int[] cell) {
+        if (cell == null) {
+            return "aucune case";
+        }
+        try {
+            SectionReader reader = new SectionReader(world.getChunkStore());
+            BlockType bt = SectionBlocks.typeAt(reader, cell[0], cell[1], cell[2]);
+            String liquid = BalloonManager.liquidAt(reader, cell[0], cell[1], cell[2]);
+            return String.format(Locale.ROOT, "case (%d, %d, %d) %s : bloc %s, fluide %s", cell[0], cell[1], cell[2],
+                    cell[3] == 1 ? "sous la ligne de flottaison sans eau" : "à l'air libre", bt != null ? bt.getId() : "aucun",
+                    liquid != null ? liquid : "aucun");
+        } catch (RuntimeException e) {
+            return String.format(Locale.ROOT, "case (%d, %d, %d)", cell[0], cell[1], cell[2]);
+        }
     }
 
     /** Whether a world cell blocks a hull sample; wet is true for a sample of a cell under the waterline (it needs water). */
@@ -425,12 +480,12 @@ final class AirshipManager {
         // T137: the helm refuses while the pilot NPC holds it or is not seated yet.
         BalloonRegistry.Entry entry = BalloonRegistry.get(world, origin, rotation, kind.id);
         CrewRecord crew = entry != null ? entry.crew() : null;
-        String refusal = spec(kind).crew ? AirshipCrew.helmRefusalKey(crew, AirshipCrew.state(world, entry)) : null;
+        String refusal = spec(kind).hasCrew() ? AirshipCrew.helmRefusalKey(crew, AirshipCrew.state(world, entry)) : null;
         if (refusal != null) {
             return Texts.pilot(refusal, crew);
         }
         // A pilot NPC sits on the cabin stool: it is no passenger seat (14 places instead of 15).
-        Set<Vector3i> excluded = spec(kind).crew && crew != null ? Set.of(new Vector3i(AirshipCrew.STOOL[0], AirshipCrew.STOOL[1], AirshipCrew.STOOL[2])) : Set.of();
+        Set<Vector3i> excluded = spec(kind).hasCrew() && crew != null ? Set.of(new Vector3i(spec(kind).crewSpec.rest()[0], spec(kind).crewSpec.rest()[1], spec(kind).crewSpec.rest()[2])) : Set.of();
         // T64: the other players aboard become passengers on the stools; more players than stools: take-off refused.
         // T145: the refusals come before anything is changed above a station (the climbers on the rungs count as aboard).
         int seats = AirshipPassengers.seats(s, excluded).size(); // stools and tavern benches (2 seats each)
@@ -549,7 +604,8 @@ final class AirshipManager {
         for (AirshipPassengers.Rider r : f.riders) {
             PlayerRef pr = playerOf(store, r.p.ref);
             if (pr != null) {
-                pr.sendMessage(Texts.pilot("crew.voyage.arrived", f.crew).param("dest", v.destName));
+                pr.sendMessage(ShipVoyage.withDest(Texts.pilot(spec(f.kind).waterborne() ? "crew.voyage.arrivedBoat" : "crew.voyage.arrived",
+                        f.crew), v.destKind, v.destName));
             }
         }
     }
@@ -594,12 +650,14 @@ final class AirshipManager {
         if (capRef == null || !capRef.isValid()) {
             return Texts.t("error.noPosition");
         }
+        // The ship type is the entry's (the airship, or the steamboat); the airship when the entry is unknown.
+        Deployables.Kind entryKind = e != null ? Deployables.get(e.kind()) : null;
+        Deployables.Kind kind = entryKind != null && entryKind.airship != null ? entryKind : Deployables.AIRSHIP;
         if (flights.containsKey(captain.getUuid()) || BalloonManager.get().isFlying(captain.getUuid())) {
-            return Texts.ship(Deployables.AIRSHIP, "error.alreadyPiloting");
+            return Texts.ship(kind, "error.alreadyPiloting");
         }
-        Deployables.Kind kind = Deployables.AIRSHIP;
         if (!spec(kind).voyage) {
-            return Texts.ship(Deployables.AIRSHIP, "error.noAirship");
+            return Texts.ship(kind, "error.noAirship");
         }
         StructureShape s;
         try {
@@ -607,7 +665,7 @@ final class AirshipManager {
         } catch (IOException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Voyage : lecture du prefab du dirigeable impossible");
             Telemetry.error("airship.autopilot", ex, Telemetry.kindId(kind), null);
-            return Texts.ship(Deployables.AIRSHIP, "error.prefabUnreadable").param("error", String.valueOf(ex.getMessage()));
+            return Texts.ship(kind, "error.prefabUnreadable").param("error", String.valueOf(ex.getMessage()));
         }
         TransformComponent pt = store.getComponent(capRef, TransformComponent.getComponentType());
         if (pt == null) {
@@ -623,7 +681,7 @@ final class AirshipManager {
         } else {
             BalloonManager.Found found = BalloonManager.get().find(world, new Vector3d(pt.getPosition()), List.of(kind));
             if (found == null) {
-                return Texts.ship(Deployables.AIRSHIP, "error.noAirship");
+                return Texts.ship(kind, "error.noAirship");
             }
             origin = found.origin();
             rotation = found.rotation();
@@ -631,7 +689,7 @@ final class AirshipManager {
         BalloonRegistry.Entry entry = BalloonRegistry.get(world, origin, rotation, kind.id);
         if (entry == null || entry.crew() == null || e == null || e.crew() == null || !entry.crew().uuid().equals(e.crew().uuid())
                 || !captain.getUuid().equals(entry.owner()) || AirshipCrew.state(world, entry) != AirshipCrew.CrewState.AT_HELM) {
-            return Texts.ship(Deployables.AIRSHIP, "error.noAirship");
+            return Texts.ship(kind, "error.noAirship");
         }
         AirshipDesk.cancel(world, entry);
         Message preflight = preflight(kind, world, s, origin, rotation);
@@ -648,8 +706,17 @@ final class AirshipManager {
             Message m = Texts.pilot(refusal, entry.crew());
             return "airship.error.full".equals(refusal) ? m.param("max", seats + 1).param("extra", onBoard - seats) : m;
         }
+        // A boat sails a path planned on its water log: planned first (over a few ticks), then this method runs again with it.
+        List<int[]> plan = null;
+        if (spec(kind).waterborne()) {
+            plan = ShipVoyage.takePlan(world, entry, d);
+            if (plan == null) {
+                Message refused = ShipVoyage.plan(store, world, captain, entry, d, onAccepted);
+                return refused != null ? refused : DEFERRED;
+            }
+        }
         // The rope ladders come up first; the voyage then starts by itself (the refusals are passed, onAccepted runs once).
-        ShipLadder.Defer defer = ShipLadder.deferDeparture(world, origin, rotation,
+        ShipLadder.Defer defer = !spec(kind).ladders ? ShipLadder.Defer.PROCEED : ShipLadder.deferDeparture(world, origin, rotation,
                 () -> capRef.isValid() && captainInside(store, capRef, s, origin, rotation),
                 () -> {
                     Message later = startVoyage(store, world, captain, e, d, null);
@@ -669,10 +736,16 @@ final class AirshipManager {
         }
         List<BalloonManager.Occupant> aboard = AirshipPassengers.aboard(store, world, s, origin, rotation, captain.getUuid());
         List<AirshipPassengers.Rider> riders = new ArrayList<>(passengers.assign(store, s, origin, rotation, aboard, Set.of()));
-        riders.add(0, passengers.chairRider(s, new BalloonManager.Occupant(captain, capRef, 0)));
-        Message launched = launchVoyage(store, world, s, origin, rotation, captain, riders, d, null, captain.getUuid(), captain.getUsername());
+        AirshipPassengers.Rider chair = passengers.chairRider(kind, s, new BalloonManager.Occupant(captain, capRef, 0));
+        if (chair != null) {
+            riders.add(0, chair);
+        }
+        Message launched = launchVoyage(kind, store, world, s, origin, rotation, captain, riders, d, plan, null, captain.getUuid(),
+                captain.getUsername());
         if (launched != null) {
-            AirshipRecall.restoreMark(world, origin, rotation);
+            if (spec(kind).recall) {
+                AirshipRecall.restoreMark(world, origin, rotation);
+            }
         } else {
             Telemetry.count("airship.voyage");
         }
@@ -751,27 +824,32 @@ final class AirshipManager {
             LOGGER.at(Level.WARNING).log("Rappel : %d joueur(s) sans place posé(s) sur le quai", aboard.size() - riders.size());
         }
         if (captain != null) {
-            riders.add(0, passengers.chairRider(s, new BalloonManager.Occupant(captain, captain.getReference(), 0)));
+            AirshipPassengers.Rider chair = passengers.chairRider(Deployables.AIRSHIP, s, new BalloonManager.Occupant(captain, captain.getReference(), 0));
+            if (chair != null) {
+                riders.add(0, chair);
+            }
         }
-        return launchVoyage(store, world, s, origin, rotation, captain, riders, null, r, entry.owner(), entry.ownerName());
+        return launchVoyage(Deployables.AIRSHIP, store, world, s, origin, rotation, captain, riders, null, null, r, entry.owner(),
+                entry.ownerName());
     }
 
-    private Message launchVoyage(Store<EntityStore> store, World world, StructureShape s, Vector3i origin, Rotation rotation,
-                                 PlayerRef captain, List<AirshipPassengers.Rider> riders, VoyagePlanner.Destination d,
-                                 RecallState leave, UUID ownerId, String ownerName) {
-        if (!ShipLadder.allUp(world, origin, rotation)) {
-            LOGGER.at(Level.WARNING).log("Décollage refusé : échelle encore descendue");
-            return Texts.ship(Deployables.AIRSHIP, "error.noAirship");
-        }
-        Deployables.Kind kind = Deployables.AIRSHIP;
+    /** plan: the waypoints of a boat (null for the airship). */
+    private Message launchVoyage(Deployables.Kind kind, Store<EntityStore> store, World world, StructureShape s, Vector3i origin,
+                                 Rotation rotation, PlayerRef captain, List<AirshipPassengers.Rider> riders, VoyagePlanner.Destination d,
+                                 List<int[]> plan, RecallState leave, UUID ownerId, String ownerName) {
         Deployables.AirshipSpec spec = spec(kind);
+        if (spec.ladders && !ShipLadder.allUp(world, origin, rotation)) {
+            LOGGER.at(Level.WARNING).log("Décollage refusé : échelle encore descendue");
+            return Texts.ship(kind, "error.noAirship");
+        }
+        boolean boat = spec.waterborne() && plan != null && leave == null;
         UUID id = UUID.randomUUID();
         AirshipFlight f = new AirshipFlight(id, id, null, "pilote PNJ", world, kind);
         initFlight(f, spec, origin, rotation);
         // The riders are held in the air before the floor goes, and listed in the flight for the resume file.
         passengers.prepare(store, riders);
         f.riders.addAll(riders);
-        RecallState parked = AirshipRecall.parkedAt(world, origin, rotation); // T145: ship waiting above a station
+        RecallState parked = spec.recall ? AirshipRecall.parkedAt(world, origin, rotation) : null; // T145: ship waiting above a station
         Detached detached = detachStructure(store, world, s, origin, rotation, f);
         Ref<EntityStore> ship = spawnShip(store, f, spec.idleModelId);
         if (ship == null) {
@@ -788,14 +866,28 @@ final class AirshipManager {
         f.parts = VehicleParts.spawn(store, partsMode, spec.modelId, ship, f.shipUuid, null, null);
         long now = System.currentTimeMillis();
         if (detached.crewLook() != null) {
-            // The pilot stands at the helm: the pivot cell, feet on the deck, no seat offset.
-            f.crewMan = AirshipCrew.createMannequin(store, f.shipUuid, ship, null, null, shipPoint(f, pivot(kind)), new Vector3f(),
+            // The pilot stands at the helm post of the crew spec (the pivot cell of the airship), feet on the deck, no seat offset.
+            int[] helm = spec.crewSpec != null ? spec.crewSpec.helm() : null;
+            Vector3f post = helm != null ? new Vector3f(helm[0], helm[1], helm[2]) : pivot(kind);
+            f.crewMan = AirshipCrew.createMannequin(store, f.shipUuid, ship, null, null, shipPoint(f, post), new Vector3f(),
                     detached.crewLook(), now, AirshipCrew.POSE_STAND);
         }
         f.takeoffMs = now;
         spawnLights(store, f, s);
         int departureY = f.lastValidPivotCell.y;
-        if (leave == null) {
+        if (boat) {
+            // The boat keeps its waterline and sails the planned path; the destination is the last waypoint (rotation centre column).
+            f.lockedY = f.pos.y;
+            int[] goal = plan.get(plan.size() - 1);
+            double[] g = ShipVoyage.goalOf(f.water, d, null, null); // a stop gives its heading, a station none (NaN)
+            // Same column convention as the destinations: dest x, z = the rotation centre column.
+            f.voyage = new VoyageState(d.name(), d.kind(), goal[0], goal[1], f.pos.y, captain.getUuid());
+            Vector3d home = centerWorld(kind, f.pos, f.theta); // where it was moored: a pose known to fit (back-off, last point)
+            f.voyage.homeColumn = new int[] {(int) Math.floor(home.x), (int) Math.floor(home.z)};
+            f.voyage.homeTheta = f.theta;
+            f.voyage.phase = VoyageState.Phase.CRUISE;
+            f.voyage.water = ShipVoyage.sailing(f, plan, g != null ? g[2] : Double.NaN);
+        } else if (leave == null) {
             f.voyage = new VoyageState(d.name(), d.kind(), d.x(), d.z(),
                     VoyagePlanner.cruiseY(departureY, d.groundY(), BalloonManager.WORLD_MAX_Y), captain.getUuid());
         } else {
@@ -817,17 +909,164 @@ final class AirshipManager {
             for (AirshipPassengers.Rider r : f.riders) {
                 PlayerRef pr = playerOf(store, r.p.ref);
                 if (pr != null) {
-                    pr.sendMessage(Texts.pilot("crew.voyage.depart", f.crew).param("dest", d.name()));
+                    pr.sendMessage(ShipVoyage.withDest(Texts.pilot("crew.voyage.depart", f.crew), d.kind(), d.name()));
                 }
             }
-            LOGGER.at(Level.INFO).log("Voyage : décollage du dirigeable de %s vers %s (%s, %.0f, %.0f), croisière à y %.0f, %d blocs retirés, "
-                            + "%d joueur(s) à bord", ownerName, d.name(), d.kind(), d.x(), d.z(), f.voyage.cruiseY, detached.removed(),
-                    f.riders.size());
+            LOGGER.at(Level.INFO).log("Voyage : décollage du %s de %s vers %s (%s, %.0f, %.0f), croisière à y %.0f, %d blocs retirés, "
+                            + "%d joueur(s) à bord%s", spec.logLabel, ownerName, d.name(), d.kind(), f.voyage.destX, f.voyage.destZ,
+                    f.voyage.cruiseY, detached.removed(), f.riders.size(), boat ? ", " + plan.size() + " point(s) de passage" : "");
         } else {
             LOGGER.at(Level.INFO).log("Rappel : le dirigeable de %s décolle de %s, %d blocs retirés, %d joueur(s) à bord", ownerName,
                     leave.station.name, detached.removed(), f.riders.size());
         }
         return null;
+    }
+
+    /**
+     * Maritime shuttle: a pilotless STEAMBOAT_PUBLIC flight that appears at this pivot and heading on the water (no blocks to remove:
+     * the departure from a moored shuttle in blocks removes them first), its height locked, sailed by BoatAutopilot. The riders
+     * (possibly none) are seated like voyage passengers. The helm mannequin stands at the pivot with the look of the departure
+     * station master (no mannequin if helmLook is null). No resume file is written for the shuttle. Returns the flight, or null if
+     * the prefab or the model is missing (the riders are then released). Call on the world thread.
+     */
+    AirshipFlight launchShuttle(Store<EntityStore> store, World world, Vector3d pivot, double theta, ShuttleState state,
+                                List<AirshipPassengers.Rider> riders, Object[] helmLook) {
+        Deployables.Kind kind = Deployables.STEAMBOAT_PUBLIC;
+        Deployables.AirshipSpec spec = spec(kind);
+        StructureShape s;
+        try {
+            s = kind.shape();
+        } catch (IOException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Navette : lecture du prefab impossible");
+            Telemetry.error("transit", e, Telemetry.kindId(kind), null);
+            passengers.releaseAll(store, riders);
+            return null;
+        }
+        UUID id = UUID.randomUUID();
+        AirshipFlight f = new AirshipFlight(id, id, null, "navette", world, kind);
+        long now = System.currentTimeMillis();
+        f.pos.set(pivot);
+        f.theta = theta;
+        f.lockedY = pivot.y; // the hull stays on the waterline
+        if (spec.wheelAnimPrefix != null || spec.propellerAnimPrefix != null) {
+            f.wheels = new PaddleWheels.State(spec.propellerAnimPrefix);
+        }
+        if (spec.helmAnimated) {
+            f.helmState = new ShipHelm.State();
+        }
+        f.modelId = spec.idleModelId;
+        f.lastValidPos.set(f.pos);
+        f.lastValidTheta = f.theta;
+        f.lastValidPivotCell.set(f.pivotCell(f.pos));
+        f.takeoffOrigin.set(f.lastValidPivotCell);
+        f.lastTickMs = now;
+        // A shuttle that appears slightly embedded may still move out (accept keeps the count up to date).
+        f.blockedNow = blocked(world, hullOf(kind, s), f.pos.x, f.pos.y, f.pos.z, f.theta, Integer.MAX_VALUE);
+        passengers.prepare(store, riders);
+        f.riders.addAll(riders);
+        Ref<EntityStore> ship = spawnShip(store, f, spec.idleModelId);
+        if (ship == null) {
+            LOGGER.at(Level.WARNING).log("Navette : modèle %s introuvable", spec.idleModelId);
+            passengers.releaseAll(store, f.riders);
+            f.riders.clear();
+            return null;
+        }
+        try {
+            // No pilot aboard: one entity seen by everybody (no observer entity, no helm helper).
+            f.parts = VehicleParts.spawn(store, partsMode, spec.modelId, ship, f.shipUuid, null, null);
+            if (helmLook != null) {
+                f.crewMan = AirshipCrew.createMannequin(store, f.shipUuid, ship, null, null, shipPoint(f, pivot(kind)), new Vector3f(),
+                        helmLook, now, AirshipCrew.POSE_STAND);
+                if (f.crewMan == null) {
+                    LOGGER.at(Level.WARNING).log("Navette %s : mannequin du pilote non créé (création refusée), nouvel essai en route", f.id);
+                }
+            } else {
+                LOGGER.at(Level.WARNING).log("Navette %s : départ sans mannequin de pilote (apparence du chef de gare introuvable), nouvel essai en route", f.id);
+            }
+            f.takeoffMs = now;
+            spawnLights(store, f, s);
+            f.shuttle = state;
+            passengers.board(store, f);
+            flights.put(f.id, f);
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Navette : départ impossible, vol retiré");
+            Telemetry.error("transit", e, Telemetry.kindId(kind), null);
+            endShuttle(store, f, "départ impossible"); // ship entity, parts, mannequin, lights and prepared riders
+            return null;
+        }
+        LOGGER.at(Level.INFO).log("Navette : départ de %s vers %s en (%.1f, %.1f, %.1f), %d point(s), %d passager(s)",
+                state.from != null ? state.from.name : "?", state.to != null ? state.to.name : "?", f.pos.x, f.pos.y, f.pos.z,
+                state.waypoints.size(), f.riders.size());
+        return f;
+    }
+
+    /** True while this flight is the registered flight of its id and is not ending. */
+    boolean isActive(AirshipFlight f) {
+        return f != null && !f.finishing && flights.get(f.id) == f;
+    }
+
+    /**
+     * Ends a shuttle flight without putting it down in blocks: the riders are released and put on the surface under their seat,
+     * every entity of the flight (ship, parts, mannequin, lights) is removed. Never throws.
+     */
+    void endShuttle(Store<EntityStore> store, AirshipFlight f, String reason) {
+        if (f.finishing) {
+            return;
+        }
+        f.finishing = true;
+        flights.remove(f.id);
+        try {
+            passengers.releaseAll(store, f);
+            removeLights(store, f);
+            removeShipEntities(store, f);
+            LOGGER.at(Level.INFO).log("Navette %s retirée (%s)", f.id, reason);
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Navette %s : retrait incomplet", f.id);
+            Telemetry.error("transit", e, Telemetry.kindId(f.kind), null);
+        }
+    }
+
+    /**
+     * Maritime shuttle at its berth: the flight ends (riders released, every entity and light removed) and the shuttle is put down in
+     * blocks at this berth origin and rotation, without owner, its hold drained. None of the cargo, engine, bench, crew or ladder
+     * steps of a landing. Returns true if the structure is registered afterwards. Call on the world thread. Never throws.
+     */
+    boolean moorShuttle(Store<EntityStore> store, AirshipFlight f, Vector3i origin, Rotation rotation) {
+        endShuttle(store, f, "amarrage");
+        return pasteShuttle(store, f.world, origin, rotation);
+    }
+
+    /** Pastes the shuttle prefab without owner at this origin and rotation and drains its hold. True if registered. Never throws. */
+    boolean pasteShuttle(Store<EntityStore> store, World world, Vector3i origin, Rotation rotation) {
+        Deployables.Kind kind = Deployables.STEAMBOAT_PUBLIC;
+        try {
+            BalloonManager.get().pastePrefab(kind, world, store, origin, rotation, Ownership.NONE);
+            StructureShape s = kind.shapeOrNull();
+            if (s != null) {
+                drainHull(world, kind, s, origin, rotation);
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Navette : pose à quai en échec en %s", origin);
+            Telemetry.error("transit", e, Telemetry.kindId(kind), null);
+        }
+        return BalloonRegistry.get(world, origin, rotation, kind.id) != null;
+    }
+
+    /**
+     * Moored shuttle leaving its berth: the registry entry and the blocks are removed (no particles left in the sky) and the hold gives
+     * its water back to the sea. Nothing else is kept (the shuttle has no cargo, fuel, bench or crew). Returns the number of blocks
+     * removed. Call on the world thread with the sections loaded.
+     */
+    int unmoorShuttle(World world, Vector3i origin, Rotation rotation) throws IOException {
+        Deployables.Kind kind = Deployables.STEAMBOAT_PUBLIC;
+        StructureShape s = kind.shape();
+        List<Fx> fx = collectParticles(world, s, origin, rotation);
+        MooredPilot.remove(world, origin);
+        BalloonRegistry.remove(world, origin, rotation, kind.id);
+        int removed = BalloonManager.removeBlocks(world, s, origin, rotation, true);
+        floodHull(world, kind, s, origin, rotation);
+        cancelParticles(world, fx);
+        return removed;
     }
 
     /** Box around a parked airship that holds all its cells for any rotation (prefab x -5..5, y 2..18, z -15..15). */
@@ -1020,9 +1259,9 @@ final class AirshipManager {
         f.parts = VehicleParts.spawn(store, partsMode, spec.modelId, ship, f.shipUuid, f.dual ? f.observerRef : null,
                 f.dual ? f.pilotUuid : null);
         long now = System.currentTimeMillis();
-        if (spec.crew && crewLook != null) {
+        if (spec.hasCrew() && crewLook != null) {
             // The mannequin sits on the stool like a passenger would: same seat offset (turned with the ship by the client).
-            Vector3f stool = crewStoolLocal();
+            Vector3f stool = crewStoolLocal(kind);
             f.crewMan = AirshipCrew.createMannequin(store, f.shipUuid, ship, f.dual ? f.observerRef : null, f.pilotUuid,
                     shipPoint(f, stool), crewSeatOffset(kind, stool), crewLook, now);
         }
@@ -1078,8 +1317,11 @@ final class AirshipManager {
         Vector3i pivotCell = rotation.rotateYaw(new Vector3i(Math.round(pv.x), Math.round(pv.y), Math.round(pv.z)), new Vector3i()).add(origin);
         f.pos.set(pivotCell.x + 0.5, pivotCell.y, pivotCell.z + 0.5);
         f.theta = rotation.getRadians();
-        if (spec.wheelAnimPrefix != null) {
-            f.wheels = new PaddleWheels.State();
+        if (spec.wheelAnimPrefix != null || spec.propellerAnimPrefix != null) {
+            f.wheels = new PaddleWheels.State(spec.propellerAnimPrefix);
+        }
+        if (spec.helmAnimated) {
+            f.helmState = new ShipHelm.State();
         }
         f.modelId = spec.idleModelId; // the travelling model (burner flames) replaces it once the ship moves
         f.lastValidPos.set(f.pos);
@@ -1112,7 +1354,10 @@ final class AirshipManager {
         // Ownership copied from the registry entry before it is removed (landing registers it again).
         BalloonRegistry.Entry registered = BalloonRegistry.get(world, origin, rotation, kind.id);
         f.ownership = registered != null ? registered.ownership() : Ownership.NONE;
-        f.crew = spec(kind).crew && registered != null ? registered.crew() : null;
+        f.crew = spec(kind).hasCrew() && registered != null ? registered.crew() : null;
+        // A boat keeps a log of the water it sails (the public shuttle has none): the registry copy, or a new one.
+        f.water = spec(kind).waterborne() && kind != Deployables.STEAMBOAT_PUBLIC
+                ? (registered != null && registered.water() != null ? registered.water().copy() : new WaterLog()) : null;
         // T137: the pilot NPC is replaced by a mannequin during the flight: its look is read, then the NPC is removed.
         Object[] crewLook = null;
         if (f.crew != null) {
@@ -1180,10 +1425,11 @@ final class AirshipManager {
         if (hull != null) {
             drainHull(f.world, f.kind, hull, origin, rotation);
         }
-        if (spec(f.kind).crew && f.crew != null) {
-            BalloonRegistry.setCrew(f.world, origin, rotation, f.crew);
+        if (spec(f.kind).hasCrew() && f.crew != null) {
+            BalloonRegistry.setCrew(f.world, origin, rotation, f.kind.id, f.crew);
             AirshipCrew.ensure(f.world, BalloonRegistry.get(f.world, origin, rotation, f.kind.id));
         }
+        keepWater(f, origin, rotation);
         BalloonManager.get().restoreCargo(f.world, store, f.cargo, origin, rotation);
         f.engines.restore(f.world, store, origin, rotation);
         f.benches.restore(f.world, store, origin, rotation); // the level first: it sets the bench slots
@@ -1191,8 +1437,9 @@ final class AirshipManager {
     }
 
     /** Seating point of the cabin stool in the prefab frame, as a passenger seat. */
-    private static Vector3f crewStoolLocal() {
-        return AirshipPassengers.seatLocal(new StructureShape.Cell(AirshipCrew.STOOL[0], AirshipCrew.STOOL[1], AirshipCrew.STOOL[2],
+    private static Vector3f crewStoolLocal(Deployables.Kind kind) {
+        int[] rest = spec(kind).crewSpec.rest();
+        return AirshipPassengers.seatLocal(new StructureShape.Cell(rest[0], rest[1], rest[2],
                 "Airship_Stool", 0));
     }
 
@@ -1275,6 +1522,7 @@ final class AirshipManager {
         VehicleParts.removeAll(store, f.parts);
         f.parts = null;
         f.wheels = null;
+        f.helmState = null;
         Ref<EntityStore> observer = f.observerRef;
         f.observerRef = null;
         f.dual = false;
@@ -1431,8 +1679,8 @@ final class AirshipManager {
      * a turn is immediate, any other change waits until the wanted state has been stable for THRUST_HOLD_MS (no flicker).
      */
     void updateThrust(Store<EntityStore> store, AirshipFlight f, long now) {
-        if (f.off || f.dry || f.engines == null || f.landing) {
-            return;
+        if (f.off || f.landing || (!spec(f.kind).fuelless && (f.dry || f.engines == null))) {
+            return; // a fuelless ship (the shuttle) has no engines and is never dry: its thrust follows its movement
         }
         double rate = Math.toDegrees(f.yawRate);
         if (Math.abs(rate) >= TURN_FLAME_ON_DEG) {
@@ -1504,6 +1752,7 @@ final class AirshipManager {
                 if (f.wheels != null) {
                     PaddleWheels.onModelChanged(store, f, System.currentTimeMillis());
                 }
+                ShipHelm.onModelChanged(store, f, System.currentTimeMillis());
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Modèle %s non appliqué au dirigeable", id);
@@ -1546,6 +1795,11 @@ final class AirshipManager {
     /** The engine runs while the flight has engines and is not dry (pilot or not). */
     static boolean engineSoundWanted(boolean hasEngines, boolean dry) {
         return hasEngines && !dry;
+    }
+
+    /** Same, and a fuelless ship (the maritime shuttle) runs its engine for as long as it exists. */
+    static boolean engineSoundWanted(boolean hasEngines, boolean dry, boolean fuelless) {
+        return fuelless || engineSoundWanted(hasEngines, dry);
     }
 
     /** Engine sound: the Ship_Engine effect (infinite) on the ship entity and the observer entity. No-op if unchanged. Never throws. */
@@ -1797,7 +2051,7 @@ final class AirshipManager {
 
     /** Colour the firebox light should have now: null when dry (out), else the flicker colour of the current mode. */
     private static ColorLight fireboxWanted(AirshipFlight f) {
-        if (f.dry || f.engines == null || f.engines.isEmpty()) {
+        if (!spec(f.kind).fuelless && (f.dry || f.engines == null || f.engines.isEmpty())) {
             return null;
         }
         return BalloonLights.effective(BalloonLights.fireboxColor(f.burning, f.fireboxLevel));
@@ -1974,6 +2228,11 @@ final class AirshipManager {
 
     private void tickOne(Store<EntityStore> store, World world, AirshipFlight f, long now) {
         if (f.shipRef == null || !f.shipRef.isValid()) {
+            if (f.shuttle != null) {
+                LOGGER.at(Level.WARNING).log("Entité de la navette %s perdue : secours", f.id);
+                BoatAutopilot.rescue(store, f);
+                return;
+            }
             LOGGER.at(Level.WARNING).log("Entité du dirigeable %s perdue : pose immédiate", f.id);
             landImmediately(f);
             return;
@@ -2015,9 +2274,15 @@ final class AirshipManager {
         }
         if (f.landing) {
             landingStep(store, world, f, s, hull, dt, now);
+        } else if (f.pilotless() && f.shuttle != null) {
+            // Maritime shuttle: sails its water route between two boat stations, never lands by itself.
+            BoatAutopilot.step(store, world, f, dt, now);
         } else if (f.pilotless() && f.recall != null) {
             // T143: the recalled ship flies to the station and hovers above it.
             AirshipRecall.step(store, world, f, dt, now);
+        } else if (f.pilotless() && f.voyage != null && f.voyage.water != null) {
+            // Steamboat voyage: the pilot NPC sails the planned path (BoatAutopilot), lands like an airship voyage.
+            ShipVoyage.step(store, world, f, dt, now);
         } else if (f.pilotless() && f.voyage != null) {
             // T139: the pilot NPC flies the ship to its destination.
             AirshipAutopilot.step(store, world, f, dt, now);
@@ -2029,6 +2294,7 @@ final class AirshipManager {
             }
         } else if (!pilotStep(store, world, f, hull, dt, now)) {
             PaddleWheels.update(store, f, now); // lot 4: the wheels keep their rules during the pause
+            ShipHelm.update(store, f, now);
             return; // collision teleport or a stop was requested: the entity is not written this tick
         }
         if (f.finishing) {
@@ -2037,10 +2303,12 @@ final class AirshipManager {
         if (f.landing || f.pilotless()) {
             writeEntity(store, f);
         }
+        recordWater(f, now, store);
         followLights(store, f);
         flickerFirebox(store, f, now);
-        setEngineSound(store, f, engineSoundWanted(f.engines != null, f.dry));
+        setEngineSound(store, f, engineSoundWanted(f.engines != null, f.dry, spec(f.kind).fuelless));
         PaddleWheels.update(store, f, now);
+        ShipHelm.update(store, f, now);
         if (now - f.lastResumeMs >= RESUME_INTERVAL_MS) {
             f.lastResumeMs = now;
             AirshipResume.write(f, false);
@@ -2066,11 +2334,61 @@ final class AirshipManager {
         return new Vector3d(c.x + r.x, pos.y, c.z + r.z);
     }
 
+    /** Registers the log of a landed boat with its entry (a copy: the flight's log is world-thread only) and forgets the last cell. */
+    private void keepWater(AirshipFlight f, Vector3i origin, Rotation rotation) {
+        WaterLog w = f.water;
+        if (w == null) {
+            return;
+        }
+        BalloonRegistry.setWater(f.world, origin, rotation, f.kind.id, w.copy());
+        w.forgetLastPosition();
+    }
+
+    /** Records the cell of the rotation centre every tick, and once a second the boat stations whose pier it passes. Never throws. */
+    private void recordWater(AirshipFlight f, long now, Store<EntityStore> store) {
+        WaterLog w = f.water;
+        if (w == null) {
+            return;
+        }
+        try {
+            Vector3d c = centerWorld(f.kind, f.pos, f.theta);
+            w.record(c.x, c.z);
+            if (now - f.waterScanMs < 1000) {
+                return;
+            }
+            f.waterScanMs = now;
+            for (TransitNetwork.Station s : TransitNetwork.get().stations(f.world.getName(), Deployables.BOAT_STATION_KIND)) {
+                Vector3d p = StationMarkerProvider.markerPoint(s);
+                double dx = p.x - c.x;
+                double dz = p.z - c.z;
+                if (dx * dx + dz * dz > (double) WaterLog.STATION_REACH * WaterLog.STATION_REACH) {
+                    continue;
+                }
+                if (w.addReached(s.origin.x, s.origin.y, s.origin.z) && !f.pilotless()) {
+                    PlayerRef pr = store.getComponent(f.pilotRef, PlayerRef.getComponentType());
+                    if (pr != null) {
+                        pr.sendMessage(Texts.t("crew.stop.stationNoted").param("station", s.name));
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Journal des eaux : enregistrement impossible");
+            Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), "water");
+        }
+    }
+
     /** World position of the rotation centre C for a ship whose pivot (pilot) is at pos with heading theta: C = P - R(theta)(P - C). */
-    private Vector3d centerWorld(Deployables.Kind kind, Vector3d pos, double theta) {
+    Vector3d centerWorld(Deployables.Kind kind, Vector3d pos, double theta) {
         Vector3d pc = pivotMinusCenter(kind);
         Vector3d r = AirshipMath.rotateY(pc.x, 0, pc.z, theta, new Vector3d());
         return new Vector3d(pos.x - r.x, pos.y, pos.z - r.z);
+    }
+
+    /** Pivot position for a rotation centre at c (world, y kept) and heading theta: P = C + R(theta)(P - C). */
+    Vector3d pivotFromCenter(Deployables.Kind kind, Vector3d c, double theta) {
+        Vector3d pc = pivotMinusCenter(kind);
+        Vector3d r = AirshipMath.rotateY(pc.x, 0, pc.z, theta, new Vector3d());
+        return new Vector3d(c.x + r.x, c.y, c.z + r.z);
     }
 
     /**
@@ -2557,6 +2875,25 @@ final class AirshipManager {
     }
 
     /**
+     * Gives a shuttle that left without one its pilot mannequin, standing at the helm (look from the station master). No effect when it
+     * already has one or has no ship entity. Never throws.
+     */
+    void attachShuttleMannequin(Store<EntityStore> store, AirshipFlight f, Object[] look, long now) {
+        try {
+            if (f.crewMan != null || look == null || f.shipRef == null || !f.shipRef.isValid()) {
+                return;
+            }
+            f.crewMan = AirshipCrew.createMannequin(store, f.shipUuid, f.shipRef, null, null, shipPoint(f, pivot(f.kind)), new Vector3f(),
+                    look, now, AirshipCrew.POSE_STAND);
+            if (f.crewMan != null) {
+                LOGGER.at(Level.INFO).log("Navette %s : mannequin du pilote ajouté en route", f.id);
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Navette %s : mannequin du pilote non ajouté", f.id);
+        }
+    }
+
+    /**
      * Tries the candidate pose, then position-only, then yaw-only (landing alignment, the ship is moved by the server). Returns
      * true if the full candidate was refused (a collision). Nothing is tested if the pose did not change.
      */
@@ -2575,6 +2912,16 @@ final class AirshipManager {
             f.lastCollision = String.format(Locale.ROOT, "pos %.2f %.2f %.2f theta %.1f deg", newPos.x, newPos.y, newPos.z,
                     Math.toDegrees(newTheta));
             LOGGER.at(Level.INFO).log("Collision du dirigeable de %s : %s", f.pilotName, f.lastCollision);
+            ShuttleState sh = f.sailState();
+            if (sh != null) {
+                // Evidence for route problems: which hull cell hits which world block, and whether the pose was a turn.
+                boolean turn = Math.abs(newTheta - f.theta) > 1e-9;
+                int[] cell = firstBlockingCell(world, hull, newPos.x, newPos.y, newPos.z, newTheta, allowed);
+                sh.lastHit = cell;
+                LOGGER.at(Level.INFO).log("Collision de la navette : %s, coque %s, cap %.1f -> %.1f deg, phase %s",
+                        describeCell(world, cell),
+                        turn ? "en rotation" : "en translation", Math.toDegrees(f.theta), Math.toDegrees(newTheta), sh.phase);
+            }
         }
         if (Math.abs(newTheta - f.theta) > 1e-9 && blocked(world, hull, newPos.x, newPos.y, newPos.z, f.theta, allowed) <= allowed) {
             accept(world, f, hull, newPos, f.theta);
@@ -2827,14 +3174,15 @@ final class AirshipManager {
         if (hull != null) {
             drainHull(f.world, f.kind, hull, origin, rotation);
         }
-        if (spec(f.kind).crew && f.crew != null) {
+        if (spec(f.kind).hasCrew() && f.crew != null) {
             if (f.recall != null || f.quayStation != null) {
                 f.crew = f.crew.withPost(CrewRecord.Post.HELM); // T144: the pilot is back at the helm after a recall
             }
-            BalloonRegistry.setCrew(f.world, origin, rotation, f.crew);
+            BalloonRegistry.setCrew(f.world, origin, rotation, f.kind.id, f.crew);
             // T137: the pilot is recreated seated on the stool (found, adopted or created once its section is loaded).
             AirshipCrew.ensure(f.world, BalloonRegistry.get(f.world, origin, rotation, f.kind.id));
         }
+        keepWater(f, origin, rotation);
         if (spec(f.kind).recall) {
             AirshipRecall.endQuay(f); // T144: the quay is free again, whatever ended the recall
         }
@@ -3246,6 +3594,7 @@ final class AirshipManager {
             if (f.wheels != null) {
                 PaddleWheels.onModelChanged(store, f, System.currentTimeMillis());
             }
+            ShipHelm.onModelChanged(store, f, System.currentTimeMillis());
             f.thrust = AirshipFlight.Thrust.IDLE;
             f.thrustWanted = AirshipFlight.Thrust.IDLE;
             f.turnDir = 0;
@@ -3274,8 +3623,13 @@ final class AirshipManager {
                 if (!r.p.uuid.equals(uuid)) {
                     continue;
                 }
-                boolean ok = BalloonManager.runOnWorld(f.world,
-                        () -> passengers.dropOne(f.world.getEntityStore().getStore(), f, r), LAND_WAIT_MS);
+                boolean ok = BalloonManager.runOnWorld(f.world, () -> {
+                    if (f.shuttle != null) {
+                        BoatQuay.dropRider(f, r); // back on the departure pier, never an instant arrival
+                    } else {
+                        passengers.dropOne(f.world.getEntityStore().getStore(), f, r);
+                    }
+                }, LAND_WAIT_MS);
                 LOGGER.at(ok ? Level.INFO : Level.WARNING).log(ok
                         ? "Passager du dirigeable %s parti : libéré, position enregistrée au sol"
                         : "Passager du dirigeable %s parti : libération impossible", r.p.name);
@@ -3350,6 +3704,12 @@ final class AirshipManager {
      * resume file (key "recall") puts it down at the leave point at the next load.
      */
     private boolean landForShutdown(AirshipFlight f) {
+        if (f.shuttle != null) {
+            // The shuttle is never put down in blocks at a shutdown: its riders go back to the departure pier first.
+            BoatQuay.dropAllRiders(f);
+            endShuttle(f.world.getEntityStore().getStore(), f, "arrêt du serveur");
+            return true;
+        }
         RecallState r = f.recall != null ? f.recall : (f.quayStation != null ? f.recallInfo : null);
         if (r != null) {
             try {
@@ -3540,11 +3900,14 @@ final class AirshipManager {
             BalloonManager.get().pastePrefab(kind, world, store, origin, q,
                     Ownership.landingOwner(rec.ownership(), rec.pilot(), null, rec.pilot() == null || !AirshipLimit.countsForLimit(kind) || !AirshipLimit.ownsAirship(rec.pilot())));
             drainHull(world, kind, s, origin, q);
-            if (spec(kind).crew && rec.crew() != null) {
+            if (spec(kind).hasCrew() && rec.crew() != null) {
                 // T140: after a voyage the pilot is recreated once, at the helm.
                 CrewRecord crew = rec.voyage() != null || rec.recall() != null ? rec.crew().withPost(CrewRecord.Post.HELM) : rec.crew();
-                BalloonRegistry.setCrew(world, origin, q, crew); // T133
+                BalloonRegistry.setCrew(world, origin, q, kind.id, crew); // T133
                 AirshipCrew.ensure(world, BalloonRegistry.get(world, origin, q, kind.id)); // T137
+            }
+            if (rec.water() != null) {
+                BalloonRegistry.setWater(world, origin, q, kind.id, rec.water());
             }
             BalloonManager.get().restoreCargo(world, store, rec.cargo(), origin, q);
             if (rec.engines() != null) {
@@ -3647,8 +4010,8 @@ final class AirshipManager {
         AirshipFlight flight = null;
         double flightDist = Double.MAX_VALUE;
         for (AirshipFlight f : flights.values()) {
-            if (f.world != world || (onlyKind != null && !onlyKind.equals(f.kind.id))) {
-                continue;
+            if (f.world != world || f.shuttle != null || (onlyKind != null && !onlyKind.equals(f.kind.id))) {
+                continue; // the shuttle is not a player's ship: never removed by these commands
             }
             double d = admin.getUuid().equals(f.pilotUuid) ? 0 : f.pos.distance(here);
             if (d <= DESPAWN_RADIUS && d < flightDist) {
@@ -3731,7 +4094,7 @@ final class AirshipManager {
         }
         floodHull(world, kind, s, origin, rotation); // removal succeeded: the lake gets its water back
         try {
-            if (spec(kind).crew && posedEntry != null) {
+            if (spec(kind).hasCrew() && posedEntry != null) {
                 AirshipCrew.remove(store, world, posedEntry);
             }
         } catch (RuntimeException e) {
@@ -3859,7 +4222,7 @@ final class AirshipManager {
                 f.lastCarry, f.totalCarry, f.carryTeleports, Math.hypot(f.carryAccX, f.carryAccZ), f.velActive,
                 Double.isNaN(f.chkRatio) ? "n/a" : String.format(Locale.ROOT, "%.2f", f.chkRatio), f.ownVx, f.ownVz,
                 f.helm != null && f.helm.ref != null && f.helm.ref.isValid() ? "present" : "absent");
-        carryText += ", steer " + steer + ", " + PaddleWheels.describe(f);
+        carryText += ", steer " + steer + ", " + PaddleWheels.describe(f) + ", " + ShipHelm.describe(f);
         carryText += String.format(Locale.ROOT, ", smoothness: yawJerk %.0f deg/s3, retrySmaller %s, thrustModels %d, swapMinMs %d, "
                         + "observerSmoothMs %.0f | totals: refused headings %d, partial steps %d, model swaps %d, collisions %d | this turn (since the "
                         + "rate last crossed %.0f deg/s): refused %d, partial %d, collision teleports %d, carry teleports %d, "

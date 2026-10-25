@@ -32,14 +32,19 @@ final class Texts {
             "despawn.none", "despawn.done", "despawn.doneInventoryFull", "despawn.removedByAdmin",
             "despawn.alreadyLanding", "approach");
 
+    /** True for the steamboat and the public shuttle boat (they share the boat texts). */
+    private static boolean isBoat(Deployables.Kind kind) {
+        return kind == Deployables.STEAMBOAT || kind == Deployables.STEAMBOAT_PUBLIC;
+    }
+
     /** Message of a ship: the steamboat text for the steamboat, the airship text otherwise (unknown kind included). */
     static Message ship(Deployables.Kind kind, String rest) {
-        return t((kind == Deployables.STEAMBOAT ? "steamboat." : "airship.") + rest);
+        return t((isBoat(kind) ? "steamboat." : "airship.") + rest);
     }
 
     /** Key of a ship message given as "airship.<rest>": the steamboat key for the steamboat, the same key otherwise. */
     static String shipKey(Deployables.Kind kind, String key) {
-        if (kind == Deployables.STEAMBOAT && key.startsWith("airship.") && SHIP_KEYS.contains(key.substring("airship.".length()))) {
+        if (isBoat(kind) && key.startsWith("airship.") && SHIP_KEYS.contains(key.substring("airship.".length()))) {
             return "steamboat." + key.substring("airship.".length());
         }
         return key;

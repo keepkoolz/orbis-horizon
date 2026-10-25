@@ -1,0 +1,45 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.boat_station_inkwell.name",
+    "Description": "server.orbis_horizon.items.boat_station_inkwell.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Deco_Inkwell.png",
+  "BlockType": {
+    "Material": "Empty",
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Miscellaneous/Inkwell.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Miscellaneous/Inkwell_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "Group": "Wood",
+    "HitboxType": "Balloon_Station_Map",
+    "VariantRotation": "Wall",
+    "Flags": {},
+    "Gathering": {
+      "Soft": {
+        "IsWeaponBreakable": false
+      }
+    },
+    "BlockParticleSetId": "Stone",
+    "TextureComputedColor": "#594E4E"
+  },
+  "PlayerAnimationsId": "Item",
+  "IconProperties": {
+    "Scale": 0.835,
+    "Translation": [
+      0.305,
+      -6.895
+    ],
+    "Rotation": [
+      22.5,
+      45,
+      22.5
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood",
+  "Quality": "OrbisHorizon_Hidden"
+}

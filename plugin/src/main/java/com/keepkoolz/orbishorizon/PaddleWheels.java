@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.logging.Level;
 
 /**
- * Pure rule of the steamboat paddle wheels: which spin each wheel wants, the animation names, and when a
+ * Pure rule of the steamboat paddle wheels and of the shuttle's single propeller: which spin each wheel (or the propeller) wants, the animation names, and when a
  * spin change may be applied (at the end of the current cycle, where the wheel looks like at frame 0).
  * The animation names and frame counts must stay equal to WHEEL_SPINS and WHEEL_STEP_DEG of scripts/prefab_to_model.py.
  * See docs/superpowers/notes/2026-10-20-essai-roue-aubes.md for the spike that settled these rules.
@@ -98,10 +98,45 @@ final class PaddleWheels {
         return new Spin[]{Spin.FWD_FAST, Spin.FWD_FAST};
     }
 
+    /**
+     * Wanted spin of the single propeller of the shuttle: forward at full speed while moving ahead (turning or not), slowly astern
+     * when reversing, slowly forward when it only turns in place, else still. A sideways slide is set by the caller (slideWheels).
+     */
+    static Spin propellerFor(boolean moving, boolean reversing, int turnDir) {
+        if (moving) {
+            return reversing ? Spin.REV_SLOW : Spin.FWD_FAST;
+        }
+        return turnDir != 0 ? Spin.FWD_SLOW : Spin.STOP;
+    }
+
+    /** Animation key of the propeller: "<node>_<suffix>" (AnimationSets of Steamboat_Public.json), null for STOP. */
+    static String propellerAnimationId(String prefix, Spin spin) {
+        String suffix = spin.suffix();
+        return suffix == null ? null : prefix + "_" + suffix;
+    }
+
+    /** The shuttle slides sideways in or out of its berth: both wheels turn slowly forward, whatever the slide direction. */
+    static Spin[] slideWheels() {
+        return new Spin[]{Spin.FWD_SLOW, Spin.FWD_SLOW};
+    }
+
     /** Global constraint name of the animation, null for STOP. */
     static String animationId(boolean right, Spin spin) {
         String suffix = spin.suffix();
         return suffix == null ? null : (right ? "Wheel_Right_" : "Wheel_Left_") + suffix;
+    }
+
+    /**
+     * The wheels stay still: off, landing, or (for a ship that burns fuel) dry, without engines or without a pilot. A fuelless
+     * ship (the maritime shuttle) has no engines and no pilot but its wheels follow its movement. A ship sailed by the autopilot
+     * (a steamboat voyage with the NPC pilot: no player pilot) counts as piloted.
+     */
+    static boolean still(boolean dry, boolean off, boolean landing, boolean hasEngines, boolean pilotless, boolean fuelless,
+                         boolean sailed) {
+        if (off || landing) {
+            return true;
+        }
+        return !fuelless && (dry || !hasEngines || (pilotless && !sailed));
     }
 
     static boolean atCycleEnd(long periodMs, long startMs, long nowMs, long tolMs) {
@@ -127,6 +162,8 @@ final class PaddleWheels {
 
     /** Per-flight wheel state: current spin of {left, right}, when it started, the wanted spin and since when. */
     static final class State {
+        /** Name of the propeller node (single-propeller mode, only index 0 and the Movement slot are used), null for two wheels. */
+        final String propeller;
         final Spin[] cur = {Spin.STOP, Spin.STOP};
         final long[] start = {0, 0};
         final Spin[] wanted = {Spin.STOP, Spin.STOP};
@@ -136,11 +173,27 @@ final class PaddleWheels {
         /** Per wheel, when the last splash was played. */
         final long[] lastSplash = {Long.MIN_VALUE, Long.MIN_VALUE};
         long lastLogMs;
+
+        State(String propeller) {
+            this.propeller = propeller;
+        }
+
+        State() {
+            this(null);
+        }
+
+        int count() {
+            return propeller != null ? 1 : 2;
+        }
+
+        String animationId(int i, Spin spin) {
+            return propeller != null ? propellerAnimationId(propeller, spin) : PaddleWheels.animationId(i == 1, spin);
+        }
     }
 
     static final String SPLASH_ID = "SFX_Steamboat_Paddle_Splash";
     /** Splash points in the prefab frame (cell coordinates, y at the waterline), left wheel (-x) then right wheel (+x). */
-    private static final double[][] SPLASH_LOCAL = {{-6, -2.5, 2}, {6, -2.5, 2}};
+    private static final double[][] SPLASH_LOCAL = {{-6, -1.5, 2}, {6, -1.5, 2}};
     private static int splashIndex = Integer.MIN_VALUE;
     private static boolean splashWarned;
 
@@ -166,6 +219,9 @@ final class PaddleWheels {
     }
 
     private static void playSplashes(Store<EntityStore> store, AirshipFlight f, State st, long nowMs) {
+        if (st.propeller != null) {
+            return; // the propeller makes no paddle splash
+        }
         for (int i = 0; i < 2; i++) {
             Spin sp = st.cur[i];
             if (sp == Spin.STOP || !splashDue(sp.periodMs(), st.start[i], st.lastSplash[i], nowMs)) {
@@ -187,11 +243,11 @@ final class PaddleWheels {
         return wheel == 0 ? AnimationSlot.Movement : AnimationSlot.Action;
     }
 
-    private static void apply(Store<EntityStore> store, Ref<EntityStore> ref, int wheel, Spin spin) {
+    private static void apply(Store<EntityStore> store, Ref<EntityStore> ref, State st, int wheel, Spin spin) {
         if (ref == null || !ref.isValid()) {
             return;
         }
-        String id = animationId(wheel == 1, spin);
+        String id = st.animationId(wheel, spin);
         if (id == null) {
             AnimationUtils.stopAnimation(ref, slot(wheel), store);
         } else {
@@ -206,9 +262,17 @@ final class PaddleWheels {
             return;
         }
         try {
-            boolean still = f.dry || f.off || f.landing || f.engines == null || f.pilotless();
-            Spin[] want = still ? new Spin[]{Spin.STOP, Spin.STOP} : wheelsFor(f.moving, f.reversing, f.turnDir);
-            for (int i = 0; i < 2; i++) {
+            boolean still = still(f.dry, f.off, f.landing, f.engines != null, f.pilotless(),
+                    f.kind.airship != null && f.kind.airship.fuelless, f.sailState() != null);
+            ShuttleState sail = f.sailState();
+            boolean slide = sail != null && sail.slide != ShuttleState.Slide.NONE;
+            Spin[] want;
+            if (st.propeller != null) {
+                want = new Spin[]{still ? Spin.STOP : slide ? Spin.FWD_SLOW : propellerFor(f.moving, f.reversing, f.turnDir)};
+            } else {
+                want = still ? new Spin[]{Spin.STOP, Spin.STOP} : slide ? slideWheels() : wheelsFor(f.moving, f.reversing, f.turnDir);
+            }
+            for (int i = 0; i < st.count(); i++) {
                 if (want[i] != st.wanted[i]) {
                     st.wanted[i] = want[i];
                     st.wantedSince[i] = nowMs;
@@ -217,8 +281,8 @@ final class PaddleWheels {
                 if (next != st.cur[i]) {
                     st.cur[i] = next;
                     st.start[i] = nowMs;
-                    apply(store, f.shipRef, i, next);
-                    apply(store, f.observerRef, i, next);
+                    apply(store, f.shipRef, st, i, next);
+                    apply(store, f.observerRef, st, i, next);
                 }
             }
             playSplashes(store, f, st, nowMs);
@@ -240,10 +304,10 @@ final class PaddleWheels {
             return;
         }
         try {
-            for (int i = 0; i < 2; i++) {
+            for (int i = 0; i < st.count(); i++) {
                 if (st.cur[i] != Spin.STOP) {
-                    apply(store, f.shipRef, i, st.cur[i]);
-                    apply(store, f.observerRef, i, st.cur[i]);
+                    apply(store, f.shipRef, st, i, st.cur[i]);
+                    apply(store, f.observerRef, st, i, st.cur[i]);
                     st.start[i] = nowMs;
                     st.lastSplash[i] = nowMs;
                 }
@@ -288,8 +352,8 @@ final class PaddleWheels {
             if (pr == null) {
                 continue;
             }
-            for (int i = 0; i < 2; i++) {
-                String id = animationId(i == 1, st.cur[i]);
+            for (int i = 0; i < st.count(); i++) {
+                String id = st.animationId(i, st.cur[i]);
                 if (id != null) {
                     pr.getPacketHandler().writeNoCache(new PlayAnimation(nid.getId(), null, id, slot(i)));
                 }
@@ -300,6 +364,9 @@ final class PaddleWheels {
     /** Diagnostic line for /orbishorizon airship debug. */
     static String describe(AirshipFlight f) {
         State st = f.wheels;
-        return st == null ? "wheels: none" : "wheels: left " + st.cur[0] + ", right " + st.cur[1];
+        if (st == null) {
+            return "wheels: none";
+        }
+        return st.propeller != null ? "propeller: " + st.cur[0] : "wheels: left " + st.cur[0] + ", right " + st.cur[1];
     }
 }

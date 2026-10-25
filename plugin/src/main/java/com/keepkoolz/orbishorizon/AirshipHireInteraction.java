@@ -69,8 +69,7 @@ public class AirshipHireInteraction extends SimpleInstantInteraction {
             Vector3i pos = new Vector3i(target.x, target.y, target.z);
             BlockType bt = SectionBlocks.typeAt(new SectionReader(world.getChunkStore()), pos.x, pos.y, pos.z);
             BalloonRegistry.Entry found = BalloonRegistry.find(world, pos);
-            if (bt != null && bt.getId() != null && bt.getId().startsWith("Airship_Helm")
-                    && found != null && Deployables.AIRSHIP_KIND.equals(found.kind())) {
+            if (bt != null && bt.getId() != null && found != null && isHireBlock(bt.getId(), found == null ? null : found.kind())) {
                 entry = found;
             }
         }
@@ -108,13 +107,13 @@ public class AirshipHireInteraction extends SimpleInstantInteraction {
         Vector3i origin = new Vector3i(entry.x(), entry.y(), entry.z());
         UUID uuid = null;
         CrewRecord hired = null;
-        BalloonRegistry.Entry current = BalloonRegistry.get(world, origin, entry.rotation(), Deployables.AIRSHIP_KIND);
+        BalloonRegistry.Entry current = BalloonRegistry.get(world, origin, entry.rotation(), entry.kind());
         if (current != null && current.crew() == null) {
             CrewRecord record = new CrewRecord(null, new java.util.Random().nextLong(), CrewRecord.Post.HELM);
             hired = record;
             uuid = AirshipCrew.spawn(store, world, current, record);
             if (uuid != null) {
-                BalloonRegistry.setCrew(world, origin, entry.rotation(), record.withUuid(uuid));
+                BalloonRegistry.setCrew(world, origin, entry.rotation(), entry.kind(), record.withUuid(uuid));
             }
         }
         if (uuid == null) {
@@ -149,5 +148,13 @@ public class AirshipHireInteraction extends SimpleInstantInteraction {
     @Override
     public String toString() {
         return "AirshipHireInteraction{}";
+    }
+
+    /** True if the block signs the contract for this kind: the helm of a ship, the chain of the large balloon. Pure. */
+    static boolean isHireBlock(String blockId, String kindId) {
+        if (blockId == null || kindId == null || Deployables.crewOf(kindId) == null) {
+            return false;
+        }
+        return Deployables.BALLOON_KIND.equals(kindId) ? blockId.equals("Hotair_Balloon_Chain") : blockId.startsWith("Airship_Helm");
     }
 }

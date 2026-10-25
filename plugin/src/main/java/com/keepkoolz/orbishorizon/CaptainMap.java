@@ -65,6 +65,19 @@ final class CaptainMap {
     private CaptainMap() {
     }
 
+    /**
+     * A voyage seen by the map, whatever the vehicle: airship, steamboat or large balloon. captainRef is null when the captain is not
+     * aboard any more, stop ends the voyage (once) and tells the riders.
+     */
+    record VoyageView(UUID captain, Ref<EntityStore> captainRef, Vector3d pos, CrewRecord crew, boolean ridersReleased, Runnable stop) {
+    }
+
+    private static java.util.List<VoyageView> viewsOf(World world) {
+        java.util.List<VoyageView> out = new ArrayList<>(AirshipManager.get().voyageViews(world));
+        out.addAll(BalloonManager.get().voyageViews(world));
+        return out;
+    }
+
     /** -1 while waiting, then 3, 2, 1 (STEP_MS each), then 0 at the moment of the stop. */
     static int phase(long selectedMs, long now) {
         long t = now - selectedMs - WAIT_MS;
@@ -163,10 +176,7 @@ final class CaptainMap {
     static void tick(Store<EntityStore> store, World world) {
         try {
             sweepHolders(store, world);
-            for (AirshipFlight f : AirshipManager.get().flights()) {
-                if (f.world != world || f.voyage == null) {
-                    continue;
-                }
+            for (VoyageView f : viewsOf(world)) {
                 try {
                     tickVoyage(store, f);
                 } catch (RuntimeException e) {
@@ -185,14 +195,14 @@ final class CaptainMap {
     private static final Map<UUID, Long> NEXT_SWEEP = new ConcurrentHashMap<>();
 
     /** A map dropped on the ground near the ship is deleted, at most once a second per voyage. */
-    private static void sweepGround(Store<EntityStore> store, AirshipFlight f) {
+    private static void sweepGround(Store<EntityStore> store, VoyageView f) {
         long now = System.currentTimeMillis();
-        Long next = NEXT_SWEEP.get(f.voyage.captain);
+        Long next = NEXT_SWEEP.get(f.captain());
         if (next != null && now < next) {
             return;
         }
-        NEXT_SWEEP.put(f.voyage.captain, now + SWEEP_MS);
-        sweepAround(store, f.pos);
+        NEXT_SWEEP.put(f.captain(), now + SWEEP_MS);
+        sweepAround(store, f.pos());
     }
 
     /** Deletes the maps on the ground around a point (one last time after a voyage ends). Never throws. */
@@ -227,9 +237,9 @@ final class CaptainMap {
         }
         NEXT_HOLDER_SWEEP.put(world, now + SWEEP_MS);
         java.util.Set<UUID> active = new java.util.HashSet<>();
-        for (AirshipFlight f : AirshipManager.get().flights()) {
-            if (f.voyage != null) {
-                active.add(f.voyage.captain);
+        for (VoyageView f : viewsOf(world)) {
+            if (!f.ridersReleased()) {
+                active.add(f.captain());
             }
         }
         for (PlayerRef pr : world.getPlayerRefs()) {
@@ -254,15 +264,10 @@ final class CaptainMap {
         }
     }
 
-    private static void tickVoyage(Store<EntityStore> store, AirshipFlight f) {
+    private static void tickVoyage(Store<EntityStore> store, VoyageView f) {
         sweepGround(store, f);
-        UUID captain = f.voyage.captain;
-        Ref<EntityStore> ref = null;
-        for (AirshipPassengers.Rider r : f.riders) {
-            if (r.p.uuid.equals(captain)) {
-                ref = r.p.ref;
-            }
-        }
+        UUID captain = f.captain();
+        Ref<EntityStore> ref = f.captainRef();
         if (ref == null || !ref.isValid()) {
             return;
         }
@@ -284,7 +289,7 @@ final class CaptainMap {
             if (pending != null) {
                 PENDING.remove(captain);
                 if (pending.shown != -1 && pr != null) {
-                    cancelled(pr, f.crew);
+                    cancelled(pr, f.crew());
                 }
                 return;
             }
@@ -295,7 +300,7 @@ final class CaptainMap {
         if (!onMap || pending.slot != slot) {
             PENDING.remove(captain);
             if (pending.shown != -1 && pr != null) {
-                cancelled(pr, f.crew);
+                cancelled(pr, f.crew());
             }
             return;
         }
@@ -316,7 +321,7 @@ final class CaptainMap {
             }
             if (STOPPED.putIfAbsent(captain, Boolean.TRUE) == null) {
                 LOGGER.at(Level.INFO).log("Voyage : arrêt demandé par la carte du capitaine");
-                AirshipAutopilot.stop(f, STOP_KEY);
+                f.stop().run();
             }
         }
     }

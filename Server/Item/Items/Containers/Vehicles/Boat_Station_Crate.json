@@ -1,0 +1,93 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.boat_station_crate.name",
+    "Description": "server.orbis_horizon.items.boat_station_crate.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Boat_Station_Crate.png",
+  "PlayerAnimationsId": "Block",
+  "MaxStack": 1,
+  "ItemLevel": 6,
+  "Quality": "Legendary",
+  "Categories": [
+    "Items.Vehicles"
+  ],
+  "Recipe": {
+    "Input": [
+      {
+        "ResourceTypeId": "Wood_Trunk",
+        "Quantity": 80
+      },
+      {
+        "ItemId": "Cloth_Block_Wool_White",
+        "Quantity": 7
+      },
+      {
+        "ItemId": "Cloth_Block_Wool_Blue",
+        "Quantity": 7
+      },
+      {
+        "ItemId": "Ingredient_Bar_Iron",
+        "Quantity": 4
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "OrbisHorizon_Transport"
+        ],
+        "Id": "OrbisHorizon_Bench",
+        "RequiredTierLevel": 3
+      }
+    ],
+    "TimeSeconds": 3,
+    "KnowledgeRequired": true
+  },
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Cube",
+    "Opacity": "Transparent",
+    "Group": "Wood",
+    "RandomRotation": "YawStep1",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Benches"
+      }
+    },
+    "BlockParticleSetId": "Wood",
+    "Textures": [
+      {
+        "Weight": 1,
+        "Sides": "BlockTextures/Boat_Station_Crate_Side.png",
+        "UpDown": "BlockTextures/Furniture_Village_Crate.png"
+      }
+    ],
+    "ParticleColor": "#3f2720",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "TextureComputedColor": "#47291D"
+  },
+  "Interactions": {
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "Transit_DeployStation",
+          "PrefabPath": "Boat_Station.prefab.json",
+          "Offset": {
+            "X": 0,
+            "Y": 1,
+            "Z": 0
+          },
+          "RotationOffset": "OneEighty",
+          "Force": true,
+          "Next": {
+            "Type": "ModifyInventory",
+            "AdjustHeldItemQuantity": -1
+          }
+        }
+      ]
+    }
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

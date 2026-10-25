@@ -33,7 +33,6 @@ import java.util.logging.Level;
 
 /** /orbishorizon station ...: transit network administration (ops). Task 4b: only "recipe on|off|show". */
 public final class StationCommand extends AbstractCommandCollection {
-    static final String CRATE_ID = "Balloon_Station_Crate";
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 
     public StationCommand() {
@@ -55,13 +54,16 @@ public final class StationCommand extends AbstractCommandCollection {
     private static String describe(TransitNetwork.Station s, boolean detail) {
         StringBuilder b = new StringBuilder();
         b.append(s.name).append(" at (").append(s.origin.x).append(", ").append(s.origin.y).append(", ").append(s.origin.z)
-                .append(") ").append(s.rotation).append(", quay ").append(StationQueue.state(s))
+                .append(") ").append(s.rotation).append(", kind ").append(s.kind).append(", quay ").append(StationQueue.state(s))
                 .append(", queue ").append(s.queue).append(", master ").append(s.masterUuid != null ? "yes" : "none");
         if (detail) {
             b.append("\n  owner ").append(s.owner).append("\n  master ").append(s.masterUuid)
                     .append("\n  countdown ").append(StationQueue.secondsLeft(s)).append(" s")
                     .append("\n  dock origin ").append(StationQueue.dockOrigin(s)).append(", pad y ").append(StationQueue.padY(s))
                     .append("\n  master point ").append(StationMaster.masterPoint(s));
+            if (Deployables.BOAT_STATION_KIND.equals(s.kind)) {
+                b.append(BoatRoutes.describe(s));
+            }
         }
         return b.toString();
     }
@@ -116,12 +118,24 @@ public final class StationCommand extends AbstractCommandCollection {
                 ctx.sendMessage(Texts.t("transit.cmd.despawnNone").param("radius", (int) TransitConstants.REMOVE_RADIUS));
                 return;
             }
+            StationSpec spec = StationSpec.of(s.kind);
+            // The registry shape follows the wood of a boat station (renamed blocks), the prefab shape does not.
+            StructureShape shape;
+            try {
+                BalloonRegistry.Entry entry = BalloonRegistry.get(world, s.origin, s.rotation, s.kind);
+                StructureShape reg = entry == null ? null : BalloonRegistry.shapeOf(entry);
+                shape = reg != null ? reg : spec.structure().shape();
+            } catch (java.io.IOException | RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Forme de la station %s illisible", s.name);
+                ctx.sendMessage(Texts.t("transit.cmd.despawnFailed"));
+                return;
+            }
             // 0. Players on the pad, in the hut or in the docked balloon lose their floor: unseated now, put on the ground after the removal.
             java.util.Map<Ref<EntityStore>, org.joml.Vector3d> stranded = new java.util.LinkedHashMap<>();
             try {
                 int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
                 int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
-                for (StructureShape.Cell c : Deployables.STATION.shape().cells()) {
+                for (StructureShape.Cell c : shape.cells()) {
                     org.joml.Vector3i p = c.rotated(s.rotation).add(s.origin);
                     minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); minZ = Math.min(minZ, p.z);
                     maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); maxZ = Math.max(maxZ, p.z);
@@ -136,21 +150,21 @@ public final class StationCommand extends AbstractCommandCollection {
                     }
                 }
                 org.joml.Vector3i dock = StationQueue.dockOrigin(s);
-                if (BalloonRegistry.get(world, dock, s.rotation, Deployables.BALLOON_PUBLIC.id) != null) {
+                if (Deployables.STATION_KIND.equals(s.kind) && BalloonRegistry.get(world, dock, s.rotation, Deployables.BALLOON_PUBLIC.id) != null) {
                     for (BalloonManager.Occupant o : BalloonManager.get().nacelleOccupants(world, store, Deployables.BALLOON_PUBLIC, dock, s.rotation)) {
                         org.joml.Vector3d pp = posOf(store, o.ref());
                         if (pp != null) stranded.putIfAbsent(o.ref(), pp);
                     }
                 }
                 for (Ref<EntityStore> sr : stranded.keySet()) MountUtil.unseat(store, sr);
-            } catch (java.io.IOException | RuntimeException e) {
+            } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Joueurs de la station %s non repérés", s.name);
             }
             // 1. Station blocks first: it refuses (chunks not loaded) before anything else is touched. Contents dropped, lock entry removed.
             StructureRemoval.Result r;
             try {
-                r = StructureRemoval.remove(store, world, Deployables.STATION, Deployables.STATION.shape(), s.origin, s.rotation);
-            } catch (java.io.IOException | RuntimeException e) {
+                r = StructureRemoval.remove(store, world, spec.structure(), shape, s.origin, s.rotation);
+            } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Station %s non retirée", s.name);
                 ctx.sendMessage(Texts.t("transit.cmd.despawnFailed"));
                 return;
@@ -161,21 +175,26 @@ public final class StationCommand extends AbstractCommandCollection {
             }
             int filled;
             try {
-                filled = fillGroundHoles(world, Deployables.STATION.shape(), s.origin, s.rotation);
-            } catch (java.io.IOException e) {
+                filled = spec.soilLayerY() == null ? 0
+                        : fillGroundHoles(world, shape, s.origin, s.rotation, spec.soilLayerY());
+            } catch (RuntimeException e) {
                 filled = 0;
             }
             // 2. Master NPC (also clears its reservation, rewire stamp and pending recovery), 3. network entry.
+            // Refund first: the payments must be written to refunds.json before the station leaves stations.json.
+            TransitFare.refundRemovedStation(s);
             StationMaster.remove(store, s);
             TransitNetwork.get().remove(s);
             TransitNetwork.get().save();
+            BoatRoutes.stationRemoved(world, s);
             StationNameType.stationsChanged();
             // 4. Quay (QUAYS entry), approaching or departing flight, docked balloon, flights heading here, other queues. World thread.
             StationQueue.onStationRemoved(world, s);
+            BoatQuay.onStationRemoved(world, s); // boat stations only: shuttles, moored shuttle, other queues
             for (java.util.Map.Entry<Ref<EntityStore>, org.joml.Vector3d> e : stranded.entrySet()) {
                 if (e.getKey().isValid()) BalloonManager.putOnGround(store, world, e.getKey(), e.getValue());
             }
-            boolean given = BalloonManager.get().giveCrate(store, ref, here, CRATE_ID);
+            boolean given = BalloonManager.get().giveCrate(store, ref, here, spec.crateId());
             LOGGER.at(Level.INFO).log("Station « %s » retirée par %s : %d bloc(s), %d objet(s) lâchés, %d trou(s) du sol rebouché(s)",
                     s.name, player.getUsername(), r.removed(), r.items(), filled);
             ctx.sendMessage(Texts.t(given ? "transit.cmd.despawnDone" : "transit.cmd.despawnDoneFull").param("name", s.name));
@@ -205,7 +224,7 @@ public final class StationCommand extends AbstractCommandCollection {
                 ctx.sendMessage(Texts.t("transit.cmd.tpUnknown").param("name", TransitNetwork.normalize(wanted)));
                 return;
             }
-            org.joml.Vector3d target = TransitAutopilot.dropPoints(s.origin, s.rotation, 1).get(0);
+            org.joml.Vector3d target = StationSpec.teleportPoint(s);
             int bx = (int) Math.floor(target.x), by = (int) Math.floor(target.y), bz = (int) Math.floor(target.z);
             SectionBlocks.loadSections(world.getChunkStore(), bx, by - 2, bz, bx, by + 2, bz).whenComplete((c, t) -> {
                 try {
@@ -232,12 +251,12 @@ public final class StationCommand extends AbstractCommandCollection {
      * Returns the number of cells filled. Never throws.
      */
     static int fillGroundHoles(World world, StructureShape shape, org.joml.Vector3i origin,
-                               com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation rotation) {
+                               com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation rotation, int soilLayerY) {
         int filled = 0;
         try {
             List<org.joml.Vector3i> holes = new ArrayList<>();
             for (StructureShape.Cell c : shape.cells()) {
-                if (c.y() == Deployables.STATION_GRASS_Y) {
+                if (c.y() == soilLayerY) {
                     holes.add(c.rotated(rotation).add(origin));
                 }
             }
@@ -360,7 +379,7 @@ public final class StationCommand extends AbstractCommandCollection {
         Player p = holder.getComponent(Player.getComponentType());
         if (p == null) return;
         Set<String> known = new HashSet<>(p.getPlayerConfigData().getKnownRecipes());
-        boolean changed = TransitSettings.recipeEnabled() ? known.add(CRATE_ID) : known.remove(CRATE_ID);
+        boolean changed = TransitSettings.recipeEnabled() ? known.addAll(StationSpec.CRATE_IDS) : known.removeAll(StationSpec.CRATE_IDS);
         if (changed) p.getPlayerConfigData().setKnownRecipes(known);
     }
 
@@ -385,8 +404,10 @@ public final class StationCommand extends AbstractCommandCollection {
                                 Ref<EntityStore> r = pr.getReference();
                                 if (r == null || !r.isValid()) continue;
                                 try {
-                                    if (on) CraftingPlugin.learnRecipe(r, CRATE_ID, r.getStore());
-                                    else CraftingPlugin.forgetRecipe(r, CRATE_ID, r.getStore());
+                                    for (String id : StationSpec.CRATE_IDS) {
+                                        if (on) CraftingPlugin.learnRecipe(r, id, r.getStore());
+                                        else CraftingPlugin.forgetRecipe(r, id, r.getStore());
+                                    }
                                 } catch (RuntimeException e) {
                                     LOGGER.at(Level.WARNING).withCause(e).log("Recette de la station non synchronisée pour %s", pr.getUsername());
                                 }

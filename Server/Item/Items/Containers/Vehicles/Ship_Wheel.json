@@ -1,0 +1,47 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.ship_wheel.name",
+    "Description": "server.orbis_horizon.items.ship_wheel.description"
+  },
+  "PlayerAnimationsId": "Block",
+  "Icon": "Icons/ItemsGenerated/Ship_Wheel.png",
+  "Categories": [
+    "Furniture.Furniture"
+  ],
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": "Block_Secondary"
+  },
+  "BlockType": {
+    "BlockParticleSetId": "Wood",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "CustomModel": "Blocks/Vehicles/Ship_Wheel.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Vehicles/Ship_Wheel_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "DrawType": "Model",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Woods"
+      }
+    },
+    "Group": "Wood",
+    "HitboxType": "Ship_Wheel",
+    "Material": "Solid",
+    "Opacity": "Transparent",
+    "VariantRotation": "NESW",
+    "ParticleColor": "#9a733c",
+    "TextureComputedColor": "#976E33"
+  },
+  "Tags": {
+    "Type": [
+      "Furniture"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

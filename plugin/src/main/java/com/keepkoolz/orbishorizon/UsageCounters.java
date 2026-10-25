@@ -9,9 +9,9 @@ import java.util.concurrent.atomic.LongAdder;
 final class UsageCounters {
     static final List<String> NAMES = List.of(
             "deploy.balloon", "deploy.balloon_basic", "deploy.balloon_transport", "deploy.airship", "deploy.steamboat",
-            "deploy.bedroll", "deploy.tent", "deploy.tent_big", "deploy.station",
+            "deploy.bedroll", "deploy.tent", "deploy.tent_big", "deploy.station", "deploy.boatStation",
             "takeoff.balloon", "takeoff.balloon_basic", "takeoff.balloon_transport", "takeoff.airship", "takeoff.steamboat",
-            "airship.voyage", "airship.recall", "airship.pilot_hired", "transit.trip",
+            "airship.voyage", "balloon.voyage", "airship.recall", "airship.pilot_hired", "transit.trip", "transit.boatTrip",
             "cage.capture", "glider.jump", "camp.upgrade");
 
     private final Map<String, LongAdder> counters = new LinkedHashMap<>();

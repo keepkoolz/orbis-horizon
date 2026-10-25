@@ -21,7 +21,7 @@ final class VoyagePlanner {
     static final int CEILING_MARGIN = 10;
     static final double ALIGN_SECONDS = 5;
 
-    enum Kind { MARKER, STATION }
+    enum Kind { MARKER, STOP, STATION }
 
     /** groundY is Integer.MIN_VALUE when unknown. */
     record Destination(String name, Kind kind, double x, double z, int groundY) {}
@@ -114,25 +114,32 @@ final class VoyagePlanner {
             LOGGER.atWarning().log("Voyage : lecture des marqueurs partagés impossible : " + t);
         }
         try {
-            List<TransitNetwork.Station> stations = TransitNetwork.get().stations(world.getName());
-            List<Vector3d> pads = new ArrayList<>();
-            for (TransitNetwork.Station s : stations) {
-                pads.add(StationMarkerProvider.markerPoint(s.origin, s.rotation));
-            }
-            for (int i = 0; i < stations.size(); i++) {
-                Vector3d pad = pads.get(i);
-                List<double[]> others = new ArrayList<>();
-                for (int j = 0; j < pads.size(); j++) {
-                    if (j != i) {
-                        others.add(new double[]{pads.get(j).x, pads.get(j).z});
-                    }
-                }
-                double[] a = stationArrival(pad.x, pad.z, fromX, fromZ, others);
-                all.add(new Destination(stations.get(i).name, Kind.STATION, a[0], a[1], (int) Math.round(pad.y)));
-            }
+            // Destinations: every station, balloon and boat. Zones to avoid: every station too.
+            all.addAll(stationDestinations(TransitNetwork.get().stations(world.getName()), fromX, fromZ));
         } catch (Throwable t) {
             LOGGER.atWarning().log("Voyage : lecture des stations impossible : " + t);
         }
         return all;
+    }
+
+    /** One destination per balloon or boat station; arrival point keeps clear of every other station. */
+    static List<Destination> stationDestinations(List<TransitNetwork.Station> every, double fromX, double fromZ) {
+        List<Destination> out = new ArrayList<>();
+        for (TransitNetwork.Station dest : every) {
+            if (!Deployables.STATION_KIND.equals(dest.kind) && !Deployables.BOAT_STATION_KIND.equals(dest.kind)) {
+                continue;
+            }
+            Vector3d pad = StationMarkerProvider.markerPoint(dest);
+            List<double[]> others = new ArrayList<>();
+            for (TransitNetwork.Station other : every) {
+                if (other != dest) {
+                    Vector3d p = StationMarkerProvider.markerPoint(other);
+                    others.add(new double[]{p.x, p.z});
+                }
+            }
+            double[] a = stationArrival(pad.x, pad.z, fromX, fromZ, others);
+            out.add(new Destination(dest.name, Kind.STATION, a[0], a[1], (int) Math.round(pad.y)));
+        }
+        return out;
     }
 }

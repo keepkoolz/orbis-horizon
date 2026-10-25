@@ -17,7 +17,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
@@ -38,8 +40,12 @@ final class TransitNetwork {
         volatile UUID masterUuid;
         final UUID owner;
         final List<String> queue;
+        /** Ticket paid for each queued destination, key = lower-case normalised destination name. Guarded by the network lock. */
+        final Map<String, TransitFare.Payment> payments = new HashMap<>();
+        /** Deployables.STATION_KIND (balloon station) or Deployables.BOAT_STATION_KIND. */
+        final String kind;
 
-        Station(String name, String world, Vector3i origin, Rotation rotation, UUID masterUuid, UUID owner, List<String> queue) {
+        Station(String name, String world, Vector3i origin, Rotation rotation, UUID masterUuid, UUID owner, List<String> queue, String kind) {
             this.name = name;
             this.world = world;
             this.origin = origin;
@@ -47,6 +53,7 @@ final class TransitNetwork {
             this.masterUuid = masterUuid;
             this.owner = owner;
             this.queue = queue;
+            this.kind = kind;
         }
     }
 
@@ -81,6 +88,13 @@ final class TransitNetwork {
     List<Station> stations(String world) {
         List<Station> out = new ArrayList<>();
         for (Station s : stations) if (s.world.equals(world)) out.add(s);
+        return out;
+    }
+
+    /** Stations of this world that have the given kind (Deployables.STATION_KIND or BOAT_STATION_KIND). */
+    List<Station> stations(String world, String kind) {
+        List<Station> out = new ArrayList<>();
+        for (Station s : stations) if (s.world.equals(world) && s.kind.equals(kind)) out.add(s);
         return out;
     }
 
@@ -140,7 +154,8 @@ final class TransitNetwork {
                         Rotation.valueOf(d.getString("rotation").getValue()),
                         d.containsKey("master") ? UUID.fromString(d.getString("master").getValue()) : null,
                         d.containsKey("owner") ? UUID.fromString(d.getString("owner").getValue()) : null,
-                        queue));
+                        queue, d.containsKey("kind") ? d.getString("kind").getValue() : Deployables.STATION_KIND));
+                loadPayments(stations.get(stations.size() - 1), d);
             }
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("stations.json illisible, réseau vide");
@@ -149,6 +164,28 @@ final class TransitNetwork {
                 Files.move(file, file.resolveSibling(file.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e2) {
                 LOGGER.at(Level.WARNING).withCause(e2).log("Impossible de renommer stations.json en .bad");
+            }
+        }
+    }
+
+    private static String payKey(String destination) { return normalize(destination).toLowerCase(java.util.Locale.ROOT); }
+
+    /** Reads the optional "payments" array; a malformed entry or one whose destination left the queue is ignored. */
+    private static void loadPayments(Station s, BsonDocument d) {
+        if (!d.containsKey("payments")) return;
+        for (var v : d.getArray("payments")) {
+            try {
+                BsonDocument p = v.asDocument();
+                String key = payKey(p.getString("dest").getValue());
+                boolean queued = false;
+                for (String q : s.queue) if (payKey(q).equals(key)) { queued = true; break; }
+                if (!queued) continue;
+                String item = p.getString("item").getValue();
+                int qty = p.getInt32("qty").getValue();
+                if (item.isEmpty() || qty <= 0) throw new IllegalArgumentException("paiement invalide");
+                s.payments.put(key, new TransitFare.Payment(UUID.fromString(p.getString("payer").getValue()), item, qty));
+            } catch (RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Paiement illisible dans stations.json, ignoré");
             }
         }
     }
@@ -163,31 +200,62 @@ final class TransitNetwork {
 
     /** Applies the queue rules (StationQueue.addTo) to the station's queue and saves when something was added. */
     synchronized StationQueue.EnqueueResult queueEnqueue(Station s, String destination) {
+        return queueEnqueue(s, destination, null);
+    }
+
+    /** Same, and records the ticket paid for the destination when it was added. */
+    synchronized StationQueue.EnqueueResult queueEnqueue(Station s, String destination, TransitFare.Payment payment) {
         StationQueue.EnqueueResult r = StationQueue.addTo(s.queue, s.name, destination);
-        if (r == StationQueue.EnqueueResult.ADDED) save();
+        if (r == StationQueue.EnqueueResult.ADDED) {
+            if (payment != null) s.payments.put(payKey(destination), payment);
+            save();
+        }
         return r;
     }
 
     synchronized String queuePoll(Station s) {
         if (s.queue.isEmpty()) return null;
         String head = s.queue.remove(0);
+        if (!queueHas(s, head)) s.payments.remove(payKey(head));
         save();
         return head;
     }
 
-    /** Removes the first occurrence of this destination (departure of the balloon that was heading there). */
-    synchronized void queueRemoveFirst(Station s, String destination) {
+    private static boolean queueHas(Station s, String destination) {
+        for (String q : s.queue) if (q.equalsIgnoreCase(destination)) return true;
+        return false;
+    }
+
+    /** Removes the first occurrence of this destination (departure of the balloon that was heading there). Returns its payment, or null. */
+    synchronized TransitFare.Payment queueRemoveFirst(Station s, String destination) {
         for (int i = 0; i < s.queue.size(); i++) {
             if (s.queue.get(i).equalsIgnoreCase(destination)) {
                 s.queue.remove(i);
+                TransitFare.Payment p = s.payments.remove(payKey(destination));
                 save();
-                return;
+                return p;
             }
         }
+        return null;
     }
 
-    synchronized void queueRemoveAll(Station s, String destination) {
-        if (s.queue.removeIf(n -> n.equalsIgnoreCase(destination))) save();
+    /** Removes every occurrence of this destination and returns the payments taken off (empty if none). */
+    synchronized List<TransitFare.Payment> queueRemoveAll(Station s, String destination) {
+        List<TransitFare.Payment> out = new ArrayList<>();
+        if (s.queue.removeIf(n -> n.equalsIgnoreCase(destination))) {
+            TransitFare.Payment p = s.payments.remove(payKey(destination));
+            if (p != null) out.add(p);
+            save();
+        }
+        return out;
+    }
+
+    /** Empties and returns the payments table (destination to payment), for a station being removed. */
+    synchronized Map<String, TransitFare.Payment> takeAllPayments(Station s) {
+        Map<String, TransitFare.Payment> out = new HashMap<>(s.payments);
+        s.payments.clear();
+        if (!out.isEmpty()) save();
+        return out;
     }
 
     /** Head of the queue, null if empty. */
@@ -210,9 +278,22 @@ final class TransitNetwork {
                 d.put("rotation", new BsonString(s.rotation.name()));
                 if (s.masterUuid != null) d.put("master", new BsonString(s.masterUuid.toString()));
                 if (s.owner != null) d.put("owner", new BsonString(s.owner.toString()));
+                d.put("kind", new BsonString(s.kind));
                 BsonArray q = new BsonArray();
                 for (String n : s.queue) q.add(new BsonString(n));
                 d.put("queue", q);
+                if (!s.payments.isEmpty()) {
+                    BsonArray pa = new BsonArray();
+                    for (var e : s.payments.entrySet()) {
+                        BsonDocument p = new BsonDocument();
+                        p.put("dest", new BsonString(e.getKey()));
+                        p.put("payer", new BsonString(e.getValue().payer().toString()));
+                        p.put("item", new BsonString(e.getValue().itemId()));
+                        p.put("qty", new BsonInt32(e.getValue().quantity()));
+                        pa.add(p);
+                    }
+                    d.put("payments", pa);
+                }
                 arr.add(d);
             }
             BsonDocument doc = new BsonDocument();

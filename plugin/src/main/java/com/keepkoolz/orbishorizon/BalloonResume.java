@@ -50,7 +50,7 @@ final class BalloonResume {
     /** A flight read back from disk. */
     record Record(UUID pilot, String world, Deployables.Kind kind, Vector3i origin, Rotation rotation, UUID balloon,
                   BurnerFuel burner, BalloonCargo cargo, List<Seated> passengers, List<CageAnimals.Animal> animals,
-                  String transitFrom, String transitTo, int cageDescent, int cageHomeY, Ownership ownership) {
+                  String transitFrom, String transitTo, int cageDescent, int cageHomeY, Ownership ownership, CrewRecord crew) {
         /** A transit flight (Task 9): nothing is placed on resume, only the passengers are set down at the destination station. */
         boolean transit() {
             return transitFrom != null;
@@ -58,7 +58,7 @@ final class BalloonResume {
 
         /** T76: the same record with the origin moved vertically (resume of a pose outside the height range). */
         Record shiftedBy(int dy) {
-            return new Record(pilot, world, kind, new Vector3i(origin).add(0, dy, 0), rotation, balloon, burner, cargo, passengers, animals, transitFrom, transitTo, cageDescent, cageHomeY, ownership);
+            return new Record(pilot, world, kind, new Vector3i(origin).add(0, dy, 0), rotation, balloon, burner, cargo, passengers, animals, transitFrom, transitTo, cageDescent, cageHomeY, ownership, crew);
         }
     }
 
@@ -131,6 +131,9 @@ final class BalloonResume {
                 doc.put("cageDescent", new BsonInt32(f.groundCage));
                 doc.put("cageHomeY", new BsonInt32(f.cageHome.y));
             }
+            if (f.crew != null) {
+                doc.put("crew", crewToBson(f.crew)); // optional NPC pilot of the large balloon
+            }
             f.ownership.writeTo(doc); // keys absent in older files: read back as NONE
             if (f.burner != null) {
                 doc.put("burner", f.burner.toBson());
@@ -183,6 +186,16 @@ final class BalloonResume {
         }
     }
 
+    /** NPC pilot as a BSON document (the "crew" key of the resume file). */
+    static BsonDocument crewToBson(CrewRecord crew) {
+        return crew.toBson();
+    }
+
+    /** NPC pilot read back, null if absent or malformed. */
+    static CrewRecord crewFromBson(BsonDocument d) {
+        return CrewRecord.fromBson(d);
+    }
+
     /** Flights to put back down in this world. An unreadable file is renamed to ".bad" and ignored. */
     static synchronized List<Record> loadAll(String worldName) {
         List<Record> list = new ArrayList<>();
@@ -228,7 +241,8 @@ final class BalloonResume {
                         doc.containsKey("transitTo") ? doc.getString("transitTo").getValue() : null,
                         doc.containsKey("cageDescent") ? doc.getNumber("cageDescent").intValue() : 0,
                         doc.containsKey("cageHomeY") ? doc.getNumber("cageHomeY").intValue() : 0,
-                        Ownership.readFrom(doc)));
+                        Ownership.readFrom(doc),
+                        doc.containsKey("crew") ? crewFromBson(doc.get("crew").isDocument() ? doc.getDocument("crew") : null) : null));
             } catch (IOException | RuntimeException e) {
                 LOGGER.at(Level.SEVERE).withCause(e).log("Fichier de reprise illisible : %s", p);
                 try {
@@ -267,6 +281,19 @@ final class BalloonResume {
             Files.writeString(strandedFile(player), doc.toJson(), StandardCharsets.UTF_8);
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Position de reprise du passager %s non écrite", player);
+        }
+    }
+
+    /** Deletes the player's resume position (a boarding safety entry that is no longer needed). Never throws. */
+    static synchronized void deleteStranded(UUID player) {
+        Path d = strandedDir;
+        if (d == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(strandedFile(player));
+        } catch (IOException | RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Position de reprise du passager %s non effacée", player);
         }
     }
 

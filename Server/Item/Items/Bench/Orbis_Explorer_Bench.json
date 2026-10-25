@@ -67,6 +67,11 @@
           "Id": "OrbisHorizon_Transport",
           "Icon": "Icons/CraftingCategories/OrbisHorizon/Transport.png",
           "Name": "server.orbis_horizon.benchCategories.transport"
+        },
+        {
+          "Id": "OrbisHorizon_Gear",
+          "Icon": "Icons/CraftingCategories/OrbisHorizon/Gear.png",
+          "Name": "server.orbis_horizon.benchCategories.gear"
         }
       ],
       "LocalOpenSoundEventId": "SFX_Workbench_Open",

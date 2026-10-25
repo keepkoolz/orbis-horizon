@@ -91,6 +91,8 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         BalloonRegistry.init(getDataDirectory());
         // Transit: station network (stations.json).
         TransitNetwork.get().load(getDataDirectory());
+        TransitFare.loadRefunds(getDataDirectory());
+        BoatRoutes.load(getDataDirectory());
         TransitSettings.load(getDataDirectory());
         PassengerProtection.load(getDataDirectory());
         CampRespawn.load(getDataDirectory());
@@ -144,6 +146,12 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                     event -> PackBackView.onReady(event.getPlayerRef()));
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Sac de campement sur le dos désactivé");
+        }
+        try {
+            getEventRegistry().registerGlobal(com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent.class,
+                    event -> TransitFare.onReady(event.getPlayerRef()));
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Remboursements des billets à l'arrivée désactivés");
         }
         // T82: dual rendering of the vehicles in flight needs the per-viewer visibility filter. Without it every flight keeps the single entity.
         try {
@@ -201,6 +209,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             CageAnimals.recoverWorld(event.getWorld());
             StationMaster.recoverWorld(event.getWorld());
             StationQueue.recoverWorld(event.getWorld());
+            BoatQuay.recoverWorld(event.getWorld());
             try {
                 AirshipCrew.recoverWorld(event.getWorld());
             } catch (RuntimeException e) {
@@ -258,6 +267,13 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         } else {
             getLogger().at(Level.WARNING).log("Station : prefab illisible");
         }
+        StructureShape boatStation = Deployables.BOAT_STATION.shapeOrNull();
+        if (boatStation != null) {
+            getLogger().at(Level.INFO).log("Station maritime : %d case(s), repère en (%d, %d, %d)", boatStation.cells().size(),
+                    boatStation.anchor().x(), boatStation.anchor().y(), boatStation.anchor().z());
+        } else {
+            getLogger().at(Level.WARNING).log("Station maritime : prefab illisible");
+        }
         // Worlds already started when the plugin starts (StartWorldEvent has already passed).
         for (World world : Universe.get().getWorlds().values()) {
             try {
@@ -298,6 +314,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             }
             try {
                 StationQueue.recoverWorld(world);
+                BoatQuay.recoverWorld(world);
             } catch (RuntimeException e) {
                 getLogger().at(Level.WARNING).withCause(e).log("Reprise des quais de %s remise au démarrage du monde", world.getName());
             }

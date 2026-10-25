@@ -124,7 +124,13 @@ public final class StructureShape {
      */
     /** Shape made of the given cells only, without anchor or burner (test hook). */
     static StructureShape ofCells(List<Cell> cells) {
-        return new StructureShape("", Collections.unmodifiableList(cells), null, null, List.of());
+        List<Cell> seatCells = new java.util.ArrayList<>();
+        for (Cell c : cells) {
+            if (SEAT_BLOCK.equals(c.baseName())) {
+                seatCells.add(c);
+            }
+        }
+        return new StructureShape("", Collections.unmodifiableList(cells), null, null, seatCells);
     }
 
     StructureShape withCells(List<Cell> newCells) {

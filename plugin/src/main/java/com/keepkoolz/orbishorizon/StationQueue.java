@@ -111,15 +111,20 @@ final class StationQueue {
      * Adds a destination to the station's queue. ADDED is announced to the players near the station, the chooser is told about the
      * other results. An unknown destination is refused like the station itself (SELF): the pages only offer existing stations.
      */
-    static EnqueueResult enqueue(World world, TransitNetwork.Station s, String destination, PlayerRef chooser) {
+    static EnqueueResult enqueue(World world, TransitNetwork.Station s, String destination, PlayerRef chooser,
+                                 Store<EntityStore> store, Ref<EntityStore> ref) {
         TransitNetwork net = TransitNetwork.get();
         TransitNetwork.Station target = net.byName(world.getName(), destination);
+        if (!Deployables.STATION_KIND.equals(s.kind) || (target != null && !target.kind.equals(s.kind))) {
+            LOGGER.at(Level.INFO).log("File de %s ignorée : stations de types différents ou station maritime", s.name);
+            return EnqueueResult.UNKNOWN;
+        }
         if (target == null) {
             LOGGER.at(Level.INFO).log("File de %s : destination inconnue « %s »", s.name, destination);
             if (chooser != null) chooser.sendMessage(Texts.t("transit.network.removed").param("name", TransitNetwork.normalize(destination)));
             return EnqueueResult.UNKNOWN;
         }
-        EnqueueResult r = net.queueEnqueue(s, target.name);
+        EnqueueResult r = TransitFare.addPaid(s, target.name, chooser, store, ref);
         int position = positionOf(s, target.name);
         switch (r) {
             case ADDED -> broadcast(world, s, Texts.t("transit.queue.added").param("name", target.name).param("position", position));
@@ -164,7 +169,7 @@ final class StationQueue {
 
     /** Called on every tick of every world. */
     static void tick(Store<EntityStore> store, World world) {
-        List<TransitNetwork.Station> stations = TransitNetwork.get().stations(world.getName());
+        List<TransitNetwork.Station> stations = TransitNetwork.get().stations(world.getName(), Deployables.STATION_KIND);
         if (stations.isEmpty()) {
             return;
         }
@@ -455,6 +460,10 @@ final class StationQueue {
      * done here.
      */
     static void onStationRemoved(World world, TransitNetwork.Station removed) {
+        if (!Deployables.STATION_KIND.equals(removed.kind)) {
+            return; // boat stations have no quay, approach or recall flows yet
+        }
+        TransitFare.refundRemovedStation(removed); // its own queue is lost with it
         Quay q = QUAYS.remove(removed);
         if (q != null) {
             BalloonFlight f = q.flight;
@@ -491,12 +500,14 @@ final class StationQueue {
         }
         // Flights in the air heading to the removed station (the network no longer contains it when this is called).
         BalloonManager.get().rerouteTransitTo(world, removed);
-        for (TransitNetwork.Station other : TransitNetwork.get().stations(world.getName())) {
+        for (TransitNetwork.Station other : TransitNetwork.get().stations(world.getName(), Deployables.STATION_KIND)) {
             if (other == removed) {
                 continue;
             }
             if (positionOf(other, removed.name) > 0) {
-                TransitNetwork.get().queueRemoveAll(other, removed.name);
+                for (TransitFare.Payment p : TransitNetwork.get().queueRemoveAll(other, removed.name)) {
+                    TransitFare.refund(p, removed.name);
+                }
                 broadcast(world, other, Texts.t("transit.network.removed").param("name", removed.name));
             }
         }
@@ -517,7 +528,7 @@ final class StationQueue {
     }
 
     private static void recoverOnThread(World world) {
-        for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName())) {
+        for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName(), Deployables.STATION_KIND)) {
             if (quay(s).state == QuayState.FREE
                     && BalloonRegistry.get(world, dockOrigin(s), s.rotation, Deployables.BALLOON_PUBLIC.id) != null) {
                 LOGGER.at(Level.INFO).log("Station %s : montgolfière à quai retrouvée, compte à rebours de %d s", s.name,

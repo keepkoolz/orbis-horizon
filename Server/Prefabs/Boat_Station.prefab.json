@@ -1,0 +1,807 @@
+{
+  "version": 8,
+  "blockIdVersion": 11,
+  "anchorX": 0,
+  "anchorY": 0,
+  "anchorZ": 0,
+  "blocks": [
+    {
+      "x": -6,
+      "y": 2,
+      "z": 3,
+      "name": "Cloth_Roof_White_Flap",
+      "rotation": 3
+    },
+    {
+      "x": -6,
+      "y": 2,
+      "z": 4,
+      "name": "Cloth_Roof_Blue_Flap",
+      "rotation": 3
+    },
+    {
+      "x": -6,
+      "y": 2,
+      "z": 5,
+      "name": "Cloth_Roof_White_Flap",
+      "rotation": 3
+    },
+    {
+      "x": -6,
+      "y": 2,
+      "z": 6,
+      "name": "Cloth_Roof_Blue_Flap",
+      "rotation": 3
+    },
+    {
+      "x": -5,
+      "y": 2,
+      "z": 2,
+      "name": "Cloth_Roof_Blue_Flap",
+      "rotation": 2
+    },
+    {
+      "x": -5,
+      "y": 0,
+      "z": 3,
+      "name": "Wood_Hardwood_Stairs",
+      "rotation": 8
+    },
+    {
+      "x": -5,
+      "y": 1,
+      "z": 3,
+      "name": "Wood_Hardwood_Beam"
+    },
+    {
+      "x": -5,
+      "y": 2,
+      "z": 3,
+      "name": "Wood_Hardwood_Beam"
+    },
+    {
+      "x": -5,
+      "y": 3,
+      "z": 3,
+      "name": "Wood_Hardwood_Roof_Shallow",
+      "rotation": 2
+    },
+    {
+      "x": -5,
+      "y": 0,
+      "z": 4,
+      "name": "Boat_Station_Gate",
+      "rotation": 3
+    },
+    {
+      "x": -5,
+      "y": 3,
+      "z": 4,
+      "name": "Wood_Hardwood_Roof_Shallow",
+      "filler": 32,
+      "rotation": 2
+    },
+    {
+      "x": -5,
+      "y": 0,
+      "z": 5,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -5,
+      "y": 1,
+      "z": 5,
+      "name": "Boat_Station_Shell"
+    },
+    {
+      "x": -5,
+      "y": 3,
+      "z": 5,
+      "name": "Wood_Hardwood_Roof_Shallow",
+      "filler": 992
+    },
+    {
+      "x": -5,
+      "y": 0,
+      "z": 6,
+      "name": "Wood_Hardwood_Stairs",
+      "rotation": 10
+    },
+    {
+      "x": -5,
+      "y": 1,
+      "z": 6,
+      "name": "Wood_Hardwood_Beam"
+    },
+    {
+      "x": -5,
+      "y": 2,
+      "z": 6,
+      "name": "Wood_Hardwood_Beam"
+    },
+    {
+      "x": -5,
+      "y": 3,
+      "z": 6,
+      "name": "Wood_Hardwood_Roof_Shallow"
+    },
+    {
+      "x": -5,
+      "y": 2,
+      "z": 7,
+      "name": "Cloth_Roof_White_Flap"
+    },
+    {
+      "x": -4,
+      "y": 2,
+      "z": 2,
+      "name": "Cloth_Roof_White_Flap",
+      "rotation": 2
+    },
+    {
+      "x": -4,
+      "y": 0,
+      "z": 3,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -4,
+      "y": 1,
+      "z": 3,
+      "name": "Boat_Station_Candle"
+    },
+    {
+      "x": -4,
+      "y": 3,
+      "z": 3,
+      "name": "Wood_Hardwood_Roof_Shallow",
+      "rotation": 2
+    },
+    {
+      "x": -4,
+      "y": 3,
+      "z": 4,
+      "name": "Wood_Hardwood_Roof_Shallow",
+      "filler": 32,
+      "rotation": 2
+    },
+    {
+      "x": -4,
+      "y": 3,
+      "z": 5,
+      "name": "Wood_Hardwood_Roof_Shallow",
+      "filler": 992
+    },
+    {
+      "x": -4,
+      "y": 0,
+      "z": 6,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -4,
+      "y": 1,
+      "z": 6,
+      "name": "Boat_Station_Treasure"
+    },
+    {
+      "x": -4,
+      "y": 3,
+      "z": 6,
+      "name": "Wood_Hardwood_Roof_Shallow"
+    },
+    {
+      "x": -4,
+      "y": 2,
+      "z": 7,
+      "name": "Cloth_Roof_Blue_Flap"
+    },
+    {
+      "x": -3,
+      "y": 2,
+      "z": 2,
+      "name": "Cloth_Roof_Blue_Flap",
+      "rotation": 2
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 3,
+      "name": "Wood_Hardwood_Stairs",
+      "rotation": 8
+    },
+    {
+      "x": -3,
+      "y": 1,
+      "z": 3,
+      "name": "Wood_Hardwood_Beam"
+    },
+    {
+      "x": -3,
+      "y": 2,
+      "z": 3,
+      "name": "Wood_Hardwood_Beam"
+    },
+    {
+      "x": -3,
+      "y": 3,
+      "z": 3,
+      "name": "Wood_Hardwood_Roof_Shallow",
+      "rotation": 2
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 4,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -3,
+      "y": 1,
+      "z": 4,
+      "name": "Boat_Station_Inkwell"
+    },
+    {
+      "x": -3,
+      "y": 3,
+      "z": 4,
+      "name": "Wood_Hardwood_Roof_Shallow",
+      "filler": 32,
+      "rotation": 2
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 5,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -3,
+      "y": 1,
+      "z": 5,
+      "name": "Boat_Station_Map",
+      "rotation": 1
+    },
+    {
+      "x": -3,
+      "y": 3,
+      "z": 5,
+      "name": "Wood_Hardwood_Roof_Shallow",
+      "filler": 992
+    },
+    {
+      "x": -3,
+      "y": 0,
+      "z": 6,
+      "name": "Wood_Hardwood_Stairs",
+      "rotation": 10
+    },
+    {
+      "x": -3,
+      "y": 1,
+      "z": 6,
+      "name": "Wood_Hardwood_Beam"
+    },
+    {
+      "x": -3,
+      "y": 2,
+      "z": 6,
+      "name": "Wood_Hardwood_Beam"
+    },
+    {
+      "x": -3,
+      "y": 3,
+      "z": 6,
+      "name": "Wood_Hardwood_Roof_Shallow"
+    },
+    {
+      "x": -3,
+      "y": 2,
+      "z": 7,
+      "name": "Cloth_Roof_White_Flap"
+    },
+    {
+      "x": -2,
+      "y": 2,
+      "z": 3,
+      "name": "Cloth_Roof_White_Flap",
+      "rotation": 1
+    },
+    {
+      "x": -2,
+      "y": 2,
+      "z": 4,
+      "name": "Cloth_Roof_Blue_Flap",
+      "rotation": 1
+    },
+    {
+      "x": -2,
+      "y": 2,
+      "z": 5,
+      "name": "Cloth_Roof_White_Flap",
+      "rotation": 1
+    },
+    {
+      "x": -2,
+      "y": 2,
+      "z": 6,
+      "name": "Cloth_Roof_Blue_Flap",
+      "rotation": 1
+    },
+    {
+      "x": -1,
+      "y": -3,
+      "z": 6,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": 6,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": -1,
+      "y": -1,
+      "z": 6,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 6,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 6,
+      "name": "Deco_Lantern"
+    },
+    {
+      "x": -1,
+      "y": -5,
+      "z": 10,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": -1,
+      "y": -4,
+      "z": 10,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": -1,
+      "y": -3,
+      "z": 10,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": 10,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": -1,
+      "y": -1,
+      "z": 10,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 10,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 10,
+      "name": "Deco_Lantern"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 5,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 6,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 7,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 8,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 9,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 10,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 11,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 5,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 6,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 7,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 8,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 9,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 10,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 11,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 5,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 6,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 7,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 8,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 9,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 10,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 11,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 1,
+      "name": "Furniture_Village_Crate"
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 2,
+      "name": "Furniture_Village_Crate"
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 5,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 6,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 7,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 8,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 9,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 10,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 3,
+      "y": 0,
+      "z": 11,
+      "name": "Wood_Hardwood_Planks_Half"
+    },
+    {
+      "x": 4,
+      "y": 0,
+      "z": 1,
+      "name": "Furniture_Village_Crate"
+    },
+    {
+      "x": 4,
+      "y": 1,
+      "z": 1,
+      "name": "Furniture_Village_Crate"
+    },
+    {
+      "x": 4,
+      "y": 0,
+      "z": 2,
+      "name": "Furniture_Village_Crate"
+    },
+    {
+      "x": 4,
+      "y": -2,
+      "z": 6,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": 4,
+      "y": -1,
+      "z": 6,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": 4,
+      "y": 0,
+      "z": 6,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": 4,
+      "y": 1,
+      "z": 6,
+      "name": "Deco_Lantern"
+    },
+    {
+      "x": 4,
+      "y": -4,
+      "z": 10,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": 4,
+      "y": -3,
+      "z": 10,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": 4,
+      "y": -2,
+      "z": 10,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": 4,
+      "y": -1,
+      "z": 10,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": 4,
+      "y": 0,
+      "z": 10,
+      "name": "Wood_Ash_Trunk",
+      "support": 15
+    },
+    {
+      "x": 4,
+      "y": 1,
+      "z": 10,
+      "name": "Deco_Lantern"
+    },
+    {
+      "x": 5,
+      "y": 0,
+      "z": 2,
+      "name": "Furniture_Village_Crate"
+    },
+    {
+      "x": -1,
+      "y": -8,
+      "z": 6,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": -1,
+      "y": -7,
+      "z": 6,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": -1,
+      "y": -6,
+      "z": 6,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": -1,
+      "y": -5,
+      "z": 6,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": -1,
+      "y": -4,
+      "z": 6,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": -1,
+      "y": -10,
+      "z": 10,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": -1,
+      "y": -9,
+      "z": 10,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": -1,
+      "y": -8,
+      "z": 10,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": -1,
+      "y": -7,
+      "z": 10,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": -1,
+      "y": -6,
+      "z": 10,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": 4,
+      "y": -7,
+      "z": 6,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": 4,
+      "y": -6,
+      "z": 6,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": 4,
+      "y": -5,
+      "z": 6,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": 4,
+      "y": -4,
+      "z": 6,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": 4,
+      "y": -3,
+      "z": 6,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": 4,
+      "y": -9,
+      "z": 10,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": 4,
+      "y": -8,
+      "z": 10,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": 4,
+      "y": -7,
+      "z": 10,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": 4,
+      "y": -6,
+      "z": 10,
+      "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": 4,
+      "y": -5,
+      "z": 10,
+      "name": "Wood_Ash_Trunk"
+    }
+  ],
+  "fluids": []
+}

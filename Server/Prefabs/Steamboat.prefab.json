@@ -7,13 +7,6 @@
   "blocks": [
     {
       "x": -7,
-      "y": -2,
-      "z": -1,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 32703
-    },
-    {
-      "x": -7,
       "y": -1,
       "z": -1,
       "name": "Steamboat_Paddle_Wheel",
@@ -39,13 +32,6 @@
       "z": -1,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 4031
-    },
-    {
-      "x": -7,
-      "y": -2,
-      "z": 0,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 32735
     },
     {
       "x": -7,
@@ -77,13 +63,6 @@
     },
     {
       "x": -7,
-      "y": -2,
-      "z": 1,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 32767
-    },
-    {
-      "x": -7,
       "y": -1,
       "z": 1,
       "name": "Steamboat_Paddle_Wheel",
@@ -109,13 +88,6 @@
       "z": 1,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 4095
-    },
-    {
-      "x": -7,
-      "y": -2,
-      "z": 2,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31775
     },
     {
       "x": -7,
@@ -147,13 +119,6 @@
     },
     {
       "x": -7,
-      "y": -2,
-      "z": 3,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31807
-    },
-    {
-      "x": -7,
       "y": -1,
       "z": 3,
       "name": "Steamboat_Paddle_Wheel",
@@ -179,13 +144,6 @@
       "z": 3,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 3135
-    },
-    {
-      "x": -7,
-      "y": -2,
-      "z": 4,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31839
     },
     {
       "x": -7,
@@ -217,13 +175,6 @@
     },
     {
       "x": -7,
-      "y": -2,
-      "z": 5,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31871
-    },
-    {
-      "x": -7,
       "y": -1,
       "z": 5,
       "name": "Steamboat_Paddle_Wheel",
@@ -249,13 +200,6 @@
       "z": 5,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 3199
-    },
-    {
-      "x": -6,
-      "y": -2,
-      "z": -1,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 32672
     },
     {
       "x": -6,
@@ -287,13 +231,6 @@
     },
     {
       "x": -6,
-      "y": -2,
-      "z": 0,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 32704
-    },
-    {
-      "x": -6,
       "y": -1,
       "z": 0,
       "name": "Steamboat_Paddle_Wheel",
@@ -319,13 +256,6 @@
       "z": 0,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 4032
-    },
-    {
-      "x": -6,
-      "y": -2,
-      "z": 1,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 32736
     },
     {
       "x": -6,
@@ -357,13 +287,6 @@
     },
     {
       "x": -6,
-      "y": -2,
-      "z": 2,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31744
-    },
-    {
-      "x": -6,
       "y": -1,
       "z": 2,
       "name": "Steamboat_Paddle_Wheel"
@@ -388,13 +311,6 @@
       "z": 2,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 3072
-    },
-    {
-      "x": -6,
-      "y": -2,
-      "z": 3,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31776
     },
     {
       "x": -6,
@@ -426,13 +342,6 @@
     },
     {
       "x": -6,
-      "y": -2,
-      "z": 4,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31808
-    },
-    {
-      "x": -6,
       "y": -1,
       "z": 4,
       "name": "Steamboat_Paddle_Wheel",
@@ -458,13 +367,6 @@
       "z": 4,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 3136
-    },
-    {
-      "x": -6,
-      "y": -2,
-      "z": 5,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31840
     },
     {
       "x": -6,
@@ -660,13 +562,6 @@
       "z": 7,
       "name": "Wood_Softwood_Planks_Half",
       "rotation": 7
-    },
-    {
-      "x": -4,
-      "y": -2,
-      "z": -5,
-      "name": "Airship_Rope_Ladder",
-      "rotation": 3
     },
     {
       "x": -4,
@@ -1172,8 +1067,8 @@
       "x": -3,
       "y": -2,
       "z": -5,
-      "name": "Furniture_Crude_Window",
-      "rotation": 1
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 7
     },
     {
       "x": -3,
@@ -1200,8 +1095,8 @@
       "x": -3,
       "y": -2,
       "z": -4,
-      "name": "Furniture_Crude_Window",
-      "rotation": 1
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 7
     },
     {
       "x": -3,
@@ -1972,13 +1867,6 @@
     },
     {
       "x": -2,
-      "y": -2,
-      "z": -5,
-      "name": "*Furniture_Crude_Trapdoor_State_Definitions_CloseDoorOut",
-      "rotation": 1
-    },
-    {
-      "x": -2,
       "y": -1,
       "z": -5,
       "name": "Wood_Softwood_Planks"
@@ -1996,13 +1884,6 @@
       "z": -4,
       "name": "Furniture_Crude_Bed",
       "filler": 32
-    },
-    {
-      "x": -2,
-      "y": -2,
-      "z": -4,
-      "name": "*Furniture_Crude_Trapdoor_State_Definitions_CloseDoorOut",
-      "rotation": 1
     },
     {
       "x": -2,
@@ -4320,7 +4201,7 @@
       "x": 0,
       "y": 2,
       "z": 7,
-      "name": "Deco_Map"
+      "name": "Airship_Captain_Map_Desk"
     },
     {
       "x": 0,
@@ -5639,13 +5520,6 @@
     },
     {
       "x": 2,
-      "y": -2,
-      "z": -5,
-      "name": "*Furniture_Crude_Trapdoor_State_Definitions_CloseDoorOut",
-      "rotation": 3
-    },
-    {
-      "x": 2,
       "y": -1,
       "z": -5,
       "name": "Wood_Softwood_Planks"
@@ -5663,13 +5537,6 @@
       "z": -4,
       "name": "Furniture_Crude_Bed",
       "filler": 32
-    },
-    {
-      "x": 2,
-      "y": -2,
-      "z": -4,
-      "name": "*Furniture_Crude_Trapdoor_State_Definitions_CloseDoorOut",
-      "rotation": 3
     },
     {
       "x": 2,
@@ -6578,8 +6445,8 @@
       "x": 3,
       "y": -2,
       "z": -5,
-      "name": "Furniture_Crude_Window",
-      "rotation": 1
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 5
     },
     {
       "x": 3,
@@ -6606,8 +6473,8 @@
       "x": 3,
       "y": -2,
       "z": -4,
-      "name": "Furniture_Crude_Window",
-      "rotation": 1
+      "name": "Wood_Softwood_Planks_Half",
+      "rotation": 5
     },
     {
       "x": 3,
@@ -7233,13 +7100,6 @@
     },
     {
       "x": 4,
-      "y": -2,
-      "z": -5,
-      "name": "Airship_Rope_Ladder",
-      "rotation": 1
-    },
-    {
-      "x": 4,
       "y": -1,
       "z": -5,
       "name": "Airship_Rope_Ladder",
@@ -7854,14 +7714,6 @@
     },
     {
       "x": 6,
-      "y": -2,
-      "z": -1,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 32672,
-      "rotation": 2
-    },
-    {
-      "x": 6,
       "y": -1,
       "z": -1,
       "name": "Steamboat_Paddle_Wheel",
@@ -7890,14 +7742,6 @@
       "z": -1,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 4000,
-      "rotation": 2
-    },
-    {
-      "x": 6,
-      "y": -2,
-      "z": 0,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 32704,
       "rotation": 2
     },
     {
@@ -7934,14 +7778,6 @@
     },
     {
       "x": 6,
-      "y": -2,
-      "z": 1,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 32736,
-      "rotation": 2
-    },
-    {
-      "x": 6,
       "y": -1,
       "z": 1,
       "name": "Steamboat_Paddle_Wheel",
@@ -7974,14 +7810,6 @@
     },
     {
       "x": 6,
-      "y": -2,
-      "z": 2,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31744,
-      "rotation": 2
-    },
-    {
-      "x": 6,
       "y": -1,
       "z": 2,
       "name": "Steamboat_Paddle_Wheel",
@@ -8009,14 +7837,6 @@
       "z": 2,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 3072,
-      "rotation": 2
-    },
-    {
-      "x": 6,
-      "y": -2,
-      "z": 3,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31776,
       "rotation": 2
     },
     {
@@ -8053,14 +7873,6 @@
     },
     {
       "x": 6,
-      "y": -2,
-      "z": 4,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31808,
-      "rotation": 2
-    },
-    {
-      "x": 6,
       "y": -1,
       "z": 4,
       "name": "Steamboat_Paddle_Wheel",
@@ -8089,14 +7901,6 @@
       "z": 4,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 3136,
-      "rotation": 2
-    },
-    {
-      "x": 6,
-      "y": -2,
-      "z": 5,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31840,
       "rotation": 2
     },
     {
@@ -8133,14 +7937,6 @@
     },
     {
       "x": 7,
-      "y": -2,
-      "z": -1,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 32673,
-      "rotation": 2
-    },
-    {
-      "x": 7,
       "y": -1,
       "z": -1,
       "name": "Steamboat_Paddle_Wheel",
@@ -8169,14 +7965,6 @@
       "z": -1,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 4001,
-      "rotation": 2
-    },
-    {
-      "x": 7,
-      "y": -2,
-      "z": 0,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 32705,
       "rotation": 2
     },
     {
@@ -8213,14 +8001,6 @@
     },
     {
       "x": 7,
-      "y": -2,
-      "z": 1,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 32737,
-      "rotation": 2
-    },
-    {
-      "x": 7,
       "y": -1,
       "z": 1,
       "name": "Steamboat_Paddle_Wheel",
@@ -8249,14 +8029,6 @@
       "z": 1,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 4065,
-      "rotation": 2
-    },
-    {
-      "x": 7,
-      "y": -2,
-      "z": 2,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31745,
       "rotation": 2
     },
     {
@@ -8293,14 +8065,6 @@
     },
     {
       "x": 7,
-      "y": -2,
-      "z": 3,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31777,
-      "rotation": 2
-    },
-    {
-      "x": 7,
       "y": -1,
       "z": 3,
       "name": "Steamboat_Paddle_Wheel",
@@ -8333,14 +8097,6 @@
     },
     {
       "x": 7,
-      "y": -2,
-      "z": 4,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31809,
-      "rotation": 2
-    },
-    {
-      "x": 7,
       "y": -1,
       "z": 4,
       "name": "Steamboat_Paddle_Wheel",
@@ -8369,14 +8125,6 @@
       "z": 4,
       "name": "Steamboat_Paddle_Wheel",
       "filler": 3137,
-      "rotation": 2
-    },
-    {
-      "x": 7,
-      "y": -2,
-      "z": 5,
-      "name": "Steamboat_Paddle_Wheel",
-      "filler": 31841,
       "rotation": 2
     },
     {
@@ -8583,13 +8331,6 @@
     },
     {
       "x": -4,
-      "y": -2,
-      "z": -5,
-      "name": "Empty",
-      "level": 0
-    },
-    {
-      "x": -4,
       "y": -1,
       "z": -5,
       "name": "Empty",
@@ -15093,13 +14834,6 @@
     },
     {
       "x": 4,
-      "y": -2,
-      "z": -5,
-      "name": "Empty",
-      "level": 0
-    },
-    {
-      "x": 4,
       "y": -1,
       "z": -5,
       "name": "Empty",
@@ -15942,6 +15676,258 @@
       "x": 1,
       "y": -3,
       "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": -6,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": -5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": -4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": -1,
+      "y": -2,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": -6,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": -5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": -4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": -3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": 5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": 6,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 0,
+      "y": -2,
+      "z": 7,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": -2,
+      "z": -6,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": -2,
+      "z": -5,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": -2,
+      "z": -4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": -2,
+      "z": -2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": -2,
+      "z": -1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": -2,
+      "z": 0,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": -2,
+      "z": 1,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": -2,
+      "z": 2,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": -2,
+      "z": 3,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": -2,
+      "z": 4,
+      "name": "Empty",
+      "level": 0
+    },
+    {
+      "x": 1,
+      "y": -2,
+      "z": 5,
       "name": "Empty",
       "level": 0
     }

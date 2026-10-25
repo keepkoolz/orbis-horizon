@@ -19,6 +19,12 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
         StationMaster.tickReservations(store, store.getExternalData().getWorld());
         // Transit: destination queues and quay state machines of the stations of this world.
         StationQueue.tick(store, store.getExternalData().getWorld());
+        // Maritime shuttle: queues and quay cycles of the boat stations (never throws).
+        BoatQuay.tick(store, store.getExternalData().getWorld());
+        // Maritime shuttle: water route searches between boat stations (never throws).
+        BoatRoutes.tick(store.getExternalData().getWorld());
+        // Steamboat voyages: path plans and reroutes shortened over open water (never throws).
+        ShipVoyage.tick(store.getExternalData().getWorld());
         // Lot 2: NPC pilots of landed airships waiting for their entity, outfit and wiring checks.
         try {
             AirshipCrew.tick(store, store.getExternalData().getWorld());
@@ -33,6 +39,7 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
         TentBedSystem.tick(store, store.getExternalData().getWorld());
         CampRespawn.tick(store, store.getExternalData().getWorld());
         PackBackView.tick(store, store.getExternalData().getWorld()); // T157: never throws
+        OxygenHud.tick(store, store.getExternalData().getWorld()); // never throws
         CampUpgrade.tick(store, store.getExternalData().getWorld());
         LegacyCamps.tick(store, store.getExternalData().getWorld()); // T158: never throws
         CaptainMap.tick(store, store.getExternalData().getWorld()); // T141: never throws

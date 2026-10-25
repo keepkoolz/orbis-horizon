@@ -52,7 +52,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Level;
 
 /**
- * The NPC pilot of a landed airship (lot 2, T134): the NPC standing at its post (the helm, or the cabin stool), its validated
+ * The NPC pilot of a landed ship that has a crew spec (every ship with a pilot, lot 2, T134): the NPC standing at its post (the helm, or the rest post), its validated
  * outfit and its persistence. Modelled on StationMaster: the NPC is a world entity saved with its section (NOT NonSerialized), the
  * registry entry keeps its uuid and skin seed under "crew", and after a restart it is found by uuid, else adopted if an orphan
  * stands in the airship, else created again, once the entities of its section are in the world.
@@ -64,11 +64,6 @@ final class AirshipCrew {
     static final String ROLE = "Airship_Pilot";
     static final String ROOT_INTERACTION_ID = "Airship_Pilot_Use";
     static final String HINT = "server.orbis_horizon.interactionHints.pilot";
-
-    /** Posts in the prefab frame of The_Cloudwork (before rotation). */
-    static final int[] HELM = {0, 8, -10};
-    static final int[] STOOL = {-2, 8, 4};
-    static final int[] DOOR = {0, 8, 2};
 
     /**
      * Fixed outfit of every pilot, "slot=Id.Colour" (format of the character creator). It is validated by
@@ -99,9 +94,10 @@ final class AirshipCrew {
         return BalloonManager.prefabPoint(logical, e.rotation(), new Vector3f((float) p[0], (float) p[1], (float) p[2])).add(0, 0.05, 0);
     }
 
-    /** Point of a post: the helm or the stool cell of the airship. */
+    /** Point of a post: the helm or the rest cell of the ship of the entry (its kind must have a crew spec). */
     static Vector3d postPoint(BalloonRegistry.Entry e, CrewRecord.Post post) {
-        return postPoint(e, post == CrewRecord.Post.HELM ? HELM : STOOL);
+        Deployables.CrewSpec c = Deployables.crewOf(e.kind());
+        return postPoint(e, post == CrewRecord.Post.HELM ? c.helm() : c.rest());
     }
 
     /** World yaw toward the bow of the airship (prefab -z, rotated with it; forward = (-sin yaw, -cos yaw)). Pure. */
@@ -385,6 +381,36 @@ final class AirshipCrew {
         }
     }
 
+    /**
+     * Standalone mannequin (not mounted on anything) standing at a world point, turned to a yaw: the pilot of the moored shuttle. Same look
+     * as the flight mannequin, never saved with the world. Returns null on failure. Never throws.
+     */
+    static Mannequin createStandalone(Store<EntityStore> store, UUID uuid, Vector3d at, float yaw, Object[] look, long now, String animId) {
+        if (look == null || uuid == null) {
+            return null;
+        }
+        try {
+            Ref<EntityStore> ref = PassengerSeatView.spawnStandalone(store, (Model) look[0], uuid, at, yaw, (PlayerSkinComponent) look[1]);
+            if (ref == null) {
+                return null;
+            }
+            if (!ref.isValid()) { // stored away at once (section not ticking): no ghost kept
+                LOGGER.at(Level.WARNING).log("Pilote : mannequin à quai rangé aussitôt par le monde (section inactive)");
+                return null;
+            }
+            Mannequin m = new Mannequin();
+            m.ref = ref;
+            m.createdMs = now;
+            m.lastAnimMs = now;
+            m.animId = animId;
+            return m;
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilote : mannequin à quai impossible");
+            Telemetry.error("airship.crew", e, null, null);
+            return null;
+        }
+    }
+
     /** The dual rendering collapsed (no captain aboard): the twin goes with the observer entity, the original becomes visible to all. */
     static void collapseMannequin(Store<EntityStore> store, Mannequin m) {
         if (m == null) {
@@ -491,7 +517,7 @@ final class AirshipCrew {
 
     /** Registry entry of the airship whose pilot has this NPC uuid, or null. */
     static BalloonRegistry.Entry entryOfPilot(String world, UUID npc) {
-        for (BalloonRegistry.Entry e : BalloonRegistry.entriesOfKindAllWorlds(Deployables.AIRSHIP_KIND)) {
+        for (BalloonRegistry.Entry e : crewedEntriesAllWorlds()) {
             if (e.world().equals(world) && e.crew() != null && npc.equals(e.crew().uuid())) {
                 return e;
             }
@@ -499,10 +525,33 @@ final class AirshipCrew {
         return null;
     }
 
-    /** World-axis box around the airship (AIRSHIP_PLACE_MIN/MAX rotated with it): {min, max}. */
+    /** Entries of every ship kind that has a crew spec, in one world. */
+    static List<BalloonRegistry.Entry> crewedEntries(World world) {
+        List<BalloonRegistry.Entry> out = new ArrayList<>();
+        for (Deployables.Kind k : Deployables.all()) {
+            if (k.crew() != null) {
+                out.addAll(BalloonRegistry.entriesOfKind(world, k.id));
+            }
+        }
+        return out;
+    }
+
+    /** Entries of every ship kind that has a crew spec, in every world. */
+    static List<BalloonRegistry.Entry> crewedEntriesAllWorlds() {
+        List<BalloonRegistry.Entry> out = new ArrayList<>();
+        for (Deployables.Kind k : Deployables.all()) {
+            if (k.crew() != null) {
+                out.addAll(BalloonRegistry.entriesOfKindAllWorlds(k.id));
+            }
+        }
+        return out;
+    }
+
+    /** World-axis box around the ship (placeMin/placeMax of the entry's own kind, rotated with it): {min, max}. */
     private static Vector3d[] box(BalloonRegistry.Entry e) {
-        int[] lo = Deployables.AIRSHIP_PLACE_MIN;
-        int[] hi = Deployables.AIRSHIP_PLACE_MAX;
+        Deployables.Kind kind = Deployables.get(e.kind());
+        int[] lo = kind.placeMin;
+        int[] hi = kind.placeMax;
         Vector3d logical = new Vector3d(e.x() + 0.5, e.y(), e.z() + 0.5);
         Vector3d min = new Vector3d(Double.MAX_VALUE), max = new Vector3d(-Double.MAX_VALUE);
         for (int i = 0; i < 8; i++) {
@@ -514,9 +563,21 @@ final class AirshipCrew {
         return new Vector3d[]{min, max};
     }
 
-    /** Pilot NPCs (role ROLE) inside the airship box. On the world thread. */
+    /** True when the pilot uuid is the registered crew of another entry, so this entry must not touch it. Pure. */
+    static boolean ownedByOther(java.util.UUID npc, java.util.Collection<java.util.UUID> otherCrews) {
+        return npc != null && otherCrews.contains(npc);
+    }
+
+    /** Pilot NPCs (role ROLE) inside the ship box, minus those registered to another crewed entry. On the world thread. */
     private static List<Ref<EntityStore>> pilotsIn(Store<EntityStore> store, BalloonRegistry.Entry e) {
         Vector3d[] b = box(e);
+        java.util.Set<java.util.UUID> others = new java.util.HashSet<>();
+        World w = store.getExternalData().getWorld();
+        for (BalloonRegistry.Entry o : crewedEntries(w)) {
+            if (o != e && !o.equals(e) && o.crew() != null && o.crew().uuid() != null) {
+                others.add(o.crew().uuid());
+            }
+        }
         List<Ref<EntityStore>> out = new ArrayList<>();
         for (Ref<EntityStore> ref : TargetUtil.getAllEntitiesInBox(b[0], b[1], store)) {
             if (ref == null || !ref.isValid()) {
@@ -524,6 +585,10 @@ final class AirshipCrew {
             }
             NPCEntity npc = store.getComponent(ref, NPCEntity.getComponentType());
             if (npc != null && ROLE.equals(npc.getRoleName())) {
+                UUIDComponent id = store.getComponent(ref, UUIDComponent.getComponentType());
+                if (ownedByOther(id == null ? null : id.getUuid(), others)) {
+                    continue;
+                }
                 out.add(ref);
             }
         }
@@ -550,7 +615,7 @@ final class AirshipCrew {
         LAST_REWIRE.remove(key(e));
         clearWalkState(world, e);
         if (e.crew() != null) {
-            BalloonRegistry.setCrew(world, new Vector3i(e.x(), e.y(), e.z()), e.rotation(), null);
+            BalloonRegistry.setCrew(world, new Vector3i(e.x(), e.y(), e.z()), e.rotation(), e.kind(), null);
         }
     }
 
@@ -610,7 +675,7 @@ final class AirshipCrew {
 
     /** World load and plugin start: every landed airship with a pilot gets it back (found by uuid, else adopted, else created). */
     static void recoverWorld(World world) {
-        for (BalloonRegistry.Entry e : BalloonRegistry.entriesOfKind(world, Deployables.AIRSHIP_KIND)) {
+        for (BalloonRegistry.Entry e : crewedEntries(world)) {
             if (e.crew() != null) {
                 ensure(world, e);
             }
@@ -663,7 +728,7 @@ final class AirshipCrew {
             }
             // The entry may have changed since it was queued (crew uuid): always work on the registry's current one.
             BalloonRegistry.Entry e = BalloonRegistry.get(world, new Vector3i(p.entry.x(), p.entry.y(), p.entry.z()),
-                    p.entry.rotation(), Deployables.AIRSHIP_KIND);
+                    p.entry.rotation(), p.entry.kind());
             if (e == null || e.crew() == null) {
                 PENDING.remove(p);
                 continue;
@@ -697,7 +762,7 @@ final class AirshipCrew {
                     UUIDComponent id = store.getComponent(orphan, UUIDComponent.getComponentType());
                     if (id != null) {
                         forgetSkin(e.crew().uuid());
-                        BalloonRegistry.Entry updated = BalloonRegistry.setCrew(world, origin, e.rotation(), e.crew().withUuid(id.getUuid()));
+                        BalloonRegistry.Entry updated = BalloonRegistry.setCrew(world, origin, e.rotation(), e.kind(), e.crew().withUuid(id.getUuid()));
                         wire(store, orphan, updated != null ? updated : e, e.crew());
                         LOGGER.at(Level.INFO).log("Pilote repris sur place en (%d, %d, %d) (%s)", e.x(), e.y(), e.z(), id.getUuid());
                         removeDuplicates(store, e, orphan);
@@ -707,7 +772,7 @@ final class AirshipCrew {
                 UUID created = spawn(store, world, e, e.crew());
                 if (created != null) {
                     forgetSkin(e.crew().uuid());
-                    BalloonRegistry.setCrew(world, origin, e.rotation(), e.crew().withUuid(created));
+                    BalloonRegistry.setCrew(world, origin, e.rotation(), e.kind(), e.crew().withUuid(created));
                 } else {
                     // Spawn failed: try again later instead of leaving the airship without a pilot until the next world start.
                     Pending retry = new Pending(world, e);
@@ -728,7 +793,7 @@ final class AirshipCrew {
      */
     private static void rewire(Store<EntityStore> store, World world) {
         long now = System.currentTimeMillis();
-        for (BalloonRegistry.Entry e : BalloonRegistry.entriesOfKind(world, Deployables.AIRSHIP_KIND)) {
+        for (BalloonRegistry.Entry e : crewedEntries(world)) {
             if (e.crew() == null) {
                 continue;
             }
@@ -1014,7 +1079,7 @@ final class AirshipCrew {
         if (e == null || WALKS.containsKey(key(e))) {
             return; // never mount while a walk is active
         }
-        Vector3d stool = postPoint(e, STOOL);
+        Vector3d stool = postPoint(e, Deployables.crewOf(e.kind()).rest());
         Vector3i block = new Vector3i((int) Math.floor(stool.x), (int) Math.floor(stool.y), (int) Math.floor(stool.z));
         try {
             BlockMountAPI.BlockMountResult res = BlockMountAPI.mountOnBlock(ref, buffer, block, new Vector3d(at));
@@ -1037,7 +1102,11 @@ final class AirshipCrew {
     // ---- door
 
     private static BlockType doorBlock(World world, BalloonRegistry.Entry e) {
-        Vector3d c = postPoint(e, DOOR);
+        int[] door = Deployables.crewOf(e.kind()).door();
+        if (door == null) {
+            return null; // this ship has no cabin door
+        }
+        Vector3d c = postPoint(e, door);
         return SectionBlocks.typeAt(new SectionReader(world.getChunkStore()), (int) Math.floor(c.x), (int) Math.floor(c.y), (int) Math.floor(c.z));
     }
 
@@ -1051,7 +1120,11 @@ final class AirshipCrew {
         if (bt.getId().contains("OpenDoor") == open) {
             return false;
         }
-        Vector3d c = postPoint(e, DOOR);
+        int[] door = Deployables.crewOf(e.kind()).door();
+        if (door == null) {
+            return false;
+        }
+        Vector3d c = postPoint(e, door);
         boolean ok = SectionBlocks.setStateAt(world.getChunkStore(), (int) Math.floor(c.x), (int) Math.floor(c.y), (int) Math.floor(c.z),
                 bt, open ? "OpenDoorOut" : "CloseDoorOut");
         LOGGER.at(Level.INFO).log("Pilote : porte %s (écriture %s)", open ? "ouverte" : "refermée", ok);
@@ -1060,8 +1133,12 @@ final class AirshipCrew {
 
     /** Unit vector along the door axis (prefab +z, rotated with the airship), world frame. */
     private static Vector3d doorAlong(BalloonRegistry.Entry e) {
-        Vector3d dc = postPoint(e, DOOR);
-        return postPoint(e, new int[]{DOOR[0], DOOR[1], DOOR[2] + 1}).sub(dc);
+        int[] door = Deployables.crewOf(e.kind()).door();
+        if (door == null) {
+            return new Vector3d(0, 0, 0); // no door: unused (callers skip the door logic)
+        }
+        Vector3d dc = postPoint(e, door);
+        return postPoint(e, new int[]{door[0], door[1], door[2] + 1}).sub(dc);
     }
 
     /**
@@ -1073,6 +1150,11 @@ final class AirshipCrew {
     private static final double[] AISLE_EAST = {0, 8, 4.4};
     private static final double AISLE_SKIP = 0.9;
 
+    /** Walk plan of a ship without obstacles between its posts (the steamboat): the pilot walks straight to the post. Pure. */
+    static List<double[]> straightLegs(double[] from, CrewRecord.Post target) {
+        return List.of();
+    }
+
     /**
      * Waypoints (prefab frame, cell centres) of a walk from a point to a post, before the final target. Pure.
      * Door legs: when the door (z = 2) lies between the two, a leg DOOR_LEG either side. Aisle: the stool is walled in by the
@@ -1080,6 +1162,8 @@ final class AirshipCrew {
      * the stool); aisle points within 0.9 block of the start are skipped. Helm legs of the old rule are kept unchanged.
      */
     static List<double[]> walkLegs(double[] from, CrewRecord.Post target) {
+        Deployables.CrewSpec spec = Deployables.crewOf(Deployables.AIRSHIP_KIND);
+        final int[] HELM = spec.helm(), STOOL = spec.rest(), DOOR = spec.door();
         List<double[]> legs = new ArrayList<>();
         double[] dest = target == CrewRecord.Post.HELM ? new double[]{HELM[0], HELM[1], HELM[2]} : new double[]{STOOL[0], STOOL[1], STOOL[2]};
         boolean fromStoolSide = from[2] > DOOR[2];
@@ -1125,7 +1209,7 @@ final class AirshipCrew {
         }
         CrewRecord crew = e.crew();
         Vector3i origin = new Vector3i(e.x(), e.y(), e.z());
-        BalloonRegistry.setCrew(world, origin, e.rotation(), crew.withPost(target));
+        BalloonRegistry.setCrew(world, origin, e.rotation(), e.kind(), crew.withPost(target));
         // Stand up: leave the stool mount or the fallback pose (every walk start goes through standUp).
         standUp(store, ref, crew.uuid());
         TransformComponent tr = store.getComponent(ref, TransformComponent.getComponentType());
@@ -1140,7 +1224,7 @@ final class AirshipCrew {
         Vector3d logical = new Vector3d(e.x() + 0.5, e.y(), e.z() + 0.5);
         Vector3f lf = e.rotation().toInverse().rotateYaw(
                 new Vector3f((float) (from.x - logical.x), (float) (from.y - logical.y), (float) (from.z - logical.z)), new Vector3f());
-        for (double[] leg : walkLegs(new double[]{lf.x, lf.y, lf.z}, target)) {
+        for (double[] leg : Deployables.crewOf(e.kind()).walk().legs(new double[]{lf.x, lf.y, lf.z}, target)) {
             w.legs.add(postPoint(e, leg));
         }
         setLeash(store, ref, w.legs.isEmpty() ? dest : w.legs.get(0));
@@ -1181,7 +1265,7 @@ final class AirshipCrew {
     static ResetResult resetPilot(Store<EntityStore> store, World world, Vector3d at, UUID player, boolean op) {
         BalloonRegistry.Entry best = null;
         double bestD = 48.0;
-        for (BalloonRegistry.Entry e : BalloonRegistry.entriesOfKind(world, Deployables.AIRSHIP_KIND)) {
+        for (BalloonRegistry.Entry e : crewedEntries(world)) {
             if (e.crew() == null) {
                 continue;
             }
@@ -1211,7 +1295,7 @@ final class AirshipCrew {
 
     private static void walkTick(Store<EntityStore> store, World world) {
         long now = System.currentTimeMillis();
-        for (BalloonRegistry.Entry e : BalloonRegistry.entriesOfKind(world, Deployables.AIRSHIP_KIND)) {
+        for (BalloonRegistry.Entry e : crewedEntries(world)) {
             if (e.crew() == null || e.crew().uuid() == null) {
                 continue;
             }
@@ -1270,18 +1354,21 @@ final class AirshipCrew {
         }
 
         // Door: opened when the pilot walks towards it, closed (only if the mod opened it) once he is through or stopped.
-        Vector3d dc = postPoint(e, DOOR);
-        Vector3d along = doorAlong(e);
-        double doorDist = new Vector3d(p).sub(dc).length();
-        double side = along.dot(new Vector3d(p).sub(dc));
-        if (walk != null && doorDist < DOOR_NEAR) {
-            BlockType bt = doorBlock(world, e);
-            if (bt != null && bt.getId() != null && bt.getId().contains("CloseDoor") && setDoor(world, e, true)) {
-                DOORS_OPENED.put(k, Math.signum(side));
+        int[] doorCell = Deployables.crewOf(e.kind()).door();
+        if (doorCell != null) {
+            Vector3d dc = postPoint(e, doorCell);
+            Vector3d along = doorAlong(e);
+            double doorDist = new Vector3d(p).sub(dc).length();
+            double side = along.dot(new Vector3d(p).sub(dc));
+            if (walk != null && doorDist < DOOR_NEAR) {
+                BlockType bt = doorBlock(world, e);
+                if (bt != null && bt.getId() != null && bt.getId().contains("CloseDoor") && setDoor(world, e, true)) {
+                    DOORS_OPENED.put(k, Math.signum(side));
+                }
+            } else if (DOORS_OPENED.containsKey(k) && doorDist > DOOR_FAR && (walk == null || Math.signum(side) != DOORS_OPENED.get(k))) {
+                DOORS_OPENED.remove(k);
+                setDoor(world, e, false);
             }
-        } else if (DOORS_OPENED.containsKey(k) && doorDist > DOOR_FAR && (walk == null || Math.signum(side) != DOORS_OPENED.get(k))) {
-            DOORS_OPENED.remove(k);
-            setDoor(world, e, false);
         }
 
         if (walk != null) {

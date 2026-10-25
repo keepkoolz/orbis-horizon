@@ -5,16 +5,16 @@
   },
   "PlayerAnimationsId": "Block",
   "Quality": "OrbisHorizon_Hidden",
-  "Icon": "Icons/ItemsGenerated/Furniture_Ancient_Statue.png",
+  "Icon": "Icons/ItemsGenerated/Ship_Wheel.png",
   "Interactions": {
     "Primary": "Block_Primary",
     "Secondary": "Block_Secondary"
   },
   "BlockType": {
     "InteractionHint": "server.orbis_horizon.interactionHints.helmTakeOff",
-    "BlockParticleSetId": "Stone",
-    "BlockSoundSetId": "Stone",
-    "PhysicalMaterialId": "Stone",
+    "BlockParticleSetId": "Wood",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
     "CustomModel": "Blocks/Vehicles/Airship_Helm.blockymodel",
     "CustomModelTexture": [
       {
@@ -33,8 +33,8 @@
     "Material": "Solid",
     "Opacity": "Transparent",
     "VariantRotation": "NESW",
-    "ParticleColor": "#9f9e81",
-    "TextureComputedColor": "#5C5C3F",
+    "ParticleColor": "#9a733c",
+    "TextureComputedColor": "#976E33",
     "Interactions": {
       "Use": {
         "Interactions": [
@@ -50,5 +50,5 @@
       "Furniture"
     ]
   },
-  "ItemSoundSetId": "ISS_Blocks_Stone"
+  "ItemSoundSetId": "ISS_Blocks_Wood"
 }

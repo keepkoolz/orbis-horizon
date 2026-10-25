@@ -1,0 +1,16 @@
+// Oxygen bar of the mod, shown instead of the game's bar when the maximum oxygen is above 100 (diving gear).
+// Position: Bottom is the distance from the bottom of the screen (the game's stamina bar sits just below), Width and Height set the size.
+@BarWidth = 260;
+@BarHeight = 10;
+@BarBottom = 140;
+
+Group {
+  Anchor: (Bottom: @BarBottom, Width: @BarWidth, Height: @BarHeight);
+  Background: #000000(0.4);
+  Padding: (Full: 1);
+
+  ProgressBar #OxygenBar {
+    BarTexturePath: "OrbisHorizon_OxygenFill.png";
+    Value: 1.0;
+  }
+}

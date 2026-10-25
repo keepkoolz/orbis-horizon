@@ -69,15 +69,18 @@
         "deploy.tent",
         "deploy.tent_big",
         "deploy.station",
+        "deploy.boatStation",
         "takeoff.balloon",
         "takeoff.balloon_basic",
         "takeoff.balloon_transport",
         "takeoff.airship",
         "takeoff.steamboat",
         "airship.voyage",
+        "balloon.voyage",
         "airship.recall",
         "airship.pilot_hired",
         "transit.trip",
+        "transit.boatTrip",
         "cage.capture",
         "glider.jump",
         "camp.upgrade"
@@ -146,6 +149,13 @@
             }
           }
         },
+        "deploy.boatStation": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
         "takeoff.balloon": {
           "allowedFields": {
             "count": {
@@ -188,6 +198,13 @@
             }
           }
         },
+        "balloon.voyage": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
         "airship.recall": {
           "allowedFields": {
             "count": {
@@ -203,6 +220,13 @@
           }
         },
         "transit.trip": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "transit.boatTrip": {
           "allowedFields": {
             "count": {
               "type": "number"

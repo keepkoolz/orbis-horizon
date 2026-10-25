@@ -1,0 +1,56 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.boat_station_shell.name",
+    "Description": "server.orbis_horizon.items.boat_station_shell.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Deco_Coral_Shell_Swirly.png",
+  "BlockType": {
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Foliage/Water/Swirly.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Foliage/Water/Swirly_Textures/Beige.png",
+        "Weight": 2
+      },
+      {
+        "Texture": "Blocks/Foliage/Water/Swirly_Textures/Brown.png",
+        "Weight": 1
+      },
+      {
+        "Texture": "Blocks/Foliage/Water/Swirly_Textures/Pink.png",
+        "Weight": 1
+      }
+    ],
+    "Group": "SeaLife",
+    "HitboxType": "Balloon_Station_Map",
+    "Flags": {
+      "IsStackable": false
+    },
+    "RandomRotation": "YawStep1",
+    "Gathering": {
+      "Harvest": {},
+      "Soft": {}
+    },
+    "BlockParticleSetId": "Stone",
+    "BlockSoundSetId": "Stone",
+    "PhysicalMaterialId": "Stone",
+    "TextureComputedColor": "#B29B62",
+    "Material": "Empty"
+  },
+  "PlayerAnimationsId": "Block",
+  "IconProperties": {
+    "Scale": 1.02,
+    "Translation": [
+      3.1,
+      -2.3
+    ],
+    "Rotation": [
+      6.935,
+      37.31,
+      33.935
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood",
+  "Quality": "OrbisHorizon_Hidden"
+}

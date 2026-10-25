@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.10
+
+### Added
+
+- The public transport now has a ticket: 100 life essences, or 1 concentrated life essence when you have fewer than 100, paid by the player who picks a destination at a balloon station or a boat station. The ticket is refunded if the trip is cancelled, for example when the destination station is removed.
+- The large hot air balloon can now have a pilot too. Use a pilot contract on the chain of your landed balloon, and the pilot flies you to a map marker or a station when you ask: pick a map marker, a balloon station or a boat station, and the pilot flies there alone and sets the balloon down on the ground nearby. Select the captain's map to stop on the way.
+- The steamboat pilot can now take you on trips. Tell your pilot "Note this place" while you sail to keep a stop, then ask "Take us to..." to be carried to one of your stops or to a boat station you have already reached. The pilot sails by the way you went and cuts across open water, and the list of stops has a Forget button. The chart on the desk of the steamboat does the same. The boat only goes where it has already been.
+- Your airship pilot can now take you to a boat station as well as to a balloon station or a map marker.
+- The steamboat can be crewed by a pilot: hire one with a contract on the helm, and the pilot walks to the chair in the upper cabin when you take the helm.
+- A Boat station: a pier on a shore with a station master who sells the pilot contract. Craft the crate at the Explorer's workbench (tier 3, Transport tab) and place it on the bank while looking at the water. Its window lists the other boat stations of the world, and choosing one calls a driverless shuttle boat: step aboard from the pier during the countdown and the small shuttle sails you to the other station by a water route, with room for 6 travellers. The station is built from the wood of the trees around it, and the preview in your hand shows that wood too.
+- The Explorer's workbench has a Gear tab with the crude diving outfit (mask, suit, gloves and fins), crafted at tier 2. The mask gives you more air under water.
+
+### Changed
+
+- The airship and the steamboats now have a real ship's wheel as their helm, in wood on its post, with dark log rims and golden spokes. You use it the same way to set off and to stop.
+- The same ship's wheel is also a decoration block, found in the furniture of the creative library.
+- The steamboat now sits one block deeper in the water. The lower cabin windows are now planks, and the shutters that were under the water are gone.
+
+### Fixed
+
+- The air bar no longer flickers under water when you wear the diving outfit: the mod shows its own bar instead.
+- Wearing a helmet while carrying a camp pack no longer leaves your character bald.
+
 ## v1.9.2
 
 ### Added

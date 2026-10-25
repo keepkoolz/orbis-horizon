@@ -13,7 +13,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Chart on the captain's desk (Airship_Captain_Map_Desk): the captain picks a destination on the parked airship. The pilot
+ * Chart on the captain's desk (Airship_Captain_Map_Desk): the captain picks a destination on a parked ship with a pilot. The pilot
  * starts the voyage at once if he is at the helm, walks to the helm first if he sits on the stool. The pending destination is
  * kept in memory per ship (cleared by any other order, a take-off, a failure and a restart).
  */
@@ -45,14 +45,16 @@ final class AirshipDesk {
 
     private static final class Pending {
         final String world;
+        final String kind;
         final Vector3i origin;
         final com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation rotation;
         final UUID owner;
         final VoyagePlanner.Destination dest;
         final long startMs = System.currentTimeMillis();
 
-        Pending(String world, Vector3i origin, com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation rotation, UUID owner, VoyagePlanner.Destination dest) {
+        Pending(String world, String kind, Vector3i origin, com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation rotation, UUID owner, VoyagePlanner.Destination dest) {
             this.world = world;
+            this.kind = kind;
             this.origin = origin;
             this.rotation = rotation;
             this.owner = owner;
@@ -67,8 +69,9 @@ final class AirshipDesk {
     }
 
     /** The two chat lines of an accepted order: the captain to the pilot, then the pilot's answer. */
-    static void sayOrder(PlayerRef captain, CrewRecord crew, String destName) {
-        captain.sendMessage(Texts.pilot("crew.desk.captainOrder", crew).param("dest", destName).param("captain", captain.getUsername()));
+    static void sayOrder(PlayerRef captain, CrewRecord crew, VoyagePlanner.Destination d) {
+        captain.sendMessage(ShipVoyage.withDest(Texts.pilot("crew.desk.captainOrder", crew), d.kind(), d.name())
+                .param("captain", captain.getUsername()));
         captain.sendMessage(Texts.pilot("crew.desk.ack", crew));
     }
 
@@ -77,9 +80,9 @@ final class AirshipDesk {
         if (!AirshipCrew.orderWalk(store, world, e, CrewRecord.Post.HELM)) {
             return Texts.pilot("crew.desk.failed", e.crew());
         }
-        sayOrder(captain, e.crew(), d.name());
+        sayOrder(captain, e.crew(), d);
         PENDING.put(key(world.getName(), e.x(), e.y(), e.z()),
-                new Pending(world.getName(), new Vector3i(e.x(), e.y(), e.z()), e.rotation(), captain.getUuid(), d));
+                new Pending(world.getName(), e.kind(), new Vector3i(e.x(), e.y(), e.z()), e.rotation(), captain.getUuid(), d));
         return null;
     }
 
@@ -102,7 +105,7 @@ final class AirshipDesk {
                 continue;
             }
             try {
-                BalloonRegistry.Entry e = BalloonRegistry.get(world, p.origin, p.rotation, Deployables.AIRSHIP_KIND);
+                BalloonRegistry.Entry e = BalloonRegistry.get(world, p.origin, p.rotation, p.kind);
                 if (e == null || e.crew() == null) {
                     PENDING.remove(me.getKey());
                     continue;

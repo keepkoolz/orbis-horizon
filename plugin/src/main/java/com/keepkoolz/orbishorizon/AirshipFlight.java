@@ -37,10 +37,26 @@ final class AirshipFlight {
     volatile Ownership ownership = Ownership.NONE;
     /** NPC pilot of the airship (T133), copied from the registry at take-off, null without pilot. */
     volatile CrewRecord crew;
+    /** Water log of a boat (cells sailed, stops, stations reached), copied from the registry at take-off; null for any other vehicle. World thread only. */
+    volatile WaterLog water;
+    /** Last time the stations near the rotation centre were looked at (once a second). */
+    long waterScanMs;
     /** Server-driven voyage to a destination (T139), null for a flight piloted by a player. */
     volatile VoyageState voyage;
     /** Recall to a station in progress (T143), null otherwise. A recall flight also has a (fuel-free) voyage for its approach. */
     volatile RecallState recall;
+    /** Maritime shuttle sailed by BoatAutopilot (boat stations), null otherwise. Never written to a resume file. */
+    volatile ShuttleState shuttle;
+
+    /** The sailing state BoatAutopilot drives: the public shuttle's, else the steamboat voyage's, else null. */
+    ShuttleState sailState() {
+        ShuttleState s = shuttle;
+        if (s != null) {
+            return s;
+        }
+        VoyageState v = voyage;
+        return v != null ? v.water : null;
+    }
     /** Station whose quay this flight holds for a recall (T143), until the ship leaves the zone or lands. */
     volatile TransitNetwork.Station quayStation;
     /** Id under which the quay is held (the recall flight id, kept when the ship takes off from blocks), null = this flight id. */
@@ -193,6 +209,12 @@ final class AirshipFlight {
     volatile boolean moving;
     /** Paddle wheel animation state (lot 4), null for a ship without wheels. */
     PaddleWheels.State wheels;
+    /** Animated helm state (25 October 2026), null for a ship kind without an animated helm. */
+    ShipHelm.State helmState;
+
+    ShipHelm.State helm() {
+        return helmState;
+    }
     /** Absolute heading change (rad) applied since the start of the current sample window. */
     double windowTurn;
     /** The sound effect of the burners (Hotair_Balloon_Burner_Boost) is on the ship entity. */

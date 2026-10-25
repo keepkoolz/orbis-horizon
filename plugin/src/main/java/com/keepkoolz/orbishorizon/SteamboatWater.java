@@ -117,6 +117,23 @@ final class SteamboatWater {
         return Collections.unmodifiableList(out);
     }
 
+    /**
+     * Blocks that sit in water on purpose: the shuttle's propeller (Material Empty, so the fluid flows in) is pasted with a water
+     * source in its cell (the prefab's fluids entry), and drain must not empty it.
+     */
+    static final java.util.Set<String> WATERLOGGED = java.util.Set.of("Steamboat_Propeller");
+
+    /** Submerged cells (prefab frame) that hold a waterlogged block: they keep their water when the hull is drained. */
+    static List<Vector3i> waterloggedCells(StructureShape shape, int waterlineY) {
+        List<Vector3i> out = new ArrayList<>();
+        for (StructureShape.Cell c : shape.cells()) {
+            if (c.y() <= waterlineY && WATERLOGGED.contains(c.baseName())) {
+                out.add(new Vector3i(c.x(), c.y(), c.z()));
+            }
+        }
+        return out;
+    }
+
     /** A neighbouring world water cell: fluid id, level and whether it is a source fluid. */
     record Neighbour(int fluidId, byte level, boolean source) {
     }
@@ -199,13 +216,17 @@ final class SteamboatWater {
         }
     }
 
-    /** Empties the fluid of every submerged cell (Fluid.EMPTY_ID, level 0). @return number of cells emptied */
+    /** Empties the fluid of every submerged cell (Fluid.EMPTY_ID, level 0) but the waterlogged blocks' cells. @return number of cells emptied */
     static int drain(World world, StructureShape s, Vector3i origin, Rotation rotation, int waterlineY) {
         try {
             SectionReader reader = new SectionReader(world.getChunkStore());
             int drained = 0;
+            java.util.Set<Vector3i> kept = new java.util.HashSet<>();
+            for (Vector3i c : waterloggedCells(s, waterlineY)) {
+                kept.add(rotation.rotateYaw(new Vector3i(c), new Vector3i()).add(origin));
+            }
             for (Vector3i p : worldCells(s, origin, rotation, waterlineY)) {
-                if (BalloonManager.outOfHeight(p.y) || !reader.hasStorageInMemory(p.x, p.y, p.z)
+                if (kept.contains(p) || BalloonManager.outOfHeight(p.y) || !reader.hasStorageInMemory(p.x, p.y, p.z)
                         || reader.getFluidId(p.x, p.y, p.z) == Fluid.EMPTY_ID) {
                     continue;
                 }

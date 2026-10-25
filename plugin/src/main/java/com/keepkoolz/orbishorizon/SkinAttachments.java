@@ -263,13 +263,24 @@ final class SkinAttachments {
         if (headType == PlayerSkinPart.HeadAccessoryType.FullyCovering && !hidden.contains(Cosmetic.HeadAccessory)) {
             return; // the head accessory covers the whole head, no hair
         }
-        if (hidden.contains(Cosmetic.Haircut) && p.getHairType() != null) {
-            String type = p.getHairType().name();
-            out.add(new ModelAttachment("Items/Hats/InnerHair_" + type + ".blockymodel",
-                    "Items/Hats/InnerHair_" + type + "_Greyscale.png", "Hair", textureId != null ? textureId : "Black", 1.0));
+        String id = helmetHaircutId(assetId, hidden.contains(Cosmetic.Haircut), p.doesRequireGenericHaircut(),
+                p.getHairType() != null ? p.getHairType().name() : null);
+        PlayerSkinPart generic = id.equals(assetId) ? null : r.getHaircuts().get(id);
+        if (generic != null) {
+            // the game's swap under a helmet: the generic haircut of the same length, same colour, no variant
+            out.add(resolve(generic, textureId, null, body));
             return;
         }
         out.add(resolve(p, textureId, variantId, body));
+    }
+
+    /**
+     * The haircut drawn under armour that hides it: the generic haircut of the same length (Cosmetics/CharacterCreator/
+     * HaircutFallbacks.json maps Short, Medium and Long to GenericShort, GenericMedium and GenericLong) when the haircut
+     * requires it, the haircut itself otherwise. The InnerHair models of True Backpack do not exist in the 0.7 assets.
+     */
+    static String helmetHaircutId(String ownId, boolean hidden, boolean requiresGeneric, String hairType) {
+        return hidden && requiresGeneric && hairType != null ? "Generic" + hairType : ownId;
     }
 
     private static ModelAttachment resolve(PlayerSkinPart part, String textureId, String variantId, String bodyGradient) {

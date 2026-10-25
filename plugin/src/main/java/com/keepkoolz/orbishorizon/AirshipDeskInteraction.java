@@ -42,7 +42,7 @@ public class AirshipDeskInteraction extends SimpleInstantInteraction {
                 PlayerRef pr = store.getComponent(ref, PlayerRef.getComponentType());
                 Player p = store.getComponent(ref, Player.getComponentType());
                 BalloonRegistry.Entry e = BalloonRegistry.find(world, pos);
-                if (pr == null || p == null || e == null || !Deployables.AIRSHIP_KIND.equals(e.kind())) {
+                if (pr == null || p == null || e == null || Deployables.crewOf(e.kind()) == null || Deployables.crewOf(e.kind()).desk() == null) {
                     return;
                 }
                 boolean owner = e.owner() != null && e.owner().equals(pr.getUuid());

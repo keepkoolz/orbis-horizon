@@ -19,6 +19,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.logging.Level;
 
 /**
  * Destination window of a station master (spec, "Fenêtre de destination"). Opened by StationMaster.onTalk, which has already
@@ -27,6 +28,8 @@ import java.util.List;
  * (page replaced, disconnection, death, distance, 60 s).
  */
 final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data> {
+    private static final com.hypixel.hytale.logger.HytaleLogger LOGGER = com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass();
+
 
     static final class Data {
         static final BuilderCodec<Data> CODEC = BuilderCodec.builder(Data.class, Data::new)
@@ -38,17 +41,19 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
     }
 
     private final TransitNetwork.Station station;
+    private final boolean boat;
     private boolean finished;
 
     DestinationPage(PlayerRef player, TransitNetwork.Station station) {
         super(player, CustomPageLifetime.CanDismiss, Data.CODEC);
         this.station = station;
+        this.boat = Deployables.BOAT_STATION_KIND.equals(station.kind);
     }
 
     @Override
     public void build(Ref<EntityStore> ref, UICommandBuilder cmd, UIEventBuilder events, Store<EntityStore> store) {
         cmd.append("Pages/Transit_Destinations.ui");
-        TransitUiTexts.destinations(cmd);
+        TransitUiTexts.destinations(cmd, StationSpec.of(station.kind).titleKey());
         cmd.set("#Status.Text", statusLine());
         List<String> queue = new ArrayList<>(station.queue);
         cmd.set("#Queue.Text", queue.isEmpty()
@@ -56,12 +61,13 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
                 : Message.translation("server.orbis_horizon.ui.dest.queue").param("list", String.join("\n", queue)));
 
         World world = store.getExternalData().getWorld();
-        double hSpeed = BalloonManager.defaultHorizontalSpeed(world, store);
-        double vSpeed = BalloonManager.defaultDescentSpeed(world, store);
+        double hSpeed = boat ? 0 : BalloonManager.defaultHorizontalSpeed(world, store);
+        double vSpeed = boat ? 0 : BalloonManager.defaultDescentSpeed(world, store);
         cmd.set("#DepHeader.Text", Message.translation("server.orbis_horizon.ui.dest.depHeader"));
         List<TransitNetwork.Station> others = new ArrayList<>();
-        for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName())) {
-            if (s != station) {
+        for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName(), station.kind)) {
+            // A boat station lists only the stations it has a route to (FOUND) or is still charting (COMPUTING).
+            if (s != station && (!boat || BoatRoutes.state(world.getName(), station.name, s.name) != BoatRoutes.RouteState.NONE)) {
                 others.add(s);
             }
         }
@@ -75,19 +81,27 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
             long dist = Math.round(Math.sqrt(distSq(o)));
             double dx = o.origin.x - station.origin.x, dz = o.origin.z - station.origin.z;
             int dock = Deployables.STATION_DOCK_ORIGIN[1];
-            double secs = tripSeconds(station.origin.y + dock, o.origin.y + dock, Math.sqrt(dx * dx + dz * dz), hSpeed, vSpeed);
+            double secs = boat ? 0 : tripSeconds(station.origin.y + dock, o.origin.y + dock, Math.sqrt(dx * dx + dz * dz), hSpeed, vSpeed);
             cmd.append("#List", "Pages/Transit_DestinationEntry.ui");
             String sel = "#List[" + i + "]";
             cmd.set(sel + " #Name.Text", o.name);
             // Direction in its own label: a translated Message given as a parameter was shown as "{dir}" in a page (11 October 2026).
             cmd.set(sel + " #Dir.Text", Message.translation("server.orbis_horizon.ui.dir." + compass(dx, dz)));
-            cmd.set(sel + " #Dist.Text", Message.translation("server.orbis_horizon.ui.dest.info")
-                    .param("n", (int) dist)
-                    .param("time", BalloonManager.durationText(secs)));
-            events.addEventBinding(CustomUIEventBindingType.Activating, sel, EventData.of("Dest", o.name));
+            // Boat stations: distance only, no trip time.
+            boolean charting = boat && BoatRoutes.state(world.getName(), station.name, o.name) == BoatRoutes.RouteState.COMPUTING;
+            cmd.set(sel + " #Dist.Text", charting
+                    ? Message.translation("server.orbis_horizon.ui.dest.routeComputing")
+                    : boat
+                    ? Message.translation("server.orbis_horizon.ui.dest.distOnly").param("n", (int) dist)
+                    : Message.translation("server.orbis_horizon.ui.dest.info")
+                            .param("n", (int) dist)
+                            .param("time", BalloonManager.durationText(secs)));
+            if (!charting) { // a route still being charted is listed but cannot be chosen
+                events.addEventBinding(CustomUIEventBindingType.Activating, sel, EventData.of("Dest", o.name));
+            }
         }
         events.addEventBinding(CustomUIEventBindingType.Activating, "#HireButton", EventData.of("Action", "Hire"));
-        cmd.set("#RecallButton.Visible", AirshipRecall.canOffer(world, playerRef.getUuid()));
+        cmd.set("#RecallButton.Visible", !boat && AirshipRecall.canOffer(world, playerRef.getUuid()));
         events.addEventBinding(CustomUIEventBindingType.Activating, "#RecallButton", EventData.of("Action", "Recall"));
         events.addEventBinding(CustomUIEventBindingType.Activating, "#CloseButton", EventData.of("Action", "Close"));
     }
@@ -125,6 +139,15 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
 
     private Message statusLine() {
         String base = "server.orbis_horizon.ui.status.";
+        if (boat) {
+            return switch (BoatQuay.state(station)) {
+                case FREE -> Message.translation(base + "boatFree");
+                case APPROACH -> Message.translation(base + "boatApproach");
+                case DOCKED -> Message.translation(base + "boatDocked").param("seconds", BoatQuay.secondsLeft(station));
+                case DEPARTING -> Message.translation(base + "boatDeparting");
+                case ARRIVING -> Message.translation(base + "boatArriving");
+            };
+        }
         return switch (StationQueue.state(station)) {
             case FREE -> Message.translation(base + "free");
             case APPROACH -> Message.translation(base + "approach");
@@ -153,6 +176,10 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
             return;
         }
         if ("Recall".equals(data.action)) {
+            if (boat) { // the button is hidden on a boat station: a crafted event is ignored
+                LOGGER.at(Level.INFO).log("Rappel ignoré : %s est une station maritime", station.name);
+                return;
+            }
             if (!StationMaster.holds(station, playerRef.getUuid())) {
                 playerRef.sendMessage(Texts.t("transit.master.expired"));
                 finished = true;
@@ -176,7 +203,16 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
                 return;
             }
             World world = store.getExternalData().getWorld();
-            StationQueue.enqueue(world, station, data.dest, playerRef);
+            if (boat) {
+                // Only a charted route can be chosen (a crafted event for another one is ignored).
+                if (BoatRoutes.state(world.getName(), station.name, data.dest) == BoatRoutes.RouteState.FOUND) {
+                    BoatQuay.enqueue(world, station, data.dest, playerRef, store, ref);
+                }
+                finish();
+                close();
+                return;
+            }
+            StationQueue.enqueue(world, station, data.dest, playerRef, store, ref);
         }
         finish();
         close();

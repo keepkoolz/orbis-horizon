@@ -53,7 +53,7 @@ final class AirshipRecall {
 
     /** Pure: the plan of a recall of a ship parked with its pivot at (pivotX, pivotZ). */
     static Plan plan(TransitNetwork.Station s, double pivotX, double pivotZ) {
-        Vector3d pad = StationMarkerProvider.markerPoint(s.origin, s.rotation);
+        Vector3d pad = StationMarkerProvider.markerPoint(s);
         double[] sp = RecallPlanner.spawnPoint(pad.x, pad.z, pivotX, pivotZ);
         double theta = AirshipAutopilot.headingTo(pad.x - sp[0], pad.z - sp[1]);
         // T145: the ship hovers with the quarter turn whose side ladder is nearest to the boarding steps.
@@ -658,9 +658,9 @@ final class AirshipRecall {
     /** The leave point (x, z): 70 blocks from the pad, computed from where the ship appeared, away from the other stations. */
     static double[] retreatPoint(RecallState r, World world) {
         List<double[]> others = new ArrayList<>();
-        for (TransitNetwork.Station other : TransitNetwork.get().stations(world.getName())) {
+        for (TransitNetwork.Station other : TransitNetwork.get().stations(world.getName())) { // every kind: boat zones count too
             if (other != r.station) {
-                Vector3d p = StationMarkerProvider.markerPoint(other.origin, other.rotation);
+                Vector3d p = StationMarkerProvider.markerPoint(other);
                 others.add(new double[] {p.x, p.z});
             }
         }
@@ -861,12 +861,12 @@ final class AirshipRecall {
                 return;
             }
             TransitNetwork.Station station = null;
-            for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName())) {
+            for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName(), Deployables.STATION_KIND)) {
                 if (s.origin.x == mark.stationX() && s.origin.y == mark.stationY() && s.origin.z == mark.stationZ()) {
                     station = s;
                 }
             }
-            Vector3d pad = station != null ? StationMarkerProvider.markerPoint(station.origin, station.rotation) : new Vector3d();
+            Vector3d pad = station != null ? StationMarkerProvider.markerPoint(station) : new Vector3d();
             RecallState r = new RecallState(station, entry.owner(), mark.spawnX(), mark.spawnZ(), pad.x, pad.z, 0, 0);
             r.origin = origin;
             r.rotation = entry.rotation();
