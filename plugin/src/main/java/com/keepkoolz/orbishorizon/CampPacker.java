@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.logging.Level;
 
 /**
- * T154: packs a deployed camp (sleeping bag, small or large tent) into its pack item, contents kept in the item's metadata.
+ * packs a deployed camp (sleeping bag, small or large tent) into its pack item, contents kept in the item's metadata.
  * Used by the placed bag's Use interaction and by the sleeping bag's automatic packing when its owner wakes after a full night.
  * Call on the world thread with the world's Store (not from inside an interaction's CommandBuffer step: defer with world.execute).
  */

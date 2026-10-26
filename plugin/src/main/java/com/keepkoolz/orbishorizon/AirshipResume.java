@@ -25,7 +25,7 @@ import java.util.stream.Stream;
  * Resume file of an airship flight (prototype). Separate from BalloonResume on purpose (own sub-folder "airships",
  * no burner, no passengers list), so that the balloon files and their format are untouched. One JSON per flight, written
  * atomically (temporary file then rename, fsync when durable), holding the world, the last collision-free pivot cell and heading
- * (the landing is made at the nearest quarter turn), the flying entity UUID, the pilot, the chest contents (BalloonCargo) and, since T57, the engine contents (AirshipEngines, optional key "engines"), and since T63 the bench levels (AirshipBenches, optional key "benches"), and since T64 the passengers (optional key "passengers").
+ * (the landing is made at the nearest quarter turn), the flying entity UUID, the pilot, the chest contents (BalloonCargo), the engine contents (AirshipEngines, optional key "engines"), the bench levels (AirshipBenches, optional key "benches"), and the passengers (optional key "passengers").
  * Written before the blocks are removed at take-off, updated every few seconds, deleted on landing.
  */
 final class AirshipResume {
@@ -38,7 +38,7 @@ final class AirshipResume {
     record Record(UUID id, Deployables.Kind kind, UUID pilot, String world, int pivotX, int pivotY, int pivotZ, double heading, UUID ship,
                   BalloonCargo cargo, AirshipEngines engines, org.joml.Vector3i takeoffOrigin, com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation takeoffRotation,
                   AirshipBenches benches, List<AirshipPassengers.Saved> riders, Ownership ownership, CrewRecord crew, VoyageState voyage,
-                  AirshipBenchContents benchContents, RecallState.Saved recall, int[] takeoffRungs, WaterLog water) {
+                  AirshipBenchContents benchContents, RecallState.Saved recall, int[] takeoffRungs, WaterLog water, SkyLog sky) {
     }
 
     /** Vehicle type of a file: absent in files written before ships had a type (airship), unknown or non-ship ids are refused. */
@@ -127,25 +127,29 @@ final class AirshipResume {
                 doc.put("cargo", f.cargoBson);
             }
             if (f.engines != null) {
-                // The engines burn during the flight: encoded at every write (T57).
+                // The engines burn during the flight: encoded at every write.
                 doc.put("engines", f.engines.toBson());
             }
             if (f.benches != null) {
-                doc.put("benches", f.benches.toBson()); // T63: level and upgrade items of the benches
+                doc.put("benches", f.benches.toBson()); // level and upgrade items of the benches
             }
             if (!f.riders.isEmpty()) {
-                doc.put("passengers", AirshipPassengers.toBson(f)); // T64: uuid and stool of each passenger
+                doc.put("passengers", AirshipPassengers.toBson(f)); // uuid and stool of each passenger
             }
             f.ownership.writeTo(doc); // keys absent in older files: read back as NONE
             if (f.crew != null) {
-                doc.put("crew", f.crew.toBson()); // T133: optional NPC pilot
+                doc.put("crew", f.crew.toBson()); // optional NPC pilot
             }
             WaterLog wl = f.water;
             if (wl != null && !wl.isEmpty()) {
                 doc.put("water", wl.toBson()); // boat log, absent in older files
             }
+            SkyLog sl = f.sky;
+            if (sl != null && !sl.isEmpty()) {
+                doc.put("sky", sl.toBson()); // destinations the pilot learned, absent in older files
+            }
             if (f.voyage != null) {
-                doc.put("voyage", f.voyage.toBson()); // T140: optional, the voyage is not resumed (the ship is put down)
+                doc.put("voyage", f.voyage.toBson()); // optional, the voyage is not resumed (the ship is put down)
             }
             if (f.benchContents != null) {
                 doc.put("benchContents", f.benchContents.toBson().get("benchContents")); // contents of the other benches, frozen
@@ -156,7 +160,7 @@ final class AirshipResume {
             }
             RecallState rs = f.recall != null ? f.recall : (f.quayStation != null ? f.recallInfo : null);
             if (rs != null) {
-                // 17 October 2026: a recalled ship that is resumed is put down at its leave point, never above the station.
+                // a recalled ship that is resumed is put down at its leave point, never above the station.
                 doc.put("recall", AirshipRecall.savedOf(rs, f.world).toBson());
             }
             byte[] bytes = doc.toJson().getBytes(StandardCharsets.UTF_8);
@@ -224,25 +228,26 @@ final class AirshipResume {
                         doc.getNumber("heading").doubleValue(),
                         doc.containsKey("ship") ? UUID.fromString(doc.getString("ship").getValue()) : null,
                         doc.containsKey("cargo") ? BalloonCargo.fromBson(doc.getDocument("cargo")) : null,
-                        // T57: absent in files written before the engines existed: no engine contents.
+                        // absent in files written before the engines existed: no engine contents.
                         doc.containsKey("engines") ? AirshipEngines.fromBson(doc.getDocument("engines")) : null,
                         doc.containsKey("orot") ? new org.joml.Vector3i(doc.getNumber("ox").intValue(), doc.getNumber("oy").intValue(),
                                 doc.getNumber("oz").intValue()) : null,
                         doc.containsKey("orot") ? com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.valueOf(
                                 doc.getString("orot").getValue()) : null,
-                        // T63: absent in files written before the bench levels were kept: no level to put back.
+                        // absent in files written before the bench levels were kept: no level to put back.
                         doc.containsKey("benches") ? AirshipBenches.fromBson(doc.getDocument("benches")) : null,
-                        // T64: absent without passengers or in older files.
+                        // absent without passengers or in older files.
                         doc.containsKey("passengers") ? AirshipPassengers.fromBson(doc.getArray("passengers")) : null,
                         Ownership.readFrom(doc),
-                        // T133: NPC pilot, absent without pilot or in older files.
+                        // NPC pilot, absent without pilot or in older files.
                         doc.containsKey("crew") ? CrewRecord.fromBson(doc.getDocument("crew")) : null,
                         doc.containsKey("voyage") ? VoyageState.fromBson(doc.getDocument("voyage")) : null,
                         // Absent in older files: no bench contents.
                         AirshipBenchContents.fromBson(doc),
                         doc.containsKey("recall") ? RecallState.Saved.fromBson(doc.getDocument("recall")) : null,
                         rungsFromBson(doc),
-                        doc.containsKey("water") ? WaterLog.fromBson(doc.getDocument("water")) : null));
+                        doc.containsKey("water") ? WaterLog.fromBson(doc.getDocument("water")) : null,
+                        doc.containsKey("sky") ? SkyLog.fromBson(doc.getDocument("sky")) : null));
             } catch (IOException | RuntimeException e) {
                 LOGGER.at(Level.SEVERE).withCause(e).log("Fichier de reprise de dirigeable illisible : %s", p);
                 try {

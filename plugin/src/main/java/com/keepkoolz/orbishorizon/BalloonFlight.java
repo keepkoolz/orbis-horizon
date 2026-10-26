@@ -17,38 +17,42 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /** State of a hot air balloon in flight. */
 final class BalloonFlight {
     /**
-     * UUID of the pilot. For a pilotless flight (T20, dry descent of a balloon stopped in mid-air
+     * UUID of the pilot. For a pilotless flight (dry descent of a balloon stopped in mid-air
      * with nobody aboard), a random flight identifier: it is also the name of the resume file.
-     * T39: when the pilot dies in flight, the flight becomes a pilotless flight and gets a new random
+     * when the pilot dies in flight, the flight becomes a pilotless flight and gets a new random
      * identifier (the respawned player can fly another balloon without overwriting this flight).
      */
     volatile UUID pilotUuid;
     /** Ownership of the structure, copied from the registry at take-off (NONE if it had no entry), registered again at landing. */
     volatile Ownership ownership = Ownership.NONE;
-    /** Pilot, or null for a pilotless flight (T20, or pilot dead in flight, T39). */
+    /** Pilot, or null for a pilotless flight (or pilot dead in flight). */
     volatile Ref<EntityStore> pilotRef;
     final World world;
     final Rotation rotation;
-    /** Balloon type of this flight (T54): prefab, pivot, gondola, model and crate. Always a balloon kind. */
+    /** Balloon type of this flight: prefab, pivot, gondola, model and crate. Always a balloon kind. */
     final Deployables.Kind kind;
     Ref<EntityStore> balloonRef;
     /**
-     * T82: observer entity (same model as balloonRef, never mounted, position written by the server every tick). With dual rendering,
+     * observer entity (same model as balloonRef, never mounted, position written by the server every tick). With dual rendering,
      * balloonRef (mounted on the pilot) is seen by the pilot only and this one by everybody else. Null in single rendering and
      * whenever the flight has no pilot on board (one entity, seen by everybody).
      */
     volatile Ref<EntityStore> observerRef;
-    /** T118: seat views of this flight's passengers, drained at the end of the flight (covers passengers dropped from the list). */
+    /** seat views of this flight's passengers, drained at the end of the flight (covers passengers dropped from the list). */
     final List<PassengerSeatView.State> seatViews = new CopyOnWriteArrayList<>();
-    /** T119: standing mannequin of the pilot (dual rendering only). */
+    /** standing mannequin of the pilot (dual rendering only). */
     volatile PilotMannequin.State pilotMan;
     /** NPC pilot of the large balloon (read from the registry entry at take-off), null without one. */
     volatile CrewRecord crew;
+    /** What the pilot has seen of the world, copied from the registry at take-off (large balloon only, null for the other types). World thread only. */
+    volatile SkyLog sky;
+    /** Last time the stations near the balloon were looked at for the sky log. */
+    long skyScanMs;
     /** Seated mannequin of the NPC pilot during the flight. */
     volatile AirshipCrew.Mannequin crewMan;
     /** Model parts (nodes beyond the client's per-entity limit), null if the type has none or the setting is off. */
     volatile VehicleParts.Group parts;
-    /** T82: dual rendering is active for this flight (set at take-off, cleared when the flight collapses to a single entity). */
+    /** dual rendering is active for this flight (set at take-off, cleared when the flight collapses to a single entity). */
     volatile boolean dual;
     /** Entity position (centre of the prefab origin block, at the prefab ground level). */
     final Vector3d entityPos = new Vector3d();
@@ -68,15 +72,15 @@ final class BalloonFlight {
     volatile boolean attached;
     /** Last collision message sent to the pilot. */
     volatile long lastCollisionMsgMs;
-    /** T76: last "height limit reached" message sent to the pilot. */
+    /** last "height limit reached" message sent to the pilot. */
     volatile long lastHeightMsgMs;
     /** Model used at take-off (the unlit model is this name followed by BalloonManager.UNLIT_MODEL_SUFFIX). */
     String modelId;
     /** Burner contents during the flight (fuel, output, burn in progress). */
     BurnerFuel burner;
-    /** Contents of the basket chests during the flight (T18). Never null after a successful take-off. */
+    /** Contents of the basket chests during the flight. Never null after a successful take-off. */
     BalloonCargo cargo;
-    /** UUID of the flying entity (T19 resume file, to find and delete it). */
+    /** UUID of the flying entity (resume file, to find and delete it). */
     UUID balloonUuid;
     /** Chest contents encoded for the resume file (does not change during the flight). */
     BsonDocument cargoBson;
@@ -92,7 +96,7 @@ final class BalloonFlight {
     /** Burner dry: the balloon can no longer climb and descends to the ground. */
     volatile boolean dry;
     /**
-     * T26: automatic descent with a pilot. The pilot became a passenger mounted on the entity (as in T25), the entity
+     * automatic descent with a pilot. The pilot became a passenger mounted on the entity (as for the airship passengers), the entity
      * is no longer mounted on them and the server lowers it every tick (tickDriven), as for a pilotless flight.
      */
     volatile boolean driven;
@@ -104,20 +108,20 @@ final class BalloonFlight {
     volatile double cruiseSpeed;
     /** Time of the last automatic descent update (ms). */
     long lastDescentMs;
-    /** Boosted flame (T17): the balloon is climbing, the _Boost model is shown. */
+    /** Boosted flame: the balloon is climbing, the _Boost model is shown. */
     boolean boost;
     /** Moment of the switch to boosted flame (ms), for the minimum duration. */
     long boostSinceMs;
     /** Last sample of the pilot's altitude (0 ms: to be taken again) to measure vertical speed. */
     double sampleY;
     long sampleMs;
-    /** T50: the flamethrower sound effect is applied to the flying entity (boosted flame). */
+    /** the flamethrower sound effect is applied to the flying entity (boosted flame). */
     boolean roar;
     /** The _Boost model does not exist: no more attempts, a single warning. */
     boolean boostUnavailable;
 
     /**
-     * Method used to seat a passenger in flight (T21). MOUNT: the player is mounted on the balloon entity
+     * Method used to seat a passenger in flight. MOUNT: the player is mounted on the balloon entity
      * (MountedComponent, Minecart controller), the client sticks them to the seat. TELEPORT: fallback, the
      * server teleports them to their seat on every drift, in forced flight at zero speed (jerks possible).
      * Adjustable with /orbishorizon balloon passengers.
@@ -125,12 +129,12 @@ final class BalloonFlight {
     enum PassengerMode {
         /**
          * Forced flight at zero flight speed and a ChangeVelocity (Set) sent every tick (seat velocity plus a correction toward the
-         * seat), like the airship passengers (T64). No mount: a player mounted on an entity drives it on their own client. The default before T117.
+         * seat), like the airship passengers. No mount: a player mounted on an entity drives it on their own client. The default is the camera mode.
          */
         FOLLOW,
         MOUNT,
         /**
-         * T115 and T117 default (and always for transit flights, whatever the global mode): the camera is attached to the entity the client
+         * Default (and always for transit flights, whatever the global mode): the camera is attached to the entity the client
          * sees and shows a fixed first-person view from the seat, the body is not mounted and stays parked in forced flight at zero speed
          * (PassengerCamera).
          */
@@ -139,7 +143,7 @@ final class BalloonFlight {
     }
 
     /**
-     * Seated pose of a passenger in flight (T25). No server data alone chooses the pose on the
+     * Seated pose of a passenger in flight. No server data alone chooses the pose on the
      * clients: the server can only (1) broadcast a player's MovementStates, including the sitting flag,
      * (2) play a model animation on an entity (AnimationUtils, "Sit" of the Player model) and (3) choose
      * the controller of the MountedComponent (Minecart or BlockMount). Each method is a flag, so they can be compared
@@ -224,7 +228,7 @@ final class BalloonFlight {
         }
     }
 
-    /** A player seated on a balloon seat during the flight (T21). */
+    /** A player seated on a balloon seat during the flight. */
     static final class Passenger {
         final Ref<EntityStore> ref;
         final UUID uuid;
@@ -240,7 +244,7 @@ final class BalloonFlight {
         volatile PassengerMode mode;
         /**
          * Where the player stood just before being seated (world position), null for the pilot and the voyage captain. A passenger who
-         * disconnects in flight is sent back here, never to where the vehicle is or to its destination (T150).
+         * disconnects in flight is sent back here, never to where the vehicle is or to its destination.
          */
         volatile Vector3d boardPos;
         /** Time of the last placement (ms), so a seating that has not arrived yet is not judged. */
@@ -252,7 +256,7 @@ final class BalloonFlight {
         long lossWindowMs;
         /** Flight settings changed (TELEPORT mode): to be restored on landing. */
         boolean hover;
-        /** Seated pose method chosen at take-off (T25). */
+        /** Seated pose method chosen at take-off. */
         final Pose pose;
         /** Last send of the pose animation (ms), and state set by the server (to undo on landing). */
         long lastPoseAnimMs;
@@ -260,7 +264,7 @@ final class BalloonFlight {
         boolean poseStatesOn;
         /** A pose error has already been logged for this passenger. */
         boolean poseFailed;
-        /** FOLLOW mode (T82): seat point at the previous update (for the seat velocity), its time, and a non-zero velocity was sent. */
+        /** FOLLOW mode: seat point at the previous update (for the seat velocity), its time, and a non-zero velocity was sent. */
         Vector3d lastSeat;
         long lastSeatMs;
         boolean velActive;
@@ -272,10 +276,10 @@ final class BalloonFlight {
         float camYaw;
         boolean camYawSet;
         int cameraTargetId = -1;
-        /** T124 external view (balloons): horizontal direction from the balloon to the camera, set at the first send, and the position of the last direction sample. */
+        /** external view (balloons): horizontal direction from the balloon to the camera, set at the first send, and the position of the last direction sample. */
         double camDirX, camDirZ, camLastX, camLastZ;
         boolean camDirSet;
-        /** T118: CAMERA mode seat view (camera anchor, mannequins, hidden body), null when not built. */
+        /** CAMERA mode seat view (camera anchor, mannequins, hidden body), null when not built. */
         volatile PassengerSeatView.State seatView;
         boolean noMannequinLogged;
 
@@ -293,30 +297,30 @@ final class BalloonFlight {
         }
     }
 
-    /** Seated passengers (T21). Empty for a flight without passengers. */
+    /** Seated passengers. Empty for a flight without passengers. */
     final List<Passenger> passengers = new CopyOnWriteArrayList<>();
 
     /**
-     * Animals captured in the cage of a transport balloon (T74), taken from the registry entry at take-off. They are teleported to their place
+     * Animals captured in the cage of a transport balloon, taken from the registry entry at take-off. They are teleported to their place
      * every tick (CageAnimals.follow), put back in the cage at landing, and written in the resume file. Empty for the other balloons.
      */
     final List<CageAnimals.Animal> animals = new CopyOnWriteArrayList<>();
 
-    /** Lights attached to the flying entity (T34: yellow crystals, T35: burner flame). See BalloonLights. */
+    /** Lights attached to the flying entity (yellow crystals: burner flame). See BalloonLights. */
     final List<BalloonLights.Light> lights = new CopyOnWriteArrayList<>();
     /** Interactable helper on the chain cell: using it in flight lands the balloon, like the airship helm. See BalloonLights.spawnChain. */
     volatile AirshipHelm.Helper chain;
 
 
     /**
-     * T120: dry descent of a transport balloon onto its lowered cage. The cage blocks stay in the world, only the rest of the balloon flies
+     * dry descent of a transport balloon onto its lowered cage. The cage blocks stay in the world, only the rest of the balloon flies
      * (model without cage, cage cells ignored by the collisions). groundCage = cage descent in blocks (0 = ordinary flight), cageHome = origin
      * of the balloon before it left, so the cage is at cageHome.y - groundCage and the balloon stops there (targetY).
      */
     volatile int groundCage;
     final Vector3i cageHome = new Vector3i();
 
-    /** T120: origin height at which the structure rests on its cage (meaningful when groundCage > 0). */
+    /** origin height at which the structure rests on its cage (meaningful when groundCage > 0). */
     int targetY() {
         return cageHome.y - groundCage;
     }
@@ -344,7 +348,7 @@ final class BalloonFlight {
         return pilotRef == null;
     }
 
-    /** The entity is moved by the server: pilotless flight (T20) or automatic descent with a seated pilot (T26). */
+    /** The entity is moved by the server: pilotless flight or automatic descent with a seated pilot. */
     boolean serverDriven() {
         return pilotRef == null || driven;
     }

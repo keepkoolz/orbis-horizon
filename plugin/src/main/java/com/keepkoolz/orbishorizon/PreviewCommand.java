@@ -32,9 +32,9 @@ import java.util.List;
 import java.util.logging.Level;
 
 /**
- * Spike of 11 October 2026 (deployment preview): /orbishorizon preview prefab|box|clear <type>. Shows, to the calling player only,
+ * Deployment preview: /orbishorizon preview prefab|box|clear <type>. Shows, to the calling player only,
  * the structure of a type (Deployables id: balloon, balloon_basic, balloon_transport, tent, tent_big, airship, station) at the
- * place the crate of this type would put it (T121, DeployPlacement; the held crate shows it automatically, HeldCratePreview): either the builder tools' paste preview (ShowTriggerVolumePastePrefabPreview, block by
+ * place the crate of this type would put it (DeployPlacement; the held crate shows it automatically, HeldCratePreview): either the builder tools' paste preview (ShowTriggerVolumePastePrefabPreview, block by
  * block, built from the prefab's BlockSelection like the game) or a translucent box of its bounds (DisplayDebug, Cube). Op only.
  */
 final class PreviewCommand extends AbstractCommandCollection {
@@ -74,7 +74,7 @@ final class PreviewCommand extends AbstractCommandCollection {
                     ctx.sendMessage(com.hypixel.hytale.server.core.Message.raw("Look at a block within 64 blocks"));
                     return;
                 }
-                // T121: the same placement as the crate of this type (shared helper), debugging tool kept.
+                // the same placement as the crate of this type (shared helper), debugging tool kept.
                 DeployPlacement.Crate crate = DeployPlacement.CRATES.values().stream()
                         .filter(c -> c.prefabPath().equals(kind.prefabPath)).findFirst().orElse(null);
                 DeployPlacement.Placement placement = crate != null
@@ -127,7 +127,7 @@ final class PreviewCommand extends AbstractCommandCollection {
     }
 
     /**
-     * Test of 20 October 2026 (paddle wheel): /orbishorizon preview wheel. A player cannot place Steamboat_Paddle_Wheel by hand
+     * Paddle wheel test: /orbishorizon preview wheel. A player cannot place Steamboat_Paddle_Wheel by hand
      * (its 2 x 5 x 7 hitbox must be free, it goes 1 block below the target cell). This places it 6 blocks in front of the player,
      * 4 blocks up, turned like the player, through BlockOperations.setBlock, which writes the filler cells itself, as a prefab will.
      */

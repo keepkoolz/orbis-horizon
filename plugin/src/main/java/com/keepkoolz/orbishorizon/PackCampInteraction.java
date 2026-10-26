@@ -15,7 +15,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.joml.Vector3i;
 
 /**
- * Interaction "Camping_PackCamp" (T154): Use (F) on a placed bag packs its camp into the matching pack item. The targeted block must
+ * Interaction "Camping_PackCamp": Use (F) on a placed bag packs its camp into the matching pack item. The targeted block must
  * be the placed bag of a camp in the registry. The work is deferred to the world thread (CampPacker works on the Store), the
  * owner/op check and the messages are in CampPacker.
  */

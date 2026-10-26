@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
- * T141: the captain's map. It is given to the captain at the departure of a voyage with the pilot NPC. Selecting it starts a
+ * the captain's map. It is given to the captain at the departure of a voyage with the pilot NPC. Selecting it starts a
  * 3-2-1 countdown that stops the voyage, changing item cancels it. The map is removed at every voyage end and on every player
  * arrival in a world (a crash cannot remove it from an offline player). The item is not placeable and has no interaction.
  */

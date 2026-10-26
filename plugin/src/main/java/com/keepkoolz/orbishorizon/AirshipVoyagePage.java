@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Orders window of an airship pilot (talk with F). Offers "take us to..." (the list of destinations, T139) and "take the helm"
+ * Orders window of an airship pilot (talk with F). Offers "take us to..." (the list of destinations) and "take the helm"
  * while the pilot is at the helm, and "take the helm back" while he sits on the stool. Owner and crew state are checked again on
  * every click.
  */
@@ -77,9 +77,9 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
     }
 
     private final UUID npc;
-    /** The recalled ship waiting above a station (T145): closing the window without a choice sends it away. Null for the pilot dialogue. */
+    /** The recalled ship waiting above a station: closing the window without a choice sends it away. Null for the pilot dialogue. */
     private final RecallState recall;
-    /** Opened from the chart on the captain's desk (T148): the list is shown at once and the order goes through AirshipDesk. */
+    /** Opened from the chart on the captain's desk: the list is shown at once and the order goes through AirshipDesk. */
     private final boolean desk;
     /** The destination list is shown instead of the orders (after "take us to..."). */
     private boolean listMode;
@@ -200,12 +200,13 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
                     fromX, fromZ, ShipVoyage::pierAndZone);
             all = dests;
         } else {
-            all = VoyagePlanner.collectAll(player, world, fromX, fromZ);
+            // A flying pilot only offers what this vehicle has already seen: stations it came close to, markers it flew near.
+            all = VoyagePlanner.known(VoyagePlanner.collectAll(player, world, fromX, fromZ), entry != null ? entry.sky() : null);
             dests = VoyagePlanner.list(all, fromX, fromZ);
         }
         if (dests.isEmpty()) {
             cmd.set("#Empty.Visible", true);
-            cmd.set("#Empty.Text", all.isEmpty() ? m("voyage.empty")
+            cmd.set("#Empty.Text", all.isEmpty() ? m(boat ? "voyage.empty" : "voyage.noneKnown")
                     : Texts.pilot("crew.voyage.tooClose", AirshipCrew.crewOfPilot(world.getName(), npc)));
             return;
         }

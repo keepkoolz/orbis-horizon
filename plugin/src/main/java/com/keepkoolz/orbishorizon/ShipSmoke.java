@@ -17,7 +17,7 @@ import java.util.logging.Level;
 
 /**
  * Lot 5 of the steamboat: moored ships smoke. The block under the "On" state (Airship_Exhaust_Pipe on the airship, Steamboat_Chimney_Top
- * on the steamboat) puffs smoke while the fuel tank holds fuel, driven by BurnerFlameSystem like the engine glow (T58). No sound.
+ * on the steamboat) puffs smoke while the fuel tank holds fuel, driven by BurnerFlameSystem like the engine glow. No sound.
  */
 final class ShipSmoke {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
@@ -75,7 +75,7 @@ final class ShipSmoke {
                 }
                 String id = bt.getId().startsWith("*") ? bt.getId().substring(1) : bt.getId();
                 if (!id.startsWith(PIPE_BLOCK) && !id.startsWith(CHIMNEY_BLOCK)) {
-                    continue; // still the game's pipe (ship posed before lot 5)
+                    continue; // still the game's pipe
                 }
                 boolean on = ON_STATE.equals(bt.getCurrentInteractionState()) || id.endsWith("_State_Definitions_" + ON_STATE);
                 if (on == lit) {

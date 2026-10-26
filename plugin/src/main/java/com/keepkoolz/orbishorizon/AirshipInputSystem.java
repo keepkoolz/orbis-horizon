@@ -25,7 +25,7 @@ import java.util.UUID;
  * PlayerInput. This system runs before PlayerSystems$ProcessPlayerInput and only copies what it needs from a snapshot of the
  * list: nothing is removed or changed.
  *
- * Facts of the test of 5 October 2026 (/orbishorizon airship input): the client never sends WishMovement, and sends no rider
+ * Facts (/orbishorizon airship input): the client never sends WishMovement, and sends no rider
  * states or relative movement. Not mounted it sends AbsoluteMovement continuously, SetHead following the mouse and
  * SetMovementStates when the states change. So the only input used is the head yaw (SetHead), for the "look" steering.
  * It also feeds /orbishorizon airship input (raw log of every update seen, kept as a diagnostic).

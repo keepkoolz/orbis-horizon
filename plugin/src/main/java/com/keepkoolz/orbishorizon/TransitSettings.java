@@ -26,7 +26,7 @@ final class TransitSettings {
         return recipeEnabled;
     }
 
-    /** T157: whether a camp pack in the inventory is drawn on the player's back. Default: on. */
+    /** whether a camp pack in the inventory is drawn on the player's back. Default: on. */
     static boolean packBackView() {
         return packBackView;
     }

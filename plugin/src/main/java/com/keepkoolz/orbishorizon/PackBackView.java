@@ -42,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
- * T157: shows the highest camp pack of the inventory on the player's back. Every trigger (inventory, armour, skin, settings,
+ * shows the highest camp pack of the inventory on the player's back. Every trigger (inventory, armour, skin, settings,
  * model, respawn, arrival) only queues a {@link #refresh}, which runs once per player and per tick on the world thread.
  * Nothing here ever throws into the game.
  */

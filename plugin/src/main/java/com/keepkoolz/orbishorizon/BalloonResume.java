@@ -24,7 +24,7 @@ import java.util.logging.Level;
 import java.util.stream.Stream;
 
 /**
- * Resume file of a flight (T19): one JSON per flight in the plugin data folder
+ * Resume file of a flight: one JSON per flight in the plugin data folder
  * (sub-folder "flights", name "pilot-uuid.json").
  *
  * It holds what is needed to put the balloon and its contents back down if the server stops before the
@@ -40,7 +40,7 @@ final class BalloonResume {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
     private static final int VERSION = 1;
     private static volatile Path dir;
-    /** Passengers to put back down on their next connection (T21), one file per player. */
+    /** Passengers to put back down on their next connection, one file per player. */
     private static volatile Path strandedDir;
 
     /** A passenger of a flight read back from disk: their seat (stool cell, prefab frame). */
@@ -50,19 +50,19 @@ final class BalloonResume {
     /** A flight read back from disk. */
     record Record(UUID pilot, String world, Deployables.Kind kind, Vector3i origin, Rotation rotation, UUID balloon,
                   BurnerFuel burner, BalloonCargo cargo, List<Seated> passengers, List<CageAnimals.Animal> animals,
-                  String transitFrom, String transitTo, int cageDescent, int cageHomeY, Ownership ownership, CrewRecord crew) {
+                  String transitFrom, String transitTo, int cageDescent, int cageHomeY, Ownership ownership, CrewRecord crew, SkyLog sky) {
         /** A transit flight (Task 9): nothing is placed on resume, only the passengers are set down at the destination station. */
         boolean transit() {
             return transitFrom != null;
         }
 
-        /** T76: the same record with the origin moved vertically (resume of a pose outside the height range). */
+        /** the same record with the origin moved vertically (resume of a pose outside the height range). */
         Record shiftedBy(int dy) {
-            return new Record(pilot, world, kind, new Vector3i(origin).add(0, dy, 0), rotation, balloon, burner, cargo, passengers, animals, transitFrom, transitTo, cageDescent, cageHomeY, ownership, crew);
+            return new Record(pilot, world, kind, new Vector3i(origin).add(0, dy, 0), rotation, balloon, burner, cargo, passengers, animals, transitFrom, transitTo, cageDescent, cageHomeY, ownership, crew, sky);
         }
     }
 
-    /** Position where to put down a player left in the air when the flight was resumed (T21). */
+    /** Position where to put down a player left in the air when the flight was resumed. */
     record Stranded(String world, double x, double y, double z) {
     }
 
@@ -95,7 +95,7 @@ final class BalloonResume {
             doc.put("version", new BsonInt32(VERSION));
             doc.put("pilot", new BsonString(f.pilotUuid.toString()));
             doc.put("world", new BsonString(f.world.getName()));
-            // T54: balloon type (absent in older files: the large balloon).
+            // balloon type (absent in older files: the large balloon).
             doc.put("kind", new BsonString(f.kind.id));
             doc.put("x", new BsonInt32(origin.x));
             doc.put("y", new BsonInt32(origin.y));
@@ -111,7 +111,7 @@ final class BalloonResume {
                 }
             }
             doc.put("savedAtMs", new org.bson.BsonInt64(System.currentTimeMillis()));
-            // T21: seated passengers (uuid and stool cell), to put them back down if the resume happens.
+            // seated passengers (uuid and stool cell), to put them back down if the resume happens.
             BsonArray seated = new BsonArray();
             for (BalloonFlight.Passenger p : f.passengers) {
                 BsonDocument d2 = new BsonDocument();
@@ -122,17 +122,21 @@ final class BalloonResume {
                 seated.add(d2);
             }
             doc.put("passengers", seated);
-            // T74: animals captured in the cage of the transport balloon (optional key).
+            // animals captured in the cage of the transport balloon (optional key).
             if (!f.animals.isEmpty()) {
                 doc.put("animals", CageAnimals.toBson(f.animals));
             }
-            // T120: dry descent onto a cage left on the ground (optional keys): descent in blocks and height of the balloon's origin before it left.
+            // dry descent onto a cage left on the ground (optional keys): descent in blocks and height of the balloon's origin before it left.
             if (f.groundCage > 0) {
                 doc.put("cageDescent", new BsonInt32(f.groundCage));
                 doc.put("cageHomeY", new BsonInt32(f.cageHome.y));
             }
             if (f.crew != null) {
                 doc.put("crew", crewToBson(f.crew)); // optional NPC pilot of the large balloon
+            }
+            SkyLog sl = f.sky;
+            if (sl != null && !sl.isEmpty()) {
+                doc.put("sky", sl.toBson()); // destinations the pilot learned, absent in older files
             }
             f.ownership.writeTo(doc); // keys absent in older files: read back as NONE
             if (f.burner != null) {
@@ -242,7 +246,8 @@ final class BalloonResume {
                         doc.containsKey("cageDescent") ? doc.getNumber("cageDescent").intValue() : 0,
                         doc.containsKey("cageHomeY") ? doc.getNumber("cageHomeY").intValue() : 0,
                         Ownership.readFrom(doc),
-                        doc.containsKey("crew") ? crewFromBson(doc.get("crew").isDocument() ? doc.getDocument("crew") : null) : null));
+                        doc.containsKey("crew") ? crewFromBson(doc.get("crew").isDocument() ? doc.getDocument("crew") : null) : null,
+                        doc.containsKey("sky") ? SkyLog.fromBson(doc.getDocument("sky")) : null));
             } catch (IOException | RuntimeException e) {
                 LOGGER.at(Level.SEVERE).withCause(e).log("Fichier de reprise illisible : %s", p);
                 try {
@@ -255,7 +260,7 @@ final class BalloonResume {
         return list;
     }
 
-    // ------------------------------------------------------------------ passengers left in the air (T21)
+    // ------------------------------------------------------------------ passengers left in the air
 
     private static Path strandedFile(UUID player) {
         return strandedDir.resolve(player + ".json");

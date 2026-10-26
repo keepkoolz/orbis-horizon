@@ -23,11 +23,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
- * Registry of the structures deployed by the mod, locked against adding and removing blocks (T27, made
- * generic in T43: the structure type is the kind from Deployables).
+ * Registry of the structures deployed by the mod, locked against adding and removing blocks (made
+ * generic: the structure type is the kind from Deployables).
  *
  * An entry is (world, prefab origin, rotation, kind, nullable owner). It is added by each paste of the mod's prefab
- * (crate, landing (chain or command), running dry, T19 recovery: all go through
+ * (crate, landing (chain or command), running dry, recovery: all go through
  * BalloonManager.pasteKeepingTerrain) and removed at take-off (the blocks no longer exist during the flight). The
  * "deployed.json" file in the plugin's data folder keeps the registry between two starts. Balloons
  * deployed before this version are not in the registry, so they are not locked until their
@@ -42,13 +42,20 @@ final class BalloonRegistry {
     private static final int VERSION = 2;
 
     /**
-     * A deployed structure (T43). The kind is the Deployables type. The owner (nullable) is the player who
-     * placed it. Neither the owner nor the cage state (T73: descent in blocks and open gate of the transport
-     * balloon, 0 and closed for every other type) nor the captured animals (T74, at most 3, immutable list) count in equality: an entry is found by world, origin, rotation and kind.
+     * A deployed structure. The kind is the Deployables type. The owner (nullable) is the player who
+     * placed it. Neither the owner nor the cage state (descent in blocks and open gate of the transport
+     * balloon, 0 and closed for every other type) nor the captured animals (at most 3, immutable list) count in equality: an entry is found by world, origin, rotation and kind.
      */
     record Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
                  java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall,
-                 java.util.List<ShipLadder.Saved> ladders, String wood, WaterLog water) {
+                 java.util.List<ShipLadder.Saved> ladders, String wood, WaterLog water, SkyLog sky) {
+        /** An entry without a sky log (everything but a vehicle whose pilot learns destinations). */
+        Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
+              java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall,
+              java.util.List<ShipLadder.Saved> ladders, String wood, WaterLog water) {
+            this(world, x, y, z, rotation, kind, owner, descent, open, animals, id, ownerName, shared, crew, recall, ladders, wood, water, null);
+        }
+
         /** An entry without a water log (everything but a boat with a log). */
         Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
               java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall,
@@ -86,12 +93,12 @@ final class BalloonRegistry {
             this(world, x, y, z, rotation, kind, owner, descent, open, animals, null, null, false, null);
         }
 
-        /** An entry without cage state (every type except the transport balloon, T73). */
+        /** An entry without cage state (every type except the transport balloon). */
         Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner) {
             this(world, x, y, z, rotation, kind, owner, 0, false, java.util.List.of());
         }
 
-        /** An entry with cage state and no captured animal (T73). */
+        /** An entry with cage state and no captured animal. */
         Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open) {
             this(world, x, y, z, rotation, kind, owner, descent, open, java.util.List.of());
         }
@@ -125,7 +132,7 @@ final class BalloonRegistry {
         return ENTRIES.size();
     }
 
-    /** The deployed balloons registered for this world (T40, administration command). All balloon kinds (T54). */
+    /** The deployed balloons registered for this world (administration command). All balloon kinds. */
     static java.util.List<Entry> entriesIn(World world) {
         java.util.List<Entry> list = new java.util.ArrayList<>();
         String name = world.getName();
@@ -176,7 +183,7 @@ final class BalloonRegistry {
         return list;
     }
 
-    /** The entry of this structure (equality: world, origin, rotation, kind), null if none (T73). */
+    /** The entry of this structure (equality: world, origin, rotation, kind), null if none. */
     static Entry get(World world, Vector3i origin, Rotation rotation, String kind) {
         Entry probe = new Entry(world.getName(), origin.x, origin.y, origin.z, rotation, kind, null);
         for (Entry e : ENTRIES) {
@@ -188,7 +195,7 @@ final class BalloonRegistry {
     }
 
     /**
-     * The shape of a placed structure in its registered state (T73): the prefab shape, except for the transport balloon
+     * The shape of a placed structure in its registered state: the prefab shape, except for the transport balloon
      * whose cage is lowered by descent blocks and whose side may be open (TransportCage.shapeFor). Null if the type or
      * its prefab is unknown.
      */
@@ -220,7 +227,7 @@ final class BalloonRegistry {
     }
 
     /**
-     * Mark of an airship waiting above a station for a recall (T145): the quay it holds (flight id), the station (origin and rotation),
+     * Mark of an airship waiting above a station for a recall: the quay it holds (flight id), the station (origin and rotation),
      * where the ship appeared and the temporary ladder cells (flat triples x, y, z). Removed with the entry when the ship takes off.
      */
     record Recall(UUID quayId, int stationX, int stationY, int stationZ, Rotation stationRotation, double spawnX, double spawnZ,
@@ -261,7 +268,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, old.crew, recall, old.ladders, old.wood, old.water);
+                old.animals, old.id, old.ownerName, old.shared, old.crew, recall, old.ladders, old.wood, old.water, old.sky);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -272,7 +279,7 @@ final class BalloonRegistry {
     private static volatile long cageSavedMs;
 
     /**
-     * Sets the cage state (T73) of a placed transport balloon. The file is written at once if force is true,
+     * Sets the cage state of a placed transport balloon. The file is written at once if force is true,
      * otherwise at most once per second (flushIfDue, called by the tick). Returns the new entry, null if not registered.
      */
     static synchronized Entry setCage(World world, Vector3i origin, Rotation rotation, String kind, int descent, boolean open, boolean force) {
@@ -281,7 +288,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, descent, open, old.animals,
-                old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water);
+                old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water, old.sky);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         cageDirty = true;
@@ -301,7 +308,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, java.util.List.copyOf(ladders), old.wood, old.water);
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, java.util.List.copyOf(ladders), old.wood, old.water, old.sky);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         cageDirty = true;
@@ -312,7 +319,7 @@ final class BalloonRegistry {
     }
 
     /**
-     * Sets the animals captured in the cage (T74) of a placed transport balloon, written at once. Returns the new entry, null if
+     * Sets the animals captured in the cage of a placed transport balloon, written at once. Returns the new entry, null if
      * not registered.
      */
     static synchronized Entry setAnimals(World world, Vector3i origin, Rotation rotation, String kind, java.util.List<CageAnimals.Animal> animals) {
@@ -321,7 +328,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                java.util.List.copyOf(animals), old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water);
+                java.util.List.copyOf(animals), old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water, old.sky);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -329,7 +336,7 @@ final class BalloonRegistry {
     }
 
     /**
-     * Sets the NPC pilot (T133) of a placed ship of the given kind, written at once. A null crew removes the pilot. Returns the new
+     * Sets the NPC pilot of a placed ship of the given kind, written at once. A null crew removes the pilot. Returns the new
      * entry, null if not registered.
      */
     static synchronized Entry setCrew(World world, Vector3i origin, Rotation rotation, String kindId, CrewRecord crew) {
@@ -338,7 +345,21 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, crew, old.recall, old.ladders, old.wood, old.water);
+                old.animals, old.id, old.ownerName, old.shared, crew, old.recall, old.ladders, old.wood, old.water, old.sky);
+        ENTRIES.remove(old);
+        ENTRIES.add(next);
+        save();
+        return next;
+    }
+
+    /** Sets the sky log of a placed vehicle with a pilot, written at once. Null if not registered. The log is stored as given: pass a copy. */
+    static synchronized Entry setSky(World world, Vector3i origin, Rotation rotation, String kindId, SkyLog sky) {
+        Entry old = get(world, origin, rotation, kindId);
+        if (old == null) {
+            return null;
+        }
+        Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water, sky);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -352,7 +373,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, water);
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, water, old.sky);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -377,21 +398,21 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, wood, old.water);
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, wood, old.water, old.sky);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
         return next;
     }
 
-    /** Writes the registry if a cage change is waiting for it and the last write is more than one second old (T73). */
+    /** Writes the registry if a cage change is waiting for it and the last write is more than one second old. */
     static synchronized void flushIfDue() {
         if (cageDirty && System.currentTimeMillis() - cageSavedMs >= 1000) {
             flushCage();
         }
     }
 
-    /** Writes the registry if a cage change is waiting for it (stop of a movement, server shutdown, T73). */
+    /** Writes the registry if a cage change is waiting for it (stop of a movement, server shutdown). */
     static synchronized void flushCage() {
         if (cageDirty) {
             cageDirty = false;
@@ -454,7 +475,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, shared, old.crew, old.recall, old.ladders, old.wood, old.water);
+                old.animals, old.id, old.ownerName, shared, old.crew, old.recall, old.ladders, old.wood, old.water, old.sky);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -485,14 +506,14 @@ final class BalloonRegistry {
      *
      * Breaking or damaging a block (broken non-null): locked if it is a block of the structure, that is,
      * if the prefab has a block of that type at this cell. A terrain block left in an unfolded ladder cell
-     * (T24) is therefore not protected. Placing a block (broken null): locked in any prefab cell and in the
+     * is therefore not protected. Placing a block (broken null): locked in any prefab cell and in the
      * type's forbidden placement volume.
      */
     static boolean isLocked(World world, Vector3i pos, BlockType broken, boolean placing) {
         return lockingEntry(world, pos, broken, placing) != null;
     }
 
-    /** The entry that locks this cell (same rules as isLocked), null if none (T43). Used to choose the message. */
+    /** The entry that locks this cell (same rules as isLocked), null if none. Used to choose the message. */
     static Entry lockingEntry(World world, Vector3i pos, BlockType broken, boolean placing) {
         if (ENTRIES.isEmpty()) {
             return null;
@@ -549,7 +570,7 @@ final class BalloonRegistry {
         return false;
     }
 
-    /** The entry whose shape contains a block at this world cell, null if none (T43). Same calculation as isLocked, without the placement volume. */
+    /** The entry whose shape contains a block at this world cell, null if none. Same calculation as isLocked, without the placement volume. */
     static Entry find(World world, Vector3i pos) {
         if (ENTRIES.isEmpty()) {
             return null;
@@ -663,6 +684,9 @@ final class BalloonRegistry {
         if (e.water != null && !e.water.isEmpty()) {
             d.put("water", e.water.toBson());
         }
+        if (e.sky != null && !e.sky.isEmpty()) {
+            d.put("sky", e.sky.toBson());
+        }
         if (!e.ladders.isEmpty()) {
             org.bson.BsonArray a = new org.bson.BsonArray();
             for (ShipLadder.Saved l : e.ladders) {
@@ -689,19 +713,20 @@ final class BalloonRegistry {
         return new Entry(d.getString("world").getValue(), d.getNumber("x").intValue(),
                 d.getNumber("y").intValue(), d.getNumber("z").intValue(),
                 Rotation.valueOf(d.getString("rotation").getValue()), kind, own.owner(),
-                // T73: cage state of the transport balloon, absent in older files (0, closed).
+                // cage state of the transport balloon, absent in older files (0, closed).
                 d.containsKey("descent") ? d.getNumber("descent").intValue() : 0,
                 d.containsKey("open") && d.getBoolean("open").getValue(),
-                // T74: captured animals, absent in older files.
+                // captured animals, absent in older files.
                 d.containsKey("animals") ? CageAnimals.fromBson(d.getArray("animals")) : java.util.List.of(),
                 own.id(), own.ownerName(), own.shared(),
-                // T133: NPC pilot, absent in older files.
+                // NPC pilot, absent in older files.
                 d.containsKey("crew") ? CrewRecord.fromBson(d.getDocument("crew")) : null,
-                // T145: recall mark of an airship waiting above a station, absent otherwise.
+                // recall mark of an airship waiting above a station, absent otherwise.
                 d.containsKey("recall") ? Recall.fromBson(d.getDocument("recall")) : null,
                 d.containsKey("ladders") ? laddersFromBson(d.getArray("ladders")) : java.util.List.of(),
                 d.containsKey("wood") ? d.getString("wood").getValue() : null,
-                d.containsKey("water") ? WaterLog.fromBson(d.getDocument("water")) : null);
+                d.containsKey("water") ? WaterLog.fromBson(d.getDocument("water")) : null,
+                d.containsKey("sky") ? SkyLog.fromBson(d.getDocument("sky")) : null);
     }
 
     private static void load() {
@@ -735,7 +760,7 @@ final class BalloonRegistry {
         }
     }
 
-    /** Writes the whole registry (temporary file then atomic rename, like the T19 recovery file). */
+    /** Writes the whole registry (temporary file then atomic rename, like the recovery file). */
     private static void save() {
         Path f = file;
         if (f == null) {

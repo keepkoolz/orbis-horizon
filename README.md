@@ -21,14 +21,14 @@ Wherever you sleep, that is where you come back if the road is unkind, even afte
 Fill the burner with fuel, climb into the basket, pull the chain, and the ground drops away. You fly freely as long as the burner has something to burn. Pull the chain again to stop, on the ground or right there in the sky. If the fuel runs out, the balloon sinks gently back to earth.
 
 - The small balloon is for travelling alone.
-- The large balloon takes your friends along on its stools and carries chests full of supplies. It can have a pilot too, who flies you to a map marker or a station while you enjoy the view.
+- The large balloon takes your friends along on its stools and carries chests full of supplies. It can have a pilot too, who flies you to the stations and map markers you have already flown past while you enjoy the view.
 - The animal transport balloon has an iron cage hanging under its basket. Lower it onto a meadow, lure an animal in with its favourite food, close the cage and fly your new livestock home.
 
 ### The Cloudwork airship
 
-A flying ship with a whole workshop on board: every workbench you need, beds, chests and seats for a crew. It floats without fuel and only burns fuel while it moves or turns. It goes where you fly and turns to face where you look. Building it is a long road, with rare materials from deep in the world.
+A flying ship with a whole workshop on board: every workbench you need, beds, chests and seats for a crew. It floats without fuel and only burns fuel while it moves or turns. It goes where you fly and turns to face where you look. Building it is a long road, with rare materials from deep in the world, and its thrusters only wake up with the core of the Gobliterator.
 
-You can hire a pilot at any station. Ask them to take you to one of your map markers or to a station and they fly the ship while you sit in the captain's chair, or pick the destination on the chart in the cabin. Parked far away, the airship comes to a station when you call it, and you climb a ladder to board.
+You can hire a pilot at any station. Your pilot only knows the way to places the ship has flown past. Ask them to take you to one of those map markers or stations and they fly the ship while you sit in the captain's chair, or pick the destination on the chart in the cabin. Parked far away, the airship comes to a station when you call it, and you climb a ladder to board.
 
 ### The steamboat
 
@@ -38,7 +38,7 @@ Hire a pilot and the steamboat learns the way. Ask them to note the places you l
 
 ### Balloon stations
 
-A station is a stone walkway with a landing pad at its end and a little hut for the station master. Name it when you set it up. Talk to the station master, pick a faraway station, and a balloon floats down onto the pad. Climb in, sit on a stool, and when the countdown ends it carries you across the sky on its own while you watch it fly from the outside. You step off on the boarding platform of the other station, with its name across the screen. No fuel to find, nothing to steer. Every station anyone sets up is a stop for everybody.
+A station is a stone walkway with a landing pad at its end and a little hut for the station master. Name it when you set it up. Talk to the station master, pick a faraway station, and a balloon floats down onto the pad. Climb in, sit on a stool, and when the countdown ends it carries you across the sky on its own while you watch it fly from the outside. You step off on the boarding platform of the other station, with its name across the screen. No fuel to find, nothing to steer. The station master only sends you to stations you have found yourself, or that a fellow traveller shared from their map.
 
 ### Boat stations
 

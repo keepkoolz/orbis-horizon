@@ -21,7 +21,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * T119: standing mannequin of the pilot of a piloted vehicle (three balloons and the airship). The others see a copy of the pilot's model
+ * standing mannequin of the pilot of a piloted vehicle (three balloons and the airship). The others see a copy of the pilot's model
  * and skin standing at the pivot (Idle animation) instead of the pilot flying with the creative flight animation: the real body is hidden
  * from everybody else (ViewFilter ONLY the pilot) and the mannequin is hidden from the pilot. Only in dual rendering: the mannequin is
  * mounted on the observer entity (which is not mounted on the pilot, so hiding the pilot's body cannot hide the vehicle). Without dual

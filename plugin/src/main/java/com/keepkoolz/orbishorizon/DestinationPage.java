@@ -65,15 +65,16 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
         double vSpeed = boat ? 0 : BalloonManager.defaultDescentSpeed(world, store);
         cmd.set("#DepHeader.Text", Message.translation("server.orbis_horizon.ui.dest.depHeader"));
         List<TransitNetwork.Station> others = new ArrayList<>();
-        for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName(), station.kind)) {
+        for (TransitNetwork.Station s : listed(world.getName())) {
             // A boat station lists only the stations it has a route to (FOUND) or is still charting (COMPUTING).
-            if (s != station && (!boat || BoatRoutes.state(world.getName(), station.name, s.name) != BoatRoutes.RouteState.NONE)) {
+            if (!boat || BoatRoutes.state(world.getName(), station.name, s.name) != BoatRoutes.RouteState.NONE) {
                 others.add(s);
             }
         }
         others.sort(Comparator.comparing((TransitNetwork.Station s) -> s.name, String.CASE_INSENSITIVE_ORDER));
+        boolean anyOther = TransitNetwork.get().stations(world.getName(), station.kind).size() > 1;
         cmd.set("#Header.Text", others.isEmpty()
-                ? Message.translation("server.orbis_horizon.ui.dest.none")
+                ? Message.translation(anyOther ? "server.orbis_horizon.ui.dest.noneKnown" : "server.orbis_horizon.ui.dest.none")
                 : Message.translation("server.orbis_horizon.ui.dest.header"));
         cmd.clear("#List");
         for (int i = 0; i < others.size(); i++) {
@@ -85,7 +86,7 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
             cmd.append("#List", "Pages/Transit_DestinationEntry.ui");
             String sel = "#List[" + i + "]";
             cmd.set(sel + " #Name.Text", o.name);
-            // Direction in its own label: a translated Message given as a parameter was shown as "{dir}" in a page (11 October 2026).
+            // Direction in its own label: a translated Message given as a parameter was shown as "{dir}" in a page.
             cmd.set(sel + " #Dir.Text", Message.translation("server.orbis_horizon.ui.dir." + compass(dx, dz)));
             // Boat stations: distance only, no trip time.
             boolean charting = boat && BoatRoutes.state(world.getName(), station.name, o.name) == BoatRoutes.RouteState.COMPUTING;
@@ -128,6 +129,25 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
     static double tripSeconds(int fromDockY, int toDockY, double horizontal, double hSpeed, double vSpeed) {
         double cruise = TransitAutopilot.cruiseY(fromDockY, toDockY);
         return (cruise - fromDockY) / vSpeed + horizontal / hSpeed + (cruise - toDockY) / vSpeed + TransitConstants.DROP_WAIT_SECONDS;
+    }
+
+    /** Stations of the same kind, other than this one, that the viewing player knows (discovered by him or shared). */
+    private List<TransitNetwork.Station> listed(String worldName) {
+        java.util.UUID uuid = playerRef.getUuid();
+        return knownOthers(TransitNetwork.get().stations(worldName, station.kind), station,
+                s -> KnownStations.get().known(worldName, uuid, new SkyLog.Reached(s.origin.x, s.origin.y, s.origin.z)));
+    }
+
+    /** Stations other than self that pass the known test, in the given order. Pure, pinned by TransitTests. */
+    static List<TransitNetwork.Station> knownOthers(List<TransitNetwork.Station> all, TransitNetwork.Station self,
+                                                    java.util.function.Predicate<TransitNetwork.Station> known) {
+        List<TransitNetwork.Station> out = new ArrayList<>();
+        for (TransitNetwork.Station s : all) {
+            if (s != self && known.test(s)) {
+                out.add(s);
+            }
+        }
+        return out;
     }
 
     private double distSq(TransitNetwork.Station o) {
@@ -203,6 +223,21 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
                 return;
             }
             World world = store.getExternalData().getWorld();
+            // The click is resolved by name against the same filtered list as the page: a destination the player does not know
+            // (stale window, crafted event) is ignored.
+            boolean offered = false;
+            for (TransitNetwork.Station s : listed(world.getName())) {
+                if (TransitNetwork.normalize(s.name).equalsIgnoreCase(TransitNetwork.normalize(data.dest))) {
+                    offered = true;
+                    break;
+                }
+            }
+            if (!offered) {
+                LOGGER.at(Level.INFO).log("Destination ignorée : « %s » n'est pas connue du joueur", data.dest);
+                finish();
+                close();
+                return;
+            }
             if (boat) {
                 // Only a charted route can be chosen (a crafted event for another one is ignored).
                 if (BoatRoutes.state(world.getName(), station.name, data.dest) == BoatRoutes.RouteState.FOUND) {

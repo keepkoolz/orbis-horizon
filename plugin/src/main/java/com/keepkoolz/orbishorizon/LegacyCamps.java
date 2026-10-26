@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
- * T158: backward compatibility of the camp packs. Old tent crates found in a player's inventory on arrival become packs (full crate
+ * backward compatibility of the camp packs. Old tent crates found in a player's inventory on arrival become packs (full crate
  * to pack with its kept contents, empty crate removed). Tents posed before the packs get their placed bag block when their section
  * is active (once per entry and per start), or the owner is told when the cell is taken. Never throws from a tick or an event.
  */

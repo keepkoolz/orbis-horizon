@@ -98,7 +98,7 @@ public final class BalloonManager {
     /**
      * Models are rendered with a half turn relative to the prefab frame: with a
      * yaw of pi (OneEighty rotation), the model appeared unrotated, shifted by 17 blocks
-     * (test of 3 October 2026, adjusted by hand with /orbishorizon balloon offset 1 0 17). So pi is added.
+     * (adjusted by hand with /orbishorizon balloon offset 1 0 17). So pi is added.
      */
     static final double MODEL_YAW_CORRECTION = Math.PI;
     /** Burner chain block: take-off. */
@@ -116,7 +116,7 @@ public final class BalloonManager {
     /** Factor applied to the player's flight speeds while piloting. */
     private static final float FLY_SPEED_FACTOR = 0.5f;
     /**
-     * Flight model without flame: same model, asset without "Particles" (T13). The server sends a
+     * Flight model without flame: same model, asset without "Particles". The server sends a
      * ModelUpdate when the ModelComponent is replaced (EntityTrackerSystems$EntityModel, like
      * NPCEntity changing model). That the client then removes the particles is an assumption.
      */
@@ -124,16 +124,16 @@ public final class BalloonManager {
     /** Lit burner state (State.Definitions of Hotair_Balloon_Burner.json). Off: "default". */
     static final String BURNER_ON_STATE = "On";
     /**
-     * Boosted flame while climbing (T17): model "<model>_Boost" (same particles as the normal model
+     * Boosted flame while climbing: model "<model>_Boost" (same particles as the normal model
      * plus a torch flame system). The pilot's vertical speed is measured over samples of BOOST_SAMPLE_MS.
      * Hysteresis: the boosted flame starts above BOOST_ON_SPEED blocks per second and
      * returns below BOOST_OFF_SPEED, after at least BOOST_MIN_MS.
      */
     static final String BOOST_MODEL_SUFFIX = "_Boost";
-    /** Radius for stopping the jet (the jet is about 5 blocks long at scale 1, T50). */
+    /** Radius for stopping the jet (the jet is about 5 blocks long at scale 1). */
     private static final double BOOST_FLAME_CANCEL_RADIUS = 8;
     /**
-     * T50: mod entity effect (copy of FlamethrowerSource with Infinite set to true) applied to the flying entity during
+     * mod entity effect (copy of FlamethrowerSource with Infinite set to true) applied to the flying entity during
      * the climb. The client plays the ignition sound and the loop, then the end sound when the effect is removed.
      */
     private static final String BOOST_EFFECT = "Hotair_Balloon_Burner_Boost";
@@ -145,7 +145,7 @@ public final class BalloonManager {
     /** Fuel level message in flight, every FUEL_MSG_INTERVAL_MS. */
     private static final long FUEL_MSG_INTERVAL_MS = 15000;
     /**
-     * T26, automatic descent (dry burner in flight, T12, or hovering, T20). The server lowers the entity on
+     * automatic descent (dry burner in flight, or hovering). The server lowers the entity on
      * every tick by flight.descentSpeed blocks per second, the pilot's vertical flight speed read back from their
      * settings (MovementSettings.verticalFlySpeed, after the division by FLY_SPEED_FACTOR), instead of teleporting
      * the pilot every quarter of a second (jerky). The step of one tick is capped at MAX_DESCENT_DT seconds so
@@ -156,16 +156,16 @@ public final class BalloonManager {
     private static final double FALLBACK_DESCENT_SPEED = 10.32 * FLY_SPEED_FACTOR;
     /** Delay for putting the burner contents back into the placed block (component creation is deferred). */
     private static final long RESTORE_TIMEOUT_MS = 10000;
-    /** Interval between two updates of the resume file during the flight (T19). */
+    /** Interval between two updates of the resume file during the flight. */
     private static final long RESUME_WRITE_INTERVAL_MS = 3000;
     /** Maximum wait for a placement on the world thread from another thread (disconnect, shutdown). */
     private static final long LAND_WAIT_MS = 4000;
     /**
-     * T20, balloon stopped in the air. It is "in the air" if the GROUND_MARGIN_CELLS cells below it
-     * are free. Since T23 the crate takes the targeted block (the ground) as origin with Offset.Y = -4: the bottom
+     * balloon stopped in the air. It is "in the air" if the GROUND_MARGIN_CELLS cells below it
+     * are free. The crate takes the targeted block (the ground) as origin with Offset.Y = -4: the bottom
      * of the ladder (y = 5 in the prefab) is placed just above the ground. The margin of 2 also tolerates a
      * balloon floating one cell above the ground (it counts as landed). On the ground, nothing burns.
-     * Since T24 the test only looks at flight cells (folded ladder) and the margin is extended by
+     * The test only looks at flight cells (folded ladder) and the margin is extended by
      * StructureShape.flightBottomGap() (see isInAir).
      */
     private static final int GROUND_MARGIN_CELLS = 2;
@@ -178,12 +178,12 @@ public final class BalloonManager {
     /** Delay before a new attempt if the dry descent could not start. */
     private static final long HOVER_RETRY_MS = 5000;
     /*
-     * T54: the gondola volume (a player whose feet are in it is "in the gondola"), the model pivot, the flight model and the crate
+     * the gondola volume (a player whose feet are in it is "in the gondola"), the model pivot, the flight model and the crate
      * item belong to each balloon type (Deployables.BalloonSpec). Large balloon: floor y = 8, walking floor y = 9, railing up to
      * y = 10, walls at x = -2 and 2 and at z = 6 and 10 (seats at (+-1, 9, 7) and (+-1, 9, 9)).
      */
     /**
-     * T21, height of the seat point above the walking floor (blocks). The game places a player seated on
+     * height of the seat point above the walking floor (blocks). The game places a player seated on
      * a stool at the centre of the cell plus 0.5 in height (BlockMountPoint.computeWorldSpacePosition: cell
      * + 0.5 + seat Y offset, which is 0 for Furniture_Crude_Stool). Adjustable with /orbishorizon balloon seatheight.
      */
@@ -196,7 +196,7 @@ public final class BalloonManager {
     private static final long PASSENGER_ACTION_INTERVAL_MS = 500;
     private static final long PASSENGER_TELEPORT_INTERVAL_MS = 150;
     private static final double PASSENGER_TELEPORT_DISTANCE = 0.35;
-    /** T82 FOLLOW mode (same values as the airship passengers, T64): correction gain (b/s per block), cap (b/s), snap distance (blocks), pause after a teleport (ms), smallest velocity sent (b/s). */
+    /** FOLLOW mode (same values as the airship passengers): correction gain (b/s per block), cap (b/s), snap distance (blocks), pause after a teleport (ms), smallest velocity sent (b/s). */
     static final double FOLLOW_GAIN = 2.0;
     static final double FOLLOW_MAX_CORRECTION = 4.0;
     static final double FOLLOW_SNAP = 1.25;
@@ -204,7 +204,7 @@ public final class BalloonManager {
     /** Seat prediction when snapping: the teleport lands about one to two ticks later. */
     static final double FOLLOW_ARRIVAL_LEAD_S = 0.05;
     private static final double FOLLOW_VELOCITY_EPS = 0.02;
-    /** T25: repeat interval of the seated animation (players coming into view would miss it otherwise). */
+    /** repeat interval of the seated animation (players coming into view would miss it otherwise). */
     private static final long POSE_ANIM_INTERVAL_MS = 4000;
     /** Placing a passenger on landing: slightly above the floor, in the free cell next to their seat. */
     private static final float LANDING_LIFT = 0.1f;
@@ -213,7 +213,7 @@ public final class BalloonManager {
     private static final BalloonManager INSTANCE = new BalloonManager();
 
     private final Map<UUID, BalloonFlight> flights = new ConcurrentHashMap<>();
-    /** Flights being resumed (T19), to avoid starting the same resume twice. */
+    /** Flights being resumed, to avoid starting the same resume twice. */
     private final Set<UUID> recovering = ConcurrentHashMap.newKeySet();
     /** Model forced with /orbishorizon balloon model (test), null: each balloon type uses its own model. */
     private volatile String modelOverride;
@@ -224,7 +224,7 @@ public final class BalloonManager {
     private volatile Vector3f modelOffset = new Vector3f();
 
     /**
-     * Test of 3 October 2026: the entity is "mounted" on the pilot (MountedComponent, like a
+     * The entity is "mounted" on the pilot (MountedComponent, like a
      * passenger), so that the client displays it stuck to the pilot instead of following the positions
      * sent by the server with a delay. Adjustable in game with /orbishorizon balloon attach.
      */
@@ -255,7 +255,7 @@ public final class BalloonManager {
         return kind.balloon.pivot;
     }
 
-    /** T124: the flight as the passenger external view sees it (behind the flight orientation before the first move, forward is the prefab -z axis). */
+    /** the flight as the passenger external view sees it (behind the flight orientation before the first move, forward is the prefab -z axis). */
     private static PassengerCamera.Source balloonView(BalloonFlight flight) {
         Vector3f fwd = flight.rotation.rotateYaw(new Vector3f(0, 0, -1), new Vector3f());
         return new PassengerCamera.Source(flight.kind, flight.entityPos, -fwd.x, -fwd.z);
@@ -277,7 +277,7 @@ public final class BalloonManager {
      * Attachment offset, in the flying entity's frame, of a point of the prefab frame (blocks, before rotation):
      * the client rotates the offset with the mount's yaw (the entity, fixed yaw: prefab rotation plus pi,
      * MODEL_YAW_CORRECTION), so it is the prefab offset (point minus pivot) with x and z inverted. A single calculation
-     * for the passenger seats (T21) and the lights (T34, BalloonLights).
+     * for the passenger seats and the lights (BalloonLights).
      */
     static Vector3f attachOffset(Deployables.Kind kind, Vector3f local) {
         Vector3f d = new Vector3f(local).sub(pivot(kind));
@@ -335,7 +335,7 @@ public final class BalloonManager {
     }
 
     /**
-     * T34: applies the lights setting (/orbishorizon balloon light) to the world's current flights: creates the missing
+     * applies the lights setting (/orbishorizon balloon light) to the world's current flights: creates the missing
      * lights (enabled), removes them (disabled) or updates their colour (forced radius). On the world thread.
      */
     void applyLightSetting(Store<EntityStore> store, World world) {
@@ -422,7 +422,7 @@ public final class BalloonManager {
         return flights.containsKey(pilot);
     }
 
-    /** The voyages of the large balloon in this world, seen by the captain's map (lot 3). */
+    /** The voyages of the large balloon in this world, seen by the captain's map. */
     List<CaptainMap.VoyageView> voyageViews(World world) {
         List<CaptainMap.VoyageView> out = new ArrayList<>();
         for (BalloonFlight f : flights.values()) {
@@ -533,7 +533,7 @@ public final class BalloonManager {
         return takeOff(store, pilotRef, player, world, null);
     }
 
-    /** T87: with the chain block that was used, only the burner directly above it is considered first (fallback: pilot position). */
+    /** with the chain block that was used, only the burner directly above it is considered first (fallback: pilot position). */
     public Message takeOff(Store<EntityStore> store, Ref<EntityStore> pilotRef, PlayerRef player, World world, Vector3i chainPos) {
         if (flights.containsKey(player.getUuid())) {
             return Texts.t("error.alreadyPiloting");
@@ -548,7 +548,7 @@ public final class BalloonManager {
         }
         Vector3d pilotPos = new Vector3d(pilotTransform.getPosition());
 
-        // T54: the large and the small balloon share the same anchor burner, the better match decides the type.
+        // the large and the small balloon share the same anchor burner, the better match decides the type.
         Found found = chainPos != null
                 ? find(world, pilotPos, Deployables.BALLOONS, new Vector3i(chainPos.x, chainPos.y + 1, chainPos.z)) : null;
         if (found == null) {
@@ -561,7 +561,7 @@ public final class BalloonManager {
         if (s == null) {
             return Texts.t("error.prefabUnreadable").param("error", found.kind().prefabPath);
         }
-        // T73: transport balloon with its cage lowered, open or moving: refused before anything is removed.
+        // transport balloon with its cage lowered, open or moving: refused before anything is removed.
         Message cage = TransportCage.takeOffRefusal(world, found.kind(), found.origin, found.rotation);
         if (cage != null) {
             return cage;
@@ -576,7 +576,7 @@ public final class BalloonManager {
                 return Texts.pilot(refusal, crewEntry.crew());
             }
         }
-        // Burner (T12): fuel is needed to take off. Its contents are kept during the flight.
+        // Burner: fuel is needed to take off. Its contents are kept during the flight.
         Vector3i burnerPos = s.burner().rotated(found.rotation).add(found.origin);
         ProcessingBenchBlock bench = BurnerFuel.live(world, burnerPos);
         if (bench == null) {
@@ -586,7 +586,7 @@ public final class BalloonManager {
             return Texts.t("error.burnerEmpty");
         }
 
-        // T21: the other players in the gondola are passengers, one seat each. Beyond the
+        // the other players in the gondola are passengers, one seat each. Beyond the
         // seats of the prefab (large balloon: pilot plus 4 passengers, small one: pilot alone), take-off is refused
         // before any block is removed.
         List<Occupant> passengers = new ArrayList<>();
@@ -754,12 +754,12 @@ public final class BalloonManager {
     /**
      * Removes the blocks of the balloon found, creates the flying entity and registers the flight. Used for
      * take-off by the chain (dry false, pilot given) and for the dry descent of a balloon stopped
-     * in the air (T20, dry true): with a pilot (the player closest to the pivot in the gondola),
+     * in the air (dry true): with a pilot (the player closest to the pivot in the gondola),
      * who is then out of fuel, or without a pilot (pilotRef and player null), the entity then being
      * moved by the server. The fuel check is done before the call. Returns null if all is
      * well, otherwise an error message (nothing is removed then, or everything is put back).
      *
-     * T21: passengers is the list of the other players in the gondola. Each is seated on a seat (assignSeats)
+     * passengers is the list of the other players in the gondola. Each is seated on a seat (assignSeats)
      * and mounted on the entity (boardPassengers). The capacity check is done before the call for a take-off,
      * in automatic descent (dry) seats are shared if there are more people than seats.
      */
@@ -769,7 +769,7 @@ public final class BalloonManager {
     }
 
     /**
-     * groundCage (T120, dry only): descent in blocks of a transport balloon's cage that rests on the ground. The cage blocks stay where they are
+     * groundCage (dry only): descent in blocks of a transport balloon's cage that rests on the ground. The cage blocks stay where they are
      * (so do the captured animals), the flying part is the shape without the cage (model without cage) and the chain column is removed.
      */
     private Message launch(Store<EntityStore> store, World world, StructureShape prefabShape, Found found, ProcessingBenchBlock bench,
@@ -805,9 +805,9 @@ public final class BalloonManager {
         if (!pilotless && !setPilotFlying(store, pilotRef, player, true)) {
             return Texts.t("error.movement");
         }
-        // T26: automatic descent speed = the pilot's vertical flight speed (already halved above).
+        // automatic descent speed = the pilot's vertical flight speed (already halved above).
         flight.descentSpeed = pilotless ? defaultDescentSpeed(world, store) : pilotDescentSpeed(store, pilotRef);
-        // T21: seats assigned before any block is removed (players' current positions). A player already seated
+        // seats assigned before any block is removed (players' current positions). A player already seated
         // on a stool (block mount) is dismounted first: the block is going to disappear.
         BalloonRegistry.Entry crewEntry = Deployables.crewOf(kind.id) != null && groundCage == 0
                 ? BalloonRegistry.get(world, found.origin, found.rotation, kind.id) : null;
@@ -824,19 +824,22 @@ public final class BalloonManager {
         // The burner contents are copied then removed from the block: otherwise the game would drop them into the
         // world when the block disappears.
         flight.burner = BurnerFuel.takeFrom(bench);
-        // T18: same precaution for the gondola chests, their contents travel with the flight.
+        // same precaution for the gondola chests, their contents travel with the flight.
         flight.cargo = BalloonCargo.takeFrom(world, s, found.origin, found.rotation);
         String modelId = groundCage > 0 && modelOverride == null && kind.balloon.groundModelId != null
                 ? kind.balloon.groundModelId : modelFor(kind);
         flight.modelId = modelId;
-        // T19: the contents now only exist in the plugin's memory. The resume file is written
+        // the contents now only exist in the plugin's memory. The resume file is written
         // (fsync) before the blocks are removed: if the server stops, the next world load
-        // puts the balloon and its contents back. T20: also valid for a flight without a pilot.
-        // T74: animals captured in the cage of a transport balloon travel with the flight (also written in the resume file).
+        // puts the balloon and its contents back. Also valid for a flight without a pilot.
+        // animals captured in the cage of a transport balloon travel with the flight (also written in the resume file).
         flight.animals.addAll(CageAnimals.takeFromEntry(world, found.origin, found.rotation, kind.id));
         // Ownership copied from the registry entry before it is removed (landing registers it again).
         BalloonRegistry.Entry registered = BalloonRegistry.get(world, found.origin, found.rotation, kind.id);
         flight.ownership = registered != null ? registered.ownership() : Ownership.NONE;
+        // A balloon type that can have a pilot keeps what the pilot sees: the registry copy, or a new log.
+        flight.sky = Deployables.crewOf(kind.id) != null
+                ? (registered != null && registered.sky() != null ? registered.sky().copy() : new SkyLog()) : null;
         // NPC pilot (large balloon): his look is read, then the NPC is removed; a mannequin takes his place in flight.
         Object[] crewLook = null;
         if (crewEntry != null && registered != null && registered.crew() != null) {
@@ -854,7 +857,7 @@ public final class BalloonManager {
         }
         BalloonResume.write(flight, found.origin, true);
 
-        // T27: the blocks are going to disappear, the balloon is no longer locked during the flight (landing
+        // the blocks are going to disappear, the balloon is no longer locked during the flight (landing
         // registers it again, pasteKeepingTerrain). The removals below do not go through the break events.
         BalloonRegistry.remove(world, found.origin, found.rotation, kind.id);
 
@@ -863,7 +866,7 @@ public final class BalloonManager {
         // structure, to avoid an object losing its support, breaking and dropping an item.
         int removed = removeBlocks(world, s, found.origin, found.rotation);
         if (groundCage > 0) {
-            // T120: the chain between the cage roof and the basket would be crossed by the basket: removed, the cage itself stays.
+            // the chain between the cage roof and the basket would be crossed by the basket: removed, the cage itself stays.
             TransportCage.removeChain(world, found.origin, found.rotation, groundCage);
         }
 
@@ -882,6 +885,7 @@ public final class BalloonManager {
             restoreCargo(world, store, flight.cargo, found.origin, found.rotation);
             CageAnimals.place(world, found.origin, found.rotation, kind.id, flight.animals, groundCage);
             restoreCrew(world, flight, found.origin, found.rotation, voyageLaunch != null ? CrewRecord.Post.HELM : CrewRecord.Post.STOOL);
+            keepSky(flight, found.origin, found.rotation);
             if (!pilotless) {
                 setPilotFlying(store, pilotRef, player, false);
             }
@@ -893,7 +897,7 @@ public final class BalloonManager {
         flight.balloonUuid = balloonId != null ? balloonId.getUuid() : null;
         if (!pilotless && attachToPilot) {
             // The client places a mounted entity at the pilot's position plus the offset rotated
-            // by the pilot's yaw (seen on 3 October 2026: the balloon rotated around the pilot when
+            // by the pilot's yaw (the balloon rotated around the pilot when
             // they looked around). So the pilot is placed on the model's pivot (centre of the
             // gondola), which gives a zero offset.
             Vector3d seat = prefabPoint(flight.entityPos, found.rotation, pivot(kind));
@@ -910,14 +914,14 @@ public final class BalloonManager {
             flight.pilotOffset.set(pilotPos).sub(flight.entityPos);
             flight.lastValidPilotPos.set(pilotPos);
         }
-        // T82: dual rendering. The entity mounted on the pilot is seen by the pilot only, an observer entity (moved by the server) is seen by
+        // dual rendering. The entity mounted on the pilot is seen by the pilot only, an observer entity (moved by the server) is seen by
         // everybody else. Only for a flight with a pilot that attaches the entity and is not dry (a dry flight collapses to one entity).
         if (!pilotless && !dry && attachToPilot && renderDual && ViewFilter.available()) {
             Ref<EntityStore> observer = VehicleView.spawnObserver(store, balloon, flight.balloonUuid, flightId, spawnId);
             if (observer != null) {
                 flight.observerRef = observer;
                 flight.dual = true;
-                // T119: standing mannequin of the pilot on the observer entity.
+                // standing mannequin of the pilot on the observer entity.
                 flight.pilotMan = PilotMannequin.create(store, flight.balloonUuid, observer, pilotRef, flightId, System.currentTimeMillis());
             }
         }
@@ -936,11 +940,11 @@ public final class BalloonManager {
             flight.dry = true;
             flight.lastDescentMs = flight.takeoffMs;
         }
-        // T21: passengers are seated before the first write of the resume file (which contains them).
+        // passengers are seated before the first write of the resume file (which contains them).
         boardPassengers(store, flight, seated);
-        // T34: lights of the yellow crystals (auxiliary entities mounted on the flying entity), no effect if disabled.
+        // lights of the yellow crystals (auxiliary entities mounted on the flying entity), no effect if disabled.
         BalloonLights.spawnAll(store, flight, s);
-        // T35: light of the burner flame (not for a dry descent, flame off).
+        // light of the burner flame (not for a dry descent, flame off).
         BalloonLights.spawnBurner(store, flight, s);
         // The chain in flight: an interactable helper entity, using it lands the balloon (like the airship helm).
         BalloonLights.spawnChain(store, flight, s);
@@ -960,7 +964,7 @@ public final class BalloonManager {
             if (notified != null) {
                 notified.sendMessage(Texts.t("fuel.status").param("fuel", fuelMessage(flight.burner)));
             }
-            // T37: the chest contents and the number of passengers go to the log (line below), not to the chat.
+            // the chest contents and the number of passengers go to the log (line below), not to the chat.
             if (!flight.cargo.isEmpty()) {
                 LOGGER.at(Level.INFO).log("Coffres : %d objet(s) transporté(s)", flight.cargo.itemCount());
             }
@@ -988,6 +992,35 @@ public final class BalloonManager {
         }
     }
 
+    /** Registers the sky log of a landed balloon with its entry (a copy: the flight's log is world-thread only) and forgets the last cell. */
+    private void keepSky(BalloonFlight flight, Vector3i origin, Rotation rotation) {
+        SkyLog k = flight.sky;
+        if (k == null) {
+            return;
+        }
+        BalloonRegistry.setSky(flight.world, origin, rotation, flight.kind.id, k.copy());
+        k.forgetLastPosition();
+    }
+
+    /** Records the cell of the balloon every tick, and once a second the stations within reach of it. Never throws. */
+    private void recordSky(BalloonFlight flight, long now) {
+        SkyLog k = flight.sky;
+        if (k == null) {
+            return;
+        }
+        try {
+            k.record(flight.entityPos.x, flight.entityPos.z);
+            if (now - flight.skyScanMs < StationDiscovery.SCAN_INTERVAL_MS) {
+                return;
+            }
+            flight.skyScanMs = now;
+            StationDiscovery.scan(k, TransitNetwork.get().stations(flight.world.getName()), flight.entityPos.x, flight.entityPos.z);
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Journal du ciel de la montgolfière : enregistrement impossible");
+            Telemetry.error("balloon.flight", e, Telemetry.kindId(flight.kind), "sky");
+        }
+    }
+
     /** The NPC pilot is back after a landing, a failed take-off or a resume: recorded on the stool in the new entry and recreated. Never throws. */
     private void restoreCrew(World world, BalloonFlight flight, Vector3i origin, Rotation rotation) {
         restoreCrew(world, flight, origin, rotation, flight.voyage != null ? CrewRecord.Post.HELM : CrewRecord.Post.STOOL);
@@ -1011,7 +1044,7 @@ public final class BalloonManager {
      * Removes the blocks of the balloon placed at this origin, without particles and without dropped items. First the
      * objects placed on other blocks (ropes, chests, trapdoors...), then the structure, to avoid an object losing
      * its support, breaking and dropping an item. Only blocks of the prefab's type are removed (terrain left in
-     * an unfolded ladder cell, T24, stays). Used for take-off (launch), removal by an administrator (T40) and tent packing (T46,
+     * an unfolded ladder cell, stays). Used for take-off (launch), removal by an administrator and tent packing (
      * StructureRemoval: the anchor block is that of the shape passed).
      * Returns the number of blocks removed.
      */
@@ -1027,7 +1060,7 @@ public final class BalloonManager {
         int removed = 0;
         // Attached blocks first (passes 0 and 1), then the structure (2 and 3), and in each group the filler cells before the origin cells. Removing the
         // origin cell of a multi-cell block first made the game remove its filler cells itself (FillerBlockUtil.removeFillerBlocksAt,
-        // called by WorldChunk.setBlock), with break particles: the airship burst into particles at takeoff (11 October 2026).
+        // called by WorldChunk.setBlock), with break particles: the airship burst into particles at takeoff.
         SectionReader reader = new SectionReader(world.getChunkStore());
         for (int pass = 0; pass < 4; pass++) {
             for (StructureShape.Cell c : s.cells()) {
@@ -1038,9 +1071,9 @@ public final class BalloonManager {
                 BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
                 boolean bagCell = c.baseName().startsWith("Camping_Pack_Placed_");
                 if (bt != null && (bagCell ? StructureRemoval.removeCell(true, sameBlock(bt, c)) : sameBlock(bt, c))) {
-                    // The anchor block (the burner, formerly the brazier, or the tent's campfire, T46) is removed without the "no particles" option: with it, the flame
-                    // stayed displayed in the sky (test of 3 October 2026, suspected cause). The airship (broadAttached) is excluded: its
-                    // anchor is the wooden helm (T67), which burst into break particles, and its block particles are cancelled apart.
+                    // The anchor block (the burner, formerly the brazier, or the tent's campfire) is removed without the "no particles" option: with it, the flame
+                    // stayed displayed in the sky (suspected cause). The airship (broadAttached) is excluded: its
+                    // anchor is the wooden helm, which burst into break particles, and its block particles are cancelled apart.
                     boolean flameAnchor = !broadAttached && s.anchor().baseName().equals(c.baseName());
                     int settings = flameAnchor ? 0 : SET_BLOCK_NO_PARTICLES;
                     SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, BlockType.EMPTY_KEY, settings);
@@ -1059,7 +1092,7 @@ public final class BalloonManager {
     }
 
     /**
-     * Looks for an anchor burner then checks that the prefab blocks are in place around it. T54: every balloon type is tried
+     * Looks for an anchor burner then checks that the prefab blocks are in place around it. Every balloon type is tried
      * (same anchor block for all), with the 4 rotations, and the best share of flight cells in place wins (at least MATCH_RATIO).
      */
     private Found findBalloon(World world, Vector3d around) {
@@ -1075,7 +1108,7 @@ public final class BalloonManager {
     }
 
     /**
-     * T87: recognition in two steps. 1. For each anchor block, the best type and rotation (the registered priority of T73 only
+     * recognition in two steps. 1. For each anchor block, the best type and rotation (the registered priority only
      * competes at the same anchor). 2. Between anchors: the one whose nacelle contains the search point, otherwise the nearest
      * (to the pivot for a balloon, to the anchor otherwise). With an anchor hint (the burner above the chain that was used), only
      * that anchor is tried.
@@ -1133,7 +1166,7 @@ public final class BalloonManager {
     }
 
     /**
-     * T87: [distance to the pivot if the point is inside the balloon's nacelle (-1 otherwise), distance to the pivot (balloon)
+     * [distance to the pivot if the point is inside the balloon's nacelle (-1 otherwise), distance to the pivot (balloon)
      * or to the anchor (other types)].
      */
     private double[] anchorDistance(Found f, Vector3d point, int ax, int ay, int az) {
@@ -1154,7 +1187,7 @@ public final class BalloonManager {
     }
 
     /**
-     * Same, T73: a structure that is in the registry at this origin and rotation (transport balloon) is compared in its registered
+     * Same: a structure that is in the registry at this origin and rotation (transport balloon) is compared in its registered
      * state (cage lowered, side open) and, if it matches, wins over every other type measured at the same burner
      * (TransportCage.REGISTERED_RATIO): the small balloon's shape matches about 90 % in a transport balloon.
      */
@@ -1163,7 +1196,7 @@ public final class BalloonManager {
         return ratio >= MATCH_RATIO && TransportCage.registered(world, kind, origin, r) ? TransportCage.REGISTERED_RATIO : ratio;
     }
 
-    /** The shape of a recognised or registered balloon in its registered state (T73), the prefab's if it has no cage state. */
+    /** The shape of a recognised or registered balloon in its registered state, the prefab's if it has no cage state. */
     static StructureShape shapeOfFound(World world, Found f) {
         StructureShape base = f.kind().shapeOrNull();
         return base == null ? null : TransportCage.shapeAt(world, f.kind(), base, f.origin(), f.rotation());
@@ -1172,7 +1205,7 @@ public final class BalloonManager {
     /** Share of the flight cells (0 to 1) that are in place for a prefab at this origin and rotation. */
     private double matchRatio(World world, StructureShape s, Vector3i origin, Rotation r) {
         int total = s.flightCells().size();
-        // Same threshold as before T54: ceil(total * MATCH_RATIO) cells are needed. Rounded here to avoid a different float result.
+        // Same threshold as before: ceil(total * MATCH_RATIO) cells are needed. Rounded here to avoid a different float result.
         int needed = (int) Math.ceil(total * MATCH_RATIO);
         int m = countMatches(world, s, origin, r);
         return m >= needed ? Math.max(MATCH_RATIO, m / (double) total) : 0;
@@ -1181,7 +1214,7 @@ public final class BalloonManager {
     private int countMatches(World world, StructureShape s, Vector3i origin, Rotation r) {
         int m = 0;
         SectionReader reader = new SectionReader(world.getChunkStore());
-        // T24: only flight cells count, the unfolded ladder may be missing (terrain) without being a problem.
+        // only flight cells count, the unfolded ladder may be missing (terrain) without being a problem.
         for (StructureShape.Cell c : s.flightCells()) {
             Vector3i p = c.rotated(r).add(origin);
             BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
@@ -1218,7 +1251,7 @@ public final class BalloonManager {
 
     /**
      * Blocks that older ships still hold in a cell whose prefab block was replaced later:
-     * the game's Deco_Map (T148 desk), the game's crude ladder (rope ladder) and the game's pipes (ship smoke blocks).
+     * the game's Deco_Map (desk), the game's crude ladder (rope ladder) and the game's pipes (ship smoke blocks).
      */
     static boolean legacyAlias(String prefabName, String worldBase) {
         if ("Airship_Captain_Map_Desk".equals(prefabName)) {
@@ -1242,7 +1275,7 @@ public final class BalloonManager {
         return spawnModelEntity(store, position, yawRadians, id, null);
     }
 
-    /** Same with a given UUID for the entity (T82: the observer entity has a deterministic one, so a resume can remove an orphan). */
+    /** Same with a given UUID for the entity (the observer entity has a deterministic one, so a resume can remove an orphan). */
     Ref<EntityStore> spawnModelEntity(Store<EntityStore> store, Vector3d position, double yawRadians, String id, UUID uuid) {
         ModelAsset asset = ModelAsset.getAssetMap().getAsset(id);
         if (asset == null) {
@@ -1268,10 +1301,10 @@ public final class BalloonManager {
         // the entity, collisions are handled by BalloonManager.
         holder.putComponent(NetworkId.getComponentType(), new NetworkId(store.getExternalData().takeNextNetworkId()));
         holder.ensureComponent(Intangible.getComponentType());
-        // T19: without this marker, EntitySystems$EnsureForSerializable makes the entity saveable and the
+        // without this marker, EntitySystems$EnsureForSerializable makes the entity saveable and the
         // world saves it with its chunks (a ghost entity without a model reappears on load).
         holder.addComponent(EntityStore.REGISTRY.getNonSerializedComponentType(), NonSerialized.get());
-        // T50: carries the sound effect of the flame jet (EffectControllerComponent.addEffect). Nothing is saved (NonSerialized).
+        // carries the sound effect of the flame jet (EffectControllerComponent.addEffect). Nothing is saved (NonSerialized).
         holder.addComponent(EffectControllerComponent.getComponentType(), new EffectControllerComponent());
         return store.addEntity(holder, AddReason.SPAWN);
     }
@@ -1352,20 +1385,20 @@ public final class BalloonManager {
         }
     }
 
-    /** A terrain block kept before placement (T24). */
+    /** A terrain block kept before placement. */
     private record Terrain(int x, int y, int z, int id, BlockType type, int rotation, int filler) {
     }
 
     /**
-     * Places the prefab without overwriting the terrain with the unfolded ladder (T24). The prefab is pasted in full
+     * Places the prefab without overwriting the terrain with the unfolded ladder. The prefab is pasted in full
      * (PrefabUtil.paste cannot skip cells), then the solid blocks that occupied an unfolded ladder cell
      * are put back (identifier, rotation, filler). The components of a terrain block (chest) are not
      * kept. Ladder cells already occupied by something other than a solid block are overwritten, except
      * liquid cells: the ladder stops at the surface, the original empty block is put back. The prefab has
      * no fluid entry on these cells, so PrefabUtil.paste does not touch the water there.
-     * Used by every placement path: landing (chain or command), dry burner, resume from T19 and crate.
+     * Used by every placement path: landing (chain or command), dry burner, resume and crate.
      */
-    /** Registers the structure of the given type (T43) and its owner (nullable) in the registry. */
+    /** Registers the structure of the given type and its owner (nullable) in the registry. */
     static void pasteKeepingTerrain(com.hypixel.hytale.server.core.prefab.selection.buffer.impl.IPrefabBuffer buffer,
                                     World world, StructureShape s, Vector3i origin, Rotation rotation, int flags,
                                     com.hypixel.hytale.component.ComponentAccessor<EntityStore> accessor,
@@ -1433,11 +1466,11 @@ public final class BalloonManager {
         if (!kept.isEmpty()) {
             LOGGER.at(Level.INFO).log("Pose : %d case(s) d'échelle laissée(s) au terrain", kept.size());
         }
-        // T27: the placed balloon is locked (block breaking and placing cancelled, BalloonLockSystems).
+        // the placed balloon is locked (block breaking and placing cancelled, BalloonLockSystems).
         BalloonRegistry.add(world, origin, rotation, kind, own);
     }
 
-    /** Balloon type of a crate's prefab (T54), null if the given prefab is not a balloon's. */
+    /** Balloon type of a crate's prefab, null if the given prefab is not a balloon's. */
     Deployables.Kind balloonKindFor(String prefabPath) {
         Deployables.Kind k = Deployables.forPrefab(prefabPath);
         return k != null && k.isBalloon() ? k : null;
@@ -1451,11 +1484,11 @@ public final class BalloonManager {
             return Texts.t("error.notPiloting");
         }
         if (flight.groundCage > 0) {
-            // T120: the balloon is coming down onto its cage, placing it on the spot would leave the cage behind.
+            // the balloon is coming down onto its cage, placing it on the spot would leave the cage behind.
             return Texts.t("error.groundCage");
         }
         if (flight.driven) {
-            // T26: the pilot is seated and their position is no longer that of a free flight: place in position, in the
+            // the pilot is seated and their position is no longer that of a free flight: place in position, in the
             // last free cell of the descent and with the flight's orientation.
             Vector3i here = flight.currentOrigin();
             try {
@@ -1559,11 +1592,11 @@ public final class BalloonManager {
         }
         flights.remove(flight.pilotUuid);
         endVoyageCleanup(store, flight);
-        // T34: lights first (the luminous blocks come back with the prefab, no double lighting).
+        // lights first (the luminous blocks come back with the prefab, no double lighting).
         BalloonLights.removeAll(store, flight);
         BalloonLights.removeChain(store, flight);
         setBurnerRoar(store, flight, false);
-        // T120: onto a cage left on the ground, the cage blocks are kept and the registry entry carries the remaining descent (0 at the target).
+        // onto a cage left on the ground, the cage blocks are kept and the registry entry carries the remaining descent (0 at the target).
         int cageRemaining = flight.groundCage > 0 ? TransportCage.remainingDescent(origin.y, flight.cageHome.y, flight.groundCage) : 0;
         if (flight.groundCage > 0) {
             TransportCage.pasteOverCage(flight.world, origin, rotation, cageRemaining,
@@ -1584,11 +1617,12 @@ public final class BalloonManager {
         }
         restoreCargo(flight.world, store, flight.cargo, origin, rotation);
         restoreCrew(flight.world, flight, origin, rotation);
-        // T74: the captured animals are put back in the placed cage (still frozen, noted in the registry entry).
+        keepSky(flight, origin, rotation);
+        // the captured animals are put back in the placed cage (still frozen, noted in the registry entry).
         CageAnimals.place(flight.world, origin, rotation, flight.kind.id, flight.animals, cageRemaining);
-        // T21: passengers are dismounted and placed next to their seat (the balloon is back to blocks).
+        // passengers are dismounted and placed next to their seat (the balloon is back to blocks).
         disembarkPassengers(store, flight, origin, rotation);
-        // T19: the flight is over, the resume file no longer has a reason to exist.
+        // the flight is over, the resume file no longer has a reason to exist.
         BalloonResume.delete(flight.pilotUuid);
         removeEntities(store, flight);
         if (flight.pilotRef != null && flight.pilotRef.isValid()) {
@@ -1720,7 +1754,7 @@ public final class BalloonManager {
             MountUtil.unseat(store, p.ref);
             p.mode = BalloonFlight.PassengerMode.CAMERA; // transit flights always use the seat camera, whatever the global mode
             if (destination != null && !p.camYawSet) {
-                // The view looks where the balloon goes, a little toward the outside of the seat (decision of the user, 11 October 2026).
+                // The view looks where the balloon goes, a little toward the outside of the seat.
                 Vector3d seat = prefabPoint(new Vector3d(origin.x + 0.5, origin.y, origin.z + 0.5), rotation, p.seatLocal);
                 p.camYaw = PassengerCamera.towardYaw(destination.origin.x - origin.x, destination.origin.z - origin.z,
                         seat.x - centre.x, seat.z - centre.z);
@@ -1928,7 +1962,7 @@ public final class BalloonManager {
         if (flights.isEmpty()) {
             return;
         }
-        // T39: a dead pilot or passenger is removed from the flight (safety net of BalloonDeathSystem).
+        // a dead pilot or passenger is removed from the flight (safety net of BalloonDeathSystem).
         checkDeaths(store, world);
         for (BalloonFlight flight : flights.values()) {
             if (flight.world != world) {
@@ -1941,7 +1975,7 @@ public final class BalloonManager {
                 continue;
             }
             if (flight.serverDriven()) {
-                // T20 (no pilot) and T26 (seated pilot): automatic descent, the entity is moved by the server.
+                // Automatic descent, the entity is moved by the server.
                 if (flight.balloonRef == null || !flight.balloonRef.isValid()
                         || (!flight.pilotless() && !flight.pilotRef.isValid())) {
                     landNow(flight);
@@ -1949,6 +1983,7 @@ public final class BalloonManager {
                     long nowMs = System.currentTimeMillis();
                     tickDriven(store, world, s, flight, nowMs);
                     updatePassengers(store, world, flight, nowMs);
+                    recordSky(flight, nowMs);
                 }
                 continue;
             }
@@ -1970,6 +2005,7 @@ public final class BalloonManager {
                 BalloonResume.write(flight, flight.currentOrigin(), false);
             }
             updatePassengers(store, world, flight, now);
+            recordSky(flight, now);
             if (!flight.dry && !flight.stopping) {
                 updateBoost(store, world, flight, pilotTransform.getPosition().y, now);
             }
@@ -1986,12 +2022,12 @@ public final class BalloonManager {
                 if (hit != null) {
                     // Collision: the pilot is brought back to their last valid position.
                     flight.teleportUntilMs = now + COLLISION_PAUSE_MS;
-                    // T37: no collision message in the chat any more, the log keeps the block touched (at most every 2 s).
+                    // no collision message in the chat any more, the log keeps the block touched (at most every 2 s).
                     if (now - flight.lastCollisionMsgMs > COLLISION_MSG_INTERVAL_MS) {
                         flight.lastCollisionMsgMs = now;
                         LOGGER.at(Level.INFO).log("Collision : %s", hit);
                     }
-                    // T76: the height limit is not visible, so the pilot is told (at most every 3 s).
+                    // the height limit is not visible, so the pilot is told (at most every 3 s).
                     if (hit.contains(HEIGHT_HIT) && now - flight.lastHeightMsgMs >= HEIGHT_MSG_INTERVAL_MS) {
                         flight.lastHeightMsgMs = now;
                         PlayerRef pilotPlayer = store.getComponent(flight.pilotRef, PlayerRef.getComponentType());
@@ -2014,7 +2050,7 @@ public final class BalloonManager {
             flight.lastValidPilotPos.set(pilotPos);
             flight.entityPos.set(desired);
             balloonTransform.setPosition(displayPosition(flight.kind, desired, flight.rotation));
-            VehicleView.sync(store, flight.balloonRef, flight.observerRef); // T82
+            VehicleView.sync(store, flight.balloonRef, flight.observerRef);
             VehicleParts.sync(store, flight.parts, flight.balloonRef, flight.observerRef);
             PilotMannequin.sync(store, flight.pilotMan, flight.observerRef, flight.pilotRef, System.currentTimeMillis());
             AirshipCrew.syncMannequin(store, flight.crewMan, System.currentTimeMillis());
@@ -2042,8 +2078,7 @@ public final class BalloonManager {
     private static final String BURNER_FLAME = "Campfire_New_Cartoon";
 
     /**
-     * Removing the block is not enough: the flame (of the brazier, then of the burner since T16) stayed displayed in the sky (tests of
-     * 3 October 2026, with and without the no-particles option). So clients are asked
+     * Removing the block is not enough: the flame (of the brazier, then of the burner) stayed displayed in the sky (with and without the no-particles option). So clients are asked
      * to stop the flame particle systems in the burner's cell and above it, with the
      * CancelParticleSystems packet used by the CancelParticles effect of the game's trigger volumes.
      */
@@ -2056,14 +2091,14 @@ public final class BalloonManager {
         }
     }
 
-    /** T76: marker of the collision description when the contact is the height limit (not a block). */
+    /** marker of the collision description when the contact is the height limit (not a block). */
     /**
      * Highest block row of a world (0.7: WORLD_MAX_Y is deprecated because of cubic sections, but a normal world keeps
      * rows 0 to 319, see SectionReader.canHoldY; only the test generator CubicTestWorldGenProvider makes unbounded worlds).
      */
     static final int WORLD_MAX_Y = 319;
     static final String HEIGHT_HIT = "limite de hauteur de construction";
-    /** T76: minimum delay between two "height limit reached" messages to the pilot. */
+    /** minimum delay between two "height limit reached" messages to the pilot. */
     static final long HEIGHT_MSG_INTERVAL_MS = 3000;
 
     /** Describes the first solid or liquid block touched by the balloon, or null if there is none. */
@@ -2107,7 +2142,7 @@ public final class BalloonManager {
      */
     /**
      * First cell of a structure (placed at origin with rotation) that holds a liquid, null if none: no crate may be deployed under
-     * water (decision of the user, 11 October 2026). The unfolded ladder cells of a balloon are skipped (they stop at the surface, T51).
+     * water. The unfolded ladder cells of a balloon are skipped (they stop at the surface).
      */
     static Vector3i underLiquid(World world, StructureShape s, Vector3i origin, Rotation rotation) {
         SectionReader reader = new SectionReader(world.getChunkStore());
@@ -2139,14 +2174,14 @@ public final class BalloonManager {
     }
 
     /**
-     * T76: true if the cell is outside the world's height range (ChunkUtil.MIN_Y = 0 to WORLD_MAX_Y = 319). Blocks
+     * true if the cell is outside the world's height range (ChunkUtil.MIN_Y = 0 to WORLD_MAX_Y = 319). Blocks
      * placed above the limit are lost, so a vehicle must never reach such a cell.
      */
     static boolean outOfHeight(int y) {
         return y < ChunkUtil.MIN_Y || y > WORLD_MAX_Y;
     }
 
-    /** T76: true if one cell of the structure (all cells, folded ladder included) is outside the height range at this origin. */
+    /** true if one cell of the structure (all cells, folded ladder included) is outside the height range at this origin. */
     static boolean exceedsHeight(StructureShape s, Vector3i origin, Rotation rotation) {
         for (StructureShape.Cell c : s.cells()) {
             if (outOfHeight(c.rotated(rotation).add(origin).y)) {
@@ -2157,7 +2192,7 @@ public final class BalloonManager {
     }
 
     /**
-     * T76: vertical shift (in blocks, positive = up) that brings every cell of the structure back into the height range, 0 if it
+     * vertical shift (in blocks, positive = up) that brings every cell of the structure back into the height range, 0 if it
      * already fits, Integer.MIN_VALUE if the structure is too tall for the world. Used by the resume after a stop.
      */
     static int heightShift(StructureShape s, Vector3i origin, Rotation rotation) {
@@ -2177,7 +2212,7 @@ public final class BalloonManager {
         return min < ChunkUtil.MIN_Y ? ChunkUtil.MIN_Y - min : 0;
     }
 
-    /** True if the cell stops the balloon: solid block, liquid, or outside the world's height range (T76). */
+    /** True if the cell stops the balloon: solid block, liquid, or outside the world's height range. */
     static boolean blocksBalloon(SectionReader reader, int x, int y, int z) {
         return blocksBalloon(reader, x, y, z, false);
     }
@@ -2199,11 +2234,11 @@ public final class BalloonManager {
     }
 
     static boolean collides(World world, StructureShape s, Vector3i origin, Rotation rotation, java.util.Set<Vector3i> ignore) {
-        // T76: every cell, the folded ladder included, must stay inside the world's height range (blocks above are lost).
+        // every cell, the folded ladder included, must stay inside the world's height range (blocks above are lost).
         if (exceedsHeight(s, origin, rotation)) {
             return true;
         }
-        // T24: folded ladder in flight, only the flight cells hit the scenery.
+        // folded ladder in flight, only the flight cells hit the scenery.
         SectionReader reader = new SectionReader(world.getChunkStore());
         for (StructureShape.Cell c : s.flightCells()) {
             Vector3i p = c.rotated(rotation).add(origin);
@@ -2217,7 +2252,7 @@ public final class BalloonManager {
         return false;
     }
 
-    // ------------------------------------------------------------------ game mode change (T75)
+    // ------------------------------------------------------------------ game mode change
 
     /**
      * Re-applies the movement settings of a game mode to a player, like Player.setGameModeInternal (MovementManager.resetFly(mode)
@@ -2284,7 +2319,7 @@ public final class BalloonManager {
     /**
      * The player left the vehicle because of a game mode change. Pilot: the balloon is placed in place (same path as the chain), else
      * it becomes a pilotless flight that comes down on its own (pilotDied without the death). During the automatic descent (seated pilot,
-     * T26) it is the pilotless descent directly. Passenger: released and removed from the flight. In both cases the player is put on
+     * it is the pilotless descent directly. Passenger: released and removed from the flight. In both cases the player is put on
      * the ground under them if the new mode cannot fly, and the new mode's movement settings are re-applied so the mod's resets do not
      * overwrite them. On the world thread, no effect if repeated (the player is no longer in a flight).
      */
@@ -2338,7 +2373,7 @@ public final class BalloonManager {
         }
     }
 
-    // ------------------------------------------------------------------ death of the pilot or a passenger (T39)
+    // ------------------------------------------------------------------ death of the pilot or a passenger
 
     /**
      * The game removes neither the entity nor the reference of a player who dies: it adds DeathComponent to the same
@@ -2404,20 +2439,20 @@ public final class BalloonManager {
 
     /**
      * The pilot died in flight: they are no longer tied to the balloon, which descends on its own. Pilot in free flight or
-     * seated pilot of the automatic descent (T26), same handling: removed from the passenger list (no
+     * seated pilot of the automatic descent, same handling: removed from the passenger list (no
      * teleport, respawn sends them to the spawn point), entity detached from them, movement
      * settings back to normal (no more forced flight or zero speeds), then the flight becomes a flight without a
-     * pilot (T20): flame off (model without flame and burner light cut, T13 and T35), automatic descent
+     * pilot: flame off (model without flame and burner light cut), automatic descent
      * at the pilot's remembered speed, placed as blocks on contact (finishFlight). The contents of the
-     * burner and chests stay in the flight. Passengers stay seated and are placed on landing (T21).
+     * burner and chests stay in the flight. Passengers stay seated and are placed on landing.
      * The flight changes identifier (random, like a flight without a pilot): the respawned player can pilot another
-     * balloon, and the resume file of T19 follows the flight under the new identifier.
+     * balloon, and the resume file follows the flight under the new identifier.
      */
     private void pilotDied(Store<EntityStore> store, World world, BalloonFlight flight) {
         pilotDied(store, world, flight, true);
     }
 
-    /** Same, T75: dead false when the pilot leaves because of a game mode change (other message, same handling). */
+    /** Same: dead false when the pilot leaves because of a game mode change (other message, same handling). */
     private void pilotDied(Store<EntityStore> store, World world, BalloonFlight flight, boolean dead) {
         Ref<EntityStore> ref = flight.pilotRef;
         if (ref == null || flights.get(flight.pilotUuid) != flight) {
@@ -2427,7 +2462,7 @@ public final class BalloonManager {
         String name = player != null ? player.getUsername() : String.valueOf(flight.pilotUuid);
         if (dead && !flight.driven && ref.isValid()) {
             // Take-over landing: a free-flying pilot died, the balloon lands in place with its own orientation and the
-            // passengers are freed (and unprotected by clearPose) so one of them can fly it again. Fallback: T39 below.
+            // passengers are freed (and unprotected by clearPose) so one of them can fly it again. Fallback below.
             TransformComponent pilotPos = store.getComponent(ref, TransformComponent.getComponentType());
             if (pilotPos != null) {
                 int count = flight.passengers.size();
@@ -2465,7 +2500,7 @@ public final class BalloonManager {
             store.tryRemoveComponent(flight.balloonRef, MountedComponent.getComponentType());
         }
         flight.attached = false;
-        collapseView(store, flight); // T82
+        collapseView(store, flight);
         if (player != null) {
             try {
                 setPilotFlying(store, ref, player, false);
@@ -2546,7 +2581,7 @@ public final class BalloonManager {
             TransformComponent pt = store.getComponent(ref, TransformComponent.getComponentType());
             Rotation3f look = pt != null ? new Rotation3f(pt.getRotation()) : new Rotation3f();
             if (ref.equals(flight.pilotRef)) {
-                // The seated pilot of a dry descent: same path as T75 (pilot left), the flight becomes pilotless with a new id.
+                // The seated pilot of a dry descent: same path as a pilot who left, the flight becomes pilotless with a new id.
                 pilotDied(store, flight.world, flight, false);
             } else {
                 releaseDeadPassenger(store, flight, p);
@@ -2586,11 +2621,11 @@ public final class BalloonManager {
         }
     }
 
-    // ------------------------------------------------------------------ removal by an administrator (T40)
+    // ------------------------------------------------------------------ removal by an administrator
 
     /** Search radius of /orbishorizon balloon despawn around the administrator, in blocks. */
     private static final double DESPAWN_RADIUS = 48;
-    /* Crate item given back to the administrator: that of the removed balloon's type (Deployables.BalloonSpec.crateItemId, T54). */
+    /* Crate item given back to the administrator: that of the removed balloon's type (Deployables.BalloonSpec.crateItemId). */
 
     /** Result of /orbishorizon balloon despawn: success or not, and the message to display. */
     record DespawnResult(boolean ok, Message message) {
@@ -2606,9 +2641,9 @@ public final class BalloonManager {
     }
 
     /**
-     * T40: removes the balloon closest to the administrator (within DESPAWN_RADIUS blocks), placed or in flight.
+     * removes the balloon closest to the administrator (within DESPAWN_RADIUS blocks), placed or in flight.
      * The burner and chest items are dropped on the ground, the blocks (or the flying entity and its lights) are
-     * removed without dropping blocks, the balloon leaves the T27 registry and the T19 resume file, and the
+     * removed without dropping blocks, the balloon leaves the registry and the resume file, and the
      * administrator receives a deployment crate. To be called on the world thread, after the permission check
      * done by the command. The administrator's own flight (pilot or passenger) takes priority over the others.
      */
@@ -2638,8 +2673,8 @@ public final class BalloonManager {
             }
         }
 
-        // Placed balloon: the T27 registry first (burner in place), then the search around the player,
-        // which also finds a balloon placed before T27 (absent from the registry).
+        // Placed balloon: the registry first (burner in place), then the search around the player,
+        // which also finds a balloon placed before the registry existed (absent from the registry).
         Found posed = null;
         double posedDist = Double.MAX_VALUE;
         SectionReader reader = new SectionReader(world.getChunkStore());
@@ -2649,7 +2684,7 @@ public final class BalloonManager {
             if (s == null) {
                 continue;
             }
-            // T73: the removal takes the cage as it is (lowered, open), the burner and anchor are those of the prefab.
+            // the removal takes the cage as it is (lowered, open), the burner and anchor are those of the prefab.
             Vector3i origin = new Vector3i(e.x(), e.y(), e.z());
             Vector3i burner = s.burner().rotated(e.rotation()).add(origin);
             BlockType bt = SectionBlocks.typeAt(reader, burner.x, burner.y, burner.z);
@@ -2681,7 +2716,7 @@ public final class BalloonManager {
             error = despawnFlight(store, flight, adminRef, admin, here);
         } else {
             crateItem = posed.kind().balloon.crateItemId;
-            // T73: the shape in the registered state, so that a lowered cage and its chain are removed too.
+            // the shape in the registered state, so that a lowered cage and its chain are removed too.
             error = despawnPosed(store, world, posed.kind(), shapeOfFound(world, posed), posed.origin, posed.rotation, adminRef, admin, here);
         }
         if (error != null) {
@@ -2713,7 +2748,7 @@ public final class BalloonManager {
         return true;
     }
 
-    /** Teleports a player to the ground under a point (dismounted first: a teleport removes the mount, T21). */
+    /** Teleports a player to the ground under a point (dismounted first: a teleport removes the mount). */
     static void putOnGround(Store<EntityStore> store, World world, Ref<EntityStore> ref, Vector3d from) {
         MountUtil.unseat(store, ref);
         TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
@@ -2731,7 +2766,7 @@ public final class BalloonManager {
     }
 
     /**
-     * T40, placed balloon: the burner and chest contents are copied then emptied BEFORE the blocks are removed.
+     * placed balloon: the burner and chest contents are copied then emptied BEFORE the blocks are removed.
      * The game already drops a container's contents when its block disappears (ItemContainerSystems$OnAddedOrRemoved and
      * BenchSystems$ProcessingBenchLifecycle, onEntityRemove: dropAllItemStacks then ItemComponent.generateItemDrops,
      * with the setBlock options 0 and 4 used here, only option 2 skips the component): a single path is
@@ -2772,14 +2807,14 @@ public final class BalloonManager {
             }
         }
 
-        // T74: animals captured in the cage are released (no longer frozen) and put on the ground under it.
+        // animals captured in the cage are released (no longer frozen) and put on the ground under it.
         BalloonRegistry.Entry cageEntry = BalloonRegistry.get(world, origin, rotation, kind.id);
         List<CageAnimals.Animal> cageAnimals = cageEntry == null ? List.of() : cageEntry.animals();
         Vector3d[] cagePos = new Vector3d[cageAnimals.size()];
         for (int i = 0; i < cagePos.length; i++) {
             cagePos[i] = CageAnimals.worldPos(cageAnimals.get(i), origin, rotation, cageEntry.descent());
         }
-        // The T27 registry first (the plugin's removals do not go through the locking events).
+        // The registry first (the plugin's removals do not go through the locking events).
         BalloonRegistry.remove(world, origin, rotation, kind.id);
         int removed = removeBlocks(world, s, origin, rotation);
         if (cageEntry != null && cageEntry.crew() != null) {
@@ -2831,8 +2866,8 @@ public final class BalloonManager {
     }
 
     /**
-     * T40, balloon in flight: the flight leaves flights (the tick no longer follows it), the lights (T34, T35) and the
-     * resume file (T19) are removed, the passengers (the seated pilot of T26 included) are dismounted and
+     * balloon in flight: the flight leaves flights (the tick no longer follows it), the lights and the
+     * resume file are removed, the passengers (the seated seated pilot included) are dismounted and
      * put on the ground under their seat, the pilot in free flight gets their movement settings back and is put on the ground
      * under the gondola (otherwise they would fall from a height), then the entity is removed. The contents kept by the flight
      * (burner and chests, copied at take-off) are dropped on the ground under the balloon, or near the administrator
@@ -2906,7 +2941,7 @@ public final class BalloonManager {
         if (flight.cargo != null) {
             items += dropAndCount(store, flight.cargo.takeAllItems(), dropPos);
         }
-        // T74: animals of the cage released and put on the ground under the balloon.
+        // animals of the cage released and put on the ground under the balloon.
         Vector3d[] flightAnimalPos = new Vector3d[flight.animals.size()];
         for (int i = 0; i < flightAnimalPos.length; i++) {
             flightAnimalPos[i] = CageAnimals.flightPos(flight.animals.get(i), flight);
@@ -2914,7 +2949,7 @@ public final class BalloonManager {
         CageAnimals.releaseToGround(world, flight.animals, flightAnimalPos);
         flight.animals.clear();
         if (flight.groundCage > 0) {
-            // T120: the cage left on the ground goes with the rest.
+            // the cage left on the ground goes with the rest.
             TransportCage.removeCage(world, flight.cageHome, flight.rotation, flight.groundCage);
         }
         BalloonResume.delete(flight.pilotUuid);
@@ -2924,18 +2959,18 @@ public final class BalloonManager {
         return null;
     }
 
-    // ------------------------------------------------------------------ shutdown, disconnect, resume (T19)
+    // ------------------------------------------------------------------ shutdown, disconnect, resume
 
     /**
-     * T82: removes the flying entity and, with dual rendering, the observer entity (and their visibility rules). The lights and the chain
+     * removes the flying entity and, with dual rendering, the observer entity (and their visibility rules). The lights and the chain
      * helper are removed by the callers (BalloonLights.removeAll, removeChain). Never throws.
      */
     private void removeEntities(Store<EntityStore> store, BalloonFlight flight) {
-        PilotMannequin.remove(store, flight.pilotMan, false); // T119
+        PilotMannequin.remove(store, flight.pilotMan, false);
         flight.pilotMan = null;
         AirshipCrew.removeMannequin(store, flight.crewMan);
         flight.crewMan = null;
-        PassengerSeatView.removeAll(store, flight.passengers); // T118
+        PassengerSeatView.removeAll(store, flight.passengers);
         PassengerSeatView.drain(store, flight.seatViews);
         VehicleParts.removeAll(store, flight.parts);
         flight.parts = null;
@@ -2952,7 +2987,7 @@ public final class BalloonManager {
     }
 
     /**
-     * T82: the flight has no pilot on board any more (pilot seated for the dry descent, dead, gone, left through a game mode change): one
+     * the flight has no pilot on board any more (pilot seated for the dry descent, dead, gone, left through a game mode change): one
      * entity seen by everybody is enough. The observer entity and the twin lights are removed, the entity that was mounted on the
      * pilot (now detached and moved by the server like in a pilotless flight) and its lights and chain helper become visible to everybody.
      * No effect in single rendering. On the world thread.
@@ -2961,7 +2996,7 @@ public final class BalloonManager {
         if (!flight.dual) {
             return;
         }
-        PilotMannequin.remove(store, flight.pilotMan, false); // T119: the mannequin lives with the dual rendering
+        PilotMannequin.remove(store, flight.pilotMan, false); // the mannequin lives with the dual rendering
         flight.pilotMan = null;
         AirshipCrew.collapseMannequin(store, flight.crewMan);
         flight.dual = false;
@@ -2986,7 +3021,7 @@ public final class BalloonManager {
     /** Model parts setting (next take-off). */
     volatile VehicleParts.Mode partsMode = VehicleParts.Mode.ON;
 
-    /** T82: dual rendering (pilot entity for the pilot, observer entity for the others) or the single entity of before. Next take-off. */
+    /** dual rendering (pilot entity for the pilot, observer entity for the others) or the single entity of before. Next take-off. */
     boolean renderDual() {
         return renderDual;
     }
@@ -3008,7 +3043,7 @@ public final class BalloonManager {
         Store<EntityStore> store = flight.world.getEntityStore().getStore();
         if (flight.transit != null) {
             // A transit balloon is never placed in blocks in mid-air: its passengers are put back on the DEPARTURE station
-            // (T150, never the destination: a stop or an early end must not skip the trip) and it is just removed. The resume file goes with it.
+            // (never the destination: a stop or an early end must not skip the trip) and it is just removed. The resume file goes with it.
             List<Vector3d> pts = transitReturnPoints(flight.world, flight.transit.from, flight.transit.to, flight.entityPos);
             if (shutdown) {
                 // The deferred teleports and the resume file (deleted by endTransit) cannot be relied on at a stop: each passenger is noted
@@ -3172,7 +3207,7 @@ public final class BalloonManager {
                 }
             }
             StructureShape s = rec.kind().shape();
-            // T76: a pose that would exceed the height range is lowered (or raised) to fit. If the structure cannot fit at all,
+            // a pose that would exceed the height range is lowered (or raised) to fit. If the structure cannot fit at all,
             // the file is kept untouched with a warning: nothing is emptied or placed, nothing is lost.
             int dy = heightShift(s, rec.origin(), rec.rotation());
             if (dy == Integer.MIN_VALUE) {
@@ -3183,10 +3218,10 @@ public final class BalloonManager {
                 LOGGER.at(Level.WARNING).log("Reprise du vol de %s : pose hors de la limite de hauteur, décalée de %d bloc(s)", rec.pilot(), dy);
                 rec = rec.shiftedBy(dy);
             }
-            // T34: auxiliary lights left in a world that survived the plugin (never saved otherwise).
+            // auxiliary lights left in a world that survived the plugin (never saved otherwise).
             BalloonLights.removeOrphans(world, store, rec.balloon(), s);
             VehicleParts.removeOrphans(world, store, rec.balloon());
-            PilotMannequin.removeOrphan(world, store, rec.balloon()); // T119
+            PilotMannequin.removeOrphan(world, store, rec.balloon());
             AirshipCrew.removeMannequinOrphan(world, store, rec.balloon());
             PassengerSeatView.removeOrphans(world, store, rec.balloon(), rec.passengers().stream().map(BalloonResume.Seated::uuid).toList());
             // If the world was saved before take-off, the old balloon and its contents are
@@ -3197,7 +3232,7 @@ public final class BalloonManager {
             if (bench != null) {
                 BurnerFuel.takeFrom(bench);
             }
-            // T120: a dry descent onto a cage left on the ground: the balloon is placed where it was last written, over the cage that never moved.
+            // a dry descent onto a cage left on the ground: the balloon is placed where it was last written, over the cage that never moved.
             final BalloonResume.Record placed = rec;
             int cageRemaining = rec.cageDescent() > 0 ? TransportCage.remainingDescent(rec.origin().y, rec.cageHomeY(), rec.cageDescent()) : 0;
             TransportCage.pasteOverCage(world, rec.origin(), rec.rotation(), cageRemaining,
@@ -3206,8 +3241,11 @@ public final class BalloonManager {
                             Ownership.landingOwner(placed.ownership(), null, null)));
             restoreBurner(rec.kind(), world, store, rec.burner(), rec.origin(), rec.rotation());
             restoreCargo(world, store, rec.cargo(), rec.origin(), rec.rotation());
-            // T74: animals of the cage found again by UUID, or recreated from their role.
+            // animals of the cage found again by UUID, or recreated from their role.
             CageAnimals.place(world, rec.origin(), rec.rotation(), rec.kind().id, rec.animals(), cageRemaining);
+            if (rec.sky() != null) {
+                BalloonRegistry.setSky(world, rec.origin(), rec.rotation(), rec.kind().id, rec.sky());
+            }
             if (rec.crew() != null) {
                 try {
                     BalloonRegistry.setCrew(world, rec.origin(), rec.rotation(), rec.kind().id, rec.crew().withPost(CrewRecord.Post.STOOL));
@@ -3230,7 +3268,7 @@ public final class BalloonManager {
 
     /**
      * Resume of a transit flight (stop or crash in the air): no block is placed. Orphan entities are removed and the passengers of the file
-     * are put back on the boarding points of the DEPARTURE station (T150, the nearest other one if it was removed, the destination only if it is the
+     * are put back on the boarding points of the DEPARTURE station (the nearest other one if it was removed, the destination only if it is the
      * last station, the ground if none is left):
      * teleported if online, else noted in stranded/ and applied on their next arrival.
      */
@@ -3244,7 +3282,7 @@ public final class BalloonManager {
         }
         BalloonLights.removeOrphans(world, store, rec.balloon(), s);
         VehicleParts.removeOrphans(world, store, rec.balloon());
-        PilotMannequin.removeOrphan(world, store, rec.balloon()); // T119
+        PilotMannequin.removeOrphan(world, store, rec.balloon());
         PassengerSeatView.removeOrphans(world, store, rec.balloon(), rec.passengers().stream().map(BalloonResume.Seated::uuid).toList());
         Vector3d here = new Vector3d(rec.origin().x + 0.5, rec.origin().y, rec.origin().z + 0.5);
         List<Vector3d> points = transitReturnPoints(world, rec.transitFrom(), rec.transitTo(), here);
@@ -3279,7 +3317,7 @@ public final class BalloonManager {
                 rec.passengers().size(), points != null ? "la station de départ" : "le sol");
     }
 
-    // ------------------------------------------------------------------ passengers (T21)
+    // ------------------------------------------------------------------ passengers
 
     /*
      * Seated passengers. Mounting choice, established in the bytecode of HytaleServer.jar (builtin.mounts):
@@ -3324,7 +3362,7 @@ public final class BalloonManager {
         passengerMode = mode;
     }
 
-    /** T25: seated pose method for passengers (next take-off), see BalloonFlight.Pose. */
+    /** seated pose method for passengers (next take-off), see BalloonFlight.Pose. */
     private volatile BalloonFlight.Pose pose = BalloonFlight.Pose.DEFAULT;
 
     BalloonFlight.Pose pose() {
@@ -3356,8 +3394,8 @@ public final class BalloonManager {
             return result;
         }
         if (seats.isEmpty()) {
-            // T54: a balloon without seats (the small one). Take-off refuses passengers, but the automatic descent cannot
-            // refuse: the extra players sit at the pivot, like the seated pilot of T26 (seat -1, shared).
+            // a balloon without seats (the small one). Take-off refuses passengers, but the automatic descent cannot
+            // refuse: the extra players sit at the pivot, like the seated pilot (seat -1, shared).
             if (!shareSeats) {
                 return result;
             }
@@ -3455,7 +3493,7 @@ public final class BalloonManager {
     }
 
     /**
-     * T25: applies the chosen seated pose (BalloonFlight.Pose) to a passenger. Called on set-up then on
+     * applies the chosen seated pose (BalloonFlight.Pose) to a passenger. Called on set-up then on
      * every tick of updatePassengers, on the world thread. states: the server sets sitting back to true when the passenger's
      * client (SetRiderMovementStates, applied by MountSystems$HandleMountInput) has set it back to false, and
      * MovementStatesSystems$TickingSystem broadcasts the change to the other clients. anim: repeated PlayAnimation
@@ -3491,7 +3529,7 @@ public final class BalloonManager {
         }
     }
 
-    /** T25: sets sitting back to false on a player whose flight was resumed (T19 resume). Never throws. */
+    /** sets sitting back to false on a player whose flight was resumed (resume). Never throws. */
     static void clearSittingFlag(Store<EntityStore> store, Ref<EntityStore> ref) {
         try {
             MovementStatesComponent msc = store.getComponent(ref, MovementStatesComponent.getComponentType());
@@ -3503,7 +3541,7 @@ public final class BalloonManager {
         }
     }
 
-    /** T25: undoes a passenger's seated pose (landing, departure). Never throws. */
+    /** undoes a passenger's seated pose (landing, departure). Never throws. */
     static void clearPose(Store<EntityStore> store, BalloonFlight.Passenger p) {
         PassengerProtection.release(store, p.ref); // every exit path of a passenger goes through here
         PassengerCamera.reset(store, p); // before any teleport to a drop point
@@ -3543,7 +3581,7 @@ public final class BalloonManager {
     }
 
     /**
-     * Entity a MOUNT-mode passenger is mounted on. T82: with dual rendering the entity mounted on the pilot is hidden from everybody but
+     * Entity a MOUNT-mode passenger is mounted on. With dual rendering the entity mounted on the pilot is hidden from everybody but
      * the pilot, so passengers use the observer entity (the one they see).
      */
     private static Ref<EntityStore> mountEntity(BalloonFlight flight) {
@@ -3578,10 +3616,10 @@ public final class BalloonManager {
     }
 
     /**
-     * T82, FOLLOW mode: the passenger is in forced flight at zero flight speed (setPassengerHover) and receives every tick a ChangeVelocity
-     * (Set) equal to the seat's velocity plus a correction toward the seat, like the airship passengers (T64) and the pilot's carry. Beyond
+     * FOLLOW mode: the passenger is in forced flight at zero flight speed (setPassengerHover) and receives every tick a ChangeVelocity
+     * (Set) equal to the seat's velocity plus a correction toward the seat, like the airship passengers and the pilot's carry. Beyond
      * FOLLOW_SNAP blocks from the seat a teleport puts them back. Nothing is mounted: a player mounted on an entity by the Minecart
-     * controller drives that entity on their own client (seen on the airship, 5 October 2026).
+     * controller drives that entity on their own client.
      */
     private void followPassenger(Store<EntityStore> store, World world, BalloonFlight flight, BalloonFlight.Passenger p, long now) {
         Vector3d seat = prefabPoint(flight.entityPos, flight.rotation, p.seatLocal);
@@ -3676,7 +3714,7 @@ public final class BalloonManager {
             return;
         }
         float want = (float) (flight.rotation.getRadians() + MODEL_YAW_CORRECTION);
-        for (Ref<EntityStore> entity : java.util.Arrays.asList(flight.balloonRef, flight.observerRef)) { // T82: the observer entity too
+        for (Ref<EntityStore> entity : java.util.Arrays.asList(flight.balloonRef, flight.observerRef)) { // the observer entity too
             TransformComponent bt = entity != null && entity.isValid()
                     ? store.getComponent(entity, TransformComponent.getComponentType()) : null;
             if (bt != null) {
@@ -3699,12 +3737,12 @@ public final class BalloonManager {
                 Vector3d seatWorld = prefabPoint(flight.entityPos, flight.rotation, p.seatLocal);
                 if (!p.camYawSet) {
                     // Piloted balloons (transit flights aim at their destination in startTransit): the view looks toward the inside of
-                    // the nacelle, not at the envelope or a wall (decision of the user, 11 October 2026). A seat at the centre looks forward.
+                    // the nacelle, not at the envelope or a wall. A seat at the centre looks forward.
                     Vector3d centre = prefabPoint(flight.entityPos, flight.rotation, new Vector3f(pivot(flight.kind)));
                     p.camYaw = PassengerCamera.inwardYaw(seatWorld, centre, flight.rotation.rotateYaw(new Vector3f(0, 0, -1), new Vector3f()));
                     p.camYawSet = true;
                 }
-                // T118: camera anchor, mannequins and hidden body (PassengerSeatView), the camera is attached to the anchor.
+                // camera anchor, mannequins and hidden body (PassengerSeatView), the camera is attached to the anchor.
                 PassengerSeatView.sync(store, p, new PassengerSeatView.Ctx(flight.balloonUuid, flight.balloonRef, flight.observerRef,
                         flight.dual, flight.pilotUuid, attachOffset(flight.kind, p.seatLocal), seatWorld, flight.seatViews,
                         balloonView(flight)), now);
@@ -3900,7 +3938,7 @@ public final class BalloonManager {
     }
 
     /**
-     * T150: boarding points (the departure platform) where the passengers of a transit flight that ends early are put back, see
+     * boarding points (the departure platform) where the passengers of a transit flight that ends early are put back, see
      * TransitAutopilot.returnStation. Null if there is no station at all (the caller puts them on the ground).
      */
     static List<Vector3d> transitReturnPoints(World world, String from, String to, Vector3d here) {
@@ -3933,7 +3971,7 @@ public final class BalloonManager {
         captainLeft(store, f, p.uuid, p.ref);
         TransformComponent t = store.getComponent(p.ref, TransformComponent.getComponentType());
         if (t != null) {
-            // T150: back where they boarded (the seated pilot of a dry descent has no boarding position and stays with the balloon).
+            // back where they boarded (the seated pilot of a dry descent has no boarding position and stays with the balloon).
             Vector3d back = p.boardPos;
             t.setPosition(groundBelow(f.world, back != null ? back : prefabPoint(f.entityPos, f.rotation, p.seatLocal)));
         }
@@ -3941,7 +3979,7 @@ public final class BalloonManager {
 
     /**
      * Passenger of a transit flight who disconnects: dismounted, and their saved position (and a stranded entry, applied when they arrive
-     * in the world) is a boarding point of the DEPARTURE station (T150: quitting must not skip the trip), else the nearest other station,
+     * in the world) is a boarding point of the DEPARTURE station (quitting must not skip the trip), else the nearest other station,
      * else the destination if it is the only one left. No station left: the ground below.
      */
     private void dropTransitPassenger(BalloonFlight f, BalloonFlight.Passenger p) {
@@ -3976,7 +4014,7 @@ public final class BalloonManager {
         int z = (int) Math.floor(from.z);
         int top = Math.min((int) Math.floor(from.y), WORLD_MAX_Y);
         SectionReader reader = new SectionReader(world.getChunkStore());
-        // T76: stays inside the height range (below it, blocksBalloon is true everywhere): without ground, the point itself.
+        // stays inside the height range (below it, blocksBalloon is true everywhere): without ground, the point itself.
         for (int y = top; y > top - 512 && y >= ChunkUtil.MIN_Y; y--) {
             if (blocksBalloon(reader, x, y, z)) {
                 return new Vector3d(from.x, y + 1.05, from.z);
@@ -3986,7 +4024,7 @@ public final class BalloonManager {
     }
 
     /**
-     * Resume after a stop in flight (T19): the passengers in the file are placed next to their seat. Connected, they
+     * Resume after a stop in flight: the passengers in the file are placed next to their seat. Connected, they
      * are teleported. Offline, their position is noted and applied on their next arrival (onPlayerAdded).
      */
     private void restoreStrandedPassengers(World world, Store<EntityStore> store, BalloonResume.Record rec) {
@@ -4016,19 +4054,19 @@ public final class BalloonManager {
         }
     }
 
-    /** A player arrives in a world: if they were left in the air on a resumed flight (T19), they are placed on the balloon. */
+    /** A player arrives in a world: if they were left in the air on a resumed flight, they are placed on the balloon. */
     void onPlayerAdded(Holder<EntityStore> holder, World world) {
         try {
             PlayerRef pr = holder.getComponent(PlayerRef.getComponentType());
             if (pr == null) {
                 return;
             }
-            // T126: a marker the mod placed and could not remove (world change, crash) is removed on every arrival.
+            // a marker the mod placed and could not remove (world change, crash) is removed on every arrival.
             PassengerProtection.clearOnArrival(holder, pr.getUuid());
-            CaptainMap.removeAll(holder); // T141: a captain's map left by a crash
-            LegacyCamps.onArrival(pr.getUuid()); // T158
-            LegacyCamps.convertInventory(holder); // T158: old tent crates become packs, before the pack upgrade and the back view
-            CampUpgrade.onArrival(holder, pr.getUuid()); // T156: a finished camp pack upgrade whose contents were not put on the new pack
+            CaptainMap.removeAll(holder); // a captain's map left by a crash
+            LegacyCamps.onArrival(pr.getUuid());
+            LegacyCamps.convertInventory(holder); // old tent crates become packs, before the pack upgrade and the back view
+            CampUpgrade.onArrival(holder, pr.getUuid()); // a finished camp pack upgrade whose contents were not put on the new pack
             BalloonResume.Stranded st = BalloonResume.takeStranded(pr.getUuid(), world.getName());
             if (st == null) {
                 return;
@@ -4044,16 +4082,16 @@ public final class BalloonManager {
         }
     }
 
-    // ------------------------------------------------------------------ hovering in the air (T20)
+    // ------------------------------------------------------------------ hovering in the air
 
     /** Placed balloon recognised around a burner, with its monitoring state. */
     private static final class Hover {
         /** Origin and rotation of the prefab, null if the burner does not belong to a recognised balloon. */
         Vector3i origin;
         Rotation rotation;
-        /** Balloon type recognised (T54). */
+        /** Balloon type recognised. */
         Deployables.Kind kind;
-        /** Shape as it stands in the world (transport balloon: lowered cage and lengthened chain, T73), for the "in the air" test. */
+        /** Shape as it stands in the world (transport balloon: lowered cage and lengthened chain), for the "in the air" test. */
         StructureShape actual;
         long validatedMs;
         long nextRetryMs;
@@ -4174,7 +4212,7 @@ public final class BalloonManager {
 
     /**
      * Looks for the type, rotation and origin of the prefab whose burner is at this position (at least MATCH_RATIO of the blocks
-     * in place, the best match among the balloon types, T54). A type whose chunks are not all loaded is skipped.
+     * in place, the best match among the balloon types). A type whose chunks are not all loaded is skipped.
      */
     private Found locate(World world, Vector3i burnerPos) {
         Found best = null;
@@ -4224,7 +4262,7 @@ public final class BalloonManager {
     /**
      * Same, with the blocks of the structure as they stand in the world (actual). The transport balloon with its cage lowered
      * counted as landed: its lengthened chain (Deco_Iron_Chain_Small, solid) under the raised cage of the prefab shape was not one
-     * of its own blocks, so a cage lowered did not burn fuel (11 October 2026).
+     * of its own blocks, so a cage lowered did not burn fuel.
      */
     static boolean isInAir(World world, StructureShape s, StructureShape actual, Vector3i origin, Rotation rotation) {
         java.util.Set<Vector3i> own = new HashSet<>();
@@ -4234,7 +4272,7 @@ public final class BalloonManager {
         for (StructureShape.Cell c : s.cells()) {
             own.add(c.rotated(rotation).add(origin));
         }
-        // T24: flight cells start flightBottomGap cells higher than the bottom of the prefab (the unfolded
+        // flight cells start flightBottomGap cells higher than the bottom of the prefab (the unfolded
         // ladder hangs below). The margin grows by the same amount: the ground under the placed ladder is reached, a
         // lone ladder touching a slope does not make the balloon look landed.
         int margin = GROUND_MARGIN_CELLS + s.flightBottomGap();
@@ -4261,7 +4299,7 @@ public final class BalloonManager {
     /**
      * Players whose feet are in the gondola of the balloon placed at this origin, the closest to the
      * pivot first. To be called on the world thread. Used to choose the pilot of a dry descent and, for
-     * T21, to find the passengers.
+     * to find the passengers.
      */
     List<Occupant> nacelleOccupants(World world, Store<EntityStore> store, Deployables.Kind kind, Vector3i origin, Rotation rotation) {
         Vector3f nMin = kind.balloon.nacelleMin;
@@ -4300,7 +4338,7 @@ public final class BalloonManager {
      * and the server moves it (tickDriven). The burner and chest contents are kept as at take-off.
      */
     private void startDryDescent(World world, Store<EntityStore> store, StructureShape s, Hover h, ProcessingBenchBlock bench) {
-        // T120: transport balloon whose cage is lowered and rests on the ground: the cage stays, the balloon comes down to it.
+        // transport balloon whose cage is lowered and rests on the ground: the cage stays, the balloon comes down to it.
         int groundCage = 0;
         if (TransportCage.isTransport(h.kind) && h.kind.balloon.groundModelId != null
                 && ModelAsset.getAssetMap().getAsset(h.kind.balloon.groundModelId + UNLIT_MODEL_SUFFIX) != null) {
@@ -4309,13 +4347,13 @@ public final class BalloonManager {
                 return; // side not closable yet: next try in HOVER_RETRY_MS
             }
         }
-        // T73: transport balloon with its cage lowered or open: raised in one go and closed before the blocks are taken off.
+        // transport balloon with its cage lowered or open: raised in one go and closed before the blocks are taken off.
         if (groundCage == 0 && !TransportCage.raiseForDescent(world, h.kind, h.origin, h.rotation)) {
             return;
         }
         List<Occupant> occupants = nacelleOccupants(world, store, h.kind, h.origin, h.rotation);
         Occupant pilot = occupants.isEmpty() ? null : occupants.get(0);
-        // T21: the other players become seated passengers. There is no refusal here (the balloon must
+        // the other players become seated passengers. There is no refusal here (the balloon must
         // descend): if there are more people than seats, the seats are shared (assignSeats, dry true).
         List<Occupant> others = pilot != null ? new ArrayList<>(occupants.subList(1, occupants.size())) : new ArrayList<>();
         Found found = new Found(h.kind, new Vector3i(h.origin), h.rotation, 0);
@@ -4333,13 +4371,13 @@ public final class BalloonManager {
     }
 
     /**
-     * Automatic descent (T20 without pilot, T26 with seated pilot): the server lowers the entity by
+     * Automatic descent (without pilot, or with a seated pilot): the server lowers the entity by
      * flight.descentSpeed blocks per second on every tick, the client interpolates. flight.lastCheckedOrigin is the
      * last origin without collision, flight.entityPos.y the continuous height. As soon as the height drops below the current
      * cell, the cell below is tested (flight cells, folded ladder): if free, it becomes the current cell
      * (several cells in a row if the tick is long). If occupied, the entity is stopped exactly on the current cell
      * (no visible jump) and the balloon is placed back as blocks there, only at that moment. No other placement on
-     * the way: the T20 "in the air" resume only looks at blocks, there are none during the flight. If the
+     * the way: the "in the air" resume only looks at blocks, there are none during the flight. If the
      * occupants' lost mount forces a fallback, updatePassengers handles it.
      */
     private void tickDriven(Store<EntityStore> store, World world, StructureShape s, BalloonFlight flight, long now) {
@@ -4371,7 +4409,7 @@ public final class BalloonManager {
         int cell = flight.lastCheckedOrigin.y;
         while (y < cell) {
             Vector3i next = new Vector3i(flight.lastCheckedOrigin).add(0, -1, 0);
-            // T120: onto a cage left on the ground the descent also ends exactly at the cage (target origin), never below it.
+            // onto a cage left on the ground the descent also ends exactly at the cage (target origin), never below it.
             if ((flight.groundCage > 0 && next.y < flight.targetY())
                     || collision(world, s, next, flight.rotation, flight.transit != null) != null) {
                 flight.stopping = true;
@@ -4402,7 +4440,7 @@ public final class BalloonManager {
         CageAnimals.follow(store, flight);
     }
 
-    // ------------------------------------------------------------------ fuel (T12) and flame (T13)
+    // ------------------------------------------------------------------ fuel and flame
 
     /** Burner contents to put back into a placed block whose component does not exist yet. */
     private static final class PendingRestore {
@@ -4422,7 +4460,7 @@ public final class BalloonManager {
 
     private final ConcurrentLinkedQueue<PendingRestore> pendingRestores = new ConcurrentLinkedQueue<>();
 
-    /** Chest contents to put back into placed containers whose component does not exist yet (T18). */
+    /** Chest contents to put back into placed containers whose component does not exist yet. */
     private static final class PendingCargo {
         final World world;
         final Vector3i origin;
@@ -4536,7 +4574,7 @@ public final class BalloonManager {
         }
     }
 
-    /** Measures the pilot's vertical speed and sets the boosted flame (T17). */
+    /** Measures the pilot's vertical speed and sets the boosted flame. */
     private void updateBoost(Store<EntityStore> store, World world, BalloonFlight flight, double y, long now) {
         if (flight.boostUnavailable) {
             return;
@@ -4588,10 +4626,10 @@ public final class BalloonManager {
             LOGGER.at(Level.WARNING).log("Modèle %s introuvable : pas de flamme renforcée", id);
             return;
         }
-        VehicleView.putModel(store, flight.balloonRef, flight.observerRef, asset); // T82: both entities
-        // T35: the burner light follows the flame (stronger when climbing).
+        VehicleView.putModel(store, flight.balloonRef, flight.observerRef, asset); // both entities
+        // the burner light follows the flame (stronger when climbing).
         BalloonLights.set(store, flight, BalloonLights.KEY_BURNER, BalloonLights.burnerColor(false, boost));
-        // T50: the flamethrower sound follows the boosted flame (ignition and loop, then end sound).
+        // the flamethrower sound follows the boosted flame (ignition and loop, then end sound).
         setBurnerRoar(store, flight, boost);
         if (!boost) {
             // Assumption: the client may not remove the particles of the previous model.
@@ -4606,7 +4644,7 @@ public final class BalloonManager {
     }
 
     /**
-     * T50: starts or stops the flamethrower sound. Applies the BOOST_EFFECT effect (Infinite) to the flying entity, or
+     * starts or stops the flamethrower sound. Applies the BOOST_EFFECT effect (Infinite) to the flying entity, or
      * removes it (RemovalBehavior.COMPLETE, the end sound then plays). No effect if the state is already the requested one. Never
      * throws: a missing asset or a vanished entity only leaves a warning.
      */
@@ -4622,7 +4660,7 @@ public final class BalloonManager {
         if (!applyRoarEffect(store, ref, on) && on) {
             flight.roar = false;
         }
-        // T82: the sound is played where the entity is drawn, so the observer entity carries the effect too.
+        // the sound is played where the entity is drawn, so the observer entity carries the effect too.
         Ref<EntityStore> observer = flight.observerRef;
         if (observer != null && observer.isValid()) {
             applyRoarEffect(store, observer, on);
@@ -4666,11 +4704,11 @@ public final class BalloonManager {
     }
 
     /**
-     * Dry burner (T26): flame off, then automatic descent. The pilot becomes a passenger mounted on the entity,
-     * in place of the pilot (gondola pivot, passenger seat height), with the same seated pose (T25).
+     * Dry burner: flame off, then automatic descent. The pilot becomes a passenger mounted on the entity,
+     * in place of the pilot (gondola pivot, passenger seat height), with the same seated pose.
      * The entity is no longer mounted on them: the server lowers it on every tick (tickDriven) at the pilot's
      * vertical flight speed, which the client interpolates. The pilot can no longer climb or move (forced flight, flight
-     * speeds at 0, in case the mount were lost). Without a pilot (T20), there is nothing else to do but the flame.
+     * speeds at 0, in case the mount were lost). Without a pilot, there is nothing else to do but the flame.
      */
     private void enterDry(Store<EntityStore> store, BalloonFlight flight) {
         if (flights.get(flight.pilotUuid) != flight) {
@@ -4699,10 +4737,10 @@ public final class BalloonManager {
             store.tryRemoveComponent(flight.balloonRef, MountedComponent.getComponentType());
         }
         flight.attached = false;
-        // T119: the seat view of the new passenger owns the hidden-body rule from now on, keep it hidden without a gap (only when that passenger gets a CAMERA seat view, else the body is shown again).
+        // the seat view of the new passenger owns the hidden-body rule from now on, keep it hidden without a gap (only when that passenger gets a CAMERA seat view, else the body is shown again).
         PilotMannequin.remove(store, flight.pilotMan, passengerMode == BalloonFlight.PassengerMode.CAMERA);
         flight.pilotMan = null;
-        collapseView(store, flight); // T82: the pilot is now a seated passenger, the balloon has no pilot entity to show
+        collapseView(store, flight); // the pilot is now a seated passenger, the balloon has no pilot entity to show
         long now = System.currentTimeMillis();
         flight.lastDescentMs = now;
         Vector3f pv = pivot(flight.kind);
@@ -4787,16 +4825,16 @@ public final class BalloonManager {
             return;
         }
         flight.boost = false;
-        // T50: no more flamethrower sound when the flame goes out (dry burner, pilot's death).
+        // no more flamethrower sound when the flame goes out (dry burner, pilot's death).
         setBurnerRoar(store, flight, false);
         String id = lit ? flight.modelId : flight.modelId + UNLIT_MODEL_SUFFIX;
         ModelAsset asset = ModelAsset.getAssetMap().getAsset(id);
         if (asset != null) {
-            VehicleView.putModel(store, flight.balloonRef, flight.observerRef, asset); // T82: both entities
+            VehicleView.putModel(store, flight.balloonRef, flight.observerRef, asset); // both entities
         } else {
             LOGGER.at(Level.WARNING).log("Modèle %s introuvable : la flamme reste affichée", id);
         }
-        // T35: the burner light goes out with the flame (dry burner), regardless of the model found.
+        // the burner light goes out with the flame (dry burner), regardless of the model found.
         BalloonLights.set(store, flight, BalloonLights.KEY_BURNER, BalloonLights.burnerColor(!lit, false));
         if (!lit) {
             try {
@@ -4860,7 +4898,7 @@ public final class BalloonManager {
     }
 
     /**
-     * T57: puts the contents back into the bench (airship engine) at this position, with the same retry and drop rules as
+     * puts the contents back into the bench (airship engine) at this position, with the same retry and drop rules as
      * the burner: retried every tick for RESTORE_TIMEOUT_MS if the component does not exist yet, then dropped on the ground.
      */
     void restoreBenchAt(World world, Store<EntityStore> store, Vector3i pos, BurnerFuel fuel) {

@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Contents of the basket containers (chests, T18) during a flight.
+ * Contents of the basket containers (chests) during a flight.
  *
  * At take-off, each prefab block that carries an ItemContainerBlock component (the two
  * Furniture_Kweebec_Chest_Small, but no name is tested: any prefab container is taken,
@@ -27,7 +27,7 @@ import java.util.List;
  * the game drops the contents of a container whose block is removed. On landing, each content
  * goes back into the container at the same prefab position, slot by slot.
  *
- * Structure designed for the T19 resume file: a list of entries, each with the
+ * Structure designed for the resume file: a list of entries, each with the
  * container position in the prefab frame (before rotation, so valid whatever the
  * orientation at placement), the block name, the capacity and the contents of each non-empty
  * slot (slot index and stack). toBson and fromBson give its JSON form.
@@ -50,7 +50,7 @@ final class BalloonCargo {
             this.slots = slots;
         }
 
-        /** The non-empty stacks of this container (T40, to drop them into the world). */
+        /** The non-empty stacks of this container (to drop them into the world). */
         List<ItemStack> items() {
             List<ItemStack> list = new ArrayList<>();
             for (ItemStack st : slots) {
@@ -224,7 +224,7 @@ final class BalloonCargo {
     }
 
     /**
-     * T40: all the kept stacks, and the list is emptied (the contents can no longer be put back or dropped a second
+     * all the kept stacks, and the list is emptied (the contents can no longer be put back or dropped a second
      * time by a pending retry).
      */
     List<ItemStack> takeAllItems() {

@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.logging.Level;
 
 /**
- * Contents of a tent (chests and campfire) kept in the crate item's metadata while the tent is packed (17 October 2026).
+ * Contents of a tent (chests and campfire) kept in the crate item's metadata while the tent is packed.
  * Reuses the airship mechanisms: benches by AirshipBenchContents, containers by BalloonCargo, both with their own retries.
  * Positions are in the prefab frame, before rotation.
  */
@@ -128,7 +128,7 @@ final class TentContents {
     private static final String CAMPFIRE_BLOCK = "Bench_Campfire";
 
     /**
-     * T156: the contents re-addressed to another tent's prefab (small tent to large tent). The campfire goes to the target's
+     * the contents re-addressed to another tent's prefab (small tent to large tent). The campfire goes to the target's
      * campfire cell. Containers go in ascending (y, x, z) order of their positions, source to target in the same order. A source
      * container with no target of its own is addressed to the last target container: restoring puts its stacks in free slots
      * there and drops what does not fit. Pure: reads only the positions in the shapes and in this object.

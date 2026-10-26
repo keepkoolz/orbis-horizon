@@ -27,7 +27,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * Interaction "Airship_HireCrew" (secondary action of the pilot contract, lot 2 T135): hires the NPC pilot of the landed airship
+ * Interaction "Airship_HireCrew" (secondary action of the pilot contract, ): hires the NPC pilot of the landed airship
  * whose helm is targeted. Refused if the block is not the helm of a registered airship, if the player is not its owner or if it
  * already has a pilot. The contract is consumed (one of the stack) only once the checks pass; the pilot is created on the world
  * thread and, if that fails, the contract is given back.

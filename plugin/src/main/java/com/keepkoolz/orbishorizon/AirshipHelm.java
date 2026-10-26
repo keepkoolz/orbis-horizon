@@ -32,7 +32,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * The airship's helm in flight (lever until 7 October 2026). In flight the helm window is only part of the entity's model, so a small
+ * The airship's helm in flight. In flight the helm window is only part of the entity's model, so a small
  * helper entity is placed on the helm cell, mounted on the ship entity like the lights (BalloonLights) but interactable, like the
  * game's minecart: an Interactable marker (the client may target the entity) and an Interactions component whose Use entry names a
  * root interaction (Server/Item/RootInteractions/Airship/Airship_Helm_Use.json, type Airship_HelmLand). The game's own Use key

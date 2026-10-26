@@ -117,7 +117,7 @@ final class GliderJump {
         processPending(store, world, aboard);
     }
 
-    /** Glider jumps are not offered from every vehicle (decision of 21 October 2026: not from the steamboat for now). */
+    /** Glider jumps are not offered from every vehicle (not from the steamboat for now). */
     static boolean allowedFor(Deployables.Kind kind) {
         return kind != Deployables.STEAMBOAT && kind != Deployables.STEAMBOAT_PUBLIC;
     }

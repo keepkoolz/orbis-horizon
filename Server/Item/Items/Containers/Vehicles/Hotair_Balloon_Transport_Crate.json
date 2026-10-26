@@ -19,7 +19,7 @@
       },
       {
         "ItemId": "Ingredient_Bar_Thorium",
-        "Quantity": 15
+        "Quantity": 10
       },
       {
         "ItemId": "Ingredient_Life_Essence_Concentrated",
@@ -27,11 +27,11 @@
       },
       {
         "ItemId": "Cloth_Block_Wool_White",
-        "Quantity": 250
+        "Quantity": 150
       },
       {
         "ItemId": "Cloth_Block_Wool_Green",
-        "Quantity": 300
+        "Quantity": 150
       },
       {
         "ItemId": "Wood_Hardwood_Planks",

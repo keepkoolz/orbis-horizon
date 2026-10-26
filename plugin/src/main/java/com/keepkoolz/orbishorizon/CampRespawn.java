@@ -37,7 +37,7 @@ import java.util.function.Predicate;
 import java.util.logging.Level;
 
 /**
- * T155: the respawn point of a player who slept in a camp is kept after the camp is packed. The game never checks that a bed
+ * the respawn point of a player who slept in a camp is kept after the camp is packed. The game never checks that a bed
  * exists for a respawn point (only that the position is free, and it searches around the point itself), but removing the bed block
  * removes the point of its online owner (RespawnBlock$OnRemove). So the camp point is recorded in camp-respawn.json and put back
  * on the next tick after a packing. A point is a "camp" point when its record is in this file for (player, world). Lying down in a

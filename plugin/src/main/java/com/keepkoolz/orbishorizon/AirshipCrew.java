@@ -1,6 +1,5 @@
 package com.keepkoolz.orbishorizon;
 
-import com.hypixel.hytale.builtin.mounts.BlockMountAPI;
 import com.hypixel.hytale.builtin.mounts.MountedComponent;
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
@@ -13,7 +12,9 @@ import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.protocol.PlayerSkin;
 import com.hypixel.hytale.server.core.cosmetics.CosmeticsModule;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
+import com.hypixel.hytale.protocol.MovementStates;
 import com.hypixel.hytale.server.core.entity.AnimationUtils;
+import com.hypixel.hytale.server.core.entity.Frozen;
 import com.hypixel.hytale.server.core.asset.type.model.config.Model;
 import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
@@ -52,7 +53,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Level;
 
 /**
- * The NPC pilot of a landed ship that has a crew spec (every ship with a pilot, lot 2, T134): the NPC standing at its post (the helm, or the rest post), its validated
+ * The NPC pilot of a landed ship that has a crew spec (every ship with a pilot): the NPC standing at its post (the helm, or the rest post), its validated
  * outfit and its persistence. Modelled on StationMaster: the NPC is a world entity saved with its section (NOT NonSerialized), the
  * registry entry keeps its uuid and skin seed under "crew", and after a restart it is found by uuid, else adopted if an orphan
  * stands in the airship, else created again, once the entities of its section are in the world.
@@ -141,7 +142,7 @@ final class AirshipCrew {
             }
             LOGGER.at(Level.INFO).log("Pilote : créé en (%d, %d, %d) (%s, poste %s)", e.x(), e.y(), e.z(), id.getUuid(), crew.post().key);
             if (crew.post() == CrewRecord.Post.STOOL) {
-                requestMount(id.getUuid());
+                seat(store, ref, e, id.getUuid());
             }
             return id.getUuid();
         } catch (RuntimeException ex) {
@@ -282,7 +283,7 @@ final class AirshipCrew {
         }
     }
 
-    // ------------------------------------------------------------------ helm refusal and flight mannequin (T137)
+    // ------------------------------------------------------------------ helm refusal and flight mannequin
 
     /**
      * Chat key of the reason the helm refuses a take-off because of the pilot, or null: the pilot holds the helm (post HELM, any
@@ -739,8 +740,9 @@ final class AirshipCrew {
                     PENDING.remove(p);
                     wire(store, ref, e, e.crew());
                     removeDuplicates(store, e, ref);
+                    standUp(store, ref, e.crew().uuid()); // drops a MountedComponent saved with the world
                     if (e.crew().post() == CrewRecord.Post.STOOL) {
-                        requestMount(e.crew().uuid());
+                        seat(store, ref, e, e.crew().uuid());
                     }
                     continue;
                 }
@@ -764,6 +766,7 @@ final class AirshipCrew {
                         forgetSkin(e.crew().uuid());
                         BalloonRegistry.Entry updated = BalloonRegistry.setCrew(world, origin, e.rotation(), e.kind(), e.crew().withUuid(id.getUuid()));
                         wire(store, orphan, updated != null ? updated : e, e.crew());
+                        standUp(store, orphan, id.getUuid());
                         LOGGER.at(Level.INFO).log("Pilote repris sur place en (%d, %d, %d) (%s)", e.x(), e.y(), e.z(), id.getUuid());
                         removeDuplicates(store, e, orphan);
                         continue;
@@ -827,9 +830,9 @@ final class AirshipCrew {
         }
     }
 
-    // ------------------------------------------------------------------ walking between the posts (T135)
+    // ------------------------------------------------------------------ walking between the posts
 
-    /** State of the pilot of an airship, for the orders window (lot 2). */
+    /** State of the pilot of an airship, for the orders window. */
     enum CrewState { AT_HELM, WALKING, SEATED, ABSENT }
 
     private static final double STEP_REACHED = 0.9;
@@ -842,7 +845,6 @@ final class AirshipCrew {
     /** Logs the walk of the pilot once per second (position, distance, mount and sitting flags, leash). Set to false to silence. */
     private static final boolean WALK_DIAGNOSTICS = true;
     private static final long WALK_STEP_MS = 250; // the walk logic runs about 4 times a second, not every tick
-    private static final long MOUNT_RETRY_MS = 3_000;
     private static final double HELM_FREE_HORIZONTAL = 0.8;
     private static final double HELM_FREE_VERTICAL = 1.5;
 
@@ -872,11 +874,11 @@ final class AirshipCrew {
     private static final Map<String, Long> LAST_STEP = new ConcurrentHashMap<>();
     /** Airships whose door was opened by the mod, with the side (sign along the door axis) the pilot opened it from. */
     private static final Map<String, Double> DOORS_OPENED = new ConcurrentHashMap<>();
-    /** Pilots (npc uuid) waiting for CrewSeatSystem to mount them on the stool, with the time of the request. */
-    private static final Map<UUID, Long> MOUNT_REQUESTS = new ConcurrentHashMap<>();
-    /** Pilots on the stool by the leash and Sit animation (the block mount was refused). */
-    private static final Set<UUID> FALLBACK = ConcurrentHashMap.newKeySet();
-    private static final Map<UUID, Long> MOUNT_ASKED = new ConcurrentHashMap<>();
+    /**
+     * Pilots (npc uuid) seated on the stool: leash on the stool point and looping Sit animation. A pilot is never mounted on
+     * the stool block: the game crashes the world when the section of a block-mounted NPC unloads.
+     */
+    private static final Set<UUID> SEATED = ConcurrentHashMap.newKeySet();
 
     /** True if no player stands within 0.8 block (horizontal) and 1.5 block (vertical) of the helm point. Pure. */
     static boolean helmCellFree(List<Vector3d> playerFeet, Vector3d helmPoint) {
@@ -897,28 +899,10 @@ final class AirshipCrew {
             return CrewState.WALKING;
         }
         if (e.crew().post() == CrewRecord.Post.STOOL) {
-            // Seated only when really mounted (or on the fallback pose): a pilot standing next to the stool is not seated.
-            Ref<EntityStore> ref = refOf(world, e);
-            boolean mounted = ref != null && ref.isValid() && ref.getStore().getComponent(ref, MountedComponent.getComponentType()) != null;
-            return mounted || FALLBACK.contains(e.crew().uuid()) ? CrewState.SEATED : CrewState.WALKING;
+            // Seated only once the seat was applied: a pilot standing next to the stool is not seated.
+            return SEATED.contains(e.crew().uuid()) ? CrewState.SEATED : CrewState.WALKING;
         }
         return CrewState.AT_HELM;
-    }
-
-    /** Asks CrewSeatSystem to mount this pilot on the stool at its next tick. */
-    static void requestMount(UUID npc) {
-        MOUNT_REQUESTS.put(npc, System.currentTimeMillis());
-        MOUNT_ASKED.put(npc, System.currentTimeMillis());
-    }
-
-    /** True if a mount request is waiting for this pilot. */
-    static boolean hasMountRequests() {
-        return !MOUNT_REQUESTS.isEmpty();
-    }
-
-    /** Takes the mount request of this pilot, if any. */
-    static boolean takeMountRequest(UUID npc) {
-        return MOUNT_REQUESTS.remove(npc) != null;
     }
 
     private static void clearWalkState(World world, BalloonRegistry.Entry e) {
@@ -929,29 +913,26 @@ final class AirshipCrew {
             setDoor(world, e, false);
         }
         if (e.crew() != null && e.crew().uuid() != null) {
-            MOUNT_REQUESTS.remove(e.crew().uuid());
-            MOUNT_ASKED.remove(e.crew().uuid());
-            FALLBACK.remove(e.crew().uuid());
+            SEATED.remove(e.crew().uuid());
             forgetSkin(e.crew().uuid());
         }
     }
 
     /**
-     * Makes the pilot really stand up before a walk: removes the block mount (a persisted MountedComponent survives a restart),
-     * stops the Sit animation, clears the sitting/mounting movement flags and drops pending mount requests and sit state.
+     * Makes the pilot really stand up before a walk: removes any MountedComponent (a persisted one survives a restart),
+     * stops the Sit animation, clears the sitting/mounting movement flags and drops the seated state.
      * Used by every walk start. Never throws. The leash is applied again on the next step (see Walk.leashDirty).
      */
     static void standUp(Store<EntityStore> store, Ref<EntityStore> ref, UUID npc) {
         try {
             if (npc != null) {
-                MOUNT_REQUESTS.remove(npc);
-                MOUNT_ASKED.remove(npc);
-                FALLBACK.remove(npc);
+                SEATED.remove(npc);
                 SIT_STATE.remove(npc);
             }
             if (ref == null || !ref.isValid()) {
                 return;
             }
+            store.tryRemoveComponent(ref, Frozen.getComponentType()); // frozen while seated: the role ticks again, and gravity with it
             MountUtil.unseat(store, ref);
             AnimationUtils.stopAnimation(ref, AnimationSlot.Movement, true, store);
             MovementStatesComponent msc = store.getComponent(ref, MovementStatesComponent.getComponentType());
@@ -1025,7 +1006,7 @@ final class AirshipCrew {
         n.setLeashPoint(new Vector3d(p));
     }
 
-    // ---- sitting pose: a block mount gives an NPC no sitting pose, so "Sit" is played and replayed (cadence of PassengerSeatView)
+    // ---- sitting pose: "Sit" is played and replayed (cadence of PassengerSeatView)
     private static final long SIT_FIRST_MS = 400;
     private static final long SIT_SECOND_MS = 1500;
     private static final long SIT_REPEAT_MS = 4000;
@@ -1072,31 +1053,46 @@ final class AirshipCrew {
         }
     }
 
-    /** Called by CrewSeatSystem inside the world tick, with the command buffer the block mount needs. */
-    static void processMount(Ref<EntityStore> ref, Vector3d at, Store<EntityStore> store, CommandBuffer<EntityStore> buffer, UUID npc) {
-        World world = store.getExternalData().getWorld();
-        BalloonRegistry.Entry e = entryOfPilot(world.getName(), npc);
-        if (e == null || WALKS.containsKey(key(e))) {
-            return; // never mount while a walk is active
-        }
-        Vector3d stool = postPoint(e, Deployables.crewOf(e.kind()).rest());
-        Vector3i block = new Vector3i((int) Math.floor(stool.x), (int) Math.floor(stool.y), (int) Math.floor(stool.z));
+    /** Point of the seated pilot's feet: the stool point raised by the seat height (the stool block has no collision). */
+    static Vector3d seatPoint(Vector3d stool, double seatHeight) {
+        return new Vector3d(stool.x, stool.y + seatHeight, stool.z);
+    }
+
+    /**
+     * Seats the pilot on the stool: teleport to the stool point raised by the seat height, leash on that point, movement states
+     * at rest, Frozen (no role tick, so no gravity: the pilot stays in the air at seat height), looping Sit animation, seated
+     * state. Never throws.
+     */
+    static void seat(Store<EntityStore> store, Ref<EntityStore> ref, BalloonRegistry.Entry e, UUID npc) {
         try {
-            BlockMountAPI.BlockMountResult res = BlockMountAPI.mountOnBlock(ref, buffer, block, new Vector3d(at));
-            if (res instanceof BlockMountAPI.Mounted) {
-                FALLBACK.remove(npc);
-                startSit(ref, store, npc);
-                LOGGER.at(Level.INFO).log("Pilote : assis sur le tabouret en (%d, %d, %d)", block.x, block.y, block.z);
-                return;
+            Vector3d stool = seatPoint(postPoint(e, Deployables.crewOf(e.kind()).rest()), BalloonManager.get().seatHeight());
+            SEATED.add(npc);
+            store.putComponent(ref, Teleport.getComponentType(), new Teleport(stool, yawRotation(bowYaw(e))).withoutVelocityReset());
+            setLeash(store, ref, stool);
+            MovementStatesComponent msc = store.getComponent(ref, MovementStatesComponent.getComponentType());
+            if (msc != null && msc.getMovementStates() != null) {
+                MovementStates ms = msc.getMovementStates();
+                ms.walking = false;
+                ms.running = false;
+                ms.sprinting = false;
+                ms.jumping = false;
+                ms.falling = false;
+                ms.fallingFar = false;
+                ms.climbing = false;
+                ms.flying = false;
+                ms.swimming = false;
+                ms.swimJumping = false;
+                ms.crouching = false;
+                ms.idle = true;
+                ms.horizontalIdle = true;
             }
-            LOGGER.at(Level.WARNING).log("Pilote : montage sur le tabouret refusé (%s), repli sur la laisse et l'animation assise", res);
+            store.putComponent(ref, Frozen.getComponentType(), Frozen.get());
+            startSit(ref, store, npc);
+            LOGGER.at(Level.INFO).log("Pilote : assis sur le tabouret en (%.1f, %.1f, %.1f)", stool.x, stool.y, stool.z);
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : montage sur le tabouret en erreur, repli");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : pose sur le tabouret en erreur");
             Telemetry.error("airship.crew", ex, null, null);
         }
-        FALLBACK.add(npc);
-        setLeash(store, ref, stool);
-        AnimationUtils.playAnimation(ref, AnimationSlot.Movement, "Sit", true, store);
     }
 
     // ---- door
@@ -1210,7 +1206,7 @@ final class AirshipCrew {
         CrewRecord crew = e.crew();
         Vector3i origin = new Vector3i(e.x(), e.y(), e.z());
         BalloonRegistry.setCrew(world, origin, e.rotation(), e.kind(), crew.withPost(target));
-        // Stand up: leave the stool mount or the fallback pose (every walk start goes through standUp).
+        // Stand up: leave the seated pose (every walk start goes through standUp).
         standUp(store, ref, crew.uuid());
         TransformComponent tr = store.getComponent(ref, TransformComponent.getComponentType());
         if (tr == null) {
@@ -1228,7 +1224,7 @@ final class AirshipCrew {
             w.legs.add(postPoint(e, leg));
         }
         setLeash(store, ref, w.legs.isEmpty() ? dest : w.legs.get(0));
-        w.leashDirty = true; // applied again on the next step, once the mount removal has landed
+        w.leashDirty = true; // applied again on the next step, once the removal of a MountedComponent has landed
         WALKS.put(key(e), w);
         LOGGER.at(Level.INFO).log("Pilote : marche vers %s en (%d, %d, %d), %d étape(s) intermédiaire(s)", target.key, e.x(), e.y(), e.z(), w.legs.size());
         return true;
@@ -1236,8 +1232,8 @@ final class AirshipCrew {
 
     /**
      * Puts the pilot back at a post at once (intended exception to "the pilot never teleports": stuck walk, walk timeout, reset
-     * command): stands up, clears the walk and mount requests (and closes the door the mod opened), teleports to the post point
-     * facing the bow, and requests the stool mount for the stool. On the world thread. Never throws.
+     * command): stands up, clears the walk (and closes the door the mod opened), teleports to the post point
+     * facing the bow, and seats the pilot for the stool. On the world thread. Never throws.
      */
     static void teleportToPost(Store<EntityStore> store, World world, BalloonRegistry.Entry e, Ref<EntityStore> ref, CrewRecord.Post post, String why) {
         try {
@@ -1249,7 +1245,7 @@ final class AirshipCrew {
             store.putComponent(ref, Teleport.getComponentType(), tp);
             setLeash(store, ref, pp);
             if (post == CrewRecord.Post.STOOL) {
-                requestMount(id);
+                seat(store, ref, e, id);
             }
             LOGGER.at(Level.WARNING).log("Pilote : %s, téléporté à son poste %s en (%.1f, %.1f, %.1f)", why, post.key, pp.x, pp.y, pp.z);
         } catch (RuntimeException ex) {
@@ -1328,23 +1324,33 @@ final class AirshipCrew {
         UUID id = e.crew().uuid();
         Vector3d p = new Vector3d(tr.getPosition());
         Walk walk = WALKS.get(k);
-        boolean mounted = store.getComponent(ref, MountedComponent.getComponentType()) != null;
         CrewRecord.Post post = e.crew().post();
         Vector3d postPoint = postPoint(e, post);
-        if (mounted && walk != null) {
-            standUp(store, ref, id); // the removal did not land yet (or the mount came back): stand up again
-            walk.leashDirty = true;
-            mounted = false;
+        if (store.getComponent(ref, MountedComponent.getComponentType()) != null) {
+            // A pilot is never mounted (a block mount crashes the world when its section unloads): a MountedComponent saved
+            // with the world, or one that came back, is removed here, in the world tick.
+            standUp(store, ref, id);
+            if (walk != null) {
+                walk.leashDirty = true;
+            }
         }
-        if (mounted && walk == null && post == CrewRecord.Post.STOOL) {
+        boolean seated = SEATED.contains(id);
+        if (seated && walk == null && post == CrewRecord.Post.STOOL) {
             replaySit(ref, store, id, now);
-        } else if (!mounted && !FALLBACK.contains(id)) {
+        } else if (!seated) {
             stopSit(ref, store, id); // stood up (or never seated): no stale sitting pose
+        }
+        if (!seated && store.getComponent(ref, Frozen.getComponentType()) != null) {
+            // Frozen is saved with the entity: a pilot that is not seated according to the mod is never left frozen.
+            store.tryRemoveComponent(ref, Frozen.getComponentType());
+            if (walk != null) {
+                walk.leashDirty = true;
+            }
         }
 
         // The only teleport: back to the post when the pilot is outside the airship (fell, got stuck).
         Vector3d[] box = box(e);
-        if (!mounted && (p.x < box[0].x || p.x > box[1].x || p.y < box[0].y || p.y > box[1].y || p.z < box[0].z || p.z > box[1].z)) {
+        if (!seated && (p.x < box[0].x || p.x > box[1].x || p.y < box[0].y || p.y > box[1].y || p.z < box[0].z || p.z > box[1].z)) {
             LOGGER.at(Level.WARNING).log("Pilote : hors du dirigeable en (%.1f, %.1f, %.1f), remis à son poste %s", p.x, p.y, p.z, post.key);
             WALKS.remove(k);
             Teleport tp = new Teleport(new Vector3d(postPoint), new Rotation3f(tr.getRotation())).withoutVelocityReset();
@@ -1376,14 +1382,11 @@ final class AirshipCrew {
             return;
         }
         // At rest: seated pilots are kept on the stool, the others at their post.
-        if (post == CrewRecord.Post.STOOL && !mounted && !FALLBACK.contains(id)) {
-            Long asked = MOUNT_ASKED.get(id);
-            if (!MOUNT_REQUESTS.containsKey(id) && p.distance(postPoint) <= REST_DRIFT && (asked == null || now - asked > MOUNT_RETRY_MS)) {
-                requestMount(id);
-                return;
-            }
+        if (post == CrewRecord.Post.STOOL && !seated && p.distance(postPoint) <= REST_DRIFT) {
+            seat(store, ref, e, id);
+            return;
         }
-        if (!mounted && p.distance(postPoint) > REST_DRIFT && !MOUNT_REQUESTS.containsKey(id)) {
+        if (!seated && p.distance(postPoint) > REST_DRIFT) {
             LOGGER.at(Level.INFO).log("Pilote : écarté de son poste de %.1f bloc(s), retour au poste %s", p.distance(postPoint), post.key);
             orderWalk(store, world, e, post);
         }
@@ -1443,8 +1446,7 @@ final class AirshipCrew {
         WALKS.remove(k);
         LOGGER.at(Level.INFO).log("Pilote : arrivé au poste %s en %.0f s", walk.target.key, (now - walk.startMs) / 1000.0);
         if (walk.target == CrewRecord.Post.STOOL) {
-            setLeash(store, ref, p);
-            requestMount(e.crew().uuid());
+            seat(store, ref, e, e.crew().uuid());
         }
     }
 

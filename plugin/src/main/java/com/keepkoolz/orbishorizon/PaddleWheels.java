@@ -24,7 +24,6 @@ import java.util.logging.Level;
  * Pure rule of the steamboat paddle wheels and of the shuttle's single propeller: which spin each wheel (or the propeller) wants, the animation names, and when a
  * spin change may be applied (at the end of the current cycle, where the wheel looks like at frame 0).
  * The animation names and frame counts must stay equal to WHEEL_SPINS and WHEEL_STEP_DEG of scripts/prefab_to_model.py.
- * See docs/superpowers/notes/2026-10-20-essai-roue-aubes.md for the spike that settled these rules.
  */
 final class PaddleWheels {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();

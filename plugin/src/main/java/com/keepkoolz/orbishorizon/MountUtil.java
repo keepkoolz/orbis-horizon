@@ -7,7 +7,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 /**
  * Player mounts, shared by the balloon (BalloonManager) and structure packing
- * (StructureRemoval, T46). Moved out of BalloonManager (T46), code unchanged.
+ * (StructureRemoval). Moved out of BalloonManager, code unchanged.
  */
 final class MountUtil {
 

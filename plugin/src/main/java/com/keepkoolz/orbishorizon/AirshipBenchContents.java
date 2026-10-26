@@ -19,7 +19,7 @@ import java.util.logging.Level;
 
 /**
  * Contents of the processing benches aboard the airship (furnaces, campfire, tannery, salvage bench) during a flight
- * (17 October 2026). Same mechanism as the chests and the fuel tank (AirshipEngines): each bench's inputs and outputs are copied then
+ *. Same mechanism as the chests and the fuel tank (AirshipEngines): each bench's inputs and outputs are copied then
  * emptied at take-off, kept in a BurnerFuel, written in the resume file (optional key "benchContents") and put back at landing with the
  * usual 10 s retry. Processing in progress is frozen during the flight. The fuel tank is not handled here (AirshipEngines does it) and
  * the bench levels and upgrade items stay with AirshipBenches. Positions are in the prefab frame, before rotation.
@@ -106,7 +106,7 @@ final class AirshipBenchContents {
             try {
                 ProcessingBenchBlock bench = BurnerFuel.live(world, at);
                 if (bench != null && !benchEmpty(bench)) {
-                    // The fuel container is cloned then cleared first: BurnerFuel.takeFrom would merge it into the inputs (T41 rule).
+                    // The fuel container is cloned then cleared first: BurnerFuel.takeFrom would merge it into the inputs (rule).
                     ItemContainer fuelBox = bench.getFuelContainer();
                     ItemContainer fuel = null;
                     if (fuelBox != null && fuelBox.getCapacity() > 0) {
@@ -252,7 +252,7 @@ final class AirshipBenchContents {
         }
     }
 
-    /** A copy whose benches all sit at this prefab-frame position (the campfire of another tent, T156). */
+    /** A copy whose benches all sit at this prefab-frame position (the campfire of another tent). */
     AirshipBenchContents relocated(Vector3i to) {
         AirshipBenchContents out = new AirshipBenchContents();
         for (Entry e : entries) {

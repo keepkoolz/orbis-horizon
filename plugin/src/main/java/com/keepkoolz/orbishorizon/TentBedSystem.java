@@ -29,7 +29,7 @@ import org.joml.Vector3f;
 import org.joml.Vector3i;
 
 /**
- * Bed of the small tent (T93). The game never places a player who gets up or wakes up: it only removes MountedComponent
+ * Bed of the small tent. The game never places a player who gets up or wakes up: it only removes MountedComponent
  * (DismountNPC packet, end of slumber) and the client picks its own position next to the bed, which is outside the tent
  * (the roof is too low beside the bed). This system, modelled on the game's WakeUpOnDismountSystem
  * (RefChangeSystem on MountedComponent), puts the player at the exit spot of the tent (Deployables.TentSpec.exitPoint), facing
@@ -59,7 +59,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
     private static final Map<Ref<EntityStore>, Vector3i> BEDS = new ConcurrentHashMap<>();
 
     /**
-     * T154: end of the night the player sleeps through, per player in a bed. Sampled each tick while the world is in slumber
+     * end of the night the player sleeps through, per player in a bed. Sampled each tick while the world is in slumber
      * (WorldSlumber.getTargetInstant). At the end of the slumber UpdateWorldSlumberSystem sets the world to Awake, then the game time
      * to the wake-up time, then removes the bed mounts; a manual get-up, or a slumber cut short because someone got up, leaves the game
      * time before the target. So full night = game time at removal reached the last sampled target.
@@ -119,7 +119,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
         if (mount.getBlockMountType() != BlockMountType.Bed) {
             return;
         }
-        // T154: read and drop the slumber target on every path below, so no stale entry stays.
+        // read and drop the slumber target on every path below, so no stale entry stays.
         java.time.Instant target = SLEEP_TARGET.remove(ref);
         try {
             Vector3i bed = bedPosition(mount);
@@ -144,7 +144,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
             Vector3i bedPos = bed;
             String bedSource = source;
             World world = store.getExternalData().getWorld();
-            // T154: full night? Read now, the world time was set just before the mount removal.
+            // full night? Read now, the world time was set just before the mount removal.
             boolean fullNight = false;
             try {
                 com.hypixel.hytale.server.core.modules.time.WorldTimeResource time =
@@ -165,7 +165,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
         }
     }
 
-    /** T154: the owner of a sleeping bag wakes after a full night, the camp packs itself into their inventory. Never throws. */
+    /** the owner of a sleeping bag wakes after a full night, the camp packs itself into their inventory. Never throws. */
     private static void autoPack(Store<EntityStore> store, Ref<EntityStore> ref, World world, Vector3i bedPos, boolean fullNight,
                                  java.util.UUID sleeper) {
         try {
@@ -312,7 +312,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
         }
     }
 
-    /** T154: remembers the slumber's target time for the players in a bed of this world. Never throws. */
+    /** remembers the slumber's target time for the players in a bed of this world. Never throws. */
     private static void sampleSlumber(Store<EntityStore> store, World world) {
         if (BEDS.isEmpty()) {
             return;

@@ -22,8 +22,8 @@ import java.util.List;
 import java.util.logging.Level;
 
 /**
- * Contents of the airship's engines during a flight (T57). An engine is the mod's Airship_Fuel_Tank block, a processing bench
- * (named Airship_Engine before T61; since then Airship_Engine is the firebox block under it, and this code keeps the words
+ * Contents of the airship's engines during a flight. An engine is the mod's Airship_Fuel_Tank block, a processing bench
+ * (Airship_Engine is the firebox block under it, and this code keeps the words
  * "engine" for the tank and "firebox" for that block)
  * set up like the balloon burner (inputs that only take fuel, outputs for charcoal, no recipe). Each engine's contents are
  * kept in a BurnerFuel (same copy, empty, burn and put-back logic as the burner, which is left unchanged). The engines are
@@ -35,7 +35,7 @@ import java.util.logging.Level;
 final class AirshipEngines {
 
     static final String TANK_BLOCK = "Airship_Fuel_Tank";
-    /** Block directly under the engine (T58), with an "On" state that glows. */
+    /** Block directly under the engine, with an "On" state that glows. */
     static final String ENGINE_BLOCK = "Airship_Engine";
     static final String FIREBOX_ON_STATE = "On";
     /** Ember particle system of the firebox (block state and flying model). */
@@ -59,7 +59,7 @@ final class AirshipEngines {
     }
 
     /**
-     * T58, on the ground: lights or puts out the firebox directly under the engine at enginePos (the engine's own cell y - 1),
+     * on the ground: lights or puts out the firebox directly under the engine at enginePos (the engine's own cell y - 1),
      * like BalloonManager.setBurnerLit for the burner (World.setBlockInteractionState keeps the rotation). Nothing happens if
      * the block under the engine is not the firebox or already in the wanted state. To be called on the world thread.
      */

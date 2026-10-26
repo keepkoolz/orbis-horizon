@@ -43,7 +43,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 .register(TakeOffBalloonInteraction.TYPE_ID, TakeOffBalloonInteraction.class, TakeOffBalloonInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
                 .register(LandBalloonInteraction.TYPE_ID, LandBalloonInteraction.class, LandBalloonInteraction.CODEC);
-        // T73: levers of the transport balloon (cage up and down, cage side open and closed).
+        // levers of the transport balloon (cage up and down, cage side open and closed).
         getCodecRegistry(Interaction.CODEC)
                 .register(CageLeverInteraction.TYPE_ID, CageLeverInteraction.class, CageLeverInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
@@ -63,7 +63,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 .register(AirshipHireInteraction.TYPE_ID, AirshipHireInteraction.class, AirshipHireInteraction.CODEC);
         registerAirshipSystems();
         try {
-            // Burner flame on the ground according to the burner's fuel (T13). Needs the game's
+            // Burner flame on the ground according to the burner's fuel. Needs the game's
             // crafting module (ProcessingBenchBlock), loaded before the mods (hypothesis: the game's
             // plugins are loaded first, "Loading pending core plugins" of PluginManager).
             getChunkStoreRegistry().registerSystem(new BurnerFlameSystem());
@@ -71,7 +71,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             getLogger().at(Level.WARNING).withCause(e).log("Flamme du brûleur au sol désactivée");
         }
         try {
-            // T41: the fuel of burners placed before T41 moves from the fuel container to the inputs,
+            // the fuel of burners placed before the tannery-style interface moves from the fuel container to the inputs,
             // before the game reduces the former to a capacity of 0 (and drops what does not fit).
             getChunkStoreRegistry().registerSystem(new BurnerMigrationSystem());
         } catch (RuntimeException e) {
@@ -83,11 +83,11 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Filtre des coffres de tente désactivé");
         }
-        // T19: resume files in the plugin data folder, landing on pilot disconnection and on
+        // resume files in the plugin data folder, landing on pilot disconnection and on
         // server shutdown, resume when worlds load.
         BalloonResume.init(getDataDirectory());
         AirshipResume.init(getDataDirectory());
-        // T27: registry of placed balloons and locking (breaking, break damage and block placement cancelled).
+        // registry of placed balloons and locking (breaking, break damage and block placement cancelled).
         BalloonRegistry.init(getDataDirectory());
         // Transit: station network (stations.json).
         TransitNetwork.get().load(getDataDirectory());
@@ -96,6 +96,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         TransitSettings.load(getDataDirectory());
         PassengerProtection.load(getDataDirectory());
         CampRespawn.load(getDataDirectory());
+        KnownStations.init(getDataDirectory());
         try {
             getEntityStoreRegistry().registerSystem(new BalloonLockSystems.Break());
             getEntityStoreRegistry().registerSystem(new BalloonLockSystems.Damage());
@@ -103,27 +104,27 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Verrouillage des montgolfières désactivé");
         }
-        // T39: a pilot or passenger who dies in flight leaves the balloon, which descends on its own if it is the pilot.
+        // a pilot or passenger who dies in flight leaves the balloon, which descends on its own if it is the pilot.
         try {
             getEntityStoreRegistry().registerSystem(new BalloonDeathSystem());
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Mort du pilote en vol : système désactivé, seul le contrôle du tick reste");
         }
-        // T93: a player who gets up from the small tent's bed is put at the tent exit, the bed's respawn point too.
+        // a player who gets up from the small tent's bed is put at the tent exit, the bed's respawn point too.
         try {
             getEntityStoreRegistry().registerSystem(new TentBedSystem());
             getEntityStoreRegistry().registerSystem(new CampRespawn.RespawnWatcher());
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Sortie du lit de la tente : système désactivé");
         }
-        // T156: upgrading a camp pack keeps the contents of the lower pack (craft events).
+        // upgrading a camp pack keeps the contents of the lower pack (craft events).
         try {
             getEntityStoreRegistry().registerSystem(new CampUpgrade.Pre());
             getEntityStoreRegistry().registerSystem(new CampUpgrade.Post());
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Amélioration des sacs de campement : système désactivé");
         }
-        // T75: a game mode change of a pilot or passenger makes them leave the vehicle (the game resets the movement settings).
+        // a game mode change of a pilot or passenger makes them leave the vehicle (the game resets the movement settings).
         try {
             getEntityStoreRegistry().registerSystem(new GameModeSystem());
         } catch (RuntimeException e) {
@@ -135,7 +136,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Protection des passagers contre les dégâts désactivée");
         }
-        // T157: the camp pack in the inventory is drawn on the player's back (look rebuilt as attachments).
+        // the camp pack in the inventory is drawn on the player's back (look rebuilt as attachments).
         try {
             getEntityStoreRegistry().registerSystem(new PackBackView.SkinWatch());
             getEntityStoreRegistry().registerSystem(new PackBackView.SettingsWatch());
@@ -153,14 +154,14 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Remboursements des billets à l'arrivée désactivés");
         }
-        // T82: dual rendering of the vehicles in flight needs the per-viewer visibility filter. Without it every flight keeps the single entity.
+        // dual rendering of the vehicles in flight needs the per-viewer visibility filter. Without it every flight keeps the single entity.
         try {
             getEntityStoreRegistry().registerSystem(new ViewFilter.FilterSystem());
             ViewFilter.markRegistered();
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Affichage double des véhicules en vol : filtre de visibilité désactivé, une seule entité par véhicule");
         }
-        // T21: a passenger who disconnects is dismounted cleanly (they would otherwise be saved in the air).
+        // a passenger who disconnects is dismounted cleanly (they would otherwise be saved in the air).
         getEventRegistry().register(PlayerDisconnectEvent.class,
                 event -> {
                     BalloonManager.get().onPlayerGone(event.getPlayerRef().getUuid());
@@ -168,7 +169,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                     StationNamePage.onPlayerGone(event.getPlayerRef().getUuid());
                     HeldCratePreview.onPlayerGone(event.getPlayerRef().getUuid());
                 });
-        // T21: a passenger left in the air when a flight was resumed is put down on their next arrival.
+        // a passenger left in the air when a flight was resumed is put down on their next arrival.
         getEventRegistry().registerGlobal(AddPlayerToWorldEvent.class,
                 event -> {
                     BalloonManager.get().onPlayerAdded(event.getHolder(), event.getWorld());
@@ -224,8 +225,8 @@ public class OrbisHorizonPlugin extends JavaPlugin {
 
     @Override
     protected void start() {
-        PackBackView.detectOtherBackpackMod(); // T157: once, result logged
-        // T44: the tent shape is read once (asset prefabs are loaded before start). A failure
+        PackBackView.detectOtherBackpackMod(); // once, result logged
+        // the tent shape is read once (asset prefabs are loaded before start). A failure
         // is logged by Deployables and the shape will be read again on demand.
         for (Deployables.Kind kind : Deployables.TENTS) {
             StructureShape tent = kind.shapeOrNull();
@@ -245,7 +246,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 AirshipManager.get().warmUp(shipKind, airship);
             }
         }
-        // T54: balloon types, with their number of seats (limit of passengers).
+        // balloon types, with their number of seats (limit of passengers).
         for (Deployables.Kind kind : Deployables.BALLOONS) {
             StructureShape shape = kind.shapeOrNull();
             if (shape != null) {
@@ -346,11 +347,6 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             getEntityStoreRegistry().registerSystem(new AirshipFlightSystem());
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Dirigeable : tick de vol désactivé");
-        }
-        try {
-            getEntityStoreRegistry().registerSystem(new CrewSeatSystem());
-        } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Pilote : montage sur le tabouret désactivé");
         }
     }
 }

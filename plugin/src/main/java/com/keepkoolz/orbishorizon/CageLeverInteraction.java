@@ -14,7 +14,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.joml.Vector3i;
 
 /**
- * Interaction "HotairBalloon_CageLever" (T73): using the cage lever (Hotair_Balloon_Cage_Lever block) of a placed transport
+ * Interaction "HotairBalloon_CageLever": using the cage lever (Hotair_Balloon_Cage_Lever block) of a placed transport
  * balloon. Lowers the cage, raises it, or stops it if it is moving (TransportCage.pullCageLever). The balloon is the one
  * in the registry that has the targeted block.
  */

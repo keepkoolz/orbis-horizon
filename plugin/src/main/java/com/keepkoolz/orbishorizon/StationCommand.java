@@ -317,7 +317,7 @@ public final class StationCommand extends AbstractCommandCollection {
     /**
      * One-word string whose suggestions are the station names (spaces written as underscores). It was a greedy string
      * first: the client showed the names in the command list instead of the value list it shows for /give (one-word item argument),
-     * cause supposed to be the greedy string (11 October 2026). The client asks the server for the values
+     * cause supposed to be the greedy string. The client asks the server for the values
      * of an argument type (ArgValuesRequest, handled by GamePacketHandler with ArgumentType.suggest of the type registered under
      * its own suggestion id). Names of every world: the command sender's world is not known here. Same name and usage keys as the
      * game's greedy string.
@@ -337,7 +337,7 @@ public final class StationCommand extends AbstractCommandCollection {
         /**
          * Number of values the client can ask for. The default (-1) means none: the client then never asked for the station names
          * and showed them elsewhere, where the item argument of /give (an asset type, which returns the size of its asset map) gets
-         * a value list (11 October 2026). At least 1, read when the command tree is built.
+         * a value list. At least 1, read when the command tree is built.
          */
         @Override
         public int getSuggestionValueCount() {

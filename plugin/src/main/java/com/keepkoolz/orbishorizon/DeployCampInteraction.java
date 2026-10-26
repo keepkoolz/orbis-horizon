@@ -40,14 +40,14 @@ import java.nio.file.Path;
 import java.util.logging.Level;
 
 /**
- * Interaction "Camping_DeployCamp" (T45): places a camp (sleeping bag, small or large tent) from its pack. Like
+ * Interaction "Camping_DeployCamp": places a camp (sleeping bag, small or large tent) from its pack. Like
  * DeployBalloonInteraction (same JSON fields, same rotation and origin computation), with three differences:
  *
  * 1. Room test before placement: if a tent chunk is not loaded or if a prefab cell contains a
  *    solid block (BlockMaterial.Solid, the pasteKeepingTerrain test), placement is refused with a message and
  *    the Failed state (the pack is not touched, and no block is placed). Grass and plants are overwritten.
  * 2. After placement, the tent is entered in the lock registry (tent type, owner = the player).
- * 3. The held pack is consumed here (no empty crate any more: the placed bag packs the camp, T154).
+ * 3. The held pack is consumed here (no empty crate any more: the placed bag packs the camp).
  *
  * JSON fields:
  *   PrefabPath      prefab path, relative to Server/Prefabs/ (the tent's)
@@ -141,7 +141,7 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
             return;
         }
 
-        // T121: same computation as the held-crate preview (shared helper). Rotation3f.y is the yaw in radians.
+        // same computation as the held-crate preview (shared helper). Rotation3f.y is the yaw in radians.
         BlockPosition target = context.getTargetBlock();
         DeployPlacement.Placement placement = DeployPlacement.compute(
                 target != null ? new Vector3i(target.x, target.y, target.z) : null,
@@ -149,7 +149,7 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
         Rotation rotation = placement.rotation();
         Vector3i origin = placement.origin();
 
-        // No deployment under water (11 October 2026).
+        // No deployment under water.
         Vector3i wet = BalloonManager.underLiquid(world, shape, origin, rotation);
         if (wet != null) {
             LOGGER.at(Level.INFO).log("Campement refusé en (%d, %d, %d) : liquide en (%d, %d, %d)", origin.x, origin.y, origin.z, wet.x, wet.y, wet.z);
@@ -169,7 +169,7 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
         for (StructureShape.Cell c : shape.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             if (BalloonManager.outOfHeight(p.y)) {
-                // T76: a cell outside the world's height range would be lost.
+                // a cell outside the world's height range would be lost.
                 LOGGER.at(Level.INFO).log("Campement refusé en (%d, %d, %d) : la case (%d, %d, %d) dépasse la limite de hauteur",
                         origin.x, origin.y, origin.z, p.x, p.y, p.z);
                 playerRef.sendMessage(Texts.t("deploy.heightLimit"));

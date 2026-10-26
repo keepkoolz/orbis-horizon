@@ -9,11 +9,11 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
     @Override
     public void tick(float dt, int index, Store<EntityStore> store) {
         BalloonManager.get().tick(store, store.getExternalData().getWorld());
-        // T73: cage of the transport balloons placed in this world (steps due, registry write).
+        // cage of the transport balloons placed in this world (steps due, registry write).
         TransportCage.tick(store.getExternalData().getWorld());
         // Airship rope ladders: lowering and raising steps (never throws).
         ShipLadder.tick(store, store.getExternalData().getWorld(), System.currentTimeMillis());
-        // T74: animals of the cage waiting for their entity after a world load.
+        // animals of the cage waiting for their entity after a world load.
         CageAnimals.tick(store.getExternalData().getWorld());
         // Transit: station masters waiting for their entity, reservations to release.
         StationMaster.tickReservations(store, store.getExternalData().getWorld());
@@ -31,18 +31,19 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
         } catch (RuntimeException e) {
             com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(e).log("Pilote : tick en échec");
         }
-        // T121: preview of the structure while a deployment crate is held.
+        // preview of the structure while a deployment crate is held.
         HeldCratePreview.tick(store, store.getExternalData().getWorld());
         // Passenger protection: players no longer aboard any flight lose their marker (safety net, at most once a second).
         BalloonManager.get().sweepProtection(store, store.getExternalData().getWorld());
-        // T125: second teleport of a player who got up from a tent bed.
+        // second teleport of a player who got up from a tent bed.
         TentBedSystem.tick(store, store.getExternalData().getWorld());
         CampRespawn.tick(store, store.getExternalData().getWorld());
-        PackBackView.tick(store, store.getExternalData().getWorld()); // T157: never throws
+        PackBackView.tick(store, store.getExternalData().getWorld()); // never throws
         OxygenHud.tick(store, store.getExternalData().getWorld()); // never throws
         CampUpgrade.tick(store, store.getExternalData().getWorld());
-        LegacyCamps.tick(store, store.getExternalData().getWorld()); // T158: never throws
-        CaptainMap.tick(store, store.getExternalData().getWorld()); // T141: never throws
+        LegacyCamps.tick(store, store.getExternalData().getWorld()); // never throws
+        CaptainMap.tick(store, store.getExternalData().getWorld()); // never throws
+        StationDiscovery.tick(store, store.getExternalData().getWorld()); // never throws
         // Glider jump: passengers taking a glider in hand.
         try {
             GliderJump.tick(store, store.getExternalData().getWorld());

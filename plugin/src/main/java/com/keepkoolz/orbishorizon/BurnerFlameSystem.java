@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Burner flame on the ground (T13, T16): for each placed burner (processing bench whose Id is
+ * Burner flame on the ground: for each placed burner (processing bench whose Id is
  * BURNER_BENCH_ID), sets the burner block itself to the "On" state (flame) if fuel remains,
  * and to "default" otherwise.
  *
@@ -25,10 +25,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * The test is done at most once per second per burner, and the block change is
  * deferred with world.execute (blocks are not modified during the ChunkStore tick).
  *
- * T58: the same pass also lights the firebox block under an airship engine (Airship_Fuel_Tank bench, the firebox being the Airship_Engine block since T61) when the engine has fuel in its
+ * the same pass also lights the firebox block under an airship engine (Airship_Fuel_Tank bench, the firebox being the Airship_Engine block) when the engine has fuel in its
  * inputs or a combustion in progress, and puts it out otherwise (AirshipEngines.setFireboxLit). Nothing else is done for engines.
  *
- * T20: the same pass, at the same rate, calls BalloonManager.hoverTick. It is what spots a
+ * the same pass, at the same rate, calls BalloonManager.hoverTick. It is what spots a
  * balloon placed in mid-air (the burner is the source of truth, it is saved with the chunk:
  * no list to reload after a restart), burns its fuel and triggers the dry descent.
  * The time elapsed since the previous pass is capped: a chunk left unloaded does not burn.
@@ -67,7 +67,7 @@ public final class BurnerFlameSystem extends EntityTickingSystem<ChunkStore> {
         if (config == null) {
             return;
         }
-        // T58: the airship engine drives the glow of the firebox under it (no burning on the ground, hover and fuel are the burner's job).
+        // the airship engine drives the glow of the firebox under it (no burning on the ground, hover and fuel are the burner's job).
         boolean engine = AirshipEngines.TANK_BLOCK.equals(config.getId());
         if (!engine && !BURNER_BENCH_ID.equals(config.getId())) {
             return;

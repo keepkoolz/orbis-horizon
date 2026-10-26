@@ -36,7 +36,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * Airship passengers (T64): the players aboard at take-off, other than the pilot, are put on the stools of the ship
+ * Airship passengers: the players aboard at take-off, other than the pilot, are put on the stools of the ship
  * (Furniture_Crude_Stool, one in front of each bench where there was room) and follow their stool through the flight. The ship
  * turns freely, so the seat point is the stool's prefab point rotated by the heading (same calculation as the lights).
  *
@@ -44,13 +44,13 @@ import java.util.logging.Level;
  * - FOLLOW (default): the passenger is in forced flight at zero flight speeds (they cannot move by themselves) and the server
  *   sends them every tick a ChangeVelocity (Set) equal to the seat's velocity plus a correction toward the seat, the mechanism
  *   of the pilot's velocity carry (validated in game). Beyond passengerSnap blocks from the seat, a teleport puts them back.
- *   Chosen because the first airship test (5 October 2026) showed that a player mounted on the ship entity with the Minecart
+ *   Chosen because the first airship test showed that a player mounted on the ship entity with the Minecart
  *   controller drives it on his own client like a minecart (gravity, own collisions), ignoring the server positions.
- * - MOUNT: the balloon's method (T21), MountedComponent on the ship entity with the seat offset (x and z inverted, like the
+ * - MOUNT: the balloon's method, MountedComponent on the ship entity with the seat offset (x and z inverted, like the
  *   lights). Kept to compare in game, with the risk above.
  * - TELEPORT: forced flight at zero speed, teleport to the seat on every drift beyond 0.35 block (jerky, last resort).
  *
- * The seated pose is the balloon's (T25: sitting flag and Sit animation, BalloonManager.applyPose). Every method here runs on the
+ * The seated pose is the balloon's (sitting flag and Sit animation, BalloonManager.applyPose). Every method here runs on the
  * world thread and never throws.
  */
 final class AirshipPassengers {
@@ -120,8 +120,8 @@ final class AirshipPassengers {
     // ------------------------------------------------------------------ seats
 
     /**
-     * Blocks whose every cell is one passenger seat: the collision-free Airship_Stool (T79), the game stool of airships placed
-     * before T79, the tavern bench (2 cells, 2 seats in the game) and the tavern stool of the small shuttle (1 cell, 1 seat).
+     * Blocks whose every cell is one passenger seat: the collision-free Airship_Stool, the game stool of airships placed
+     * before, the tavern bench (2 cells, 2 seats in the game) and the tavern stool of the small shuttle (1 cell, 1 seat).
      */
     static final java.util.Set<String> SEAT_BLOCKS = java.util.Set.of("Airship_Stool", StructureShape.SEAT_BLOCK, "Furniture_Tavern_Bench",
             "Furniture_Tavern_Stool");
@@ -134,7 +134,7 @@ final class AirshipPassengers {
         return seats(s, Set.of());
     }
 
-    /** Same, without the cells in the excluded set (the stool of the pilot NPC, T137: 14 places while a pilot exists). */
+    /** Same, without the cells in the excluded set (the stool of the pilot NPC: 14 places while a pilot exists). */
     static List<StructureShape.Cell> seats(StructureShape s, Set<Vector3i> excluded) {
         List<StructureShape.Cell> list = new ArrayList<>();
         for (StructureShape.Cell c : s.cells()) {
@@ -146,7 +146,7 @@ final class AirshipPassengers {
         return list;
     }
 
-    /** Seating point of a seat cell, prefab frame: centre of the cell, at the stool's seat height (T21 value, bench too). */
+    /** Seating point of a seat cell, prefab frame: centre of the cell, at the stool's seat height (value, bench too). */
     static Vector3f seatLocal(StructureShape.Cell c) {
         return new Vector3f(c.x(), c.y() + BalloonManager.get().seatHeight(), c.z());
     }
@@ -370,17 +370,17 @@ final class AirshipPassengers {
         r.lastSeatMs = now;
         if (r.mode == Mode.CAMERA) {
             if (!p.camYawSet) {
-                // The view looks toward the middle of the ship (prefab x 0, z 0 at the seat's height), not at a wall or the rail (decision of
-                // the user, 11 October 2026). World yaw fixed at boarding: the camera does not turn with the ship.
+                // The view looks toward the middle of the ship (prefab x 0, z 0 at the seat's height), not at a wall or the rail.
+                // World yaw fixed at boarding: the camera does not turn with the ship.
                 Vector3d centre = manager.shipPoint(f, new Vector3f(0, p.seatLocal.y, 0));
                 Vector3d ahead = manager.shipPoint(f, new Vector3f(0, p.seatLocal.y, -1));
                 p.camYaw = PassengerCamera.inwardYaw(seat, centre, new Vector3f((float) (ahead.x - centre.x), 0, (float) (ahead.z - centre.z)));
                 p.camYawSet = true;
             }
-            // External view (T124, since 16 October 2026 also for the airship): behind the ship's movement, the body is not mounted and
+            // External view (as for the balloons): behind the ship's movement, the body is not mounted and
             // follows by itself, safety teleport beyond PassengerCamera's distance.
             Vector3f d = new Vector3f(p.seatLocal).sub(AirshipManager.pivot(f.kind));
-            // T118: mannequins and hidden body (PassengerSeatView), the external camera is attached to the entity the rider sees.
+            // mannequins and hidden body (PassengerSeatView), the external camera is attached to the entity the rider sees.
             PassengerSeatView.sync(store, p, new PassengerSeatView.Ctx(f.shipUuid, f.shipRef, f.observerRef, f.dual, f.pilotUuid,
                     new Vector3f(-d.x, d.y, -d.z), seat, f.seatViews,
                     new PassengerCamera.Source(f.kind, f.pos, PassengerCamera.behindHeading(f.theta)[0], PassengerCamera.behindHeading(f.theta)[1], Math.abs(f.yawRate) > PassengerCamera.TURNING_YAW_RATE)), now);
@@ -480,7 +480,7 @@ final class AirshipPassengers {
     }
 
     /**
-     * T82: entity a MOUNT-mode rider is mounted on. With dual rendering the ship entity mounted on the pilot is hidden from everybody
+     * entity a MOUNT-mode rider is mounted on. With dual rendering the ship entity mounted on the pilot is hidden from everybody
      * but the pilot, so the riders use the observer entity (the one they see).
      */
     private static Ref<EntityStore> mountEntity(AirshipFlight f) {
@@ -683,7 +683,7 @@ final class AirshipPassengers {
     }
 
     /**
-     * A rider who disconnects: released, their saved position set on the ground where they boarded (T150), else (the captain on the chair)
+     * A rider who disconnects: released, their saved position set on the ground where they boarded, else (the captain on the chair)
      * under their seat.
      */
     void dropOne(Store<EntityStore> store, AirshipFlight f, Rider r) {
@@ -717,7 +717,7 @@ final class AirshipPassengers {
     }
 
     /**
-     * T75: a rider changed game mode: released, removed from the flight, the new mode's movement settings re-applied, and put on the
+     * a rider changed game mode: released, removed from the flight, the new mode's movement settings re-applied, and put on the
      * ground under their seat if the new mode cannot fly.
      */
     void leaveForGameMode(Store<EntityStore> store, AirshipFlight f, Rider r, com.hypixel.hytale.protocol.GameMode mode) {
@@ -835,7 +835,7 @@ final class AirshipPassengers {
                     MountUtil.unseat(store, online);
                     BalloonManager.clearSittingFlag(store, online);
                     PassengerProtection.clearStale(store, online); // the registry did not survive the restart
-                    CaptainMap.removeAll(store, online); // T141: a voyage map left by the crash
+                    CaptainMap.removeAll(store, online); // a voyage map left by the crash
                     MovementManager mm = store.getComponent(online, MovementManager.getComponentType());
                     if (mm != null) {
                         mm.resetDefaultsAndUpdate(online, store);

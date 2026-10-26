@@ -122,7 +122,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
         IPrefabBuffer buffer = PrefabBufferUtil.getCached(path);
         World world = ((EntityStore) commandBuffer.getExternalData()).getWorld();
 
-        // T121: same computation as the held-crate preview (shared helper).
+        // same computation as the held-crate preview (shared helper).
         BlockPosition target = context.getTargetBlock();
         DeployPlacement.Placement placement = DeployPlacement.compute(
                 target != null ? new Vector3i(target.x, target.y, target.z) : null,
@@ -247,7 +247,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
                                      Vector3i origin, Rotation rotation) {
         // Room test: the station cells above the grass layer and the balloon resting at the dock. The grass layer is the ground
         // level (the targeted block): it is never tested. Its soil yields to the existing terrain and its stone path replaces it
-        // (keepTerrainAt). Testing the path cells refused every placement on ordinary ground (11 October 2026: "not enough space"
+        // (keepTerrainAt). Testing the path cells refused every placement on ordinary ground ("not enough space"
         // with Soil_Grass_Full in the path cells).
         ArrayList<Vector3i> cells = new ArrayList<>();
         for (StructureShape.Cell c : station.cells()) {
@@ -260,7 +260,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
         for (StructureShape.Cell c : balloon.cells()) {
             cells.add(c.rotated(rotation).add(dock));
         }
-        // No deployment under water (11 October 2026): the station (grass layer included) and the docked balloon.
+        // No deployment under water: the station (grass layer included) and the docked balloon.
         Vector3i wet = BalloonManager.underLiquid(world, station, origin, rotation);
         if (wet == null) {
             wet = BalloonManager.underLiquid(world, balloon, dock, rotation);
@@ -387,6 +387,9 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
         }
         final TransitNetwork.Station toSpawn = placed;
         if (toSpawn != null) {
+            if (owner != null) {
+                KnownStations.learn(world.getName(), owner, toSpawn); // whoever places a station knows it
+            }
             world.execute(() -> StationMaster.spawn(world.getEntityStore().getStore(), world, toSpawn));
             BoatRoutes.stationAdded(world, toSpawn); // boat stations only: their routes to the others start computing
         }

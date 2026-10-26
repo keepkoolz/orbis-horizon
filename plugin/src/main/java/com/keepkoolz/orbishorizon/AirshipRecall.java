@@ -24,7 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 
 /**
- * Recall of a parked airship to a station (T143). The owner's airship is taken off where it is parked, appears 120 blocks from the
+ * Recall of a parked airship to a station. The owner's airship is taken off where it is parked, appears 120 blocks from the
  * station and flies in with its pilot NPC, without fuel, then hovers above the pad. AirshipManager.tickOne calls {@link #step} on
  * every tick of a flight that has a recall.
  */
@@ -56,7 +56,7 @@ final class AirshipRecall {
         Vector3d pad = StationMarkerProvider.markerPoint(s);
         double[] sp = RecallPlanner.spawnPoint(pad.x, pad.z, pivotX, pivotZ);
         double theta = AirshipAutopilot.headingTo(pad.x - sp[0], pad.z - sp[1]);
-        // T145: the ship hovers with the quarter turn whose side ladder is nearest to the boarding steps.
+        // the ship hovers with the quarter turn whose side ladder is nearest to the boarding steps.
         int[] side = RecallPlanner.ladderSide(pad.x, pad.z, boardingPoints(s));
         double[] hover = RecallPlanner.hoverPivot(pad.x, pad.z, s.origin.y + STATION_TOP_OFFSET, side[0] * Math.PI / 2);
         int padY = StationQueue.padY(s);
@@ -144,7 +144,10 @@ final class AirshipRecall {
             BalloonRegistry.Entry entry = parkedAirship(world, me);
             boolean recalling = recalling(me);
             boolean occupied = entry != null && !recalling && occupied(store, world, entry);
-            String key = RecallPlanner.recallRefusalKey(entry != null || recalling, flyingOther(me), recalling, occupied, true);
+            boolean known = entry != null && entry.sky() != null
+                    && entry.sky().hasReached(new SkyLog.Reached(s.origin.x, s.origin.y, s.origin.z));
+            String key = RecallPlanner.recallRefusalKey(entry != null || recalling, flyingOther(me), recalling, known || recalling, occupied,
+                    true);
             UUID flightId = UUID.randomUUID();
             if (key == null && !StationQueue.beginRecall(s, flightId)) {
                 key = "recall.quayBusy";
@@ -333,7 +336,7 @@ final class AirshipRecall {
         am.updateThrust(store, f, now);
     }
 
-    // ------------------------------------------------------------------ parked above the station (T145)
+    // ------------------------------------------------------------------ parked above the station
 
     /** Ships waiting in blocks above a station (WAIT, CHOOSE). In memory: the registry mark keeps what a restart needs. */
     private static final java.util.Set<RecallState> PARKED = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -816,7 +819,7 @@ final class AirshipRecall {
         }
     }
 
-    // ------------------------------------------------------------------ restart (17 October 2026)
+    // ------------------------------------------------------------------ restart
 
     private static final Set<UUID> RECOVERING = java.util.concurrent.ConcurrentHashMap.newKeySet();
 

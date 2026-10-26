@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
- * Cage of the animal transport balloon (T73): descent and ascent block by block, opening and closing of the side.
+ * Cage of the animal transport balloon: descent and ascent block by block, opening and closing of the side.
  *
  * State (BalloonRegistry.Entry): descent in blocks (0 to Deployables.TRANSPORT_MAX_DESCENT) and open side. The movement in
  * progress is not saved: after a restart the cage stays where it was.
@@ -38,7 +38,7 @@ import java.util.logging.Level;
  * removed to open and put back to close. cells() is the only function that tells which cells of a state are expected: the
  * recognition, the lock, the removal and the placed-structure tests all go through it (BalloonRegistry.shapeOf).
  *
- * Hooks of the animal capture (T74, CageAnimals): Listener, called at each step, at closing and at opening.
+ * Hooks of the animal capture (CageAnimals): Listener, called at each step, at closing and at opening.
  */
 final class TransportCage {
 
@@ -60,7 +60,7 @@ final class TransportCage {
     private static final int[] GATE_TEMPLATE = {1, 2, -4};
 
     /**
-     * Hook for the capture of animals (T74, implemented by CageAnimals). All methods are called on the world thread,
+     * Hook for the capture of animals (implemented by CageAnimals). All methods are called on the world thread,
      * after the change of blocks.
      */
     interface Listener {
@@ -78,7 +78,7 @@ final class TransportCage {
         }
     }
 
-    /** The listener (T74: CageAnimals). */
+    /** The listener (CageAnimals). */
     static volatile Listener listener = CageAnimals.LISTENER;
 
     /** A movement in progress: dir 1 = down, -1 = up. */
@@ -193,7 +193,7 @@ final class TransportCage {
     }
 
     /**
-     * Placement lock (T27) beyond the type's volume: the whole path of the cage (x -2..2, z -8..-4, from its lowest cell
+     * Placement lock beyond the type's volume: the whole path of the cage (x -2..2, z -8..-4, from its lowest cell
      * up to the burner row) and the opening of the gate, so that nothing can be built where the cage goes or in its open side.
      */
     static boolean placeForbidden(Deployables.Kind kind, BalloonRegistry.Entry e, int x, int y, int z) {
@@ -220,7 +220,7 @@ final class TransportCage {
     }
 
     /**
-     * Before the automatic descent of a balloon that ran out of fuel (T20): the cage is raised in one go and its side closed, so
+     * Before the automatic descent of a balloon that ran out of fuel: the cage is raised in one go and its side closed, so
      * that the placed prefab can be taken off as blocks and landed as usual. If the cage cannot be raised (path blocked),
      * returns false and nothing else is done: the descent starts again at the next try. If the side cannot be put back
      * (a block in the opening), it stays open and the descent starts all the same: the flight model always has a closed cage, the
@@ -261,12 +261,12 @@ final class TransportCage {
         return true;
     }
 
-    // ------------------------------------------------------------------ dry descent onto the cage (T120)
+    // ------------------------------------------------------------------ dry descent onto the cage
 
     private static volatile StructureShape noCage;
 
     /**
-     * T120: the transport balloon without its cage box and its chain column: the cells of the flying part during a dry descent onto a
+     * the transport balloon without its cage box and its chain column: the cells of the flying part during a dry descent onto a
      * cage that stays on the ground (collisions and lights ignore the cage, which is made of blocks left in the world).
      */
     static StructureShape noCageShape(StructureShape base) {
@@ -287,7 +287,7 @@ final class TransportCage {
     }
 
     /**
-     * T120: start of the dry descent of a transport balloon whose cage is lowered AND rests on the ground: the cage blocks stay, the
+     * start of the dry descent of a transport balloon whose cage is lowered AND rests on the ground: the cage blocks stay, the
      * balloon will come down to them. A moving cage is stopped. An open side is closed first (refused while a player or an animal
      * is in the opening, or a block blocks it: the descent starts again at the next try). Returns the cage descent in blocks (above 0),
      * 0 if this mode does not apply (not a transport, cage up, or lowered but hanging in the air: raiseForDescent), -1 to try again later.
@@ -322,14 +322,14 @@ final class TransportCage {
     }
 
     /**
-     * T120: cage descent that is left when the balloon stops at originY after a dry descent onto a cage lowered by descent blocks from a balloon
+     * cage descent that is left when the balloon stops at originY after a dry descent onto a cage lowered by descent blocks from a balloon
      * that was at homeY: 0 at the target (homeY - descent), more above it, never below 0 or above the maximum. Pure.
      */
     static int remainingDescent(int originY, int homeY, int descent) {
         return Math.max(0, Math.min(MAX, originY - (homeY - descent)));
     }
 
-    /** T120: removes the chain column (lengthened by d) of a cage left on the ground when the balloon leaves, no particles, no drops. */
+    /** removes the chain column (lengthened by d) of a cage left on the ground when the balloon leaves, no particles, no drops. */
     static void removeChain(World world, Vector3i origin, Rotation rotation, int d) {
         int[] col = Deployables.TRANSPORT_CHAIN_COLUMN;
         SectionReader reader = new SectionReader(world.getChunkStore());
@@ -342,7 +342,7 @@ final class TransportCage {
         }
     }
 
-    /** T120: removes the cage blocks left on the ground (cage lowered by d), used when an administrator removes the flight. */
+    /** removes the cage blocks left on the ground (cage lowered by d), used when an administrator removes the flight. */
     static void removeCage(World world, Vector3i origin, Rotation rotation, int d) {
         StructureShape base = Deployables.BALLOON_TRANSPORT.shapeOrNull();
         if (base == null) {
@@ -362,7 +362,7 @@ final class TransportCage {
     }
 
     /**
-     * T120: places the transport balloon at this origin (paste = the prefab paste) over a cage left on the ground, r blocks below its raised
+     * places the transport balloon at this origin (paste = the prefab paste) over a cage left on the ground, r blocks below its raised
      * position (r = 0: the balloon is at the cage, the paste simply rewrites the same blocks). For r above 0 the cage blocks are read before the
      * paste, the cage cells the paste put in the air are cleared, the cage blocks are written back where they stand and the chain column is
      * lengthened down to the roof. The registry entry then has descent r and the side closed, so the cage and the chain stay consistent.
@@ -429,7 +429,7 @@ final class TransportCage {
             BalloonRegistry.flushCage();
             return Texts.t("cage.stopped");
         }
-        // The side must be closed to move the cage, down or up (decision of the user, 12 October 2026): an open cage stays where it is.
+        // The side must be closed to move the cage, down or up: an open cage stays where it is.
         if (e.open()) {
             return Texts.t("cage.closeFirst");
         }
@@ -449,7 +449,7 @@ final class TransportCage {
     }
 
     /**
-     * Gate lever: opens or closes the side, cage immobile only. Opening only when the cage floor rests on the ground (T74). Closing is
+     * Gate lever: opens or closes the side, cage immobile only. Opening only when the cage floor rests on the ground. Closing is
      * refused if a player or a non-player character is in the opening, or if a solid block (or a liquid) occupies one of its cells.
      */
     static Message pullGateLever(World world, BalloonRegistry.Entry e) {
@@ -462,7 +462,7 @@ final class TransportCage {
             return Texts.t("cage.gateMoving");
         }
         if (!e.open()) {
-            // T74: the side opens when the cage floor rests on the ground, raised (landed balloon) or lowered. A cage hanging in the
+            // the side opens when the cage floor rests on the ground, raised (landed balloon) or lowered. A cage hanging in the
             // air (raised in flight, or stopped at the bottom without touching the ground) would drop the animal: refused.
             if (!groundUnder(world, e)) {
                 return Texts.t("cage.gateNoGround");
@@ -508,8 +508,8 @@ final class TransportCage {
     }
 
     /**
-     * True if the cage floor rests on the ground (T74): at least one of the cells right under the floor of the cage footprint
-     * (x -2..2, z -8..-4) is a solid block or a liquid (same rule as T51). The floor is at y = cage minimum - descent.
+     * True if the cage floor rests on the ground: at least one of the cells right under the floor of the cage footprint
+     * (x -2..2, z -8..-4) is a solid block or a liquid (same rule as the crate placement). The floor is at y = cage minimum - descent.
      */
     static boolean groundUnder(World world, BalloonRegistry.Entry e) {
         int[] a = Deployables.TRANSPORT_CAGE_MIN;

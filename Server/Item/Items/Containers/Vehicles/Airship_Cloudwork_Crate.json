@@ -65,11 +65,11 @@
       },
       {
         "ItemId": "Ingredient_Bar_Thorium",
-        "Quantity": 60
+        "Quantity": 200
       },
       {
         "ItemId": "Ingredient_Bar_Adamantite",
-        "Quantity": 40
+        "Quantity": 200
       },
       {
         "ItemId": "Ingredient_Charcoal",
@@ -77,19 +77,39 @@
       },
       {
         "ItemId": "Ingredient_Fire_Essence",
-        "Quantity": 54
+        "Quantity": 100
       },
       {
         "ItemId": "Ingredient_Bar_Copper",
-        "Quantity": 16
+        "Quantity": 200
       },
       {
         "ItemId": "Ingredient_Bar_Cobalt",
-        "Quantity": 48
+        "Quantity": 200
       },
       {
         "ItemId": "Ingredient_Leather_Heavy",
-        "Quantity": 6
+        "Quantity": 30
+      },
+      {
+        "ItemId": "Rock_Gem_Zephyr",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Rock_Gem_Sapphire",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Rock_Gem_Ruby",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Rock_Gem_Emerald",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Ingredient_Gobliterator_Core",
+        "Quantity": 1
       },
       {
         "ItemId": "Bench_WorkBench",
@@ -141,7 +161,7 @@
       },
       {
         "ItemId": "Cloth_Block_Wool_White",
-        "Quantity": 750
+        "Quantity": 500
       },
       {
         "ItemId": "Wood_Softwood_Planks",

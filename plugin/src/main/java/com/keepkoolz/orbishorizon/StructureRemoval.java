@@ -23,8 +23,8 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * Removal of a placed structure (T46, first use: the tent), in the order of BalloonManager.despawnPosed
- * (T40): chunks loaded, players mounted on a block dismounted, contents copied then emptied (StructureContents), registry
+ * Removal of a placed structure (first use: the tent), in the order of BalloonManager.despawnPosed
+ *: chunks loaded, players mounted on a block dismounted, contents copied then emptied (StructureContents), registry
  * entry removed, blocks removed (BalloonManager.removeBlocks), items dropped. A single way of dropping, the
  * plugin's. The crate and the messages are the caller's business. Call on the world thread, with a valid
  * ComponentAccessor (the interaction's CommandBuffer).
@@ -50,7 +50,7 @@ final class StructureRemoval {
     /**
      * True if the player is an op. Test chosen: membership of the GROUP_ADMIN ("hytale:Admin") group of
      * HytalePermissionsProvider, read by PermissionsModule.getGroupsForUser. It is the group that /op add
-     * and /op self give, and the one /orbishorizon balloon despawn requires (T40). hasPermission(uuid, "*") would give the same result
+     * and /op self give, and the one /orbishorizon balloon despawn requires. hasPermission(uuid, "*") would give the same result
      * for this group (its only permission is "*"), but would also test a "*" right given to a single player.
      */
     static boolean isOp(UUID uuid) {
@@ -63,7 +63,7 @@ final class StructureRemoval {
     }
 
     /**
-     * T154: whether a cell may be cleared. A cell that is not the camp's placed bag follows the usual rule (it is cleared, the caller
+     * whether a cell may be cleared. A cell that is not the camp's placed bag follows the usual rule (it is cleared, the caller
      * only offers cells it already matched); the bag cell is cleared only when the world block there really is the placed bag.
      */
     static boolean removeCell(boolean isBagCell, boolean worldMatchesPrefab) {

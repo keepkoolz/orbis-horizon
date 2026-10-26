@@ -126,6 +126,7 @@ public class TransitTests {
     }
 
     public static void main(String[] args) throws Exception {
+        run("airshipCaptainChest", TransitTests::airshipCaptainChest);
         run("balloonCrewSpec", TransitTests::balloonCrewSpec);
         run("balloonNoCrewUnchanged", TransitTests::balloonNoCrewUnchanged);
         run("balloonResumeKeepsCrew", TransitTests::balloonResumeKeepsCrew);
@@ -257,6 +258,7 @@ public class TransitTests {
         run("contractMissing", TransitTests::contractMissing);
         run("crewBsonRoundTrip", TransitTests::crewBsonRoundTrip);
         run("crewPostAfterReload", TransitTests::crewPostAfterReload);
+        run("pilotSeatPoint", TransitTests::pilotSeatPoint);
         run("crewPostPoint", TransitTests::crewPostPoint);
         run("helmCellFree", TransitTests::helmCellFree);
         run("crewDialogueOptions", TransitTests::crewDialogueOptions);
@@ -301,6 +303,7 @@ public class TransitTests {
         run("gateRule", TransitTests::gateRule);
         run("campRespawnShouldRescue", TransitTests::campRespawnShouldRescue);
         run("campRespawnForget", TransitTests::campRespawnForget);
+        run("commandRights", TransitTests::commandRights);
         run("campRespawnGuard", TransitTests::campRespawnGuard);
         run("campRespawnFreeSpot", TransitTests::campRespawnFreeSpot);
         run("campRespawnOwnersOfBed", TransitTests::campRespawnOwnersOfBed);
@@ -363,6 +366,18 @@ public class TransitTests {
         run("waterLogUPath", TransitTests::waterLogUPath);
         run("waterLogStops", TransitTests::waterLogStops);
         run("waterLogRoundTrip", TransitTests::waterLogRoundTrip);
+        run("stationShareCommand", TransitTests::stationShareCommand);
+        run("knownStationsAddOnce", TransitTests::knownStationsAddOnce);
+        run("knownStationsSeparation", TransitTests::knownStationsSeparation);
+        run("knownStationsShared", TransitTests::knownStationsShared);
+        run("knownStationsRoundTrip", TransitTests::knownStationsRoundTrip);
+        run("knownStationsMalformed", TransitTests::knownStationsMalformed);
+        run("skyLogCells", TransitTests::skyLogCells);
+        run("skyLogStationDiscovery", TransitTests::skyLogStationDiscovery);
+        run("destinationKnownOthers", TransitTests::destinationKnownOthers);
+        run("skyLogMarkerDistance", TransitTests::skyLogMarkerDistance);
+        run("skyLogRoundTrip", TransitTests::skyLogRoundTrip);
+        run("skyLogDestinationFilter", TransitTests::skyLogDestinationFilter);
         run("waterLogEmptyStart", TransitTests::waterLogEmptyStart);
         run("reachedStationsDropRemoved", TransitTests::reachedStationsDropRemoved);
         run("waterLogStationTarget", TransitTests::waterLogStationTarget);
@@ -522,6 +537,13 @@ public class TransitTests {
         eq(c, CrewRecord.fromBson(c.toBson()));
         eq("stool", c.toBson().getString("post").getValue());
         eq(null, CrewRecord.fromBson(new org.bson.BsonDocument("post", new org.bson.BsonString("deck"))));
+    }
+
+    private static void pilotSeatPoint() {
+        Vector3d p = AirshipCrew.seatPoint(new Vector3d(10.5, 64.05, -3.5), 0.5);
+        near(10.5, p.x);
+        near(64.55, p.y);
+        near(-3.5, p.z);
     }
 
     private static void crewPostAfterReload() {
@@ -697,6 +719,35 @@ public class TransitTests {
         eq("orbishorizon camping forget 1 2 3", RespawnPointMarkerProvider.forgetCommand(a));
     }
 
+    static void stationShareCommand() {
+        eq("orbishorizon map sharestation 1 -2 3", StationMarkerProvider.shareCommand(1, -2, 3));
+    }
+
+    static void commandRights() throws Exception {
+        java.util.Map<String, Boolean> open = new java.util.TreeMap<>();
+        commandRights(new OrbisHorizonCommand(), "", open);
+        // A command neither open nor in a group gets a generated permission that only ops hold.
+        for (java.util.Map.Entry<String, Boolean> e : open.entrySet()) {
+            check(e.getValue() != null, "no rights set: " + e.getKey());
+        }
+        eq(true, open.get("orbishorizon camping forget"));
+        eq(true, open.get("orbishorizon camping pack"));
+        eq(true, open.get("orbishorizon map share"));
+        eq(true, open.get("orbishorizon map sharestation"));
+        eq(false, open.get("orbishorizon camping back"));
+    }
+
+    private static void commandRights(com.hypixel.hytale.server.core.command.system.AbstractCommand c, String prefix,
+            java.util.Map<String, Boolean> open) throws Exception {
+        java.lang.reflect.Field f = com.hypixel.hytale.server.core.command.system.AbstractCommand.class.getDeclaredField("openToEveryone");
+        f.setAccessible(true);
+        String path = prefix + c.getName();
+        open.put(path, f.getBoolean(c) ? Boolean.TRUE : c.getPermissionGroups() != null ? Boolean.FALSE : null);
+        for (com.hypixel.hytale.server.core.command.system.AbstractCommand sub : c.getSubCommands().values()) {
+            commandRights(sub, path + " ", open);
+        }
+    }
+
     static void campRespawnGuard() {
         java.util.function.IntFunction<com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData> mk =
                 a -> new com.hypixel.hytale.server.core.entity.entities.player.data.PlayerRespawnPointData(new Vector3i(a, 0, 0), new org.joml.Vector3d(a, 0, 0), "p" + a, 0f);
@@ -796,7 +847,7 @@ public class TransitTests {
         }
     }
 
-    /** T118: ONLY, HIDE and HIDE_SET visibility rules. */
+    /** ONLY, HIDE and HIDE_SET visibility rules. */
     static void viewFilterRules() {
         java.util.UUID a = java.util.UUID.randomUUID(), b = java.util.UUID.randomUUID(), c = java.util.UUID.randomUUID();
         ViewFilter.Rule only = new ViewFilter.Rule(a, ViewFilter.Mode.ONLY);
@@ -811,8 +862,8 @@ public class TransitTests {
         eq(false, ViewFilter.hiddenFrom(set, c));
     }
 
-    /** T120: cage left on the ground, balloon home at y 100 with the cage lowered by 12 (target 88). */
-    /** T124: external view framing, camera opposite to the given direction, above the aim point, looking down at it. */
+    /** cage left on the ground, balloon home at y 100 with the cage lowered by 12 (target 88). */
+    /** external view framing, camera opposite to the given direction, above the aim point, looking down at it. */
     static void externalView() {
         PassengerCamera.ExternalView v = PassengerCamera.externalView(0, 3, 40, 1.2, 0.25);
         check(Math.abs(v.x()) < 1e-4 && Math.abs(v.z() - 48f) < 1e-3, "camera on the direction side at factor * size");
@@ -1507,7 +1558,7 @@ public class TransitTests {
                 (x, y, z) -> x == 0 && z == -2 && y == 60 ? 2 : y <= 60 ? 1 : 0)), "block in turned hull cell");
     }
 
-    /** 25 October 2026: the steamboat sits one block lower (waterline -2), nothing that lets water in or keeps it out (rope ladder) stays under it and the hold is dry. */
+    /** the steamboat sits one block lower (waterline -2), nothing that lets water in or keeps it out (rope ladder) stays under it and the hold is dry. */
     private static void steamboatWaterlineLayer() throws Exception {
         check(Deployables.STEAMBOAT.airship.waterlineY == -2, "waterline layer -2");
         StructureShape shape = prefabShape("Steamboat.prefab.json");
@@ -1571,7 +1622,7 @@ public class TransitTests {
 
     /** The shuttle berth: the small hull placed by the berth constants fits against the pier of the boat station, step to deck. */
     private static void boatStationBerth() throws Exception {
-        // 25 October 2026: the player steamboat has its own mooring rules (crate, DeployPlacement.steamboatFit), the berth constants
+        // the player steamboat has its own mooring rules (crate, DeployPlacement.steamboatFit), the berth constants
         // are the shuttle's, so only the shuttle prefab is checked against them.
         boatBerth("Steamboat_Public.prefab.json");
     }
@@ -1691,7 +1742,7 @@ public class TransitTests {
         check(DeployPlacement.CRATES.containsKey("Boat_Station_Crate"), "boat crate in the table");
     }
 
-    /** T121: the placement helper and the crate table (compared with the crate JSON files). */
+    /** the placement helper and the crate table (compared with the crate JSON files). */
     private static void deployPlacement() throws Exception {
         // No target: the player's position. Facing 0 (yaw 0), offset (0, 1, -3), Ninety.
         DeployPlacement.Placement p = DeployPlacement.compute(null, new org.joml.Vector3d(10.4, 64.2, 20.9), 0.0,
@@ -1727,7 +1778,7 @@ public class TransitTests {
         }
     }
 
-    /** T153: the tier table, the lookups and the bag cells. */
+    /** the tier table, the lookups and the bag cells. */
     private static void campTiersTable() {
         eq(CampTiers.Tier.TENT, CampTiers.Tier.BEDROLL.next());
         eq(CampTiers.Tier.TENT, CampTiers.Tier.TENT_BIG.previous());
@@ -1742,7 +1793,7 @@ public class TransitTests {
         eq(Deployables.BEDROLL, Deployables.forPrefab("Camping_Bedroll.prefab.json"));
     }
 
-    /** T153: the pack and placed-bag JSON files, and the bag cell of each prefab. */
+    /** the pack and placed-bag JSON files, and the bag cell of each prefab. */
     private static void campTiersJson() throws Exception {
         for (CampTiers.Tier t : CampTiers.Tier.values()) {
             Path dir = Path.of("Server/Item/Items/Containers/Camping");
@@ -1779,7 +1830,7 @@ public class TransitTests {
         }
     }
 
-    /** T156: refusal rule of a pack upgrade. */
+    /** refusal rule of a pack upgrade. */
     private static void campUpgradeRefusal() {
         eq(CampUpgrade.Refusal.NO_BAG, CampUpgrade.check(0, 0));
         eq(CampUpgrade.Refusal.NONE, CampUpgrade.check(1, 1));
@@ -1838,7 +1889,7 @@ public class TransitTests {
         eq(0, q.size());
     }
 
-    /** T156: small tent contents re-addressed to the large tent (campfire, chest, surplus chest). */
+    /** small tent contents re-addressed to the large tent (campfire, chest, surplus chest). */
     private static void tentContentsConvert() throws Exception {
         // ItemStack needs the asset store (absent in these tests): the containers are empty, positions and capacity are checked.
         var slots1 = new com.hypixel.hytale.server.core.inventory.ItemStack[18];
@@ -2140,11 +2191,11 @@ public class TransitTests {
                     m.put(in.asDocument().getString("ItemId").getValue(), in.asDocument().getInt32("Quantity").getValue());
                 }
                 eq(35, m.get("Ingredient_Bar_Iron"));
-                eq(15, m.get("Ingredient_Bar_Thorium"));
+                eq(10, m.get("Ingredient_Bar_Thorium"));
                 eq(4, m.get("Ingredient_Life_Essence_Concentrated"));
                 check(!m.containsKey("Ingredient_Bar_Cobalt") && !m.containsKey("Ingredient_Fire_Essence"), "no cobalt or fire essence");
-                eq(250, m.get("Cloth_Block_Wool_White"));
-                eq(300, m.get("Cloth_Block_Wool_Green"));
+                eq(150, m.get("Cloth_Block_Wool_White"));
+                eq(150, m.get("Cloth_Block_Wool_Green"));
                 eq(24, m.get("Wood_Hardwood_Planks"));
             }
         }
@@ -2170,7 +2221,7 @@ public class TransitTests {
         eq(4, gear);
     }
 
-    /** T156: the pack recipes match the spec, the lower pack comes first, ids exist, piles <= 40, legacy crates have no recipe. */
+    /** the pack recipes match the spec, the lower pack comes first, ids exist, piles <= 40, legacy crates have no recipe. */
     private static void campRecipesJson() throws Exception {
         Path dir = Path.of("Server/Item/Items/Containers/Camping");
         Object[][] spec = {
@@ -2950,12 +3001,15 @@ public class TransitTests {
 
     static void recallRefusalOccupied() {
         // Order: no airship, in flight, already recalling (a ship parked above a station counts), occupied, quay busy.
-        eq("recall.occupied", RecallPlanner.recallRefusalKey(true, false, false, true, false));
-        eq("recall.already", RecallPlanner.recallRefusalKey(true, false, true, true, true));
-        eq("recall.inFlight", RecallPlanner.recallRefusalKey(true, true, false, true, true));
-        eq("recall.noAirship", RecallPlanner.recallRefusalKey(false, false, false, true, true));
-        eq(null, RecallPlanner.recallRefusalKey(true, false, false, false, true));
-        eq("recall.quayBusy", RecallPlanner.recallRefusalKey(true, false, false, false, false));
+        eq("recall.occupied", RecallPlanner.recallRefusalKey(true, false, false, true, true, false));
+        eq("recall.already", RecallPlanner.recallRefusalKey(true, false, true, true, true, true));
+        eq("recall.inFlight", RecallPlanner.recallRefusalKey(true, true, false, true, true, true));
+        eq("recall.noAirship", RecallPlanner.recallRefusalKey(false, false, false, true, true, true));
+        eq(null, RecallPlanner.recallRefusalKey(true, false, false, true, false, true));
+        eq("recall.quayBusy", RecallPlanner.recallRefusalKey(true, false, false, true, false, false));
+        eq("recall.unknownStation", RecallPlanner.recallRefusalKey(true, false, false, false, false, true));
+        eq("recall.unknownStation", RecallPlanner.recallRefusalKey(true, false, false, false, true, false));
+        eq("recall.already", RecallPlanner.recallRefusalKey(true, false, true, false, false, true));
     }
 
     static void recallStrandOffline() {
@@ -3971,6 +4025,152 @@ public class TransitTests {
         eq(0, WaterLog.fromBson(new org.bson.BsonDocument()).size());
     }
 
+    private static void knownStationsAddOnce() {
+        KnownStations k = new KnownStations();
+        java.util.UUID a = java.util.UUID.randomUUID();
+        SkyLog.Reached st = new SkyLog.Reached(1, 64, 2);
+        check(!k.known("w", a, st), "unknown at first");
+        check(k.add("w", a, st), "first add is new");
+        check(!k.add("w", a, st), "second add is not new");
+        check(k.known("w", a, st), "known after add");
+    }
+
+    private static void knownStationsSeparation() {
+        KnownStations k = new KnownStations();
+        java.util.UUID a = java.util.UUID.randomUUID();
+        java.util.UUID b = java.util.UUID.randomUUID();
+        SkyLog.Reached st = new SkyLog.Reached(1, 64, 2);
+        k.add("w", a, st);
+        check(!k.known("w", b, st), "another player does not know it");
+        check(!k.known("other", a, st), "another world does not know it");
+        check(k.add("w", b, st), "the other player discovers it on his own");
+        check(k.add("other", a, st), "the other world discovers it on its own");
+    }
+
+    private static void knownStationsShared() {
+        KnownStations k = new KnownStations();
+        java.util.UUID a = java.util.UUID.randomUUID();
+        java.util.UUID late = java.util.UUID.randomUUID();
+        SkyLog.Reached st = new SkyLog.Reached(1, 64, 2);
+        check(!k.isShared("w", st), "not shared at first");
+        check(k.share("w", st), "first share is new");
+        check(!k.share("w", st), "second share is not new");
+        check(k.known("w", a, st), "a shared station is known to everyone");
+        check(k.known("w", late, st), "also to a player who comes later");
+        check(!k.known("other", a, st), "but only in its world");
+        check(!k.knownPersonally("w", a, st), "shared is not personal");
+        check(k.add("w", a, st), "personal discovery still counts once");
+    }
+
+    private static void knownStationsRoundTrip() {
+        KnownStations k = new KnownStations();
+        java.util.UUID a = java.util.UUID.randomUUID();
+        k.add("w", a, new SkyLog.Reached(1, 64, 2));
+        k.add("w", a, new SkyLog.Reached(-5, 70, 9));
+        k.share("w2", new SkyLog.Reached(3, 4, 5));
+        KnownStations back = new KnownStations();
+        back.fromBson(org.bson.BsonDocument.parse(k.toBson().toJson()));
+        check(back.known("w", a, new SkyLog.Reached(1, 64, 2)), "personal station kept");
+        check(back.known("w", a, new SkyLog.Reached(-5, 70, 9)), "negative coordinates kept");
+        check(back.isShared("w2", new SkyLog.Reached(3, 4, 5)), "shared station kept");
+        check(!back.known("w", java.util.UUID.randomUUID(), new SkyLog.Reached(1, 64, 2)), "still separated by player");
+    }
+
+    private static void knownStationsMalformed() {
+        KnownStations k = new KnownStations();
+        java.util.UUID a = java.util.UUID.randomUUID();
+        k.fromBson(org.bson.BsonDocument.parse("{\"players\": [1, {\"world\": \"w\", \"player\": \"nope\", \"stations\": []},"
+                + " {\"world\": \"w\", \"player\": \"" + a + "\", \"stations\": [[1, 2], \"x\", [4, 5, 6]]}], \"shared\": 7}"));
+        check(k.known("w", a, new SkyLog.Reached(4, 5, 6)), "valid entry kept among bad ones");
+        k.fromBson(new org.bson.BsonDocument());
+        check(!k.known("w", a, new SkyLog.Reached(4, 5, 6)), "empty document gives an empty list");
+        k.fromBson(null);
+    }
+
+    private static void skyLogCells() {
+        SkyLog k = new SkyLog();
+        check(k.isEmpty(), "new log is empty");
+        check(k.record(0, 0), "first cell is new");
+        check(!k.record(15.9, 15.9), "same 16-block cell is not new");
+        check(k.record(16, 0), "next cell is new");
+        check(k.record(-0.1, 0), "negative side is the cell before 0");
+        check(k.contains(-1, 0) && k.contains(0, 0) && k.contains(1, 0), "cells by floorDiv 16");
+        k.forgetLastPosition();
+        k.record(0, 0);
+        k.record(64, 0); // cells skipped on the way are added along the line
+        check(k.contains(2, 0) && k.contains(3, 0) && k.contains(4, 0), "skipped cells added");
+        check(!k.copy().isEmpty() && k.copy().size() == k.size(), "copy keeps the cells");
+    }
+
+    private static void destinationKnownOthers() {
+        java.util.function.BiFunction<String, Integer, TransitNetwork.Station> mk = (n, x) -> new TransitNetwork.Station(n, "w",
+                new Vector3i(x, 64, 0), Rotation.None, null, null, new java.util.ArrayList<>(), Deployables.STATION_KIND);
+        TransitNetwork.Station self = mk.apply("Gare", 0), b = mk.apply("B", 100), c = mk.apply("C", 200);
+        java.util.List<TransitNetwork.Station> all = java.util.List.of(self, b, c);
+        java.util.List<TransitNetwork.Station> out = DestinationPage.knownOthers(all, self, s -> s != c);
+        eq(1, out.size());
+        check(out.get(0) == b, "only the known station other than self is listed");
+        check(DestinationPage.knownOthers(all, self, s -> false).isEmpty(), "nothing known gives an empty list");
+        eq(2, DestinationPage.knownOthers(all, self, s -> true).size());
+    }
+
+    private static void skyLogStationDiscovery() {
+        SkyLog k = new SkyLog();
+        check(k.addReached(10, 64, 20), "first discovery is new");
+        check(!k.addReached(10, 64, 20), "second discovery is not new");
+        check(k.addReached(10, 65, 20), "another station is new");
+        eq(2, k.reached().size());
+        check(!k.isEmpty(), "a log with a station is not empty");
+        check(SkyLog.stationInReach(0, 0, 40, 0), "exactly 40 blocks is in reach");
+        check(!SkyLog.stationInReach(0, 0, 41, 0), "41 blocks is out of reach");
+        check(!SkyLog.stationInReach(0, 0, 30, 30), "diagonal 42.4 blocks is out of reach");
+        check(k.copy().hasReached(new SkyLog.Reached(10, 64, 20)), "copy keeps the stations");
+    }
+
+    private static void skyLogMarkerDistance() {
+        SkyLog k = new SkyLog();
+        check(!k.markerVisited(0, 0), "empty log: nothing visited");
+        k.record(8, 8); // cell (0, 0): square 0..16
+        check(k.markerVisited(8, 8), "marker inside the cell");
+        check(k.markerVisited(16 + 32, 8), "32 blocks from the cell edge");
+        check(!k.markerVisited(16 + 33, 8), "33 blocks from the cell edge");
+        check(k.markerVisited(-32, 8), "32 blocks on the other side");
+        check(!k.markerVisited(-33, 8), "33 blocks on the other side");
+        check(!k.markerVisited(16 + 25, 16 + 25), "corner distance 35.4 is too far");
+        check(k.markerVisited(16 + 22, 16 + 22), "corner distance 31.1 is near enough");
+    }
+
+    private static void skyLogRoundTrip() {
+        SkyLog k = new SkyLog();
+        k.record(1, 1);
+        k.record(100, -40);
+        k.addReached(5, 70, -9);
+        SkyLog back = SkyLog.fromBson(k.toBson());
+        eq(k.size(), back.size());
+        eq(new SkyLog.Reached(5, 70, -9), back.reached().get(0));
+        check(back.markerVisited(100, -40), "visited cells survive the round trip");
+        check(SkyLog.fromBson(new org.bson.BsonDocument()).isEmpty(), "empty document gives an empty log");
+        check(SkyLog.fromBson(null).isEmpty(), "null gives an empty log");
+    }
+
+    private static void skyLogDestinationFilter() {
+        SkyLog.Reached known = new SkyLog.Reached(1, 2, 3);
+        List<VoyagePlanner.Destination> all = List.of(
+                new VoyagePlanner.Destination("Known", VoyagePlanner.Kind.STATION, 500, 0, 60, known),
+                new VoyagePlanner.Destination("Unknown", VoyagePlanner.Kind.STATION, 900, 0, 60, new SkyLog.Reached(9, 9, 9)),
+                new VoyagePlanner.Destination("Near", VoyagePlanner.Kind.MARKER, 20, 20, Integer.MIN_VALUE),
+                new VoyagePlanner.Destination("Far", VoyagePlanner.Kind.MARKER, 800, 800, Integer.MIN_VALUE));
+        eq(0, VoyagePlanner.known(all, null).size());
+        eq(0, VoyagePlanner.known(all, new SkyLog()).size());
+        SkyLog k = new SkyLog();
+        k.record(0, 0);
+        k.addReached(1, 2, 3);
+        List<VoyagePlanner.Destination> kept = VoyagePlanner.known(all, k);
+        eq(2, kept.size());
+        eq("Known", kept.get(0).name());
+        eq("Near", kept.get(1).name());
+    }
+
     private static void waterLogEmptyStart() {
         WaterLog w = new WaterLog();
         eq(List.of(), w.path(1, 1, 41, 1, java.util.Set.of()));
@@ -4198,5 +4398,50 @@ public class TransitTests {
         // Nothing sailed yet: only the departure point.
         eq(1, ShipVoyage.backoffPoints(wps, 0, new int[]{-1, 0}).size());
         eq(0, ShipVoyage.backoffPoints(wps, 0, null).size());
+    }
+
+    private static void airshipCaptainChest() throws Exception {
+        // The gems handed back are exactly the gems of the crate recipe, one of each.
+        var recipe = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Item/Items/Containers/Vehicles/Airship_Cloudwork_Crate.json")));
+        List<String> gems = new java.util.ArrayList<>();
+        collectGems(recipe, gems);
+        eq(4, AirshipCaptainChest.GEM_IDS.size());
+        check(gems.containsAll(AirshipCaptainChest.GEM_IDS) && gems.size() == AirshipCaptainChest.GEM_IDS.size(), "gems = recipe gems");
+        // The chest is where the prefab holds the captain's chest, and it is empty there (the prefab never carries the gems).
+        var prefab = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Prefabs/The_Cloudwork.prefab.json")));
+        boolean found = false;
+        for (org.bson.BsonValue v : prefab.getArray("blocks")) {
+            org.bson.BsonDocument b = v.asDocument();
+            if (b.getNumber("x").intValue() == AirshipCaptainChest.CHEST_LOCAL.x && b.getNumber("y").intValue() == AirshipCaptainChest.CHEST_LOCAL.y
+                    && b.getNumber("z").intValue() == AirshipCaptainChest.CHEST_LOCAL.z) {
+                found = true;
+                check(b.getString("name").getValue().contains(AirshipCaptainChest.CHEST_BLOCK), "chest block name");
+                eq(0, b.getDocument("components").getDocument("Components").getDocument("ItemContainerBlock")
+                        .getDocument("ItemContainer").getDocument("Items").size());
+                eq((int) AirshipCaptainChest.CHEST_CAPACITY, b.getDocument("components").getDocument("Components")
+                        .getDocument("ItemContainerBlock").getDocument("ItemContainer").getNumber("Capacity").intValue());
+            }
+        }
+        check(found, "captain chest in the prefab");
+        // Same transform as the paste.
+        Vector3i origin = new Vector3i(100, 64, 200);
+        eq(new Vector3i(98, 73, 203), AirshipCaptainChest.worldPosition(origin, Rotation.None));
+        eq(Rotation.Ninety.rotateYaw(new Vector3i(-2, 9, 3), new Vector3i()).add(origin), AirshipCaptainChest.worldPosition(origin, Rotation.Ninety));
+    }
+
+    private static void collectGems(org.bson.BsonValue v, List<String> out) {
+        if (v.isDocument()) {
+            org.bson.BsonDocument d = v.asDocument();
+            if (d.containsKey("ItemId") && d.get("ItemId").isString() && d.getString("ItemId").getValue().startsWith("Rock_Gem_")) {
+                out.add(d.getString("ItemId").getValue());
+            }
+            for (org.bson.BsonValue c : d.values()) {
+                collectGems(c, out);
+            }
+        } else if (v.isArray()) {
+            for (org.bson.BsonValue c : v.asArray()) {
+                collectGems(c, out);
+            }
+        }
     }
 }

@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.logging.Level;
 
 /**
- * Server-driven flight of an airship whose NPC pilot takes the captain to a destination (T139). AirshipManager.tickOne calls
+ * Server-driven flight of an airship whose NPC pilot takes the captain to a destination. AirshipManager.tickOne calls
  * {@link #step} on every tick of a pilotless flight that has a voyage. Phases: CLIMB (vertical, to the cruise height), TURN (on the
  * spot, toward the destination, with the yaw controller of the player-piloted ship), CRUISE (straight line, obstacle look-ahead),
  * ARRIVE (landing started above the destination) RETRY (a landing was refused: climb a few blocks, wait the backoff, try again) and STOPPING (a stop landing was started).
@@ -120,7 +120,7 @@ final class AirshipAutopilot {
         }
     }
 
-    // ------------------------------------------------------------------ captain ashore (T152)
+    // ------------------------------------------------------------------ captain ashore
 
     /** Height above the ground the bottom of the fixed ladder may keep when the captain is left ashore. */
     static final int ASHORE_MAX_ABOVE = 30;
@@ -353,7 +353,7 @@ final class AirshipAutopilot {
 
     /**
      * One tick of the yaw controller of the player-piloted ship toward a heading error (radians): the rate ramps up and brakes
-     * before the target, the last step snaps on it. The ship turns around its centre (T66), so the pivot moves on the arc. Every
+     * before the target, the last step snaps on it. The ship turns around its centre, so the pivot moves on the arc. Every
      * pose goes through AirshipManager.move. Also used by the maritime shuttle (BoatAutopilot).
      */
     static void yawStep(World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f, double err, double dt, long now) {
@@ -368,7 +368,7 @@ final class AirshipAutopilot {
             f.yawRate = 0;
             f.yawAcc = 0;
         }
-        // Turn around the ship centre (T66), not around the helm: the pivot cell moves on the arc.
+        // Turn around the ship centre, not around the helm: the pivot cell moves on the arc.
         am.move(world, f, hull, am.pivotAfterTurn(f.kind, f.pos, f.theta, f.theta + step), f.theta + step, now);
     }
 

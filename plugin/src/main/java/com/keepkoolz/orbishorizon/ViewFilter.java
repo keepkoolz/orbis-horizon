@@ -21,12 +21,12 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Per-viewer entity visibility (T82). Vehicles in flight are drawn by two entities with the same model: one mounted on the pilot
+ * Per-viewer entity visibility. Vehicles in flight are drawn by two entities with the same model: one mounted on the pilot
  * (stuck to the pilot on the pilot's client, validated in solo) and one "observer" entity moved by the server (what the other players
  * see). Each entity must only be seen by the right players, so this registry says, for an entity, "only this player sees it" or
  * "everybody but this player sees it".
  *
- * Mechanism (bytecode of HytaleServer.jar, EntityTrackerSystems, read on 7 October 2026): for every player (EntityViewer), the
+ * Mechanism (bytecode of HytaleServer.jar, EntityTrackerSystems): for every player (EntityViewer), the
  * game's CollectVisible fills EntityViewer.visible (a public Set of refs) with the network-sendable entities in view range. The game's
  * own HideFromPlayer then removes the players hidden by the player's HiddenPlayersManager from that same set, in the same system group
  * (FIND_VISIBLE_ENTITIES_GROUP, dependency AFTER CollectVisible). The visibility components are only updated afterwards
@@ -42,7 +42,7 @@ final class ViewFilter {
         ONLY,
         /** Visible to everybody except the given player. */
         HIDE,
-        /** T118: visible to everybody except the given players. */
+        /** visible to everybody except the given players. */
         HIDE_SET
     }
 
@@ -82,7 +82,7 @@ final class ViewFilter {
         }
     }
 
-    /** T118: the entity is visible to everybody except these players. */
+    /** the entity is visible to everybody except these players. */
     static void hideAll(Ref<EntityStore> ref, Set<UUID> players) {
         if (ref != null && players != null && !players.isEmpty()) {
             RULES.put(ref, new Rule(null, Mode.HIDE_SET, Set.copyOf(players)));

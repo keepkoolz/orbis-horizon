@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.logging.Level;
 
 /**
- * Interaction "Camping_PackTent" (T46): right click with the empty crate on a placed tent, the tent is packed and
+ * Interaction "Camping_PackTent": right click with the empty crate on a placed tent, the tent is packed and
  * the empty crate becomes full again, in the same slot (the DeployTentInteraction swap in the other direction).
  *
  * The targeted block must belong to a tent in the registry (BalloonRegistry.find, any tent kind). Only the player who
@@ -106,7 +106,7 @@ public class PackTentInteraction extends SimpleInstantInteraction {
         }
         CampRespawn.afterRemoval(world, entry);
 
-        // T158: the old empty crate gives the pack of the tier (contents kept), in the same slot. If the swap fails, the pack
+        // the old empty crate gives the pack of the tier (contents kept), in the same slot. If the swap fails, the pack
         // is dropped at the foot of the campfire: the tent is already removed, it must not be lost.
         CampTiers.Tier tier = CampTiers.ofKind(kind.id);
         ItemStack full = tier != null ? CampPacker.packStack(tier, result.kept()) : new ItemStack(kind.tent.legacyFullCrateId, 1);

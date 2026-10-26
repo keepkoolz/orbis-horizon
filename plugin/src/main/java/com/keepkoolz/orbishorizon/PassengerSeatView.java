@@ -32,11 +32,11 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * T118: seat view of a CAMERA-mode passenger (balloons with seats, dry-descent pilot, transit balloons, airship). Two things (the camera anchor and the relative camera yaw of the airship seat view were removed on 16 October 2026: every vehicle now uses the T124 external view, see PassengerCamera), all
+ * seat view of a CAMERA-mode passenger (balloons with seats, dry-descent pilot, transit balloons, airship). Two things (every vehicle uses the external view, see PassengerCamera), all
  * built from the same few lines and removed together (PassengerCamera.reset, the single exit point of the pose):
  *
  * - a mannequin: an entity with a copy of the passenger's model and skin, mounted on the vehicle at the seat point and playing Sit, so the
- *   others see the passenger seated as part of the vehicle. With dual rendering (T82) there is one on the pilot's entity (seen by the
+ *   others see the passenger seated as part of the vehicle. With dual rendering there is one on the pilot's entity (seen by the
  *   pilot) and a twin on the observer entity (seen by everybody but the pilot and the passenger), otherwise one seen by everybody but the passenger.
  * - the real body is hidden from everybody else (ViewFilter ONLY the passenger).
  *
@@ -55,7 +55,7 @@ final class PassengerSeatView {
     private PassengerSeatView() {
     }
 
-    /** What the caller knows about the vehicle and the seat, for one tick. view: the vehicle as the external view sees it (T124, balloons and airship). */
+    /** What the caller knows about the vehicle and the seat, for one tick. view: the vehicle as the external view sees it (balloons and airship). */
     record Ctx(UUID vehicleUuid, Ref<EntityStore> main, Ref<EntityStore> observer, boolean dual, UUID pilot, Vector3f seatOffset,
                Vector3d seatWorld, List<State> registry, PassengerCamera.Source view) {
     }
@@ -76,7 +76,7 @@ final class PassengerSeatView {
         List<State> registry;
     }
 
-    /** Camera anchor of the former airship seat view (removed 16 October 2026), kept to clean up entities an older version left in a world. */
+    /** Camera anchor of the former airship seat view, kept to clean up entities an older version left in a world. */
     private static UUID anchorUuid(UUID vehicle, UUID player) {
         return BalloonLights.uuidFor(vehicle, "cam:" + player);
     }
@@ -112,7 +112,7 @@ final class PassengerSeatView {
             place(store, s.mannequin, c.seatWorld());
             place(store, s.twin, c.seatWorld());
             replayAnimation(store, p, s, now);
-            // T124: external view, re-sent when the travel direction changes or the entity the client sees changes.
+            // external view, re-sent when the travel direction changes or the entity the client sees changes.
             NetworkId tn = store.getComponent(target, NetworkId.getComponentType());
             if (tn != null && p.cameraOn && PassengerCamera.directionChanged(c.view(), p)) {
                 PassengerCamera.attachExternal(store, c.view(), p, target);
@@ -144,7 +144,7 @@ final class PassengerSeatView {
         }
     }
 
-    /** T119: sets the yaw of an auxiliary entity to the one of another entity (pitch and roll zero). */
+    /** sets the yaw of an auxiliary entity to the one of another entity (pitch and roll zero). */
     static void copyYaw(Store<EntityStore> store, Ref<EntityStore> ref, Ref<EntityStore> from) {
         if (!valid(ref) || !valid(from)) {
             return;
@@ -188,7 +188,7 @@ final class PassengerSeatView {
             if (s.mannequin != null) {
                 if (c.pilot() != null) {
                     ViewFilter.only(s.mannequin, c.pilot());
-                } // T124: no pilot: the passenger sees his own mannequin from outside
+                } // no pilot: the passenger sees his own mannequin from outside
 
             }
             s.twin = spawn(store, model, mannequinUuid(c.vehicleUuid(), p.uuid, true), c.seatWorld(), c.observer(), c.seatOffset(), skin);

@@ -35,15 +35,19 @@ final class AirshipFlight {
     volatile String pilotName = "?";
     /** Ownership of the structure, copied from the registry at take-off (NONE if it had no entry), registered again at landing. */
     volatile Ownership ownership = Ownership.NONE;
-    /** NPC pilot of the airship (T133), copied from the registry at take-off, null without pilot. */
+    /** NPC pilot of the airship, copied from the registry at take-off, null without pilot. */
     volatile CrewRecord crew;
     /** Water log of a boat (cells sailed, stops, stations reached), copied from the registry at take-off; null for any other vehicle. World thread only. */
     volatile WaterLog water;
     /** Last time the stations near the rotation centre were looked at (once a second). */
     long waterScanMs;
-    /** Server-driven voyage to a destination (T139), null for a flight piloted by a player. */
+    /** What the pilot has seen of the world (cells flown through, stations discovered), copied from the registry at take-off; null for a boat or a ship without pilot. World thread only. */
+    volatile SkyLog sky;
+    /** Last time the stations near the rotation centre were looked at for the sky log. */
+    long skyScanMs;
+    /** Server-driven voyage to a destination, null for a flight piloted by a player. */
     volatile VoyageState voyage;
-    /** Recall to a station in progress (T143), null otherwise. A recall flight also has a (fuel-free) voyage for its approach. */
+    /** Recall to a station in progress, null otherwise. A recall flight also has a (fuel-free) voyage for its approach. */
     volatile RecallState recall;
     /** Maritime shuttle sailed by BoatAutopilot (boat stations), null otherwise. Never written to a resume file. */
     volatile ShuttleState shuttle;
@@ -57,27 +61,27 @@ final class AirshipFlight {
         VoyageState v = voyage;
         return v != null ? v.water : null;
     }
-    /** Station whose quay this flight holds for a recall (T143), until the ship leaves the zone or lands. */
+    /** Station whose quay this flight holds for a recall, until the ship leaves the zone or lands. */
     volatile TransitNetwork.Station quayStation;
     /** Id under which the quay is held (the recall flight id, kept when the ship takes off from blocks), null = this flight id. */
     volatile java.util.UUID quayId;
-    /** The recall state kept after the captain chose a destination, to send the ship away if it must stop near the station (T144). */
+    /** The recall state kept after the captain chose a destination, to send the ship away if it must stop near the station. */
     volatile RecallState recallInfo;
-    /** Seated mannequin that stands for the pilot NPC during the flight (T137), null without pilot. */
+    /** Seated mannequin that stands for the pilot NPC during the flight, null without pilot. */
     volatile AirshipCrew.Mannequin crewMan;
     final World world;
     final Deployables.Kind kind;
     Ref<EntityStore> shipRef;
     UUID shipUuid;
-    /** T82: observer entity (same model, never mounted, moved by the server every tick), seen by everybody but the pilot. Null in single rendering. */
+    /** observer entity (same model, never mounted, moved by the server every tick), seen by everybody but the pilot. Null in single rendering. */
     volatile Ref<EntityStore> observerRef;
-    /** T118: seat views of this flight's passengers, drained at the end of the flight. */
+    /** seat views of this flight's passengers, drained at the end of the flight. */
     final List<PassengerSeatView.State> seatViews = new CopyOnWriteArrayList<>();
-    /** T119: standing mannequin of the pilot (dual rendering only). */
+    /** standing mannequin of the pilot (dual rendering only). */
     volatile PilotMannequin.State pilotMan;
     /** Model parts (nodes beyond the client's per-entity limit), null if there are none or the setting is off. */
     volatile VehicleParts.Group parts;
-    /** T82: dual rendering is active (cleared when the flight has no pilot on board and collapses to one entity). */
+    /** dual rendering is active (cleared when the flight has no pilot on board and collapses to one entity). */
     volatile boolean dual;
 
     /** Entity position: bottom centre of the pivot cell (where the pilot stands), world frame. */
@@ -86,9 +90,9 @@ final class AirshipFlight {
     double theta;
     /** Yaw rate (rad/s). */
     double yawRate;
-    /** T85: yaw acceleration (rad/s2) of the jerk-limited rate controller. */
+    /** yaw acceleration (rad/s2) of the jerk-limited rate controller. */
     double yawAcc;
-    /** T85: smoothness diagnostics. Per-turn values are reset when a turn starts (turnDir leaves 0). */
+    /** smoothness diagnostics. Per-turn values are reset when a turn starts (turnDir leaves 0). */
     long lastTickNs;
     double lastDt;
     int refusedHeadings;
@@ -133,7 +137,7 @@ final class AirshipFlight {
     /** The pilot's horizontal flight speed read right after he is put in flight (before dry or reverse scaling). */
     float baseHorizontalSpeed;
 
-    // ---- rotation centre carry (second test of 5 October 2026)
+    // ---- rotation centre carry
     /** Travel carried by the carry itself in the current sample window (expected, world frame): removed from the measured travel. */
     double sampleCarryX;
     double sampleCarryZ;
@@ -177,10 +181,10 @@ final class AirshipFlight {
     BalloonCargo cargo;
     BsonDocument cargoBson;
 
-    // ---- engines and fuel (T57)
+    // ---- engines and fuel
     /** Contents of the engines, kept during the flight (null only for a flight that has none to keep). */
     AirshipEngines engines;
-    /** Level and upgrade items of the upgraded benches aboard, put back at landing (T63, null for an older resume file). */
+    /** Level and upgrade items of the upgraded benches aboard, put back at landing (null for an older resume file). */
     AirshipBenches benches;
     /** Contents of the other processing benches aboard (furnaces, tannery...), frozen during the flight and put back at landing. */
     AirshipBenchContents benchContents;
@@ -207,9 +211,9 @@ final class AirshipFlight {
     int turnDir;
     /** The last travel sample was above fuelMoveMin (forward flames). */
     volatile boolean moving;
-    /** Paddle wheel animation state (lot 4), null for a ship without wheels. */
+    /** Paddle wheel animation state, null for a ship without wheels. */
     PaddleWheels.State wheels;
-    /** Animated helm state (25 October 2026), null for a ship kind without an animated helm. */
+    /** Animated helm state, null for a ship kind without an animated helm. */
     ShipHelm.State helmState;
 
     ShipHelm.State helm() {
@@ -226,16 +230,16 @@ final class AirshipFlight {
     long restSinceMs;
 
     final List<BalloonLights.Light> lights = new CopyOnWriteArrayList<>();
-    /** Passengers seated on the stools (T64). Empty without passengers. */
+    /** Passengers seated on the stools. Empty without passengers. */
     final List<AirshipPassengers.Rider> riders = new CopyOnWriteArrayList<>();
-    /** Firebox light flicker (T58): next update time and the smoothed level (0 to 1). */
+    /** Firebox light flicker: next update time and the smoothed level (0 to 1). */
     long fireboxNextMs;
     double fireboxLevel = 0.5;
 
     long lastTickMs;
     long lastResumeMs;
     long lastCollisionLogMs;
-    /** T76: last "height limit reached" message sent to the pilot. */
+    /** last "height limit reached" message sent to the pilot. */
     long lastHeightMsgMs;
 
     // ---- landing alignment

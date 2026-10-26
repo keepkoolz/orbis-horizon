@@ -18,7 +18,7 @@ import java.util.logging.Level;
 import org.joml.Vector3i;
 
 /**
- * Water primitives of the steamboat (lot 3): which cells of the hull sit under the waterline, and filling or draining them in the
+ * Water primitives of the steamboat: which cells of the hull sit under the waterline, and filling or draining them in the
  * world. Cell positions are in the prefab frame unless a method takes an origin and a rotation.
  */
 final class SteamboatWater {

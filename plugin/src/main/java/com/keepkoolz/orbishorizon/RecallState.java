@@ -2,7 +2,7 @@ package com.keepkoolz.orbishorizon;
 
 import java.util.UUID;
 
-/** State of an airship recall to a station (T143): where it appeared, where it hovers and which phase it is in. */
+/** State of an airship recall to a station: where it appeared, where it hovers and which phase it is in. */
 final class RecallState {
     /**
      * APPROACH: flown by the voyage autopilot. DESCEND: vertical descent to the hover pose. LADDER: parked in blocks, the rope ladder

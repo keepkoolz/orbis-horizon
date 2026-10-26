@@ -16,11 +16,11 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * T82: helpers shared by the balloon and the airship for the observer entity (dual rendering, see ViewFilter).
+ * helpers shared by the balloon and the airship for the observer entity (dual rendering, see ViewFilter).
  *
  * The pilot's entity (mounted on the pilot) is what the pilot's client draws. The observer entity has the same model, no mount, and
  * the server writes its position and yaw every tick, which the other clients interpolate (the same mechanism as the pilotless
- * descent of T20 and T26, validated in game). A model change (flame, boost, off, thrust states) must be applied to both.
+ * descent, validated in game). A model change (flame, boost, off, thrust states) must be applied to both.
  */
 final class VehicleView {
 
@@ -66,7 +66,7 @@ final class VehicleView {
     }
 
     /**
-     * Same, with an exponential smoothing of the observer position (alpha 1 = plain copy). T85: the pilot's position only changes
+     * Same, with an exponential smoothing of the observer position (alpha 1 = plain copy). The pilot's position only changes
      * when a client packet arrives, so copying it raw gives observers uneven steps. A jump above 3 blocks is copied at once.
      */
     static void sync(Store<EntityStore> store, Ref<EntityStore> main, Ref<EntityStore> observer, double alpha) {

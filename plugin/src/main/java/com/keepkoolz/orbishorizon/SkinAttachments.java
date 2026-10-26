@@ -31,7 +31,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * T157: rebuilds the player's whole look as model attachments so a camp pack can be added on the back.
+ * rebuilds the player's whole look as model attachments so a camp pack can be added on the back.
  *
  * Adding one ModelAttachment to the player's Model makes the client draw only the attachments (the player would be naked),
  * and resending the skin brings the clothes back but removes the bag. So every piece of the PlayerSkin becomes a

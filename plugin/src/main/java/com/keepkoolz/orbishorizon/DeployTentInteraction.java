@@ -40,7 +40,7 @@ import java.nio.file.Path;
 import java.util.logging.Level;
 
 /**
- * Interaction "Camping_DeployTent" (T45): places the camping tent from the full crate. Like
+ * Interaction "Camping_DeployTent": places the camping tent from the full crate. Like
  * DeployBalloonInteraction (same JSON fields, same rotation and origin computation), with three differences:
  *
  * 1. Room test before placement: if a tent chunk is not loaded or if a prefab cell contains a
@@ -142,7 +142,7 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
             return;
         }
 
-        // T121: same computation as the held-crate preview (shared helper). Rotation3f.y is the yaw in radians.
+        // same computation as the held-crate preview (shared helper). Rotation3f.y is the yaw in radians.
         BlockPosition target = context.getTargetBlock();
         DeployPlacement.Placement placement = DeployPlacement.compute(
                 target != null ? new Vector3i(target.x, target.y, target.z) : null,
@@ -150,7 +150,7 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
         Rotation rotation = placement.rotation();
         Vector3i origin = placement.origin();
 
-        // No deployment under water (11 October 2026).
+        // No deployment under water.
         Vector3i wet = BalloonManager.underLiquid(world, shape, origin, rotation);
         if (wet != null) {
             LOGGER.at(Level.INFO).log("Tente refusée en (%d, %d, %d) : liquide en (%d, %d, %d)", origin.x, origin.y, origin.z, wet.x, wet.y, wet.z);
@@ -170,7 +170,7 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
         for (StructureShape.Cell c : shape.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             if (BalloonManager.outOfHeight(p.y)) {
-                // T76: a cell outside the world's height range would be lost.
+                // a cell outside the world's height range would be lost.
                 LOGGER.at(Level.INFO).log("Tente refusée en (%d, %d, %d) : la case (%d, %d, %d) dépasse la limite de hauteur",
                         origin.x, origin.y, origin.z, p.x, p.y, p.z);
                 playerRef.sendMessage(Texts.t("deploy.heightLimit"));
@@ -196,7 +196,7 @@ public class DeployTentInteraction extends SimpleInstantInteraction {
 
         // The full crate becomes the empty crate, in the same slot. Done first: the kept contents are put back
         // only if the swap succeeded, otherwise the player would keep the crate with its metadata and duplicate them.
-        // T158: the old full crate is consumed, no empty crate in exchange (the tent is packed with its bag now).
+        // the old full crate is consumed, no empty crate in exchange (the tent is packed with its bag now).
         boolean swapped = heldContainer.removeItemStackFromSlot((short) context.getHeldItemSlot(), 1, true, false).succeeded();
         if (!swapped) {
             LOGGER.at(Level.WARNING).log("Camping_DeployTent: la caisse n'a pas pu être retirée");

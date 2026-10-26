@@ -68,7 +68,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
         }
     }
 
-    /** T82: /orbishorizon airship render dual|single, same as the balloon's (next take-off). */
+    /** /orbishorizon airship render dual|single, same as the balloon's (next take-off). */
     static final class Render extends AbstractPlayerCommand {
         private final RequiredArg<String> mode = withRequiredArg("mode", Texts.cmd("render.mode"), ArgTypes.STRING);
 
@@ -97,7 +97,7 @@ public final class AirshipCommand extends AbstractCommandCollection {
                 ctx.sendMessage(Texts.t("cmd.render.parts").param("mode", AirshipManager.get().partsMode.name().toLowerCase()));
                 return;
             } else if (m.equalsIgnoreCase("pilot:on") || m.equalsIgnoreCase("pilot:off")) {
-                // T119: standing mannequin of the pilot for the others (next take-off), shared by the balloons and the airship.
+                // standing mannequin of the pilot for the others (next take-off), shared by the balloons and the airship.
                 PilotMannequin.enabled = m.equalsIgnoreCase("pilot:on");
                 ctx.sendMessage(Texts.t("cmd.render.pilot").param("mode", PilotMannequin.enabled ? "on" : "off"));
                 return;

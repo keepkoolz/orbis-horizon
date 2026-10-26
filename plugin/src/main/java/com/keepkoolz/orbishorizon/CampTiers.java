@@ -3,7 +3,7 @@ package com.keepkoolz.orbishorizon;
 import org.joml.Vector3i;
 
 /**
- * T153: the three camp tiers (sleeping bag, small tent, large tent). Each tier has a pack item (held to deploy), a placed bag
+ * the three camp tiers (sleeping bag, small tent, large tent). Each tier has a pack item (held to deploy), a placed bag
  * block (inside the deployed prefab, used to pack the camp) and a structure type of {@link Deployables}.
  */
 final class CampTiers {

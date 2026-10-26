@@ -153,15 +153,16 @@ final class RecallPlanner {
 
     /** Chat key of the refusal, in the order of the decisions, null when the recall is allowed (nobody on the parked ship). */
     static String recallRefusalKey(boolean hasCrewAirship, boolean inFlight, boolean alreadyRecalling, boolean quayFree) {
-        return recallRefusalKey(hasCrewAirship, inFlight, alreadyRecalling, false, quayFree);
+        return recallRefusalKey(hasCrewAirship, inFlight, alreadyRecalling, true, false, quayFree);
     }
 
     /**
      * Chat key of the refusal, in the order of the decisions, null when the recall is allowed. {@code occupied}: a player stands in
-     * the box of the parked ship (the recall would take the floor from under his feet).
+     * the box of the parked ship (the recall would take the floor from under his feet). {@code stationKnown}: the sky log of
+     * the ship has discovered the station where the recall is asked.
      */
-    static String recallRefusalKey(boolean hasCrewAirship, boolean inFlight, boolean alreadyRecalling, boolean occupied,
-                                   boolean quayFree) {
+    static String recallRefusalKey(boolean hasCrewAirship, boolean inFlight, boolean alreadyRecalling, boolean stationKnown,
+                                   boolean occupied, boolean quayFree) {
         if (!hasCrewAirship) {
             return "recall.noAirship";
         }
@@ -170,6 +171,9 @@ final class RecallPlanner {
         }
         if (alreadyRecalling) {
             return "recall.already";
+        }
+        if (!stationKnown) {
+            return "recall.unknownStation";
         }
         if (occupied) {
             return "recall.occupied";

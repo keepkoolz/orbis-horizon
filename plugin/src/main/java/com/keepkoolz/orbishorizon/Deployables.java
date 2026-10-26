@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.logging.Level;
 
 /**
- * Types of structures placed by the mod, locked by the registry (T43). A type is identified by a
+ * Types of structures placed by the mod, locked by the registry. A type is identified by a
  * string (`kind`, written in deployed.json) and gives its prefab, its marker block, its forbidden placement volume
  * (prefab frame, before rotation) and its lock messages. The shape (StructureShape) is read only once,
  * on demand.
@@ -49,7 +49,7 @@ final class Deployables {
     static final String BASIC_KIND = "balloon_basic";
 
     /**
-     * Small one-seater balloon (T54). Its forbidden placement volume covers the basket (walking floor y = 2) up to the
+     * Small one-seater balloon. Its forbidden placement volume covers the basket (walking floor y = 2) up to the
      * burner row (y = 5). Same names as the large one with the BASIC_ prefix: scripts/prefab_to_model.py reads them.
      */
     private static final int[] BASIC_PIVOT = {0, 2, 4};
@@ -67,7 +67,7 @@ final class Deployables {
     static final String TRANSPORT_KIND = "balloon_transport";
 
     /**
-     * Animal transport balloon (T72): a balloon the size of the large one (pilot and one passenger on the stool) with an iron cage hanging under
+     * Animal transport balloon: a balloon the size of the large one (pilot and one passenger on the stool) with an iron cage hanging under
      * the basket. Prefab frame, before rotation. Same names as the other balloons with the TRANSPORT_ prefix:
      * scripts/prefab_to_model.py reads them. The pivot is the pilot's cell (walking floor y = 9, burner row y = 12).
      * The forbidden placement volume is one box: it covers the basket (x -1..1, z -7..-5, up to the burner row), the
@@ -79,8 +79,8 @@ final class Deployables {
     private static final int[] TRANSPORT_PLACE_MIN = {-1, 1, -7};
     private static final int[] TRANSPORT_PLACE_MAX = {1, 12, -5};
 
-    // Description of the cage for the next tasks (T73 moves it and opens its side, T74 captures animals). Prefab frame,
-    // cage raised and closed, whole cells, bounds included. T72 only describes it: nothing reads these constants yet.
+    // Description of the cage (TransportCage moves it and opens its side, CageAnimals captures animals). Prefab frame,
+    // cage raised and closed, whole cells, bounds included. The constants are read by TransportCage and CageAnimals.
     // The prefab and the flight model always draw the cage closed and raised.
 
     /** Outer box of the cage: floor y = 0 (stairs and half planks), bars y 1..3, roof y = 4. */
@@ -91,12 +91,12 @@ final class Deployables {
     static final int[] TRANSPORT_CAGE_INSIDE_MAX = {1, 3, -5};
     /**
      * Opening side of the cage: the 9 Deco_Iron_Bars of the face z = -8, between the two corner blocks (x = +-2, kept).
-     * T73 removes these blocks to open the cage and puts them back to close it. A cow (hit box 1.6 x 1.7 in
+     * TransportCage removes these blocks to open the cage and puts them back to close it. A cow (hit box 1.6 x 1.7 in
      * Server/Models/Livestock/Cow.json) fits in this 3 x 3 opening.
      */
     static final int[] TRANSPORT_GATE_MIN = {-1, 1, -8};
     static final int[] TRANSPORT_GATE_MAX = {1, 3, -8};
-    /** Chain column of the cage (Deco_Iron_Chain_Small, game block): x, lowest y and z, up to TRANSPORT_CHAIN_TOP_Y, under the basket floor (y = 8). T73 lengthens it. */
+    /** Chain column of the cage (Deco_Iron_Chain_Small, game block): x, lowest y and z, up to TRANSPORT_CHAIN_TOP_Y, under the basket floor (y = 8). TransportCage lengthens it. */
     static final int[] TRANSPORT_CHAIN_COLUMN = {0, 5, -6};
     static final int TRANSPORT_CHAIN_TOP_Y = 7;
     /** Cells of the two levers of the basket: cage down and up, gate open and close. */
@@ -118,13 +118,13 @@ final class Deployables {
     static final String TENT_KIND = "tent";
 
     /**
-     * Forbidden placement volume of the tent (T44), prefab frame: the bounding box of the recentred prefab
+     * Forbidden placement volume of the tent, prefab frame: the bounding box of the recentred prefab
      * (x from -3 to 3, y from 0 to 1, z from -1 to 3, the outside chest of the small tent at z = 3 included). No block can be placed in the tent, even on an empty cell.
      */
     static final int[] TENT_PLACE_MIN = {-3, 0, -1};
     static final int[] TENT_PLACE_MAX = {3, 1, 3};
 
-    /** The camping tent (T44). Marker: the game's campfire, unique in the prefab, no burner. */
+    /** The camping tent. Marker: the game's campfire, unique in the prefab, no burner. */
     static final Kind TENT = new Kind(TENT_KIND, "Camping_Tent.prefab.json", "Bench_Campfire", false,
             TENT_PLACE_MIN, TENT_PLACE_MAX,
             "lock.tent.break", "lock.tent.place", null,
@@ -150,7 +150,7 @@ final class Deployables {
     private static final int[] BEDROLL_PLACE_MAX = {3, 1, 2};
 
     /**
-     * The sleeping-bag camp (T153): a bed, a bivouac fire and the placed bag. The marker is the placed bag (unique in the prefab).
+     * The sleeping-bag camp: a bed, a bivouac fire and the placed bag. The marker is the placed bag (unique in the prefab).
      * It has no legacy crates.
      */
     static final Kind BEDROLL = new Kind(BEDROLL_KIND, "Camping_Bedroll.prefab.json", "Camping_Pack_Placed_Bedroll", false,
@@ -251,7 +251,7 @@ final class Deployables {
      * (it is NOT recentred: x starts at 2), whole cells, before rotation. Measured on the prefab; if the prefab changes, update
      * them. The station is placed by its prefab origin, like the other structures.
      *
-     * Landing pad (prefab of 11 October 2026): the 5 x 5 Rock_Stone_Brick blocks of the raised walkway, top layer y = 6
+     * Landing pad: the 5 x 5 Rock_Stone_Brick blocks of the raised walkway, top layer y = 6
      * (STATION_PAD_MIN to STATION_PAD_MAX, bounds included), in the room the user left between the boarding steps (walls at x = 15)
      * and the statues (x = 24): the gondola rim (y = -1 of its prefab, one cell wider than the floor on each side) fits from x = 16 to
      * 22 without touching any station block. The cells above the pad (y = 7) are free. Dock: the gondola floor (y = -2 in its prefab)
@@ -301,7 +301,7 @@ final class Deployables {
     static final int[] BOAT_STATION_PIER_END = {1, 0, 11};
     /**
      * Berth of the shuttle (Steamboat_Public.prefab.json) in the station frame. Found by brute force over the 4 rotations and
-     * origins near the pier (search of 25 October 2026, not kept): no hull cell on a station block, every cell at station z >= 6
+     * origins near the pier (a brute-force search, not kept): no hull cell on a station block, every cell at station z >= 6
      * (the water side of the prefab, the kiosk is on the shore at z 1..7), and the boarding step of the hull (the half plank
      * Wood_Softwood_Planks_Half in the gap of each gunwale, prefab (+-2, 1, 0)) right against a deck half plank of the pier at the
      * same height. Only berths across the end of the pier qualify (the lantern posts at x -1 and 4, z 6 and 10 are in the way of a
@@ -344,7 +344,7 @@ final class Deployables {
 
     static final List<Kind> TENTS = List.of(BEDROLL, TENT, TENT_BIG);
 
-    /** Balloon types (T54), in the order recognition tries them. They share the same anchor burner. */
+    /** Balloon types, in the order recognition tries them. They share the same anchor burner. */
     static final List<Kind> BALLOONS = List.of(BALLOON, BALLOON_BASIC, BALLOON_TRANSPORT);
 
     private Deployables() {
@@ -360,7 +360,7 @@ final class Deployables {
         return null;
     }
 
-    /** The type whose prefab is this path (relative to Server/Prefabs/), null if none (T54: crate deployment). */
+    /** The type whose prefab is this path (relative to Server/Prefabs/), null if none (crate deployment). */
     static Kind forPrefab(String prefabPath) {
         for (Kind k : ALL) {
             if (k.prefabPath.equals(prefabPath)) {
@@ -370,7 +370,7 @@ final class Deployables {
         return null;
     }
 
-    /** Data specific to a balloon type (T54): flight model, crate item, model pivot and gondola volume (prefab frame). */
+    /** Data specific to a balloon type: flight model, crate item, model pivot and gondola volume (prefab frame). */
     static final class BalloonSpec {
         final String modelId;
         final String crateItemId;
@@ -380,11 +380,11 @@ final class Deployables {
         final Vector3f nacelleMin;
         final Vector3f nacelleMax;
         /** Particle systems of the flight model (Server/Models/Vehicles/<model>*.json): burner flame and climbing jet,
-         * named in CancelParticleSystems. The small balloon has its own copies that follow the model (T54). */
+         * named in CancelParticleSystems. The small balloon has its own copies that follow the model. */
         final String flameSystem;
         final String boostSystem;
         /**
-         * T120: flight model without the cage and the chain column (transport balloon only, else null), used by the dry descent onto a
+         * flight model without the cage and the chain column (transport balloon only, else null), used by the dry descent onto a
          * cage that rests on the ground. Its _Off variant is shown. Generated by the transport_nocage profile of prefab_to_model.py.
          */
         final String groundModelId;
@@ -568,7 +568,7 @@ final class Deployables {
     }
 
     /**
-     * Data specific to a camp type: the pack item (held to deploy, T153) and the legacy crates of before T153 (null for the
+     * Data specific to a camp type: the pack item (held to deploy) and the legacy crates (null for the
      * sleeping bag, which never had crates).
      */
     static final class TentSpec {
@@ -576,7 +576,7 @@ final class Deployables {
         final String legacyFullCrateId;
         final String legacyEmptyCrateId;
         /**
-         * Exit spot (T93), prefab frame before rotation, in blocks relative to the centre of the origin cell (same convention
+         * Exit spot, prefab frame before rotation, in blocks relative to the centre of the origin cell (same convention
          * as BalloonManager.prefabPoint): where a player who gets up from a bed of the tent is put, feet height. Null if the
          * tent has none (the client then places the player next to the bed).
          */

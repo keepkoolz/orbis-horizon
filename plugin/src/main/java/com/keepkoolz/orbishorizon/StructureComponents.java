@@ -18,7 +18,7 @@ import java.util.Set;
 import java.util.logging.Level;
 
 /**
- * Guard against silent loss (17 October 2026): before a structure is removed, every cell whose block carries a container or a bench
+ * Guard against silent loss: before a structure is removed, every cell whose block carries a container or a bench
  * component must give that component (SectionBlocks.blockComponent, also in a section without players near). Otherwise the contents
  * and the bench level would be dropped with the block, so the take-off or the packing is refused before anything is removed.
  */

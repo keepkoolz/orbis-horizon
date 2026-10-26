@@ -2,6 +2,7 @@ package com.keepkoolz.orbishorizon;
 
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
@@ -11,16 +12,25 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
-import java.util.UUID;
+import org.joml.Vector3i;
 
-/** /orbishorizon map share|unshare <id>: sharing of a structure on the world map, open to every player (owner or op). */
+import java.util.UUID;
+import java.util.logging.Level;
+
+/**
+ * /orbishorizon map share|unshare <id>: sharing of a structure on the world map, open to every player (owner or op).
+ * /orbishorizon map shareStation <x> <y> <z>: sharing of a known station with every player of the world.
+ */
 public final class MapCommand extends AbstractCommandCollection {
+
+    private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 
     public MapCommand() {
         super("map", Texts.cmd("map.desc"));
         requireNoPermission();
         addSubCommand(new Share(true));
         addSubCommand(new Share(false));
+        addSubCommand(new ShareStation());
     }
 
     /** The id as a UUID, null if it is not one. */
@@ -35,6 +45,54 @@ public final class MapCommand extends AbstractCommandCollection {
     /** True if the player may change the sharing: an op, or the owner. */
     static boolean canToggle(Ownership own, UUID player, boolean op) {
         return op || (own.owner() != null && own.owner().equals(player));
+    }
+
+    /** Shares a station the player knows with every player of the world, from the menu of its map marker. */
+    static final class ShareStation extends AbstractPlayerCommand {
+        private final RequiredArg<Integer> x;
+        private final RequiredArg<Integer> y;
+        private final RequiredArg<Integer> z;
+
+        ShareStation() {
+            super("shareStation", Texts.cmd("map.shareStation.desc"));
+            requireNoPermission();
+            this.x = withRequiredArg("x", Texts.cmd("map.shareStation.x"), ArgTypes.INTEGER);
+            this.y = withRequiredArg("y", Texts.cmd("map.shareStation.y"), ArgTypes.INTEGER);
+            this.z = withRequiredArg("z", Texts.cmd("map.shareStation.z"), ArgTypes.INTEGER);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            try {
+                TransitNetwork.Station s = TransitNetwork.get().at(world.getName(), new Vector3i(x.get(ctx), y.get(ctx), z.get(ctx)));
+                if (s == null) {
+                    ctx.sendMessage(Texts.t("map.station.notFound"));
+                    return;
+                }
+                SkyLog.Reached key = new SkyLog.Reached(s.origin.x, s.origin.y, s.origin.z);
+                KnownStations known = KnownStations.get();
+                if (!known.known(world.getName(), player.getUuid(), key)) {
+                    ctx.sendMessage(Texts.t("map.station.unknown"));
+                    return;
+                }
+                if (!known.share(world.getName(), key)) {
+                    ctx.sendMessage(Texts.t("map.station.alreadyShared").param("station", s.name));
+                    return;
+                }
+                known.save();
+                ctx.sendMessage(Texts.t("map.station.shared").param("station", s.name));
+                for (PlayerRef other : world.getPlayerRefs()) {
+                    if (other.isValid() && !other.getUuid().equals(player.getUuid())
+                            && !known.knownPersonally(world.getName(), other.getUuid(), key)) {
+                        StationDiscovery.showShared(other, s.name, player.getUsername());
+                    }
+                }
+            } catch (RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Partage de station impossible");
+                Telemetry.error("map.shareStation", e, null, null);
+                ctx.sendMessage(Texts.t("map.station.error"));
+            }
+        }
     }
 
     static final class Share extends AbstractPlayerCommand {

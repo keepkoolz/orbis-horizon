@@ -34,7 +34,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * Animals captured by the cage of the transport balloon (T74).
+ * Animals captured by the cage of the transport balloon.
  *
  * Closing the side captures the passive animals standing in the cage (Frozen: the role no longer ticks, and invulnerable). They
  * stay visible and follow the cage: Teleport at each step of the cage (blocks), at each tick of the flight (the cage is part of the
@@ -46,7 +46,7 @@ import java.util.logging.Level;
  * file of the flight (BalloonResume), so a restart finds them again: by UUID if the entity is still in the world, otherwise
  * recreated from its role (NPCPlugin.spawnNPC).
  *
- * Captured animals are not mounted on the flying entity (MountedComponent and Teleport remove each other, T21): they are moved by Teleport.
+ * Captured animals are not mounted on the flying entity (MountedComponent and Teleport remove each other): they are moved by Teleport.
  */
 final class CageAnimals {
 
@@ -169,7 +169,7 @@ final class CageAnimals {
     /** World position of an animal in flight: from the flight's entity position (centre of the origin block). */
     static Vector3d flightPos(Animal a, BalloonFlight flight) {
         if (flight.groundCage > 0) {
-            // T120: the cage stays on the ground, the animals never left their place in it.
+            // the cage stays on the ground, the animals never left their place in it.
             return worldPos(a, flight.cageHome, flight.rotation, flight.groundCage);
         }
         Vector3d p = BalloonManager.prefabPoint(flight.entityPos, flight.rotation, new Vector3f((float) a.x(), (float) a.y(), (float) a.z()));
@@ -329,7 +329,7 @@ final class CageAnimals {
 
     /** Each tick of the flight: the animals are brought back to their place in the cage (teleport if the gap exceeds the threshold). */
     static void follow(Store<EntityStore> store, BalloonFlight flight) {
-        if (flight.animals.isEmpty() || flight.groundCage > 0) { // T120: with the cage on the ground nothing moves
+        if (flight.animals.isEmpty() || flight.groundCage > 0) { // with the cage on the ground nothing moves
             return;
         }
         for (Animal a : flight.animals) {

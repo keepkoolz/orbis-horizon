@@ -6,7 +6,7 @@ import org.bson.BsonInt64;
 import org.bson.BsonString;
 
 /**
- * The NPC pilot of an airship (T133): the NPC entity uuid, the seed of its skin and where it stands.
+ * The NPC pilot of an airship: the NPC entity uuid, the seed of its skin and where it stands.
  * Stored with the registry entry, the flight and the airship resume file under the key "crew".
  */
 record CrewRecord(UUID uuid, long seed, Post post) {

@@ -96,7 +96,7 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             return;
         }
 
-        // T121: same computation as the held-crate preview (shared helper). Rotation3f.y is the yaw in radians.
+        // same computation as the held-crate preview (shared helper). Rotation3f.y is the yaw in radians.
         BlockPosition target = context.getTargetBlock();
         DeployPlacement.Placement placement = DeployPlacement.compute(
                 target != null ? new Vector3i(target.x, target.y, target.z) : null,
@@ -118,7 +118,7 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
         }
 
         int flags = (force ? 1 : 0) | 8; // same options as SpawnPrefab
-        // T24: the unfolded ladder does not replace the terrain (a slope, a wall). T54: the balloon type is found by the
+        // the unfolded ladder does not replace the terrain (a slope, a wall). The balloon type is found by the
         // prefab, and it is the one registered (the small balloon is registered as balloon_basic).
         Deployables.Kind kind = BalloonManager.get().balloonKindFor(prefabPath);
         if (kind == null) {
@@ -132,7 +132,7 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             return;
         }
         StructureShape shape = kind.shapeOrNull();
-        // T76: a pose with a cell outside the world's height range would lose blocks: refused, the Failed state skips the Next
+        // a pose with a cell outside the world's height range would lose blocks: refused, the Failed state skips the Next
         // (ModifyInventory), so the crate is not consumed.
         if (shape != null && BalloonManager.exceedsHeight(shape, origin, rotation)) {
             PlayerRef playerRef = commandBuffer.getComponent(player, PlayerRef.getComponentType());
@@ -185,6 +185,9 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             Ownership own = placer != null ? Ownership.of(placer.getUuid(), placer.getUsername()) : Ownership.NONE;
             BalloonManager.pasteKeepingTerrain(buffer, world, shape, origin, rotation, flags, commandBuffer, kind.id, own);
             Telemetry.count("deploy." + kind.id);
+            if (Deployables.AIRSHIP_KIND.equals(kind.id)) {
+                AirshipCaptainChest.give(world, origin, rotation);
+            }
         } else {
             // Unreadable shape: placed without terrain protection and without registry entry (logged by shapeOrNull).
             PrefabUtil.paste(buffer, world, origin, rotation, new FastRandom(), flags, 0, commandBuffer);

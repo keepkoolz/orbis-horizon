@@ -20,7 +20,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Locking of placed balloons (T27): cancels breaking, break damage and block placement on
+ * Locking of placed balloons: cancels breaking, break damage and block placement on
  * a balloon in the registry (BalloonRegistry).
  *
  * These are ECS event systems (EntityEventSystem), like NoBuild and NoDestroyBlockBreak of the

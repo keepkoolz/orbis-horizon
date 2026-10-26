@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.logging.Level;
 
 /**
- * Animated helm of the airship and of both steamboats (25 October 2026): the node "Helm" of the flight model (hub axis of the helm block,
+ * Animated helm of the airship and of both steamboats: the node "Helm" of the flight model (hub axis of the helm block,
  * wheel axis = z) turns to the right while the ship turns right, to the left while it turns left, up to half a turn (4 steps of 45
  * degrees), holds while the turn lasts and returns to centre at the same speed. Step -4..4, positive = right.
  * The constants and the animation names must stay equal to HELM_* and helm_*_key of scripts/prefab_to_model.py (write_helm_anims):

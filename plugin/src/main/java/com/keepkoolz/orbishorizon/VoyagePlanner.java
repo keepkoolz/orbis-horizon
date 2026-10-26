@@ -23,8 +23,12 @@ final class VoyagePlanner {
 
     enum Kind { MARKER, STOP, STATION }
 
-    /** groundY is Integer.MIN_VALUE when unknown. */
-    record Destination(String name, Kind kind, double x, double z, int groundY) {}
+    /** groundY is Integer.MIN_VALUE when unknown. station identifies a balloon or boat station (null for anything else). */
+    record Destination(String name, Kind kind, double x, double z, int groundY, SkyLog.Reached station) {
+        Destination(String name, Kind kind, double x, double z, int groundY) {
+            this(name, kind, x, z, groundY, null);
+        }
+    }
 
     private VoyagePlanner() {}
 
@@ -37,6 +41,28 @@ final class VoyagePlanner {
         }
         out.sort(Comparator.comparingInt((Destination d) -> d.kind().ordinal())
                 .thenComparingDouble(d -> Math.hypot(d.x() - fromX, d.z() - fromZ)));
+        return out;
+    }
+
+    /**
+     * Destinations a vehicle has already seen: a station whose id is in the log, a marker with a visited cell near it. A null or empty
+     * log keeps nothing.
+     */
+    static List<Destination> known(List<Destination> all, SkyLog sky) {
+        List<Destination> out = new ArrayList<>();
+        if (sky == null || sky.isEmpty()) {
+            return out;
+        }
+        for (Destination d : all) {
+            boolean keep = switch (d.kind()) {
+                case STATION -> d.station() != null && sky.hasReached(d.station());
+                case MARKER -> sky.markerVisited(d.x(), d.z());
+                default -> false;
+            };
+            if (keep) {
+                out.add(d);
+            }
+        }
         return out;
     }
 
@@ -138,7 +164,8 @@ final class VoyagePlanner {
                 }
             }
             double[] a = stationArrival(pad.x, pad.z, fromX, fromZ, others);
-            out.add(new Destination(dest.name, Kind.STATION, a[0], a[1], (int) Math.round(pad.y)));
+            out.add(new Destination(dest.name, Kind.STATION, a[0], a[1], (int) Math.round(pad.y),
+                    new SkyLog.Reached(dest.origin.x, dest.origin.y, dest.origin.z)));
         }
         return out;
     }

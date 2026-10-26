@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
- * T121: while a player holds a deployment crate of the mod, shows them (only them) where and how the structure would be placed,
+ * while a player holds a deployment crate of the mod, shows them (only them) where and how the structure would be placed,
  * with the builder tools' paste preview (ShowTriggerVolumePastePrefabPreview, built from the prefab's BlockSelection like the game).
  * Called by the world tick, every PERIOD_MS per player; the packet is only resent when the origin or rotation changed. Hidden when the
  * held item is no longer a crate (also after a deployment: the crate is consumed or swapped), on death, world change, disconnection.

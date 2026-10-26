@@ -18,7 +18,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
  * /orbishorizon balloon takeoff, /orbishorizon balloon land: piloting (first version).
  * /orbishorizon balloon model <id>: chooses the model used in flight.
  * /orbishorizon balloon spawnmodel <id>: shows a still model in front of the player (diagnostics).
- * /orbishorizon balloon despawn: removes the nearest balloon, administrators only (T40).
+ * /orbishorizon balloon despawn: removes the nearest balloon, administrators only.
  */
 public final class BalloonCommand extends AbstractCommandCollection {
 
@@ -44,7 +44,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
     }
 
     /**
-     * T82: /orbishorizon balloon render dual|single. dual (default): the entity mounted on the pilot is seen by the pilot only and an
+     * /orbishorizon balloon render dual|single. dual (default): the entity mounted on the pilot is seen by the pilot only and an
      * observer entity moved by the server is seen by the others. single: the previous behaviour (one entity mounted on the pilot,
      * seen by everybody). Applies at the next take-off. Without an argument value other than those two, shows the setting.
      */
@@ -76,7 +76,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
                 ctx.sendMessage(Texts.t("cmd.render.parts").param("mode", BalloonManager.get().partsMode.name().toLowerCase()));
                 return;
             } else if (m.equalsIgnoreCase("pilot:on") || m.equalsIgnoreCase("pilot:off")) {
-                // T119: standing mannequin of the pilot for the others (next take-off), shared by the balloons and the airship.
+                // standing mannequin of the pilot for the others (next take-off), shared by the balloons and the airship.
                 PilotMannequin.enabled = m.equalsIgnoreCase("pilot:on");
                 ctx.sendMessage(Texts.t("cmd.render.pilot").param("mode", PilotMannequin.enabled ? "on" : "off"));
                 return;
@@ -90,7 +90,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
     }
 
     /**
-     * T40: removes the nearest balloon (deployed or in flight), administrators (ops) only. The contents of the
+     * removes the nearest balloon (deployed or in flight), administrators (ops) only. The contents of the
      * burner and chests fall to the ground, and the administrator receives the deployment crate. Alias: remove.
      *
      * Permissions (HytaleServer-v65.jar bytecode, AbstractCommand): without any setting, a sub-command gets the node
@@ -112,7 +112,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
     }
 
     /**
-     * T34: lights of the balloon in flight (yellow crystals). Options separated by +: on, off, radius:N (forced radius,
+     * lights of the balloon in flight (yellow crystals). Options separated by +: on, off, radius:N (forced radius,
      * for testing), radius:default (the block's radius), show. Takes effect immediately on the world's flights and at the
      * next take-off. Diagnostic setting, not saved.
      */
@@ -155,7 +155,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
         }
     }
 
-    /** T21: passenger seating method (fallback if mounting on the entity does not work in game). */
+    /** passenger seating method (fallback if mounting on the entity does not work in game). */
     static final class Passengers extends AbstractPlayerCommand {
         private final RequiredArg<String> mode = withRequiredArg("mode", Texts.cmd("balloon.passengers.mode"), ArgTypes.STRING);
 
@@ -184,7 +184,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
     }
 
     /**
-     * T25: passenger seated-pose method, to compare in game (see BalloonFlight.Pose). Options separated
+     * passenger seated-pose method, to compare in game (see BalloonFlight.Pose). Options separated
      * by +: none, default, states, nomount, controller, anim, slot:Name, id:Name. show displays the setting.
      */
     static final class SeatPose extends AbstractPlayerCommand {
@@ -212,9 +212,9 @@ public final class BalloonCommand extends AbstractCommandCollection {
         }
     }
 
-    /** T21: height of the seat point, to calibrate passengers in game. */
+    /** height of the seat point, to calibrate passengers in game. */
     /**
-     * T124: /orbishorizon balloon view show, /orbishorizon balloon view set <distanceFactor> <heightFactor>: external view of balloon passengers
+     * /orbishorizon balloon view show, /orbishorizon balloon view set <distanceFactor> <heightFactor>: external view of balloon passengers
      * (camera distance in times the balloon size, 0.3 to 5, and height in times that distance, 0 to 2). Not saved, applies at the next camera send.
      */
     static final class View extends AbstractCommandCollection {
@@ -292,7 +292,7 @@ public final class BalloonCommand extends AbstractCommandCollection {
         }
     }
 
-    /** T73: state of the nearest transport balloon cage (descent, side, movement), diagnostic in English. */
+    /** state of the nearest transport balloon cage (descent, side, movement), diagnostic in English. */
     static final class Cage extends AbstractPlayerCommand {
         Cage() {
             super("cage", Texts.cmd("balloon.cage.desc"));

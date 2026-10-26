@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Level;
 
 /**
- * Upgrade level of the airship's benches during a flight (T63). A bench upgraded on the ground (BenchBlock.tierLevel above 1)
+ * Upgrade level of the airship's benches during a flight. A bench upgraded on the ground (BenchBlock.tierLevel above 1)
  * would lose its level when the blocks are removed at take-off, and the game would drop its upgrade items as a refund
  * (BenchSystems$OnAddOrRemoved.onEntityRemove, dropUpgradeItems). The level and the upgrade items are copied at take-off,
  * the items are cleared from the live component so the game drops nothing, and both are put back on the bench placed at the
@@ -230,7 +230,7 @@ final class AirshipBenches {
             BlockType placedBase = BenchBlock.getBaseBlockType(placed);
             String placedName = placedBase != null ? placedBase.getId() : null;
             if (placedName != null && !placedName.equals(e.block)) {
-                // Never put a level on a different bench (prefab layout changed between take-off and landing, T80).
+                // Never put a level on a different bench (prefab layout changed between take-off and landing).
                 LOGGER.at(Level.WARNING).log("Établi %s du dirigeable en %s : le bloc posé est %s, niveau %d non remis",
                         e.block, p, placedName, e.tier);
                 return false;

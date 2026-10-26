@@ -34,10 +34,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
- * T156: upgrading a camp pack keeps the contents of the lower pack. The recipe of a level 2 or 3 pack needs the lower pack as an
+ * upgrading a camp pack keeps the contents of the lower pack. The recipe of a level 2 or 3 pack needs the lower pack as an
  * ingredient, which comes back as a fresh stack without metadata. CraftRecipeEvent.Pre (before ingredients are taken, can be
  * cancelled) notes the lower pack's contents, converted to the target tent. After the craft (the output reaches the inventory one
- * tick after Post) the tick puts them on the new pack. Facts from the in-game spike of 18 October 2026: ingredients are not taken
+ * tick after Post) the tick puts them on the new pack. Facts from the in-game spike: ingredients are not taken
  * in creative mode, the workbench may take ingredients from nearby chests, which is why the lower pack must be on the player.
  */
 final class CampUpgrade {

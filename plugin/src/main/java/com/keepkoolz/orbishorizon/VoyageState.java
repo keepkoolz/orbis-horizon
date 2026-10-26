@@ -10,7 +10,7 @@ import java.util.UUID;
 final class VoyageState {
     enum Phase { CLIMB, TURN, CRUISE, ARRIVE, RETRY, STOPPING, ASHORE }
 
-    /** What the ship does above the destination: LAND starts the landing alignment, HOVER hands over to the recall (T143). */
+    /** What the ship does above the destination: LAND starts the landing alignment, HOVER hands over to the recall. */
     enum ArrivalMode { LAND, HOVER }
 
     final String destName;
@@ -18,7 +18,7 @@ final class VoyageState {
     final double destX;
     final double destZ;
     final UUID captain;
-    /** The flight burns no fuel and never stops for lack of it (the recall, T143). */
+    /** The flight burns no fuel and never stops for lack of it (the recall). */
     final boolean fuelFree;
     final ArrivalMode arrivalMode;
     /** Cruise height of the ship pivot; raised when an obstacle forces a climb and then kept. */
@@ -62,7 +62,7 @@ final class VoyageState {
     /** Steamboat: last "no mooring fits" log line (logged once, then at most every NO_MOORING_LOG_MS). */
     long noMooringLogMs;
 
-    /** The captain jumped or died during the voyage (T152): the ship sinks to a mooring height and lowers one ladder on this side. */
+    /** The captain jumped or died during the voyage: the ship sinks to a mooring height and lowers one ladder on this side. */
     volatile boolean ashore;
     /** Ladder side (+1 or -1 in the prefab frame) chosen for the captain ashore. */
     volatile int ashoreSide = -1;

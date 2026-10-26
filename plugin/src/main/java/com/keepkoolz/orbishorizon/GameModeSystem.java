@@ -11,7 +11,7 @@ import com.hypixel.hytale.server.core.event.events.ecs.ChangeGameModeEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 /**
- * Game mode change of a player (T75). Player.setGameMode invokes ChangeGameModeEvent on the player's entity, then
+ * Game mode change of a player. Player.setGameMode invokes ChangeGameModeEvent on the player's entity, then
  * setGameModeInternal sets the new mode, sends SetGameMode and calls MovementManager.resetFly(mode) then update(): the
  * forced flight set by the mod would be overwritten, the survival pilot would fall and the collision teleport would bring
  * them back in a loop. Same shape as FlockSystems$PlayerChangeGameModeEventSystem of the game.

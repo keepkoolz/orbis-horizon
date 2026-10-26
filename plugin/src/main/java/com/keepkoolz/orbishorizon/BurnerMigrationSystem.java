@@ -30,9 +30,9 @@ import java.util.Set;
 import java.util.logging.Level;
 
 /**
- * T41: compatibility of burners placed before the tannery-style interface.
+ * compatibility of burners placed before the tannery-style interface.
  *
- * Before T41 the fuel was in the bench fuel container (3 slots, Fuel field of the
+ * Before, the fuel was in the bench fuel container (3 slots, Fuel field of the
  * JSON). Now it is in the 3 input slots and the JSON no longer has a Fuel field. When the
  * block loads, BenchSystems$ProcessingBenchLifecycle.onEntityAdded calls initializeBenchConfig
  * then setupSlots, which reduces the fuel container to a capacity of 0 (ItemContainer.ensureContainerCapacity)
@@ -147,7 +147,7 @@ public final class BurnerMigrationSystem extends RefSystem<ChunkStore> {
         for (ItemStack rest : left) {
             fuel.addItemStack(rest, false, false, false);
         }
-        LOGGER.at(Level.INFO).log("Brûleur d'avant T41 : %d objet(s) de combustible déplacé(s) vers les entrées (%d restés dans l'ancien conteneur)",
+        LOGGER.at(Level.INFO).log("Ancien brûleur : %d objet(s) de combustible déplacé(s) vers les entrées (%d restés dans l'ancien conteneur)",
                 moved, left.size());
     }
 

@@ -10,13 +10,13 @@ final class TransitConstants {
     static final int COUNTDOWN_SECONDS = 30;
     /** Interval between countdown messages. */
     static final int MESSAGE_INTERVAL_SECONDS = 10;
-    /** T124 external view of balloon passengers: horizontal move (blocks) after which the travel direction is sampled again. */
+    /** external view of balloon passengers: horizontal move (blocks) after which the travel direction is sampled again. */
     static final double VIEW_DIRECTION_MIN_MOVE = 2.0;
-    /** T124 external view: change of travel direction (degrees) that re-sends the camera. */
+    /** external view: change of travel direction (degrees) that re-sends the camera. */
     static final double VIEW_DIRECTION_CHANGE_DEGREES = 10.0;
-    /** T124 external view: default camera distance, in times the size of the balloon. */
+    /** external view: default camera distance, in times the size of the balloon. */
     static final double VIEW_DISTANCE_FACTOR = 1.2;
-    /** T124 external view: default camera height above the target, in times the camera distance. */
+    /** external view: default camera height above the target, in times the camera distance. */
     static final double VIEW_HEIGHT_FACTOR = 0.25;
     /** View of the passengers: eye height above the seat point (prefab seat points are about 0.5 above the cell floor), in blocks. */
     static final float VIEW_EYE_HEIGHT_ABOVE_SEAT = 1.2f;
@@ -42,9 +42,9 @@ final class TransitConstants {
     static final int HOLDING_SPACING = 6;
     /** Distance at which the station master reservation is released. */
     static final double MASTER_RELEASE_DISTANCE = 8.0;
-    /** Wait on the arrival pad after the drop before the balloon climbs away and vanishes (it left at once, 11 October 2026). */
+    /** Wait on the arrival pad after the drop before the balloon climbs away and vanishes. */
     static final int DROP_WAIT_SECONDS = 5;
-    /** Gap after a departing balloon frees the quay before the next balloon may come down on it (it went through the next one, 11 October 2026). */
+    /** Gap after a departing balloon frees the quay before the next balloon may come down on it. */
     static final int QUAY_GAP_SECONDS = 10;
     /** Time after which the station master reservation is released. */
     static final int MASTER_RELEASE_SECONDS = 60;

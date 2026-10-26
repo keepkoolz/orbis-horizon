@@ -29,7 +29,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * Lights of the balloon in flight (T34), reusable (T35: burner flame).
+ * Lights of the balloon in flight, reusable (burner flame).
  *
  * A model has only one light (ModelAsset.Light, a ColorLight sent with the model, placed at the model's
  * origin): one light per crystal is impossible. The only way to light several precise points is
@@ -39,14 +39,14 @@ import java.util.logging.Level;
  *
  * - TransformComponent and NetworkId (NetworkSendableSpatialSystem query, otherwise the entity is never sent),
  *   Intangible, NonSerialized (never saved with the world, like the flying entity), DynamicLight.
- * - MountedComponent on the balloon entity (Minecart controller, like the T21 passengers) with the
+ * - MountedComponent on the balloon entity (Minecart controller, like the passengers) with the
  *   offset in the entity's frame (BalloonManager.attachOffset, the same calculation as the seats), so that the
  *   client sticks it to the balloon without jerks.
  * - its server-side position is reset on every tick (follow) to the world point, so that client
  *   tracking (view area) and the fallback without chained mounting stay correct. No Teleport (it would remove the
  *   mount, MountSystems$TeleportMountedEntity).
  * - a deterministic UUID (balloonUuid + key) to find and remove lights left in a world
- *   (T19 recovery, removeOrphans) without changing the recovery file format.
+ *   (recovery, removeOrphans) without changing the recovery file format.
  *
  * Colour: the block's ColorLight (BlockType.getLight, "#eb7" for Rock_Crystal_Yellow_Block gives radius 0 and
  * red, green, blue 14, 11, 7: ColorParseUtil.hexStringToColorLightDirect reads one hexadecimal digit per channel,
@@ -54,7 +54,7 @@ import java.util.logging.Level;
  * game's models (Fireball: "Light": {"Color": "#fb8"}). The unit of the radius is not documented: 0 for the game's
  * blocks (the client deduces the range from the channels), 2 to 18 for others. Option /orbishorizon balloon light radius:N to experiment.
  *
- * T35: call spawn(store, flight, KEY_BURNER, prefab-frame anchor point, colour) at take-off, then
+ * call spawn(store, flight, KEY_BURNER, prefab-frame anchor point, colour) at take-off, then
  * set(store, flight, KEY_BURNER, colour or null) to put it out (running dry) or boost it (climbing). removeAll and
  * removeOrphans already handle the KEY_BURNER key.
  */
@@ -64,9 +64,9 @@ final class BalloonLights {
 
     /** Prefix of the key of a prefab block light: "block:x,y,z" (prefab cell). */
     static final String KEY_BLOCK_PREFIX = "block:";
-    /** Key reserved for the burner flame light (T35). */
+    /** Key reserved for the burner flame light. */
     static final String KEY_BURNER = "burner";
-    /** Key of the airship's flickering firebox light (T58). */
+    /** Key of the airship's flickering firebox light. */
     static final String KEY_FIREBOX = "firebox";
     /** Key of the chain helper entity (not a light, same UUID scheme so a resume finds an orphan). */
     static final String KEY_CHAIN = "chain";
@@ -74,7 +74,7 @@ final class BalloonLights {
     static final String CHAIN_ROOT_INTERACTION = "Hotair_Balloon_Chain_Use";
 
     /**
-     * Airship firebox light (T58): one hexadecimal digit per channel (0 to 15), radius 0 like the game's blocks. Hovering with fuel the
+     * Airship firebox light: one hexadecimal digit per channel (0 to 15), radius 0 like the game's blocks. Hovering with fuel the
      * embers glow dimly, from (8, 3, 1) to (11, 4, 1) ("#c62" is the block's own On light, (12, 6, 2)). While the engine burns (the
      * ship travels horizontally) they run from (11, 4, 1) to (15, 7, 2). The flicker level (0 to 1) picks the point between the two.
      */
@@ -90,12 +90,12 @@ final class BalloonLights {
     }
 
     /**
-     * Colour of the lit burner flame (T35): "#dba" from the On state of Hotair_Balloon_Burner.json, like the
+     * Colour of the lit burner flame: "#dba" from the On state of Hotair_Balloon_Burner.json, like the
      * game's brazier. One hexadecimal digit per channel (red 13, green 11, blue 10), radius 0 like the game's blocks.
      */
     static final ColorLight BURNER_LIT = new ColorLight((byte) 0, (byte) 13, (byte) 11, (byte) 10);
     /**
-     * Boosted flame when climbing (T17): "#fc8", same hue, higher channels (red 15, green 12, blue 8). The
+     * Boosted flame when climbing: "#fc8", same hue, higher channels (red 15, green 12, blue 8). The
      * radius has no documented unit, so the stronger light goes through the channels, not the radius.
      */
     static final ColorLight BURNER_BOOST = new ColorLight((byte) 0, (byte) 15, (byte) 12, (byte) 8);
@@ -117,7 +117,7 @@ final class BalloonLights {
         return new Vector3f(a.x(), a.y() + 1, a.z());
     }
 
-    /** Creates the burner flame light at take-off (T35), if lights are enabled and the burner is lit. */
+    /** Creates the burner flame light at take-off, if lights are enabled and the burner is lit. */
     static void spawnBurner(Store<EntityStore> store, BalloonFlight flight, StructureShape s) {
         if (!enabled || flight.dry || flight.lights.stream().anyMatch(l -> l.key.equals(KEY_BURNER))) {
             return;
@@ -132,7 +132,7 @@ final class BalloonLights {
         final Vector3f local;
         Ref<EntityStore> ref;
         UUID uuid;
-        /** T82: twin light mounted on the observer entity (what the other players see), null in single rendering. */
+        /** twin light mounted on the observer entity (what the other players see), null in single rendering. */
         Ref<EntityStore> twinRef;
         UUID twinUuid;
         /** Colour currently given to the component (null: off). */
@@ -152,7 +152,7 @@ final class BalloonLights {
     /** Radius forced on all lights (diagnostics), null: the block's own. */
     private static volatile Integer radiusOverride;
 
-    /** Light specs per shape (one entry per balloon type, T54). */
+    /** Light specs per shape (one entry per balloon type). */
     private static final java.util.Map<StructureShape, List<Spec>> SPECS = new java.util.concurrent.ConcurrentHashMap<>();
 
     static boolean enabled() {
@@ -186,7 +186,7 @@ final class BalloonLights {
 
     /**
      * The prefab cells whose block (base type, no state) emits light. Currently the 4
-     * Rock_Crystal_Yellow_Block. The burner is not one of them: its light only exists in the On state, and in flight it has its own key (T35, spawnBurner).
+     * Rock_Crystal_Yellow_Block. The burner is not one of them: its light only exists in the On state, and in flight it has its own key (spawnBurner).
      * Computed once per shape.
      */
     static List<Spec> specsFor(StructureShape s) {
@@ -248,7 +248,7 @@ final class BalloonLights {
             }
             store.putComponent(light.ref, MountedComponent.getComponentType(),
                     new MountedComponent(flight.balloonRef, BalloonManager.attachOffset(flight.kind, light.local), MountController.Minecart));
-            // T82: dual rendering, this light is seen by the pilot only, its twin (on the observer entity) by the others.
+            // dual rendering, this light is seen by the pilot only, its twin (on the observer entity) by the others.
             if (flight.dual && flight.observerRef != null && flight.observerRef.isValid()) {
                 attachTwin(store, light, flight.balloonUuid, flight.observerRef, BalloonManager.attachOffset(flight.kind, light.local),
                         BalloonManager.prefabPoint(flight.entityPos, flight.rotation, light.local), c, flight.pilotUuid);
@@ -277,7 +277,7 @@ final class BalloonLights {
                         flight.balloonRef, local, BalloonManager.attachOffset(flight.kind, local),
                         BalloonManager.prefabPoint(flight.entityPos, flight.rotation, local));
                 if (flight.dual && flight.chain != null) {
-                    ViewFilter.only(flight.chain.ref, flight.pilotUuid); // T82: only the pilot can use it
+                    ViewFilter.only(flight.chain.ref, flight.pilotUuid); // only the pilot can use it
                 }
                 return;
             }
@@ -345,7 +345,7 @@ final class BalloonLights {
     }
 
     /**
-     * Removes the lights that an interrupted flight may have left in a world that stayed loaded (T19 recovery). They
+     * Removes the lights that an interrupted flight may have left in a world that stayed loaded (recovery). They
      * are never saved (NonSerialized), so this only concerns a world that outlived the plugin.
      */
     static void removeOrphans(World world, Store<EntityStore> store, UUID balloonUuid, StructureShape s) {
@@ -359,7 +359,7 @@ final class BalloonLights {
         keys.add(KEY_BURNER);
         keys.add(KEY_FIREBOX);
         keys.add(KEY_CHAIN);
-        // T82: the twin lights (mounted on the observer entity) and the observer entity itself have deterministic UUIDs too.
+        // the twin lights (mounted on the observer entity) and the observer entity itself have deterministic UUIDs too.
         List<String> all = new ArrayList<>(keys);
         for (String key : keys) {
             all.add(key + TWIN_SUFFIX);
@@ -379,7 +379,7 @@ final class BalloonLights {
         }
     }
 
-    // ------------------------------------------------------------------ T82: twin lights (observer entity)
+    // ------------------------------------------------------------------ twin lights (observer entity)
 
     /** Key of the observer entity (not a light, same UUID scheme so a resume finds an orphan). */
     static final String KEY_OBSERVER = "observer";
@@ -387,7 +387,7 @@ final class BalloonLights {
     static final String TWIN_SUFFIX = "+obs";
 
     /**
-     * T82: dual rendering. Makes this light visible to the pilot only and creates its twin on the observer entity (same colour and
+     * dual rendering. Makes this light visible to the pilot only and creates its twin on the observer entity (same colour and
      * point, mounted with the same offset), visible to everybody but the pilot. Never throws: without the twin, the others simply see no light.
      */
     static void attachTwin(Store<EntityStore> store, Light light, UUID mainUuid, Ref<EntityStore> observer, Vector3f mountOffset,

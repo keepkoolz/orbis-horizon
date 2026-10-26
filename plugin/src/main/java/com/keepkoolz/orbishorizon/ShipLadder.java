@@ -80,7 +80,7 @@ final class ShipLadder {
         long nextMs;
         boolean flipped;                              // lever shown pulled
         Phase gateDone;                               // phase for which the gate rule was already applied (reset while moving)
-        boolean gateByMod;                            // the deck gate of this side was opened by the mod (T152)
+        boolean gateByMod;                            // the deck gate of this side was opened by the mod
 
         Run(String world, Vector3i origin, Rotation rotation, int side) {
             this.world = world;

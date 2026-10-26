@@ -18,7 +18,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 /**
  * /orbishorizon camping: camp commands. The group is open to everyone (requireNoPermission, so that open sub-commands such as
- * the pack command of T158 are reachable), each sub-command sets its own rights. {@code back on|off} is for ops.
+ * the pack command are reachable), each sub-command sets its own rights. {@code back on|off} is for ops.
  */
 public final class CampingCommand extends AbstractCommandCollection {
 
@@ -61,6 +61,7 @@ public final class CampingCommand extends AbstractCommandCollection {
     static final class Pack extends AbstractPlayerCommand {
         Pack() {
             super("pack", Texts.cmd("camping.pack.desc"));
+            requireNoPermission();
         }
 
         @Override
@@ -75,7 +76,7 @@ public final class CampingCommand extends AbstractCommandCollection {
         }
     }
 
-    /** /orbishorizon camping forget x y z: forgets the camp respawn point on this block (menu of the world map). Own points only. */
+    /** /orbishorizon camping forget x y z: forgets the camp respawn point on this block (menu of the world map). Open to everyone, own points only. */
     static final class Forget extends AbstractPlayerCommand {
         private final RequiredArg<Integer> x = withRequiredArg("x", Texts.cmd("camping.forget.x"), ArgTypes.INTEGER);
         private final RequiredArg<Integer> y = withRequiredArg("y", Texts.cmd("camping.forget.y"), ArgTypes.INTEGER);
@@ -83,6 +84,7 @@ public final class CampingCommand extends AbstractCommandCollection {
 
         Forget() {
             super("forget", Texts.cmd("camping.forget.desc"));
+            requireNoPermission();
         }
 
         @Override

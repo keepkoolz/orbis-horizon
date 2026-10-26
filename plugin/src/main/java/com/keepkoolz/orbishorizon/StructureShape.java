@@ -24,18 +24,18 @@ public final class StructureShape {
 
     /**
      * Block used as a marker to find a placed balloon: the mod's burner, since
-     * the removal of the brazier (T16). The prefab brazier no longer exists.
+     * the removal of the brazier. The prefab brazier no longer exists.
      */
     public static final String ANCHOR_BLOCK = "Hotair_Balloon_Burner";
-    /** Burner (fuel tank, flame in the "On" state), same as the marker (T12, T16). */
+    /** Burner (fuel tank, flame in the "On" state), same as the marker. */
     public static final String BURNER_BLOCK = "Hotair_Balloon_Burner";
     /**
-     * Basket seat (T21): the 4 stools of the prefab, at the corners of the basket. On the ground they work
+     * Basket seat: the 4 stools of the prefab, at the corners of the basket. On the ground they work
      * as in the game (Block_Seat, nothing was changed), in flight they receive the passengers.
      */
     public static final String SEAT_BLOCK = "Furniture_Crude_Stool";
     /**
-     * Basket ladder (T23, T24). In flight it is folded: only the top cell of each column
+     * Basket ladder. In flight it is folded: only the top cell of each column
      * of ladders (attached to the basket) exists. The other cells are "unfolded": placed with the prefab,
      * but not in the flight model, nor in the collisions, nor in the room tests.
      */
@@ -43,7 +43,7 @@ public final class StructureShape {
 
     /**
      * A prefab block. filler is the prefab's "filler" value: 0 for the origin cell of a block, non-zero for the other
-     * cells of a multi-cell block (T57: the engine bench is the origin cell only).
+     * cells of a multi-cell block (the engine bench is the origin cell only).
      */
     public record Cell(int x, int y, int z, String name, int filler) {
         public Cell(int x, int y, int z, String name) {
@@ -70,14 +70,14 @@ public final class StructureShape {
     private final List<Cell> flightCells;
     private final List<Cell> unfoldedLadder;
     private final int flightBottomGap;
-    /** T27: the prefab cells by position (prefab frame), and the box that contains them. */
+    /** the prefab cells by position (prefab frame), and the box that contains them. */
     private final java.util.Map<Long, Cell> byPosition = new java.util.HashMap<>();
     private final int[] bounds = new int[6];
 
     private StructureShape(String prefabPath, List<Cell> cells, Cell anchor, Cell burner, List<Cell> seats) {
         this.prefabPath = prefabPath;
         this.cells = cells;
-        // T24: a ladder cell is unfolded if another ladder is just above it.
+        // a ladder cell is unfolded if another ladder is just above it.
         java.util.Set<java.util.List<Integer>> ladders = new java.util.HashSet<>();
         for (Cell c : cells) {
             if (LADDER_BLOCK.equals(c.baseName())) {
@@ -90,7 +90,7 @@ public final class StructureShape {
         int minFlight = Integer.MAX_VALUE;
         for (Cell c : cells) {
             minAll = Math.min(minAll, c.y());
-            // 11 October 2026: the whole ladder is folded in flight, its top cell too (it stuck out of the basket, on the outside of
+            // the whole ladder is folded in flight, its top cell too (it stuck out of the basket, on the outside of
             // the nacelle wall, decision of the user). Every ladder cell yields to the terrain at landing like the unfolded ones.
             if (LADDER_BLOCK.equals(c.baseName())) {
                 unfolded.add(c);
@@ -119,7 +119,7 @@ public final class StructureShape {
     }
 
     /**
-     * A shape with the same anchor, burner and seats as this one and other cells (T73: the transport balloon with its
+     * A shape with the same anchor, burner and seats as this one and other cells (the transport balloon with its
      * cage lowered or its side open, TransportCage.cells). The ladder, flight cells and bounds are recomputed.
      */
     /** Shape made of the given cells only, without anchor or burner (test hook). */
@@ -151,7 +151,7 @@ public final class StructureShape {
     }
 
     /**
-     * Reads a prefab (T43). anchorBlock is the marker block (unique). Without requireBurner (the tent), the prefab
+     * Reads a prefab. anchorBlock is the marker block (unique). Without requireBurner (the tent), the prefab
      * does not need a burner and burner() returns null.
      */
     public static StructureShape load(String prefabPath, String anchorBlock, boolean requireBurner) throws IOException {
@@ -183,7 +183,7 @@ public final class StructureShape {
                 seats.add(c);
             }
         }
-        // Stable order of the seats (T21): by z then by x, in the prefab frame.
+        // Stable order of the seats: by z then by x, in the prefab frame.
         seats.sort(Comparator.comparingInt(Cell::z).thenComparingInt(Cell::x));
         if (anchor == null) {
             throw new IOException("The prefab has no anchor block " + anchorBlock);
@@ -204,9 +204,9 @@ public final class StructureShape {
     }
 
     /**
-     * Cells of the prefab in flight (T24): all except the unfolded ladder cells. This is the list for collisions,
+     * Cells of the prefab in flight: all except the unfolded ladder cells. This is the list for collisions,
      * room tests (landing, resume), recognition at take-off and the
-     * "in the air" test of T20. The full prefab (`cells()`) is used for placement, block removal, chests
+     * "in the air" test. The full prefab (`cells()`) is used for placement, block removal, chests
      * and the chunk computation.
      */
     public List<Cell> flightCells() {
@@ -227,22 +227,22 @@ public final class StructureShape {
         return anchor;
     }
 
-    /** The burner, null for a prefab loaded without requireBurner (T43). */
+    /** The burner, null for a prefab loaded without requireBurner. */
     public Cell burner() {
         return burner;
     }
 
-    /** The seats (stools) of the basket, in the prefab frame (T21). The passenger limit is their number. */
+    /** The seats (stools) of the basket, in the prefab frame. The passenger limit is their number. */
     public List<Cell> seats() {
         return seats;
     }
 
-    /** The prefab cell at this position (prefab frame, before rotation), null if the prefab has no block there (T27). */
+    /** The prefab cell at this position (prefab frame, before rotation), null if the prefab has no block there. */
     public Cell cellAt(int x, int y, int z) {
         return byPosition.get(pack(x, y, z));
     }
 
-    /** True if the position (prefab frame) is in the box that contains all the prefab blocks (T27). */
+    /** True if the position (prefab frame) is in the box that contains all the prefab blocks. */
     public boolean inBounds(int x, int y, int z) {
         return x >= bounds[0] && y >= bounds[1] && z >= bounds[2] && x <= bounds[3] && y <= bounds[4] && z <= bounds[5];
     }

@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.function.IntPredicate;
 
 /**
- * T121: the single place computing where a deployment crate puts its structure. The three deploy interactions and the held-crate
+ * the single place computing where a deployment crate puts its structure. The three deploy interactions and the held-crate
  * preview call {@link #compute}, so the preview and the real placement can never disagree.
  */
 final class DeployPlacement {
@@ -57,7 +57,7 @@ final class DeployPlacement {
     }
 
     /**
-     * Steamboat placement check. Prefab layers at or under the steamboat's waterline (y <= -2 since 25 October 2026, -3 before)
+     * Steamboat placement check. Prefab layers at or under the steamboat's waterline (y <= -2)
      * are the hull under water and must be water, the layers above must be empty (no block, no liquid). Every cell is tested,
      * filler cells included.
      * @return null if the boat fits, otherwise the refusal key
@@ -158,7 +158,7 @@ final class DeployPlacement {
             Map.entry("Camping_Tent_Big_Crate", new Crate("Camping_Tent_Big.prefab.json", new Vector3i(0, 1, -1), Rotation.OneEighty)),
             Map.entry("Balloon_Station_Crate", new Crate("Balloon_Landing_zone.prefab.json", new Vector3i(0, 1, 0), Rotation.Ninety)),
             Map.entry("Boat_Station_Crate", new Crate("Boat_Station.prefab.json", new Vector3i(0, 1, 0), Rotation.OneEighty)),
-            // T153: the camp packs. Same values as the legacy tent crates; the sleeping bag is shifted by one block in X so the
+            // the camp packs. Same values as the legacy tent crates; the sleeping bag is shifted by one block in X so the
             // 3 x 3 camp is centred on the targeted block once turned.
             Map.entry("Camping_Pack_Bedroll", new Crate("Camping_Bedroll.prefab.json", new Vector3i(-1, 1, 0), Rotation.Ninety)),
             Map.entry("Camping_Pack_Tent", new Crate("Camping_Tent.prefab.json", new Vector3i(0, 1, -3), Rotation.Ninety)),

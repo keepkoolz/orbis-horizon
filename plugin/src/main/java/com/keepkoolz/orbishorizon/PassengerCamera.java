@@ -23,8 +23,8 @@ import org.joml.Vector3d;
 import java.util.logging.Level;
 
 /**
- * Passenger view of a flight (transit balloons, piloted balloons, airship, shared by BalloonManager and AirshipPassengers): T124 external
- * view (attachExternal) for every vehicle, balloons and airship since 16 October 2026 (the inside view was unpleasant): camera attached to the entity the client
+ * Passenger view of a flight (transit balloons, piloted balloons, airship, shared by BalloonManager and AirshipPassengers): external
+ * view (attachExternal) for every vehicle, balloons and airship: camera attached to the entity the client
  * sees, behind the horizontal movement of the vehicle and above, looking at the middle of it. The body is not mounted: it stays parked in
  * forced flight at zero speed, follows the vehicle by itself and is teleported back to the seat only beyond TransitConstants.BODY_SAFETY_DISTANCE.
  * Never throws.
@@ -62,7 +62,7 @@ final class PassengerCamera {
         return new double[]{Math.sin(theta), Math.cos(theta)};
     }
 
-    /** T124: camera distance (times the balloon size) and height (times the distance) of the external view, op setting, not saved. */
+    /** camera distance (times the balloon size) and height (times the distance) of the external view, op setting, not saved. */
     static volatile double distanceFactor = TransitConstants.VIEW_DISTANCE_FACTOR;
     static volatile double heightFactor = TransitConstants.VIEW_HEIGHT_FACTOR;
 
@@ -71,16 +71,16 @@ final class PassengerCamera {
     }
 
     /**
-     * T124: pure framing of the external view. (dirX, dirZ) is the horizontal direction from the target to the camera (any length),
+     * pure framing of the external view. (dirX, dirZ) is the horizontal direction from the target to the camera (any length),
      * size the largest dimension of the balloon: the camera sits distanceFactor * size away horizontally and heightFactor times that
-     * above the target. Rotation convention of the T115 external view (validated): yaw = atan2(wx, wz), pitch = atan2(-dy, horizontal).
+     * above the target. Rotation convention of the external view (validated): yaw = atan2(wx, wz), pitch = atan2(-dy, horizontal).
      * Pinned by TransitTests.externalView.
      */
     static ExternalView externalView(double dirX, double dirZ, double size, double distanceFactor, double heightFactor) {
         return externalView(dirX, dirZ, size, distanceFactor, heightFactor, 0);
     }
 
-    /** Extra horizontal recoil (blocks) added to the airship's external camera (user request, 16 October 2026). */
+    /** Extra horizontal recoil (blocks) added to the airship's external camera. */
     static final double AIRSHIP_EXTRA_DISTANCE = 8.0;
 
     /** Same with an extra horizontal recoil in blocks; the height stays heightFactor times the total recoil. */
@@ -130,7 +130,7 @@ final class PassengerCamera {
     }
 
     /**
-     * T124: sends the external view of a passenger (balloon or airship): camera attached to the entity the client sees, behind the travel direction
+     * sends the external view of a passenger (balloon or airship): camera attached to the entity the client sees, behind the travel direction
      * and above, looking at the middle of the balloon. The position offset is in the world frame (not turned by the client). Direction:
      * opposite to the horizontal move of the entity (before the first move: behind the heading, given by the source).
      * Re-sent by directionChanged. Never throws.
@@ -212,7 +212,7 @@ final class PassengerCamera {
      * Camera yaw of a transit passenger: the travel direction (departure to destination, horizontal), turned toward the outside of his
      * seat (seat minus nacelle centre) by at most TRANSIT_VIEW_SPREAD_DEG, so that every passenger sees where the balloon goes. Yaw
      * convention of the mod (forward = (-sin yaw, -cos yaw)), assumed to be the camera's once the camera sits on its own seat (the pi
-     * added in October 2026 made up for the camera placed on the opposite seat). Pure, pinned by TransitTests.transitViewYaw.
+     * once added made up for the camera placed on the opposite seat). Pure, pinned by TransitTests.transitViewYaw.
      */
     static float towardYaw(double travelDx, double travelDz, double outDx, double outDz) {
         double h = Math.atan2(-travelDx, -travelDz);
@@ -241,7 +241,7 @@ final class PassengerCamera {
 
     /**
      * A player already seated on a seat block when the vehicle takes off keeps the direction he was looking at: his head yaw becomes
-     * the camera yaw (decision of the user, 11 October 2026). To be called before he is unseated. Otherwise the yaw is assigned
+     * the camera yaw. To be called before he is unseated. Otherwise the yaw is assigned
      * automatically later (inside of the vehicle, or destination for a transit flight). Never throws.
      */
     static void keepSeatedLook(Store<EntityStore> store, BalloonFlight.Passenger p) {
@@ -286,7 +286,7 @@ final class PassengerCamera {
 
     /** Gives the normal camera back (CameraManager.resetCamera), to be called before any teleport to a drop point. Never throws. */
     static void reset(Store<EntityStore> store, BalloonFlight.Passenger p) {
-        PassengerSeatView.remove(store, p); // T118: anchor, mannequins and hidden body go with the camera, on every exit path
+        PassengerSeatView.remove(store, p); // anchor, mannequins and hidden body go with the camera, on every exit path
         if (!p.cameraOn) {
             return;
         }

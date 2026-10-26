@@ -11,7 +11,7 @@ import com.hypixel.hytale.server.core.modules.entity.damage.DeathComponent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 /**
- * Death of a player (T39). The game adds DeathComponent to the player's entity when they die (it is the same entity,
+ * Death of a player. The game adds DeathComponent to the player's entity when they die (it is the same entity,
  * its reference stays valid), the respawn systems (RespawnSystems.OnRespawnSystem) react to its
  * removal. This system follows the same model, on the add side: it warns BalloonManager, which removes the player from their
  * flight (pilot or passenger) before the respawn. The processing is deferred to the world thread.
@@ -32,7 +32,7 @@ public final class BalloonDeathSystem extends RefChangeSystem<EntityStore, Death
     public void onComponentAdded(Ref<EntityStore> ref, DeathComponent death, Store<EntityStore> store,
                                  CommandBuffer<EntityStore> commandBuffer) {
         BalloonManager.get().onPlayerDeath(store, ref);
-        // T93: a respawn point set on a tent bed without sleeping is fixed before the respawn.
+        // a respawn point set on a tent bed without sleeping is fixed before the respawn.
         com.hypixel.hytale.server.core.universe.world.World world = store.getExternalData().getWorld();
         world.execute(() -> TentBedSystem.patchRespawnPoints(store, ref, world));
     }

@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Block and chunk section access for the 0.7 server API (T99). Modelled on the game's /block get and /block set
+ * Block and chunk section access for the 0.7 server API. Modelled on the game's /block get and /block set
  * commands: reads go through a SectionReader, writes through BlockOperations on the section reference of the block.
  * Nothing here takes a World, and none of the readers or references may be kept in a field.
  */

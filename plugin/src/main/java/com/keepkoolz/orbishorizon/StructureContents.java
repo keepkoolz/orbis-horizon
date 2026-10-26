@@ -13,11 +13,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Contents of the containers of a placed structure, to drop them on the ground when it is packed (T46). Reuses the logic
+ * Contents of the containers of a placed structure, to drop them on the ground when it is packed. Reuses the logic
  * of BurnerFuel.takeFrom (processing benches) and BalloonCargo.takeFrom (containers), without the burner case:
  * for each cell of the rotated shape, every ProcessingBenchBlock (the tent's campfire) and every
  * ItemContainerBlock is copied then emptied. The containers are emptied before the blocks are removed, so the game drops nothing
- * extra (finding of T40): the plugin is the only way of dropping. Call on the world thread.
+ * extra (finding): the plugin is the only way of dropping. Call on the world thread.
  */
 final class StructureContents {
 

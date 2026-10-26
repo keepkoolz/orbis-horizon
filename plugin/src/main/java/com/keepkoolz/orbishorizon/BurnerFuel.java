@@ -29,7 +29,7 @@ import java.util.logging.Level;
  * Contents of the burner (Hotair_Balloon_Burner block) during a flight, and combustion.
  *
  * On the ground, the burner is a game processing bench (ProcessingBenchBlock component) modelled on
- * Bench_Tannery (T41): input and output slots only, no Fuel field in its JSON. The 3 input slots only
+ * Bench_Tannery: input and output slots only, no Fuel field in its JSON. The 3 input slots only
  * accept items of the Fuel resource (ResourceTypeId, ResourceFilter set by ProcessingBenchBlock.setupSlots): this is the
  * fuel. The game never burns this content: with no recipe (recipe null),
  * ProcessingBenchBlock.advanceProcessing returns immediately and BenchSystems$ProcessingBenchTick
@@ -39,7 +39,7 @@ import java.util.logging.Level;
  * BenchSystems$ProcessingBenchLifecycle), burns the fuel itself, then puts everything back into the
  * block on landing.
  *
- * Compatibility (T41): a burner placed before T41 has its fuel in the fuel container
+ * Compatibility: a burner placed before the tannery-style interface has its fuel in the fuel container
  * (3 slots). On load, setupSlots shrinks it to capacity 0 and the game drops whatever does not
  * fit into the world. BurnerMigrationSystem therefore runs before the game and moves it into the
  * inputs. takeFrom and fromBson (old recovery files, "fuel" key) also move any old fuel
@@ -65,7 +65,7 @@ final class BurnerFuel {
      * durations are short for a flight: raise it here if the flight ends too quickly.
      */
     static final double FUEL_DURATION_FACTOR = 1.0;
-    /** Number of input (fuel) slots in the burner JSON (T41). */
+    /** Number of input (fuel) slots in the burner JSON. */
     static final int INPUT_SLOTS = 3;
 
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
@@ -73,7 +73,7 @@ final class BurnerFuel {
     private static final Field FUEL_TIME = field("fuelTime");
     private static final Field NEXT_EXTRA = field("nextExtra");
 
-    /** Detached copies of the bench containers (same slots). The inputs hold the fuel (T41). */
+    /** Detached copies of the bench containers (same slots). The inputs hold the fuel. */
     private ItemContainer input;
     private final ItemContainer output;
     private final ProcessingBench.ExtraOutput extra;
@@ -116,7 +116,7 @@ final class BurnerFuel {
         return (f != null && !f.isEmpty()) || bench.getFuelTime() > 0;
     }
 
-    /** Seconds of burning left for a bench in place: current burn plus fuel items (T20). */
+    /** Seconds of burning left for a bench in place: current burn plus fuel items. */
     static double remainingSeconds(ProcessingBenchBlock bench) {
         double total = Math.max(0, bench.getFuelTime());
         ItemContainer f = bench.getInputContainer();
@@ -132,7 +132,7 @@ final class BurnerFuel {
     }
 
     /**
-     * Burns the in-place bench's fuel for dt seconds (T20, balloon stopped in mid-air).
+     * Burns the in-place bench's fuel for dt seconds (balloon stopped in mid-air).
      * Same logic as burn: the bench's live containers are modified, the current burn time
      * and the charcoal counter are rewritten by reflection. Returns the outputs that do not
      * fit in the output slots (to be dropped into the world).
@@ -153,7 +153,7 @@ final class BurnerFuel {
         BurnerFuel b = new BurnerFuel(copy(bench.getInputContainer()),
                 copy(bench.getOutputContainer()), config != null ? config.getExtraOutput() : null,
                 bench.getFuelTime(), getInt(bench, NEXT_EXTRA));
-        // T41: an old fuel container that is still filled (pre-T41 burner whose contents
+        // an old fuel container that is still filled (old burner whose contents
         // were not moved on load) goes into the kept inputs, with no duplicate (it is emptied).
         ItemContainer legacy = bench.getFuelContainer();
         if (legacy != null && legacy.getCapacity() > 0 && !legacy.isEmpty()) {
@@ -167,10 +167,10 @@ final class BurnerFuel {
     }
 
     /**
-     * JSON form for the recovery file (T19): both containers (inputs and outputs, capacity and
+     * JSON form for the recovery file: both containers (inputs and outputs, capacity and
      * non-empty stacks by index), the current burn time, the charcoal counter and the surplus
-     * outputs. Files from before T41 also have a "fuel" key (fuel container), which fromBson
-     * moves into the inputs. T41 no longer writes this key.
+     * outputs. Files from before also have a "fuel" key (fuel container), which fromBson
+     * moves into the inputs. The current code no longer writes this key.
      */
     BsonDocument toBson() {
         BsonDocument d = new BsonDocument();
@@ -195,7 +195,7 @@ final class BurnerFuel {
                 containerFromBson(d.get("output")), null,
                 d.containsKey("fuelTime") ? d.getNumber("fuelTime").doubleValue() : 0,
                 d.containsKey("nextExtra") ? d.getNumber("nextExtra").intValue() : 0);
-        // Recovery file from before T41: the fuel was in the "fuel" container, it goes into the inputs.
+        // Old recovery file: the fuel was in the "fuel" container, it goes into the inputs.
         b.mergeLegacyFuel(containerFromBson(d.get("fuel")));
         if (d.containsKey("overflow")) {
             for (BsonValue v : d.getArray("overflow")) {
@@ -206,7 +206,7 @@ final class BurnerFuel {
     }
 
     /**
-     * T41: adds the contents of an old fuel container to the inputs. Each stack takes its slot index
+     * adds the contents of an old fuel container to the inputs. Each stack takes its slot index
      * if the slot is free (old slots 0 to 2 are inputs 0 to 2), otherwise it goes into the first free place.
      * What does not fit goes into the surplus outputs (dropped on
      * landing), nothing is lost.
@@ -269,8 +269,8 @@ final class BurnerFuel {
         BsonDocument d = v.asDocument();
         short capacity = (short) d.getNumber("capacity").intValue();
         if (capacity <= 0) {
-            // A container of capacity 0 (T36: empty Input, or the fuel container of a bench with no
-            // Fuel field since T41): SimpleItemContainer rejects a capacity of 0.
+            // A container of capacity 0 (empty Input, or the fuel container of a bench with no
+            // Fuel field ): SimpleItemContainer rejects a capacity of 0.
             return null;
         }
         ItemContainer c = new SimpleItemContainer(capacity);
@@ -335,7 +335,7 @@ final class BurnerFuel {
     }
 
     /**
-     * T40: all kept items, then the containers are emptied (a pending put-back retry can no longer drop
+     * all kept items, then the containers are emptied (a pending put-back retry can no longer drop
      * them a second time).
      */
     List<ItemStack> takeAllItems() {
@@ -398,7 +398,7 @@ final class BurnerFuel {
 
     /**
      * Burns for dt seconds (same logic as ProcessingBenchBlock.consumeFuelForDuration). Returns the part of dt that could
-     * not be burned because the fuel ran out (0 if all of it was burned): T57 pools several engines with it.
+     * not be burned because the fuel ran out (0 if all of it was burned): the airship pools several engines with it.
      */
     double burn(double dt) {
         double left = dt;

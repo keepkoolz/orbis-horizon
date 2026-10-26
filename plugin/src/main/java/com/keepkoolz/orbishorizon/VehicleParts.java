@@ -26,7 +26,7 @@ import java.util.logging.Level;
  * "<BaseId>_Part1", "<BaseId>_Part2"... (same pivot and same root, no particles). Each part is carried by its own entity, placed exactly on
  * the entity it completes and with the same yaw, mounted on it with a zero offset (like the lights).
  *
- * A flight has a Group: the parts of the entity mounted on the pilot (main) and, with dual rendering (T82), the parts of the observer
+ * A flight has a Group: the parts of the entity mounted on the pilot (main) and, with dual rendering, the parts of the observer
  * entity (obs). Visibility rules follow the carrying entity. Model changes (flame, off, boost, thrust) only concern part 0.
  */
 final class VehicleParts {
@@ -199,8 +199,8 @@ final class VehicleParts {
     /**
      * A part rides what its host rides when the host is mounted on an entity with a zero offset (the vehicle entity mounted on its
      * pilot): same point and yaw, without a chain of mounts. A part mounted on an entity that is itself mounted shook in flight, more
-     * with speed (large balloon in 2 parts against the small one in 1, airship in 3, 11 October 2026, same effect as the chain mount of
-     * T115). Otherwise (pilotless flight, airship landing alignment, observer entity) the part rides its host. Remounts only on a change.
+     * with speed (large balloon in 2 parts against the small one in 1, airship in 3, same effect as the chain mount of
+     * Otherwise (pilotless flight, airship landing alignment, observer entity) the part rides its host. Remounts only on a change.
      */
     private static void remount(Store<EntityStore> store, Ref<EntityStore> part, Ref<EntityStore> target) {
         MountedComponent mc = store.getComponent(part, MountedComponent.getComponentType());
@@ -210,7 +210,7 @@ final class VehicleParts {
         store.putComponent(part, MountedComponent.getComponentType(), new MountedComponent(target, new Vector3f(), MountController.Minecart));
     }
 
-    /** Dual rendering ends (T82): the observer parts go, the main parts become visible to everybody. */
+    /** Dual rendering ends: the observer parts go, the main parts become visible to everybody. */
     static void collapse(Store<EntityStore> store, Group g) {
         if (g == null) {
             return;

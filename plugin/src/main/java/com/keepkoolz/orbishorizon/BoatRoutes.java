@@ -205,7 +205,7 @@ final class BoatRoutes {
 
     private static final Book BOOK = new Book();
     /** Version of boat-routes.json: 2 = waypoints of the rotation centre (1 joined the pivots). */
-    static final int VERSION = 4; // 4: new berth and small shuttle (3: wider clearance (9) and the turn clearance at corners)
+    static final int VERSION = 4; // bump when the route shape or clearances change, saved routes are recomputed
 
     static void load(Path dataDir) {
         BOOK.load(dataDir.resolve("boat-routes.json"));

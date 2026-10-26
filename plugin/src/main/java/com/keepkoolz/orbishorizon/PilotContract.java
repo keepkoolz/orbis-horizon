@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 
-/** The pilot contract item and its purchase from a station master (lot 2 of the NPC airship pilot). */
+/** The pilot contract item and its purchase from a station master. */
 final class PilotContract {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 

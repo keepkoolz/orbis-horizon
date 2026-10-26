@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.11
+
+### Added
+
+- The four gems of the airship recipe wait for you in the chest of the captain's cabin when you set up the airship.
+
+### Changed
+
+- The station master now only lists the stations you know: the ones you have discovered by passing near them, the ones you set up, and the ones a fellow traveller shared from their map.
+- Pilots only know the way to the places their vehicle has already been: a station is discovered when the vehicle passes near it. Calling your airship to a station works only if the airship has discovered that station.
+- The large hot air balloon is cheaper to build: 150 red wool, 150 white wool, 20 iron bars, 10 thorium bars and 30 hardwood planks. It no longer needs cobalt or fire essence.
+- The small hot air balloon needs 20 iron bars instead of 38.
+- The animal transport balloon is cheaper too: 10 thorium bars, 150 white wool and 150 green wool, like the large balloon.
+- The Cloudwork airship is now the true goal of the mod and costs much more: 200 bars each of iron, thorium, adamantite, cobalt and copper, 100 fire essences, 30 heavy leathers, one zephyr, sapphire, ruby and emerald, and the core of the Gobliterator that powers its thrusters. It now needs 500 white wool instead of 750.
+
+### Fixed
+
+- Pilots sit on their stool again, instead of sitting on the floor next to it, on the airship, the steamboat and the large balloon.
+- A world no longer crashes when it unloads the place where a seated pilot is.
+- Players who are not operators can forget their wake-up spot and pack up their camp from the world map.
+
 ## v1.10
 
 ### Added
