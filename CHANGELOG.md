@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.12
+
+### Added
+
+- Stations now appear by themselves as new land is generated. Balloon stations stand near the portals of the Forgotten Temple, and ports are built along sea coasts, each with a partner port across the water for the shuttle boat. They get invented names, belong to nobody and work like the stations you set up yourself. Land that was explored before you installed this version never gets one.
+- Operators have a configuration window, opened with `/orbishorizon config`. It switches any recipe of the mod on or off for everyone at once, with a search box, and sets generated stations, map marker sharing, camp packs on the back and passenger protection.
+- New operator commands: `/orbishorizon station nearest` takes you to the nearest station, `station planned` to the nearest generated station that is still waiting for its land, and `station worldgen on|off|show` switches generated stations on or off.
+
+### Changed
+
+- A balloon station is built from the stone of the region and the wood of the trees around it, whether it comes from a crate or from the world.
+- Shuttle boats can sail much further between two boat stations, up to about 4,000 blocks of water.
+- The shuttle boat moors against the pier facing the way it came in.
+- The hut of a boat station stands on a plank floor, so the station master always has firm ground under his feet.
+- A boat station can no longer be set up where the shuttle boat would have no way out to open water.
+- The passenger protection chosen by an operator is kept when the server restarts.
+- When an operator turns marker sharing off, everyone only sees their own vehicles, tents and the stations they discovered themselves. Nothing shared is lost, it comes back when sharing is turned on again.
+
+### Fixed
+
+- Pilots look towards the helm or the bow, and seated pilots look the way their seat faces, on the airship, the steamboat, the shuttle boat and the large balloon.
+- A station master no longer appears twice when its station loads late.
+- A station crate recipe switched off by an operator no longer shows at the Explorer's workbench.
+
 ## v1.11
 
 ### Added

@@ -79,6 +79,11 @@ final class ShuttleState {
     boolean sidewaysAbandoned;
     /** Next time the sections around the destination berth may be asked to load again. */
     long loadRetryMs;
+    /**
+     * Heading of the arrival berth, chosen once per arrival by BoatAutopilot: true = the opposite of the usual berth heading, false =
+     * the usual one, null = not chosen yet.
+     */
+    Boolean berthFlip;
     /** The route ends at the pre-berth point: once turned there, the shuttle slides in to the berth centre. */
     boolean slideIn;
     /** Look-ahead (BoatAutopilot): next scan time, detour offsets tried for the obstacle ahead, detours inserted on this leg. */
@@ -123,6 +128,11 @@ final class ShuttleState {
         this.waypoints = new ArrayList<>(waypoints);
         this.phase = phase;
         this.phaseSinceMs = now;
+    }
+
+    /** True when the shuttle berths with the opposite heading (false while not chosen). */
+    boolean flipped() {
+        return Boolean.TRUE.equals(berthFlip);
     }
 
     void setPhase(Phase p, long now) {

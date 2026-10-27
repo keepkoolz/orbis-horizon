@@ -205,7 +205,7 @@ final class BoatRoutes {
 
     private static final Book BOOK = new Book();
     /** Version of boat-routes.json: 2 = waypoints of the rotation centre (1 joined the pivots). */
-    static final int VERSION = 4; // bump when the route shape or clearances change, saved routes are recomputed
+    static final int VERSION = 5; // bump when the route shape or clearances change, saved routes are recomputed
 
     static void load(Path dataDir) {
         BOOK.load(dataDir.resolve("boat-routes.json"));
@@ -220,26 +220,52 @@ final class BoatRoutes {
         return s.rotation.rotateYaw(local, new Vector3i()).add(s.origin);
     }
 
-    /** World rotation of the moored shuttle: station rotation plus the berth rotation. */
+    /**
+     * World rotation of the moored shuttle: station rotation plus the berth rotation, plus a half turn when it lies the other way
+     * round (flipped). The berth cell and the rotation centre are the same for both headings, the boarding steps (prefab x +-2, z 0)
+     * are symmetric about the prefab origin, so a step touches the pier either way. Pure.
+     */
+    static Rotation berthRotation(Rotation stationRotation, boolean flipped) {
+        Rotation r = stationRotation.add(Deployables.BOAT_STATION_BERTH_ROTATION);
+        return flipped ? r.add(Rotation.OneEighty) : r;
+    }
+
+    /** World rotation of the shuttle moored the usual way (not flipped). */
     static Rotation berthRotation(TransitNetwork.Station s) {
-        return s.rotation.add(Deployables.BOAT_STATION_BERTH_ROTATION);
+        return berthRotation(s.rotation, false);
+    }
+
+    /** World rotation of the shuttle moored with this heading. */
+    static Rotation berthRotation(TransitNetwork.Station s, boolean flipped) {
+        return berthRotation(s.rotation, flipped);
     }
 
     /** Cell of the pivot of the moored shuttle. */
     static Vector3i berthPivotCell(TransitNetwork.Station s) {
+        return berthPivotCell(s, false);
+    }
+
+    /** Cell of the pivot of the shuttle moored with this heading. */
+    static Vector3i berthPivotCell(TransitNetwork.Station s, boolean flipped) {
         int[] pv = Deployables.STEAMBOAT_PUBLIC_PIVOT;
-        return berthRotation(s).rotateYaw(new Vector3i(pv[0], pv[1], pv[2]), new Vector3i()).add(berthOrigin(s));
+        return berthRotation(s, flipped).rotateYaw(new Vector3i(pv[0], pv[1], pv[2]), new Vector3i()).add(berthOrigin(s));
     }
 
     /** World position of the pivot of the moored shuttle (cell centre in x and z, like AirshipManager.initFlight). */
     static Vector3d berthPivot(TransitNetwork.Station s) {
-        Vector3i c = berthPivotCell(s);
+        return berthPivot(s, false);
+    }
+
+    /** World position of the pivot of the shuttle moored with this heading. */
+    static Vector3d berthPivot(TransitNetwork.Station s, boolean flipped) {
+        Vector3i c = berthPivotCell(s, flipped);
         return new Vector3d(c.x + 0.5, c.y, c.z + 0.5);
     }
 
     /**
      * World position of the rotation centre of the moored shuttle: the point AirshipManager turns the ship around (prefab x 0,
-     * z rotationCenterZ, at the pivot height). The water routes join these centres, since a turn keeps the centre fixed.
+     * z rotationCenterZ, at the pivot height). The water routes join these centres, since a turn keeps the centre fixed. It is the same
+     * point for both headings (the prefab origin).
      */
     static Vector3d berthCentre(TransitNetwork.Station s) {
         return AirshipManager.get().centerWorld(Deployables.STEAMBOAT_PUBLIC, berthPivot(s), berthTheta(s));
@@ -254,6 +280,19 @@ final class BoatRoutes {
     /** Heading of the moored shuttle. */
     static double berthTheta(TransitNetwork.Station s) {
         return berthRotation(s).getRadians();
+    }
+
+    /** Heading of the shuttle moored with this heading (the usual one, or the opposite). */
+    static double berthTheta(TransitNetwork.Station s, boolean flipped) {
+        return berthRotation(s, flipped).getRadians();
+    }
+
+    /**
+     * True when the opposite berth heading is closer to the heading of the shuttle than the usual one (more than a quarter turn away
+     * from it). A tie keeps the usual heading. Pure.
+     */
+    static boolean preferFlipped(double theta, double usualTheta) {
+        return Math.abs(AirshipMath.wrapPi(theta - usualTheta)) > Math.PI / 2 + 1e-9;
     }
 
     /**
@@ -614,6 +653,17 @@ final class BoatRoutes {
             }
             return unknown ? WaterRoute.Cell.UNKNOWN : WaterRoute.Cell.WATER;
         };
+    }
+
+    /**
+     * True when the shuttle moored at the berth of s can reach open water under the route rules (WaterRoute.exitsToOpenWater).
+     * s need not be registered. Reads the loaded chunks only: an unloaded column counts as blocked.
+     */
+    static boolean hasOpenWaterExit(World world, TransitNetwork.Station s) {
+        Vector3i pa = berthCentreCell(s);
+        int surface = surfaceY(s);
+        SectionReader[] holder = {new SectionReader(world.getChunkStore())};
+        return WaterRoute.exitsToOpenWater(probe(holder, surface, surface + hullHeight()), pa.x, pa.z);
     }
 
     /** One tick of the route work of this world. Never throws. */

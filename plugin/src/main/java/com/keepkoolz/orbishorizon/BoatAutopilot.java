@@ -486,6 +486,7 @@ final class BoatAutopilot {
         st.slide = ShuttleState.Slide.NONE; // a new list starts a new manoeuvre
         st.slideIn = false;
         st.fullRoute = null;
+        st.berthFlip = null; // a new list is a new arrival: the berth heading is chosen again
         if (wps.isEmpty()) {
             return;
         }
@@ -556,18 +557,69 @@ final class BoatAutopilot {
         if (dBerth < BoatRoutes.BERTH_STANDOFF) {
             LOGGER.at(Level.INFO).log("Navette %s : déjà à moins de %d blocs du pont de %s, arrivée sans manœuvre par le travers", f.id,
                     BoatRoutes.BERTH_STANDOFF, arr.name);
-        } else if (openWater(world, am, hull, f, pre, BoatRoutes.berthTheta(arr))) {
-            List<int[]> out = BoatRoutes.arriveRoute(wps, berth, pre, BoatRoutes.BERTH_STANDOFF);
-            st.fullRoute = wps;
-            st.waypoints = out;
-            st.arrivalFor = out;
-            st.preparedFor = out;
-            st.index = Math.min(st.index, out.size() - 1);
-            st.slideIn = true;
-            st.detoursSinceTrim = 0;
         } else {
-            LOGGER.at(Level.INFO).log("Navette %s : point de pré-amarrage de %s non dégagé, arrivée sans manœuvre par le travers", f.id,
-                    arr.name);
+            List<int[]> out = BoatRoutes.arriveRoute(wps, berth, pre, BoatRoutes.BERTH_STANDOFF);
+            // The shuttle will reach the pre-berth point heading along its last leg: that heading picks the berth heading.
+            double approach = f.theta;
+            if (out.size() >= 2) {
+                int[] before = out.get(out.size() - 2);
+                approach = targetHeading(before[0] + 0.5, before[1] + 0.5, out.get(out.size() - 1));
+            }
+            boolean flip = chooseBerth(world, st, arr, approach);
+            boolean open = openWater(world, am, hull, f, pre, BoatRoutes.berthTheta(arr, flip));
+            if (!open && flip) {
+                st.berthFlip = false; // the opposite heading does not have the room at the pre-berth point: the usual one
+                flip = false;
+                open = openWater(world, am, hull, f, pre, BoatRoutes.berthTheta(arr, false));
+            }
+            if (open) {
+                st.fullRoute = wps;
+                st.waypoints = out;
+                st.arrivalFor = out;
+                st.preparedFor = out;
+                st.index = Math.min(st.index, out.size() - 1);
+                st.slideIn = true;
+                st.detoursSinceTrim = 0;
+            } else {
+                st.berthFlip = null; // not trimmed: the heading is chosen at the berth
+                LOGGER.at(Level.INFO).log("Navette %s : point de pré-amarrage de %s non dégagé, arrivée sans manœuvre par le travers", f.id,
+                        arr.name);
+            }
+        }
+    }
+
+    /**
+     * Berth heading of this arrival, chosen once (the answer is kept in the state until a new route list): the one of the two headings
+     * closest to the heading the shuttle comes with, the opposite one only when the hull fits at the berth in that direction (same
+     * water and clearance test as the placement of the station, waterline 0, read in the live world).
+     */
+    private static boolean chooseBerth(World world, ShuttleState st, TransitNetwork.Station arr, double theta) {
+        Boolean decided = st.berthFlip;
+        if (decided != null) {
+            return decided;
+        }
+        boolean flip = BoatRoutes.preferFlipped(theta, BoatRoutes.berthTheta(arr)) && berthFits(world, arr, true);
+        st.berthFlip = flip;
+        if (flip) {
+            LOGGER.at(Level.INFO).log("Navette vers %s : amarrage dans le sens d'arrivée (cap opposé au cap habituel)", arr.name);
+        }
+        return flip;
+    }
+
+    /** True when the shuttle hull at the berth of this station with this heading is on clear water (the placement test). Never throws. */
+    static boolean berthFits(World world, TransitNetwork.Station s, boolean flipped) {
+        try {
+            DeployPlacement.Fault fault = DeployPlacement.steamboatFault(Deployables.STEAMBOAT_PUBLIC.shape(), BoatRoutes.berthOrigin(s),
+                    BoatRoutes.berthRotation(s, flipped), DeployPlacement.worldState(world), 0);
+            if (fault != null) {
+                LOGGER.at(Level.INFO).log("Station maritime %s : amarrage dans l'autre sens impossible (%s en %s)", s.name, fault.key(),
+                        fault.at());
+            }
+            return fault == null;
+        } catch (IOException | RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Station maritime %s : contrôle de l'amarrage dans l'autre sens en échec", s.name);
+            Telemetry.error("transit", e, Telemetry.kindId(Deployables.STEAMBOAT_PUBLIC), null);
+            return false;
         }
     }
 
@@ -648,7 +700,7 @@ final class BoatAutopilot {
     /** Centre on the berth centre (or on the pre-berth point): turn around it to the berth heading, slide in if needed, then docked. */
     private static void berth(Store<EntityStore> store, World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f,
                               ShuttleState st, double dt, long now) {
-        double goal = st.to != null ? BoatRoutes.berthTheta(st.to) : st.goalTheta;
+        double goal = st.to != null ? BoatRoutes.berthTheta(st.to, chooseBerth(world, st, st.to, f.theta)) : st.goalTheta;
         double err = Double.isNaN(goal) ? 0 : AirshipMath.wrapPi(goal - f.theta);
         if (Math.abs(err) > 1e-4) {
             AirshipAutopilot.yawStep(world, am, hull, f, err, dt, now); // the centre stays where it is

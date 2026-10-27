@@ -44,6 +44,10 @@ A station is a stone walkway with a landing pad at its end and a little hut for 
 
 A boat station is a wooden pier on a shore with its own station master. Pick another boat station and a small shuttle boat comes alongside the pier. Step aboard during the countdown and it sails you there along the water.
 
+### Stations in the wild
+
+You will not always find an empty world. As you explore new land, balloon stations appear near the portals of the Forgotten Temple and ports rise along the sea coasts, with a partner port waiting across the water. They have their own names and belong to nobody: discover one, talk to its station master and travel.
+
 Each trip, by balloon or by boat, costs a ticket paid in life essences by the traveller who picks the destination. If the trip never happens, the ticket is refunded.
 
 ## Before you set off

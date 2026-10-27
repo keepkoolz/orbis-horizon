@@ -36,6 +36,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -94,13 +95,14 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
             fail(context);
             return;
         }
+        Deployables.Kind kind = prefabPath != null ? Deployables.forPrefab(prefabPath) : null;
         // Recipe enabled: anyone may place a station. Disabled: only the creative crate, and only ops.
-        if (!TransitSettings.recipeEnabled() && !StructureRemoval.isOp(playerRef.getUuid())) {
+        String crateId = StationSpec.of(kind == null ? null : kind.id).crateId();
+        if (!RecipeToggles.enabled(crateId) && !StructureRemoval.isOp(playerRef.getUuid())) {
             playerRef.sendMessage(Texts.t("transit.deploy.opOnly"));
             fail(context);
             return;
         }
-        Deployables.Kind kind = prefabPath != null ? Deployables.forPrefab(prefabPath) : null;
         Path path = prefabPath != null ? PrefabStore.get().findAssetPrefabPath(prefabPath) : null;
         boolean boatStation = kind == Deployables.BOAT_STATION;
         if ((kind != Deployables.STATION && !boatStation) || path == null) {
@@ -139,13 +141,19 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
                 fail(context);
                 return;
             }
-            if (!checkBoatRoom(world, playerRef, station, origin, rotation)) {
+            Refusal refusal = boatRoomRefusal(world, station, origin, rotation);
+            if (refusal != null) {
+                refusal.send(playerRef);
                 fail(context);
                 return;
             }
-        } else if (!checkBalloonRoom(world, playerRef, station, balloon, origin, rotation)) {
-            fail(context);
-            return;
+        } else {
+            Refusal refusal = balloonRoomRefusal(world, station, balloon, origin, rotation);
+            if (refusal != null) {
+                refusal.send(playerRef);
+                fail(context);
+                return;
+            }
         }
         // Distance to the other stations of this world.
         double min = TransitConstants.MIN_STATION_DISTANCE;
@@ -155,27 +163,18 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
             fail(context);
             return;
         }
+        if (boatStation && !boatHasOpenWater(world, origin, rotation, kind)) {
+            playerRef.sendMessage(Texts.t("transit.deploy.boatNoOpenWater"));
+            fail(context);
+            return;
+        }
 
-        // Boat station: the wood follows the biome around the pier (read before the paste, applied after it).
-        BiomeWood.Wood wood = boatStation ? BiomeWood.woodAt(world, origin.x, origin.z, true) : null;
+        // Wood and stone follow the biome and zone (read before the paste, applied after it).
+        Look look = readLook(world, kind, origin);
         int flags = (force ? 1 : 0) | 8; // same options as SpawnPrefab
         BalloonManager.pasteKeepingTerrain(buffer, world, station, origin, rotation, flags, commandBuffer, kind.id,
                 Ownership.of(playerRef.getUuid(), null), boatStation ? Integer.MIN_VALUE : Deployables.STATION_GRASS_Y); // station: owner kept as before, no map marker (out of scope)
-        if (boatStation && wood != null) {
-            try {
-                boolean custom = !wood.equals(BiomeWood.DEFAULT);
-                // Registry first (null for the default wood, so a stale entry cannot keep an old wood): a failure halfway through
-                // the rewrite must not leave renamed blocks with a registry saying "no wood".
-                BalloonRegistry.setWood(world, origin, rotation, kind.id, custom ? wood.species() : null);
-                if (custom) {
-                    int changed = applyWood(world, station, origin, rotation, wood);
-                    LOGGER.at(Level.INFO).log("Station maritime : %d bloc(s) réécrits en %s", changed, wood.species());
-                }
-            } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Bois de la station maritime non appliqué");
-                Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
-            }
-        }
+        applyLook(world, station, origin, rotation, kind, look);
         Telemetry.count(boatStation ? "deploy.boatStation" : "deploy.station");
         // The station is locked from the paste (registry). It joins the network when its name is chosen: the name window opens
         // here, deferred like the other entity-side work started from an interaction.
@@ -209,25 +208,117 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
     }
 
     /**
+     * True when the shuttle moored at the berth of a boat station placed at origin can sail out to open water. A failure of the
+     * check itself counts as a refusal. Never throws.
+     */
+    private static boolean boatHasOpenWater(World world, Vector3i origin, Rotation rotation, Deployables.Kind kind) {
+        try {
+            TransitNetwork.Station probe = new TransitNetwork.Station("", world.getName(), new Vector3i(origin), rotation, null, null,
+                    new ArrayList<>(), kind.id);
+            if (BoatRoutes.hasOpenWaterExit(world, probe)) {
+                return true;
+            }
+            LOGGER.at(Level.INFO).log("Station maritime refusée en (%d, %d, %d) : pas de sortie vers le large", origin.x, origin.y, origin.z);
+            return false;
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Station maritime : recherche d'une sortie vers le large en échec, pose refusée");
+            Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
+            return false;
+        }
+    }
+
+    /** Wood and stone read from the generator before a paste. A field is null when it does not apply to the kind. */
+    record Look(BiomeWood.Wood wood, BiomeStone.Stone stone) {
+    }
+
+    /** Reads the wood (boat station: around the pier) or the wood and stone (balloon station: at the origin) of the biome and zone. */
+    static Look readLook(World world, Deployables.Kind kind, Vector3i origin) {
+        if (kind == Deployables.BOAT_STATION) {
+            return new Look(BiomeWood.woodAt(world, origin.x, origin.z, true), null);
+        }
+        if (Deployables.STATION_KIND.equals(kind.id)) {
+            return new Look(BiomeWood.stationWoodAt(world, origin.x, origin.z, true), BiomeStone.stoneAt(world, origin.x, origin.z));
+        }
+        return new Look(null, null);
+    }
+
+    /** Registers then rewrites the wood (and stone) of a pasted station, registry first so a failure leaves no renamed blocks unrecorded. */
+    static void applyLook(World world, StructureShape station, Vector3i origin, Rotation rotation, Deployables.Kind kind, Look look) {
+        if (kind == Deployables.BOAT_STATION) {
+            BiomeWood.Wood wood = look.wood();
+            if (wood == null) {
+                return;
+            }
+            try {
+                boolean custom = !wood.equals(BiomeWood.DEFAULT);
+                // Registry first (null for the default wood, so a stale entry cannot keep an old wood): a failure halfway through
+                // the rewrite must not leave renamed blocks with a registry saying "no wood".
+                BalloonRegistry.setWood(world, origin, rotation, kind.id, custom ? wood.species() : null);
+                if (custom) {
+                    int changed = applyWood(world, station, origin, rotation, wood);
+                    LOGGER.at(Level.INFO).log("Station maritime : %d bloc(s) réécrits en %s", changed, wood.species());
+                }
+            } catch (RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Bois de la station maritime non appliqué");
+                Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
+            }
+        } else if (Deployables.STATION_KIND.equals(kind.id)) {
+            applyBalloonLook(world, station, origin, rotation, kind, look.wood(), look.stone());
+        }
+    }
+
+    private static void applyBalloonLook(World world, StructureShape station, Vector3i origin, Rotation rotation, Deployables.Kind kind,
+                                         BiomeWood.Wood wood, BiomeStone.Stone stone) {
+        try {
+            boolean customWood = wood != null;
+            boolean customStone = stone != null && !stone.equals(BiomeStone.DEFAULT);
+            BalloonRegistry.setWood(world, origin, rotation, kind.id, customWood ? wood.species() : null);
+            BalloonRegistry.setStone(world, origin, rotation, kind.id, customStone ? stone.family() : null);
+            int changed = 0;
+            if (customWood) {
+                changed += rewrite(world, station, origin, rotation, n -> BiomeWood.remapStation(n, wood));
+            }
+            if (customStone) {
+                changed += applyStone(world, station, origin, rotation, stone);
+            }
+            LOGGER.at(Level.INFO).log("Station : %d bloc(s) réécrits (bois %s, pierre %s)", changed,
+                    customWood ? wood.species() : "d'origine", customStone ? stone.family() : "d'origine");
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Bois et pierre de la station non appliqués");
+            Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
+        }
+    }
+
+    /** Rewrites the basalt bricks of a pasted balloon station to the stone of its zone. Returns the number of cells rewritten. */
+    static int applyStone(World world, StructureShape base, Vector3i origin, Rotation rotation, BiomeStone.Stone stone) {
+        return rewrite(world, base, origin, rotation, n -> BiomeStone.remap(n, stone));
+    }
+
+    /**
      * Rewrites the origin cells (filler 0) of a pasted boat station whose name changes with the wood. The rotation index is
      * read back from the world, where the paste already composed the cell rotation with the station rotation. BlockOperations
      * writes the filler cells of a multi-cell block itself. Returns the number of cells rewritten.
      */
     static int applyWood(World world, StructureShape base, Vector3i origin, Rotation rotation, BiomeWood.Wood wood) {
+        return rewrite(world, base, origin, rotation, n -> BiomeWood.remap(n, wood));
+    }
+
+    private static int rewrite(World world, StructureShape base, Vector3i origin, Rotation rotation,
+                               java.util.function.UnaryOperator<String> rename) {
         SectionReader reader = new SectionReader(world.getChunkStore());
         int changed = 0;
         for (StructureShape.Cell c : base.cells()) {
             if (c.filler() != 0) {
                 continue;
             }
-            String name = BiomeWood.remap(c.name(), wood);
+            String name = rename.apply(c.name());
             if (name.equals(c.name())) {
                 continue;
             }
             int id = BlockType.getAssetMap().getIndex(name);
             BlockType type = id < 0 ? null : BlockType.getAssetMap().getAsset(id);
             if (type == null) {
-                LOGGER.at(Level.WARNING).log("Bois de la station maritime : bloc inconnu %s", name);
+                LOGGER.at(Level.WARNING).log("Station : bloc inconnu %s", name);
                 continue;
             }
             Vector3i p = c.rotated(rotation).add(origin);
@@ -242,9 +333,65 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
         return changed;
     }
 
-    /** Room test of the balloon station (unchanged path): station cells above the grass layer, the docked balloon, no liquid. */
-    private boolean checkBalloonRoom(World world, PlayerRef playerRef, StructureShape station, StructureShape balloon,
-                                     Vector3i origin, Rotation rotation) {
+    /**
+     * A room test refusal: the chat key, the offending block and cell when the message names them, and a second key sent after
+     * the first (boat berth), and for a berth refusal whether the faulty cell is a hull cell (null for the other refusals). A null key
+     * is a refusal with no message to the player.
+     */
+    record Refusal(String key, String block, Vector3i at, String detailKey, Boolean hull) {
+        Refusal(String key, String block, Vector3i at, String detailKey) {
+            this(key, block, at, detailKey, null);
+        }
+
+        static Refusal of(String key) {
+            return new Refusal(key, null, null, null);
+        }
+
+        static Refusal at(String key, String block, int x, int y, int z) {
+            return new Refusal(key, block, new Vector3i(x, y, z), null);
+        }
+
+        /** Sends the refusal messages to the player. */
+        void send(PlayerRef player) {
+            if (key == null) {
+                return;
+            }
+            com.hypixel.hytale.server.core.Message m = Texts.t(key);
+            if (block != null) {
+                m = m.param("block", block);
+            }
+            if (at != null) {
+                m = m.param("x", at.x).param("y", at.y).param("z", at.z);
+            }
+            player.sendMessage(m);
+            if (detailKey != null) {
+                player.sendMessage(Texts.t(detailKey));
+            }
+        }
+    }
+
+    /**
+     * Room test of the balloon station: station cells above the grass layer and the docked balloon, no liquid. Null when there is
+     * room, else the refusal.
+     */
+    static Refusal balloonRoomRefusal(World world, StructureShape station, StructureShape balloon, Vector3i origin, Rotation rotation) {
+        return balloonRoomRefusal(world, station, balloon, origin, rotation, false);
+    }
+
+    /** Position of the docked balloon (prefab origin of the balloon) for a station at origin. */
+    static Vector3i dockOrigin(Vector3i origin, Rotation rotation) {
+        return rotation.rotateYaw(new Vector3i(Deployables.STATION_DOCK_ORIGIN[0], Deployables.STATION_DOCK_ORIGIN[1],
+                Deployables.STATION_DOCK_ORIGIN[2]), new Vector3i()).add(origin);
+    }
+
+    /** Pure rule: a block refuses the room when it is solid, unless vegetation to be cleared is treated as empty. */
+    static boolean blocksRoom(String blockId, boolean solid, boolean removableIsEmpty) {
+        return solid && !(removableIsEmpty && GenClear.removable(blockId));
+    }
+
+    /** Same test; with removableIsEmpty, blocks GenClear would clear count as empty (nothing is cleared by the test). */
+    static Refusal balloonRoomRefusal(World world, StructureShape station, StructureShape balloon, Vector3i origin, Rotation rotation,
+                                      boolean removableIsEmpty) {
         // Room test: the station cells above the grass layer and the balloon resting at the dock. The grass layer is the ground
         // level (the targeted block): it is never tested. Its soil yields to the existing terrain and its stone path replaces it
         // (keepTerrainAt). Testing the path cells refused every placement on ordinary ground ("not enough space"
@@ -255,8 +402,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
                 cells.add(c.rotated(rotation).add(origin));
             }
         }
-        Vector3i dock = rotation.rotateYaw(new Vector3i(Deployables.STATION_DOCK_ORIGIN[0], Deployables.STATION_DOCK_ORIGIN[1],
-                Deployables.STATION_DOCK_ORIGIN[2]), new Vector3i()).add(origin);
+        Vector3i dock = dockOrigin(origin, rotation);
         for (StructureShape.Cell c : balloon.cells()) {
             cells.add(c.rotated(rotation).add(dock));
         }
@@ -267,30 +413,26 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
         }
         if (wet != null) {
             LOGGER.at(Level.INFO).log("Station refusée en (%d, %d, %d) : liquide en (%d, %d, %d)", origin.x, origin.y, origin.z, wet.x, wet.y, wet.z);
-            playerRef.sendMessage(Texts.t("deploy.underwater"));
-            return false;
+            return Refusal.of("deploy.underwater");
         }
         SectionReader reader = new SectionReader(world.getChunkStore());
         for (Vector3i p : cells) {
             if (BalloonManager.outOfHeight(p.y)) {
                 LOGGER.at(Level.INFO).log("Station refusée en (%d, %d, %d) : la case (%d, %d, %d) dépasse la limite de hauteur",
                         origin.x, origin.y, origin.z, p.x, p.y, p.z);
-                playerRef.sendMessage(Texts.t("deploy.heightLimit"));
-                return false;
+                return Refusal.of("deploy.heightLimit");
             }
             boolean loaded = reader.hasStorageInMemory(p.x, p.y, p.z);
             BlockType bt = loaded ? SectionBlocks.typeAt(reader, p.x, p.y, p.z) : null;
-            if (!loaded || (bt != null && bt.getMaterial() == BlockMaterial.Solid)) {
+            if (!loaded || (bt != null && blocksRoom(bt.getId(), bt.getMaterial() == BlockMaterial.Solid, removableIsEmpty))) {
                 LOGGER.at(Level.INFO).log("Station refusée en (%d, %d, %d) : %s en (%d, %d, %d)",
                         origin.x, origin.y, origin.z, loaded ? bt.getId() : "chunk non chargé", p.x, p.y, p.z);
-                playerRef.sendMessage(loaded
-                        ? Texts.t("transit.deploy.noSpaceAt").param("block", bt.getId().startsWith("*") ? bt.getId().substring(1) : bt.getId())
-                                .param("x", p.x).param("y", p.y).param("z", p.z)
-                        : Texts.t("transit.deploy.noSpace"));
-                return false;
+                return loaded
+                        ? Refusal.at("transit.deploy.noSpaceAt", bt.getId().startsWith("*") ? bt.getId().substring(1) : bt.getId(), p.x, p.y, p.z)
+                        : Refusal.of("transit.deploy.noSpace");
             }
         }
-        return true;
+        return null;
     }
 
     /** Pure rule: a prefab cell below y 0 (posts) accepts anything, a cell at y 0 or above (deck, kiosk) refuses a solid block and a liquid. */
@@ -300,54 +442,61 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
 
     /**
      * Room test of the boat station: every cell of the pier (no grass layer), then the berth, where the steamboat must fit on clear
-     * water. Sends the refusal message itself.
+     * water. Null when there is room, else the refusal.
      */
-    private boolean checkBoatRoom(World world, PlayerRef playerRef, StructureShape station, Vector3i origin, Rotation rotation) {
+    static Refusal boatRoomRefusal(World world, StructureShape station, Vector3i origin, Rotation rotation) {
+        return boatRoomRefusal(world, station, origin, rotation, Set.of());
+    }
+
+    /** Same test with the cells of emptied read as empty solid-free cells, to check a site as it would be once they are cleared. */
+    static Refusal boatRoomRefusal(World world, StructureShape station, Vector3i origin, Rotation rotation, Set<Vector3i> emptied) {
         SectionReader reader = new SectionReader(world.getChunkStore());
         for (StructureShape.Cell c : station.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             if (BalloonManager.outOfHeight(p.y)) {
                 LOGGER.at(Level.INFO).log("Station maritime refusée en (%d, %d, %d) : la case (%d, %d, %d) dépasse la limite de hauteur",
                         origin.x, origin.y, origin.z, p.x, p.y, p.z);
-                playerRef.sendMessage(Texts.t("deploy.heightLimit"));
-                return false;
+                return Refusal.of("deploy.heightLimit");
             }
             if (!reader.hasStorageInMemory(p.x, p.y, p.z)) {
-                playerRef.sendMessage(Texts.t("transit.deploy.boatNoSpace"));
-                return false;
+                return Refusal.of("transit.deploy.boatNoSpace");
             }
             BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
-            boolean solid = bt != null && bt.getMaterial() == BlockMaterial.Solid;
+            boolean solid = bt != null && bt.getMaterial() == BlockMaterial.Solid && !emptied.contains(p);
             String liquidId = BalloonManager.liquidAt(reader, p.x, p.y, p.z);
-            boolean liquid = liquidId != null;
+            boolean liquid = liquidId != null && !emptied.contains(p);
             if (!boatCellAllowed(c.y(), solid, liquid)) {
                 LOGGER.at(Level.INFO).log("Station maritime refusée en (%d, %d, %d) : %s en (%d, %d, %d)",
                         origin.x, origin.y, origin.z, solid ? bt.getId() : liquidId, p.x, p.y, p.z);
                 String what = solid ? (bt.getId().startsWith("*") ? bt.getId().substring(1) : bt.getId()) : liquidId;
-                playerRef.sendMessage(Texts.t("transit.deploy.boatNoSpaceAt").param("block", what)
-                        .param("x", p.x).param("y", p.y).param("z", p.z));
-                return false;
+                return Refusal.at("transit.deploy.boatNoSpaceAt", what, p.x, p.y, p.z);
             }
         }
         StructureShape boat;
         try {
-            boat = Deployables.STEAMBOAT.shape();
+            boat = Deployables.STEAMBOAT_PUBLIC.shape();
         } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station maritime : forme du bateau illisible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Station maritime : forme de la navette illisible");
             Telemetry.error("deploy", e, Telemetry.kindId(Deployables.BOAT_STATION), null);
-            return false;
+            return new Refusal(null, null, null, null);
         }
         Vector3i berth = rotation.rotateYaw(new Vector3i(Deployables.BOAT_STATION_BERTH_ORIGIN[0], Deployables.BOAT_STATION_BERTH_ORIGIN[1],
                 Deployables.BOAT_STATION_BERTH_ORIGIN[2]), new Vector3i()).add(origin);
-        String refusal = DeployPlacement.steamboatFit(boat, berth, rotation.add(Deployables.BOAT_STATION_BERTH_ROTATION),
-                DeployPlacement.worldState(world));
-        if (refusal != null) {
-            LOGGER.at(Level.INFO).log("Station maritime refusée en (%d, %d, %d) : poste d'amarrage (%s)", origin.x, origin.y, origin.z, refusal);
-            playerRef.sendMessage(Texts.t("transit.deploy.boatBerth"));
-            playerRef.sendMessage(Texts.t(refusal));
-            return false;
+        DeployPlacement.CellState state = DeployPlacement.worldState(world);
+        DeployPlacement.Fault fault = DeployPlacement.steamboatFault(boat, berth, rotation.add(Deployables.BOAT_STATION_BERTH_ROTATION),
+                emptied.isEmpty() ? state : DeployPlacement.withEmptied(state, emptied), 0);
+        if (fault != null) {
+            Vector3i at = fault.at();
+            BlockType bt = SectionBlocks.typeAt(reader, at.x, at.y, at.z);
+            String liquidId = BalloonManager.liquidAt(reader, at.x, at.y, at.z);
+            String found = bt != null && bt.getMaterial() == BlockMaterial.Solid ? bt.getId() : liquidId != null ? liquidId
+                    : bt != null ? bt.getId() : "air";
+            String block = found.startsWith("*") ? found.substring(1) : found;
+            LOGGER.at(Level.INFO).log("Station maritime refusée en (%d, %d, %d) : poste d'amarrage (%s), %s en (%d, %d, %d), %s",
+                    origin.x, origin.y, origin.z, fault.key(), block, at.x, at.y, at.z, fault.hull() ? "coque" : "hors de l'eau");
+            return new Refusal("transit.deploy.boatBerth", block, new Vector3i(at), fault.key(), fault.hull());
         }
-        return true;
+        return null;
     }
 
     /** First station of the same kind closer than min blocks (origin to origin), null if none. Other kinds are ignored. */

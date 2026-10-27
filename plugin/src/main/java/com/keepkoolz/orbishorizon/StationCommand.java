@@ -1,7 +1,5 @@
 package com.keepkoolz.orbishorizon;
 
-import com.hypixel.hytale.builtin.crafting.CraftingPlugin;
-import com.hypixel.hytale.component.Holder;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
@@ -16,22 +14,19 @@ import com.hypixel.hytale.server.core.command.system.basecommands.AbstractComman
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
 import com.hypixel.hytale.math.vector.Rotation3f;
 import com.hypixel.hytale.server.core.Message;
-import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
 import com.hypixel.hytale.server.core.permissions.provider.HytalePermissionsProvider;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
-import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
-import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 
-/** /orbishorizon station ...: transit network administration (ops). Task 4b: only "recipe on|off|show". */
+/** /orbishorizon station ...: transit network administration (ops). */
 public final class StationCommand extends AbstractCommandCollection {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 
@@ -39,10 +34,13 @@ public final class StationCommand extends AbstractCommandCollection {
         super("station", Texts.cmd("station.desc"));
         setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
         addSubCommand(new Recipe());
+        addSubCommand(new Worldgen());
         addSubCommand(new ListStations());
         addSubCommand(new Debug());
         addSubCommand(new Despawn());
         addSubCommand(new Tp());
+        addSubCommand(new Nearest());
+        addSubCommand(new Planned());
     }
 
     private static org.joml.Vector3d posOf(Store<EntityStore> store, Ref<EntityStore> ref) {
@@ -194,6 +192,13 @@ public final class StationCommand extends AbstractCommandCollection {
             for (java.util.Map.Entry<Ref<EntityStore>, org.joml.Vector3d> e : stranded.entrySet()) {
                 if (e.getKey().isValid()) BalloonManager.putOnGround(store, world, e.getKey(), e.getValue());
             }
+            try {
+                GeneratedStations.Entry generated = GeneratedStations.get().at(world.getName(), s.origin.x, s.origin.z);
+                if (generated != null) GeneratedStations.get().setState(generated, GeneratedStations.State.REMOVED);
+            } catch (RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Station %s retirée mais son entrée du registre n'a pas changé d'état", s.name);
+                Telemetry.error("worldgen", e, s.kind, "remove");
+            }
             boolean given = BalloonManager.get().giveCrate(store, ref, here, spec.crateId());
             LOGGER.at(Level.INFO).log("Station « %s » retirée par %s : %d bloc(s), %d objet(s) lâchés, %d trou(s) du sol rebouché(s)",
                     s.name, player.getUsername(), r.removed(), r.items(), filled);
@@ -224,24 +229,100 @@ public final class StationCommand extends AbstractCommandCollection {
                 ctx.sendMessage(Texts.t("transit.cmd.tpUnknown").param("name", TransitNetwork.normalize(wanted)));
                 return;
             }
-            org.joml.Vector3d target = StationSpec.teleportPoint(s);
-            int bx = (int) Math.floor(target.x), by = (int) Math.floor(target.y), bz = (int) Math.floor(target.z);
-            SectionBlocks.loadSections(world.getChunkStore(), bx, by - 2, bz, bx, by + 2, bz).whenComplete((c, t) -> {
-                try {
-                    world.execute(() -> {
-                        if (!ref.isValid()) return;
-                        Store<EntityStore> st = ref.getStore();
-                        TransformComponent tr = st.getComponent(ref, TransformComponent.getComponentType());
-                        Rotation3f look = tr != null ? new Rotation3f(tr.getRotation()) : new Rotation3f();
-                        MountUtil.unseat(st, ref);
-                        st.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(target, look));
-                        ctx.sendMessage(Texts.t("transit.cmd.tpDone").param("name", s.name));
-                    });
-                } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Téléportation vers « %s » impossible", s.name);
-                }
-            });
+            teleport(ctx, ref, world, StationSpec.teleportPoint(s), Texts.t("transit.cmd.tpDone").param("name", s.name), s.name);
         }
+    }
+
+    /** Teleports the player to target once the sections around it are loaded, then sends done. Never throws. */
+    private static void teleport(CommandContext ctx, Ref<EntityStore> ref, World world, org.joml.Vector3d target,
+                                 com.hypixel.hytale.server.core.Message done, String label) {
+        int bx = (int) Math.floor(target.x), by = (int) Math.floor(target.y), bz = (int) Math.floor(target.z);
+        SectionBlocks.loadSections(world.getChunkStore(), bx, by - 2, bz, bx, by + 2, bz).whenComplete((c, t) -> {
+            try {
+                world.execute(() -> {
+                    if (!ref.isValid()) return;
+                    Store<EntityStore> st = ref.getStore();
+                    TransformComponent tr = st.getComponent(ref, TransformComponent.getComponentType());
+                    Rotation3f look = tr != null ? new Rotation3f(tr.getRotation()) : new Rotation3f();
+                    MountUtil.unseat(st, ref);
+                    st.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(target, look));
+                    ctx.sendMessage(done);
+                });
+            } catch (RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Téléportation vers « %s » impossible", label);
+            }
+        });
+    }
+
+    /** /orbishorizon station nearest: teleports the operator to the nearest station of the current world, of any kind. */
+    static final class Nearest extends AbstractPlayerCommand {
+        Nearest() {
+            super("nearest", Texts.cmd("station.nearest.desc"));
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            org.joml.Vector3d pos = posOf(store, ref);
+            TransitNetwork.Station s = pos == null ? null : TransitNetwork.get().nearest(world.getName(), pos, Double.MAX_VALUE);
+            if (s == null) {
+                ctx.sendMessage(Texts.t("transit.cmd.nearestNone"));
+                return;
+            }
+            long dist = Math.round(Math.hypot(s.origin.x - pos.x, s.origin.z - pos.z));
+            teleport(ctx, ref, world, StationSpec.teleportPoint(s),
+                    Texts.t("transit.cmd.nearestDone").param("name", s.name).param("distance", dist), s.name);
+        }
+    }
+
+    /**
+     * /orbishorizon station planned: teleports the operator above the nearest generated station that is not built (planned or
+     * abandoned) and gives its kind, state and distance.
+     */
+    static final class Planned extends AbstractPlayerCommand {
+        Planned() {
+            super("planned", Texts.cmd("station.planned.desc"));
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            if (!TransitSettings.worldgenEnabled()) {
+                ctx.sendMessage(Texts.t("transit.cmd.plannedWorldgenOff"));
+                return;
+            }
+            org.joml.Vector3d pos = posOf(store, ref);
+            GeneratedStations.Entry e = pos == null ? null
+                    : nearestUnbuilt(GeneratedStations.get().entries(world.getName()), pos.x, pos.z);
+            if (e == null) {
+                ctx.sendMessage(Texts.t("transit.cmd.plannedNone"));
+                return;
+            }
+            GeneratorProbe probe = GeneratorProbe.of(world);
+            double y = probe != null ? Math.max(probe.height(e.x, e.z), SeaRules.SEA_LEVEL) + 3 : pos.y;
+            long dist = Math.round(Math.hypot(e.x - pos.x, e.z - pos.z));
+            String kind = Deployables.BOAT_STATION_KIND.equals(e.kind) ? "boat" : "balloon";
+            teleport(ctx, ref, world, new org.joml.Vector3d(e.x + 0.5, y, e.z + 0.5),
+                    Texts.t("transit.cmd.plannedDone." + kind).param("state", Texts.t("transit.cmd.state." + e.state.name().toLowerCase(java.util.Locale.ROOT))).param("distance", dist)
+                            .param("x", e.x).param("z", e.z), "(" + e.x + ", " + e.z + ")");
+        }
+    }
+
+    /** Nearest generated entry still planned or abandoned, horizontally, or null. */
+    static GeneratedStations.Entry nearestUnbuilt(List<GeneratedStations.Entry> entries, double x, double z) {
+        GeneratedStations.Entry best = null;
+        double bestD = Double.MAX_VALUE;
+        for (GeneratedStations.Entry e : entries) {
+            if (e.state != GeneratedStations.State.PLANNED && e.state != GeneratedStations.State.ABANDONED) {
+                continue;
+            }
+            double d = (e.x - x) * (e.x - x) + (e.z - z) * (e.z - z);
+            if (d < bestD) {
+                bestD = d;
+                best = e;
+            }
+        }
+        return best;
     }
 
     /**
@@ -374,15 +455,6 @@ public final class StationCommand extends AbstractCommandCollection {
         }
     }
 
-    /** Learns or forgets the crate recipe for a player who is arriving in a world (holder not in the store yet). */
-    static void syncOnArrival(Holder<EntityStore> holder) {
-        Player p = holder.getComponent(Player.getComponentType());
-        if (p == null) return;
-        Set<String> known = new HashSet<>(p.getPlayerConfigData().getKnownRecipes());
-        boolean changed = TransitSettings.recipeEnabled() ? known.addAll(StationSpec.CRATE_IDS) : known.removeAll(StationSpec.CRATE_IDS);
-        if (changed) p.getPlayerConfigData().setKnownRecipes(known);
-    }
-
     static final class Recipe extends AbstractPlayerCommand {
         private final RequiredArg<String> mode = withRequiredArg("mode", Texts.cmd("station.recipe.mode"), ArgTypes.STRING);
 
@@ -397,28 +469,48 @@ public final class StationCommand extends AbstractCommandCollection {
             switch (m) {
                 case "on", "off" -> {
                     boolean on = m.equals("on");
-                    TransitSettings.setRecipeEnabled(on);
-                    for (World w : Universe.get().getWorlds().values()) {
-                        w.execute(() -> {
-                            for (PlayerRef pr : w.getPlayerRefs()) {
-                                Ref<EntityStore> r = pr.getReference();
-                                if (r == null || !r.isValid()) continue;
-                                try {
-                                    for (String id : StationSpec.CRATE_IDS) {
-                                        if (on) CraftingPlugin.learnRecipe(r, id, r.getStore());
-                                        else CraftingPlugin.forgetRecipe(r, id, r.getStore());
-                                    }
-                                } catch (RuntimeException e) {
-                                    LOGGER.at(Level.WARNING).withCause(e).log("Recette de la station non synchronisée pour %s", pr.getUsername());
-                                }
-                            }
-                        });
-                    }
+                    for (String id : StationSpec.CRATE_IDS) RecipeToggles.set(id, on);
                     ctx.sendMessage(Texts.t(on ? "transit.recipe.on" : "transit.recipe.off"));
                 }
                 case "show" -> ctx.sendMessage(Texts.t("transit.recipe.show")
-                        .param("state", TransitSettings.recipeEnabled() ? "on" : "off"));
+                        .param("state", recipeState()));
                 default -> ctx.sendMessage(Texts.t("transit.recipe.usage"));
+            }
+        }
+    }
+
+    /** "on" or "off" when both station crates agree, "mixed" when their recipes differ. */
+    private static String recipeState() {
+        boolean any = false, all = true;
+        for (String id : StationSpec.CRATE_IDS) {
+            boolean e = RecipeToggles.enabled(id);
+            any |= e;
+            all &= e;
+        }
+        return all ? "on" : any ? "mixed" : "off";
+    }
+
+    /** /orbishorizon station worldgen on|off|show: turns the generated stations on or off for the whole server. */
+    static final class Worldgen extends AbstractPlayerCommand {
+        private final RequiredArg<String> mode = withRequiredArg("mode", Texts.cmd("station.worldgen.mode"), ArgTypes.STRING);
+
+        Worldgen() {
+            super("worldgen", Texts.cmd("station.worldgen.desc"));
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            String m = mode.get(ctx).trim().toLowerCase(java.util.Locale.ROOT);
+            switch (m) {
+                case "on", "off" -> {
+                    boolean on = m.equals("on");
+                    TransitSettings.setWorldgenEnabled(on);
+                    ctx.sendMessage(Texts.t(on ? "transit.worldgen.on" : "transit.worldgen.off"));
+                }
+                case "show" -> ctx.sendMessage(Texts.t("transit.worldgen.show")
+                        .param("state", TransitSettings.worldgenEnabled() ? "on" : "off"));
+                default -> ctx.sendMessage(Texts.t("transit.worldgen.usage"));
             }
         }
     }

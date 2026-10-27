@@ -1264,6 +1264,9 @@ final class AirshipManager {
             Vector3f stool = crewStoolLocal(kind);
             f.crewMan = AirshipCrew.createMannequin(store, f.shipUuid, ship, f.dual ? f.observerRef : null, f.pilotUuid,
                     shipPoint(f, stool), crewSeatOffset(kind, stool), crewLook, now);
+            if (f.crewMan != null) {
+                f.crewMan.localYaw = AirshipCrew.seatYaw(spec.crewSpec.restRotation());
+            }
         }
         f.teleportUntilMs = now + BalloonManager.COLLISION_PAUSE_MS;
         f.takeoffMs = now;
@@ -2988,6 +2991,11 @@ final class AirshipManager {
             VehicleParts.sync(store, f.parts, f.shipRef, f.observerRef); // after the smoothing: the parts copy their host
             // the pilot faces the bow, which points to (-sin theta, -cos theta): the entity yaw of a model faces the same way at yaw theta.
             PilotMannequin.sync(store, f.pilotMan, f.observerRef, (float) (yawSign * f.theta), null, System.currentTimeMillis());
+            if (f.crewMan != null) {
+                // a mounted entity keeps its own yaw, so the mannequin is turned with the ship: standing at the helm (in front of him,
+                // bow side) he looks to the bow like the player's pilot, on the stool he looks the way the seat faces (localYaw)
+                AirshipCrew.faceYaw(store, f.crewMan, (float) (yawSign * f.theta) + f.crewMan.localYaw);
+            }
             AirshipCrew.syncMannequin(store, f.crewMan, System.currentTimeMillis());
         }
     }

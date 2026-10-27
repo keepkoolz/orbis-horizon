@@ -51,8 +51,7 @@ public final class CampingCommand extends AbstractCommandCollection {
                 ctx.sendMessage(Texts.t("cmd.camping.backUsage"));
                 return;
             }
-            TransitSettings.setPackBackView(on);
-            PackBackView.applySetting();
+            PackBackView.set(on);
             ctx.sendMessage(Texts.t(on ? "cmd.camping.backOn" : "cmd.camping.backOff"));
         }
     }

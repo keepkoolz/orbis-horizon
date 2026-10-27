@@ -1,5 +1,6 @@
 package com.keepkoolz.orbishorizon;
 
+import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.math.vector.Transform;
 import com.hypixel.hytale.protocol.packets.worldmap.ContextMenuItem;
 import com.hypixel.hytale.server.core.entity.entities.Player;
@@ -10,6 +11,8 @@ import com.hypixel.hytale.server.core.universe.world.worldmap.markers.MarkersCol
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 
+import java.util.logging.Level;
+
 /**
  * World map markers of the transit stations. A player sees the stations he knows (discovered by him, or shared with every
  * player of the world), each not yet shared one with a menu entry to share it. Registered on each world like the game's warps
@@ -19,6 +22,9 @@ final class StationMarkerProvider implements WorldMapManager.MarkerProvider {
     static final StationMarkerProvider INSTANCE = new StationMarkerProvider();
     /** Name of the provider in WorldMapManager. */
     static final String PROVIDER_ID = "orbis_horizon_stations";
+    private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
+    private static volatile boolean errorLogged;
+
     private StationMarkerProvider() {}
 
     static void register(World world) {
@@ -27,6 +33,18 @@ final class StationMarkerProvider implements WorldMapManager.MarkerProvider {
 
     @Override
     public void update(World world, Player player, MarkersCollector collector) {
+        try {
+            fill(world, player, collector);
+        } catch (RuntimeException e) {
+            if (!errorLogged) {
+                errorLogged = true;
+                LOGGER.at(Level.WARNING).withCause(e).log("Marqueurs de stations ignorés");
+            }
+            Telemetry.error("map.stations", e, null, null);
+        }
+    }
+
+    private static void fill(World world, Player player, MarkersCollector collector) {
         KnownStations known = KnownStations.get();
         for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName())) {
             SkyLog.Reached key = new SkyLog.Reached(s.origin.x, s.origin.y, s.origin.z);
@@ -37,7 +55,7 @@ final class StationMarkerProvider implements WorldMapManager.MarkerProvider {
             String id = PROVIDER_ID + ":" + s.origin.x + "," + s.origin.y + "," + s.origin.z;
             MapMarkerBuilder marker = new MapMarkerBuilder(id, StationSpec.of(s.kind).mapIcon(), new Transform(p.x, p.y, p.z))
                     .withCustomName(s.name);
-            if (!known.isShared(world.getName(), key)) {
+            if (TransitSettings.markerSharing() && !known.isShared(world.getName(), key)) {
                 // Translation key as name, command without the leading slash (the client adds its own).
                 marker.withContextMenuItem(new ContextMenuItem("server.orbis_horizon.map.menu.shareStation",
                         shareCommand(s.origin.x, s.origin.y, s.origin.z)));

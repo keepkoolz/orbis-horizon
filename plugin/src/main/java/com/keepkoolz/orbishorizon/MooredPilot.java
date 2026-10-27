@@ -45,17 +45,21 @@ final class MooredPilot {
     }
 
     /** World point where the pilot stands: the pivot of the moored shuttle (where the flight mannequin starts). Pure. */
-    static Vector3d helmPoint(TransitNetwork.Station s) {
-        return BoatRoutes.berthPivot(s);
+    static Vector3d helmPoint(TransitNetwork.Station s, boolean flipped) {
+        return BoatRoutes.berthPivot(s, flipped);
     }
 
-    /** Yaw that turns the pilot to the bow of the moored shuttle (forward = (-sin yaw, -cos yaw), the heading of the shuttle). Pure. */
-    static float facingYaw(TransitNetwork.Station s) {
-        return (float) BoatRoutes.berthTheta(s);
+    /**
+     * Yaw that turns the pilot to the bow of the moored shuttle, so toward the helm in front of him: an entity looks along
+     * (-sin yaw, -cos yaw) (Transform.getDirection), and the bow is the prefab -z turned by the berth rotation, which is the heading
+     * of the shuttle. Pure.
+     */
+    static float facingYaw(TransitNetwork.Station s, boolean flipped) {
+        return (float) BoatRoutes.berthTheta(s, flipped);
     }
 
     /** One tick of a DOCKED quay: creates the pilot if missing, replays his pose. Never throws. */
-    static void tick(Store<EntityStore> store, World world, TransitNetwork.Station s, long now) {
+    static void tick(Store<EntityStore> store, World world, TransitNetwork.Station s, boolean flipped, long now) {
         try {
             Vector3i origin = BoatRoutes.berthOrigin(s);
             UUID id = uuidFor(world.getName(), origin);
@@ -70,7 +74,7 @@ final class MooredPilot {
             }
             e.nextTryMs = now + RETRY_MS;
             e.man = null;
-            Vector3d at = helmPoint(s);
+            Vector3d at = helmPoint(s, flipped);
             if (!SectionBlocks.entitiesLoaded(world.getChunkStore(), (int) Math.floor(at.x), (int) Math.floor(at.y), (int) Math.floor(at.z))) {
                 return; // nobody near: an entity added to a section that does not tick would be stored away and doubled when it wakes up
             }
@@ -86,7 +90,7 @@ final class MooredPilot {
                 }
                 return;
             }
-            e.man = AirshipCrew.createStandalone(store, id, at, facingYaw(s), look, now, AirshipCrew.POSE_STAND);
+            e.man = AirshipCrew.createStandalone(store, id, at, facingYaw(s, flipped), look, now, AirshipCrew.POSE_STAND);
             if (e.man == null) {
                 if (!e.warned) {
                     e.warned = true;

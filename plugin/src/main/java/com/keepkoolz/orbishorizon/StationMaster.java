@@ -70,8 +70,18 @@ final class StationMaster {
 
     // ------------------------------------------------------------------ spawn, find, remove
 
-    /** Creates the master NPC of a station and stores its UUID in the station. Null if it cannot be created. On the world thread. */
+    /** Creates the master NPC of a station and stores its UUID in the station. Null if it cannot be created (yet). On the world thread. */
     static UUID spawn(Store<EntityStore> store, World world, TransitNetwork.Station s) {
+        return spawn(store, world, s, false);
+    }
+
+    /**
+     * retried: the call comes from the recovery after a first failed attempt, so a new failure is not handed over again.
+     * When the entities of the master's section are not loaded (a station built with nobody near), spawnNPC gives no usable entity
+     * and the NPC would later appear without skin or interactions: nothing is created and the station goes to the recovery
+     * (ensure, then resolvePending), which waits for the section and adopts a master standing there before creating one.
+     */
+    private static UUID spawn(Store<EntityStore> store, World world, TransitNetwork.Station s, boolean retried) {
         // A deferred spawn may run after the station was removed: never leave an orphan NPC.
         if (!TransitNetwork.get().stations(world.getName()).contains(s)) {
             return null;
@@ -82,10 +92,21 @@ final class StationMaster {
                 LOGGER.at(Level.WARNING).log("Rôle %s introuvable : pas de chef de gare pour « %s »", ROLE, s.name);
                 return null;
             }
+            Vector3d point = masterPoint(s);
+            if (!SectionBlocks.entitiesLoaded(world.getChunkStore(), (int) Math.floor(point.x), (int) Math.floor(point.y), (int) Math.floor(point.z))) {
+                LOGGER.at(Level.INFO).log("Chef de gare de « %s » : section non chargée, il sera créé à son chargement", s.name);
+                ensure(world, s, false);
+                return null;
+            }
             Pair<Ref<EntityStore>, com.hypixel.hytale.server.core.universe.world.npc.INonPlayerCharacter> p =
-                    plugin.spawnNPC(store, ROLE, null, masterPoint(s), yawRotation(facingYaw(s)));
+                    plugin.spawnNPC(store, ROLE, null, point, yawRotation(facingYaw(s)));
             if (p == null || p.first() == null || !p.first().isValid()) {
-                LOGGER.at(Level.WARNING).log("Chef de gare de « %s » : création impossible", s.name);
+                if (retried) {
+                    LOGGER.at(Level.WARNING).log("Chef de gare de « %s » : création impossible après un second essai", s.name);
+                } else {
+                    LOGGER.at(Level.WARNING).log("Chef de gare de « %s » : création impossible, confié à la reprise", s.name);
+                    ensure(world, s, true);
+                }
                 return null;
             }
             Ref<EntityStore> ref = p.first();
@@ -236,11 +257,14 @@ final class StationMaster {
     private static final class Pending {
         final World world;
         final TransitNetwork.Station station;
+        /** True when the station comes back after a failed creation: a second failure is not retried. */
+        final boolean retried;
         long readyMs;
 
-        Pending(World world, TransitNetwork.Station station) {
+        Pending(World world, TransitNetwork.Station station, boolean retried) {
             this.world = world;
             this.station = station;
+            this.retried = retried;
         }
 
         World world() {
@@ -276,6 +300,10 @@ final class StationMaster {
      * that section to be in the world before finding, adopting or creating the master.
      */
     static void ensure(World world, TransitNetwork.Station s) {
+        ensure(world, s, false);
+    }
+
+    private static void ensure(World world, TransitNetwork.Station s, boolean retried) {
         try {
             Vector3d p = masterPoint(s);
             int bx = (int) Math.floor(p.x), by = (int) Math.floor(p.y), bz = (int) Math.floor(p.z);
@@ -283,7 +311,7 @@ final class StationMaster {
                 try {
                     world.execute(() -> {
                         PENDING.removeIf(q -> q.station() == s);
-                        PENDING.add(new Pending(world, s));
+                        PENDING.add(new Pending(world, s, retried));
                     });
                 } catch (RuntimeException ex) {
                     LOGGER.at(Level.WARNING).withCause(ex).log("Monde %s arrêté : chef de gare de « %s » non retrouvé", world.getName(), s.name);
@@ -341,7 +369,7 @@ final class StationMaster {
                         continue;
                     }
                 }
-                spawn(store, world, s);
+                spawn(store, world, s, p.retried);
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Chef de gare de « %s » non remis en état", s.name);
                 Telemetry.error("transit", e, null, null);

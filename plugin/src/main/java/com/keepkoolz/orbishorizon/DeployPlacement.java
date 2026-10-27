@@ -63,20 +63,43 @@ final class DeployPlacement {
      * @return null if the boat fits, otherwise the refusal key
      */
     static String steamboatFit(StructureShape shape, Vector3i origin, Rotation rotation, CellState state) {
-        boolean blocked = false;
-        int waterline = Deployables.STEAMBOAT.airship.waterlineY;
+        Fault fault = steamboatFault(shape, origin, rotation, state);
+        return fault == null ? null : fault.key();
+    }
+
+    /** First faulty cell of a steamboat fit: the refusal key, the cell in world coordinates and whether it is a hull cell. */
+    record Fault(String key, Vector3i at, boolean hull) {
+    }
+
+    /**
+     * Same check as {@link #steamboatFit} but returns the first faulty cell. A faulty hull cell wins over a blocked cell above water
+     * and returns at once.
+     * @return null if the boat fits
+     */
+    static Fault steamboatFault(StructureShape shape, Vector3i origin, Rotation rotation, CellState state) {
+        return steamboatFault(shape, origin, rotation, state, Deployables.STEAMBOAT.airship.waterlineY);
+    }
+
+    /** Same check with an explicit waterline: prefab layers at or under it must be water, the layers above must be empty. */
+    static Fault steamboatFault(StructureShape shape, Vector3i origin, Rotation rotation, CellState state, int waterline) {
+        Fault blocked = null;
         for (StructureShape.Cell c : shape.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             int st = state.at(p.x, p.y, p.z);
             if (c.y() <= waterline) {
                 if (st != 1) {
-                    return "deploy.steamboat.noWater";
+                    return new Fault("deploy.steamboat.noWater", p, true);
                 }
-            } else if (st != 0) {
-                blocked = true;
+            } else if (st != 0 && blocked == null) {
+                blocked = new Fault("deploy.steamboat.blocked", p, false);
             }
         }
-        return blocked ? "deploy.steamboat.blocked" : null;
+        return blocked;
+    }
+
+    /** The same state with the given cells read as empty (0). Used to check a site as it would be once those cells are cleared. */
+    static CellState withEmptied(CellState base, java.util.Set<Vector3i> emptied) {
+        return (x, y, z) -> emptied.contains(new Vector3i(x, y, z)) ? 0 : base.at(x, y, z);
     }
 
     /** CellState reading the world (0.7 section reader). Out of height, solid blocks and non-water liquids count as 2. */
@@ -135,6 +158,23 @@ final class DeployPlacement {
             }
             if (st != 0) {
                 return null;
+            }
+        }
+        return null;
+    }
+
+    /** The cell that stops the {@link #boatStationOrigin} search (first state 2 going down the column), or null when none does. */
+    static Vector3i boatStationOriginBlocker(CellState state, Vector3i computed, Rotation rotation) {
+        Vector3i end = rotation.rotateYaw(new Vector3i(Deployables.BOAT_STATION_PIER_END[0], Deployables.BOAT_STATION_PIER_END[1],
+                Deployables.BOAT_STATION_PIER_END[2]), new Vector3i());
+        int cx = computed.x + end.x, cz = computed.z + end.z;
+        for (int y = computed.y + 3; y >= computed.y - 10; y--) {
+            int st = state.at(cx, y, cz);
+            if (st == 1) {
+                return null;
+            }
+            if (st != 0) {
+                return new Vector3i(cx, y, cz);
             }
         }
         return null;

@@ -335,6 +335,12 @@ final class PackBackView {
         }
     }
 
+    /** Stores the setting then applies it to the players online (command and configuration page). */
+    static void set(boolean on) {
+        TransitSettings.setPackBackView(on);
+        applySetting();
+    }
+
     /** Applies the setting to every online player of every world: on shows the packs, off restores the native look. */
     static void applySetting() {
         try {

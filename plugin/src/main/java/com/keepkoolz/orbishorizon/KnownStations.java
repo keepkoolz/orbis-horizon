@@ -43,8 +43,13 @@ final class KnownStations {
 
     /** True if the player knows the station: discovered by him or shared. */
     synchronized boolean known(String world, UUID player, SkyLog.Reached station) {
+        return known(world, player, station, TransitSettings.markerSharing());
+    }
+
+    /** Pure form of known: shared stations count only when includeShared is true (sharing switched on). Nothing stored is changed. */
+    synchronized boolean known(String world, UUID player, SkyLog.Reached station, boolean includeShared) {
         Set<SkyLog.Reached> s = shared.get(world);
-        if (s != null && s.contains(station)) {
+        if (includeShared && s != null && s.contains(station)) {
             return true;
         }
         Map<UUID, Set<SkyLog.Reached>> w = personal.get(world);

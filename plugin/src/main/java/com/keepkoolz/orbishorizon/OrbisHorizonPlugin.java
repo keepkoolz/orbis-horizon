@@ -91,6 +91,8 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         BalloonRegistry.init(getDataDirectory());
         // Transit: station network (stations.json).
         TransitNetwork.get().load(getDataDirectory());
+        GeneratedStations.get().load(getDataDirectory());
+        NewChunks.init(getDataDirectory());
         TransitFare.loadRefunds(getDataDirectory());
         BoatRoutes.load(getDataDirectory());
         TransitSettings.load(getDataDirectory());
@@ -123,6 +125,18 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             getEntityStoreRegistry().registerSystem(new CampUpgrade.Post());
         } catch (RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Amélioration des sacs de campement : système désactivé");
+        }
+        // disabled recipes of the mod cannot be crafted (craft events).
+        try {
+            getEntityStoreRegistry().registerSystem(new RecipeToggles.Guard());
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Recettes désactivées : blocage du craft désactivé");
+        }
+        // bench tabs whose recipes are all disabled are removed from the window data.
+        try {
+            BenchTabs.register();
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Recettes désactivées : masquage des onglets d'établi désactivé");
         }
         // a game mode change of a pilot or passenger makes them leave the vehicle (the game resets the movement settings).
         try {
@@ -173,11 +187,12 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         getEventRegistry().registerGlobal(AddPlayerToWorldEvent.class,
                 event -> {
                     BalloonManager.get().onPlayerAdded(event.getHolder(), event.getWorld());
-                    // Transit: the station crate recipe follows the server setting.
+                    // Mod recipes follow the server setting (station crates are learned or forgotten, the rest is sent to the client).
                     try {
-                        StationCommand.syncOnArrival(event.getHolder());
+                        RecipeToggles.syncOnArrival(event.getHolder());
                     } catch (RuntimeException e) {
-                        getLogger().at(Level.WARNING).withCause(e).log("Recette de la station non synchronisée à l'arrivée");
+                        getLogger().at(Level.WARNING).withCause(e).log("Recettes du mod non synchronisées à l'arrivée");
+                        Telemetry.error("recipes", e, null, null);
                     }
                 });
         // Before the players are disconnected (-48) and the worlds stopped (-32): the worlds are still running.
@@ -207,6 +222,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         });
         getEventRegistry().registerGlobal(StartWorldEvent.class, event -> {
             BalloonManager.get().recoverWorld(event.getWorld());
+            GenerationListener.onWorldStart(event.getWorld());
             CageAnimals.recoverWorld(event.getWorld());
             StationMaster.recoverWorld(event.getWorld());
             StationQueue.recoverWorld(event.getWorld());
@@ -218,6 +234,14 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             }
             AirshipManager.get().recoverWorld(event.getWorld());
         });
+        // Stations generated with the world: every new chunk is marked, planned stations are built once their chunks are all new.
+        try {
+            GenerationListener.start();
+            getEventRegistry().registerGlobal(com.hypixel.hytale.server.core.universe.world.events.ChunkPreLoadProcessEvent.class,
+                    GenerationListener::onChunk);
+        } catch (RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Stations générées : écoute des chunks désactivée");
+        }
         getCommandRegistry().registerCommand(new OrbisHorizonCommand());
         getLogger().at(Level.INFO).log("Orbis Horizon plugin: interaction %s, /orbishorizon balloon command and flight system registered",
                 DeployBalloonInteraction.TYPE_ID);
@@ -292,6 +316,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             } catch (RuntimeException e) {
                 getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des lieux de réveil non enregistrés pour %s", world.getName());
             }
+            GenerationListener.onWorldStart(world);
             // One failing resume must never stop the plugin: StartWorldEvent calls them again when the world is ready.
             try {
                 BalloonManager.get().recoverWorld(world);
@@ -333,6 +358,8 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         BalloonManager.get().landAll();
         AirshipManager.get().landAll();
         BalloonRegistry.flushCage();
+        GenerationListener.stop();
+        BenchTabs.unregister();
         Telemetry.stop();
     }
 

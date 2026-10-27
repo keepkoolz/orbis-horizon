@@ -20,8 +20,13 @@ final class BiomeWood {
     private static final String FALLBACK_FAMILY = "Hardwood";
 
     // Wood_<Family>_<Part>[_State_Definitions_...] with an optional leading '*'.
-    private static final Pattern FAMILY_BLOCK = Pattern.compile(
-            "^(\\*?)Wood_Hardwood_((?:Planks_Half|Planks|Beam|Stairs|Roof_Shallow)(?:_State_Definitions_.*)?)$");
+    private static final Pattern FAMILY_BLOCK = familyPattern("Hardwood");
+    private static final Pattern STATION_FAMILY_BLOCK = familyPattern("Softwood");
+
+    private static Pattern familyPattern(String source) {
+        return Pattern.compile(
+                "^(\\*?)Wood_" + source + "_((?:Planks_Half|Planks|Beam|Stairs|Roof_Shallow)(?:_State_Definitions_.*)?)$");
+    }
     private static final Pattern TRUNK_BLOCK = Pattern.compile("^(\\*?)Wood_Ash_Trunk(_State_Definitions_.*)?$");
 
     /** Species of a biome, or null when unknown or without trees. Accepts a biome name with a Tile. or Custom. prefix. */
@@ -83,6 +88,26 @@ final class BiomeWood {
         return renamed.equals(blockName) || exists.test(renamed) ? renamed : blockName;
     }
 
+    /**
+     * Same renaming for the balloon station, whose prefab wood is Softwood (planks, beams, stairs). Its Darkwood roof and any
+     * other block are unchanged. A null wood (no tree found) keeps the prefab; any species renames, Ash included.
+     */
+    static String remapStation(String blockName, Wood wood, java.util.function.Predicate<String> exists) {
+        if (blockName == null || wood == null) {
+            return blockName;
+        }
+        Matcher f = STATION_FAMILY_BLOCK.matcher(blockName);
+        if (!f.matches()) {
+            return blockName;
+        }
+        String renamed = f.group(1) + "Wood_" + wood.family() + "_" + f.group(2);
+        return exists.test(renamed) ? renamed : blockName;
+    }
+
+    static String remapStation(String blockName, Wood wood) {
+        return remapStation(blockName, wood, BiomeWood::blockExists);
+    }
+
     private static String rename(String blockName, Wood wood) {
         if (blockName == null || wood == null || wood.equals(DEFAULT)) {
             return blockName;
@@ -113,13 +138,25 @@ final class BiomeWood {
     /**
      * Wood of the biome around (x, z), read from the world generator (25 samples, most frequent species).
      * The log flag is true only for a real placement (the preview calls this often).
-     * Any other generator, or any failure, gives DEFAULT: this never throws.
+     * Any other generator, no tree, or any failure gives DEFAULT: this never throws.
      */
     static Wood woodAt(World world, int x, int z, boolean log) {
+        String species = speciesAt(world, x, z, log, "Station maritime");
+        return species == null ? DEFAULT : woodOf(species);
+    }
+
+    /** Wood for the balloon station: null when no tree species is found (the prefab wood is kept), Ash included otherwise. */
+    static Wood stationWoodAt(World world, int x, int z, boolean log) {
+        String species = speciesAt(world, x, z, log, "Station de montgolfière");
+        return species == null ? null : woodOf(species);
+    }
+
+    /** Most frequent tree species around (x, z), null when there is none, another generator is used, or on failure. Never throws. */
+    static String speciesAt(World world, int x, int z, boolean log, String station) {
         try {
             Object gen = world.getChunkStore().getGenerator();
             if (!(gen instanceof com.hypixel.hytale.server.worldgen.chunk.ChunkGenerator generator)) {
-                return DEFAULT;
+                return null;
             }
             int seed = (int) world.getWorldConfig().getSeed();
             List<String> samples = new ArrayList<>();
@@ -137,18 +174,20 @@ final class BiomeWood {
                 }
                 samples.add(speciesOf(zone, biome));
             }
-            Wood wood = woodOf(chooseSpecies(samples));
+            String species = chooseSpecies(samples);
             if (log) {
                 var l = com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.INFO);
                 if (firstBiome == null) {
-                    l.log("Station maritime : aucun biome lu, bois par défaut %s (%s)", wood.species(), wood.family());
+                    l.log("%s : aucun biome lu, bois d'origine", station);
+                } else if (species == null) {
+                    l.log("%s : aucun arbre, bois d'origine, biome %s", station, firstBiome);
                 } else {
-                    l.log("Station maritime : bois %s (%s), biome %s", wood.species(), wood.family(), firstBiome);
+                    l.log("%s : bois %s, biome %s", station, species, firstBiome);
                 }
             }
-            return wood;
+            return species;
         } catch (RuntimeException | LinkageError e) {
-            return DEFAULT;
+            return null;
         }
     }
 }

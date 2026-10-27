@@ -64,6 +64,10 @@ public final class MapCommand extends AbstractCommandCollection {
         @Override
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
             try {
+                if (!TransitSettings.markerSharing()) {
+                    ctx.sendMessage(Texts.t("map.sharingOff"));
+                    return;
+                }
                 TransitNetwork.Station s = TransitNetwork.get().at(world.getName(), new Vector3i(x.get(ctx), y.get(ctx), z.get(ctx)));
                 if (s == null) {
                     ctx.sendMessage(Texts.t("map.station.notFound"));
@@ -108,6 +112,10 @@ public final class MapCommand extends AbstractCommandCollection {
 
         @Override
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            if (!TransitSettings.markerSharing()) {
+                ctx.sendMessage(Texts.t("map.sharingOff"));
+                return;
+            }
             UUID sid = parseId(id.get(ctx));
             Ownership own = sid == null ? null : find(sid);
             if (own == null) {

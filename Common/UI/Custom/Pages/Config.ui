@@ -1,0 +1,25 @@
+$C = "../Common.ui";
+
+$C.@PageOverlay {}
+$C.@Container {
+  Anchor: (Width: 700, Height: 640);
+
+  #Title {
+    Group {
+      $C.@Title #TitleText {}
+
+      $C.@HeaderSearch {}
+    }
+  }
+
+  #Content {
+    LayoutMode: Top;
+
+    Group #List {
+      FlexWeight: 1;
+      LayoutMode: TopScrolling;
+      ScrollbarStyle: $C.@DefaultScrollbarStyle;
+    }
+  }
+}
+$C.@BackButton {}

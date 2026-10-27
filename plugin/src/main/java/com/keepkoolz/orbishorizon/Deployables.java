@@ -38,7 +38,7 @@ final class Deployables {
     private static final float[] BALLOON_NACELLE_MAX = {2.0f, 12.0f, 10.0f};
 
     /** Posts of the NPC pilot of the large balloon: at the pivot, resting on a stool, no door, no desk, no fixed captain seat. */
-    static final CrewSpec BALLOON_CREW = new CrewSpec(new int[]{0, 9, 8}, new int[]{1, 9, 9}, null, null, null, AirshipCrew::straightLegs);
+    static final CrewSpec BALLOON_CREW = new CrewSpec(new int[]{0, 9, 8}, new int[]{1, 9, 9}, null, null, null, AirshipCrew::straightLegs, 2);
 
     static final Kind BALLOON = new Kind(BALLOON_KIND, "Hotair_Balloon.prefab.json", StructureShape.ANCHOR_BLOCK, true,
             PLACE_MIN, PLACE_MAX,
@@ -180,7 +180,7 @@ final class Deployables {
                     "Airship_Exhaust_Smoke", "Airship_Burner_Flame",
                     true, true, true, true, null, 1f, false, null, null, "dirigeable", false,
                     new CrewSpec(new int[]{0, 8, -10}, new int[]{-2, 8, 4}, new int[]{0, 8, 2}, new int[]{0, 8, 9}, new int[]{0, 9, 8},
-                            AirshipCrew::walkLegs)));
+                            AirshipCrew::walkLegs, 1)));
 
     static final String STEAMBOAT_KIND = "steamboat";
     /** Steamboat, prefab frame before rotation: pivot = pilot cell, forbidden placement volume = whole prefab box. */
@@ -196,7 +196,7 @@ final class Deployables {
                     "Steamboat", "Steamboat", new String[]{"Airship_Exhaust_Smoke"}, new String[]{"Airship_Exhaust_Smoke"},
                     "Airship_Exhaust_Smoke", "Steamboat_Chimney_Smoke_Thick",
                     true, false, false, false, -2, 0.5f, true, "Steamboat", null, "bateau", false,
-                    new CrewSpec(STEAMBOAT_PIVOT, new int[]{0, 4, 8}, null, new int[]{0, 1, 8}, new int[]{0, 2, 7}, AirshipCrew::straightLegs)));
+                    new CrewSpec(STEAMBOAT_PIVOT, new int[]{0, 4, 8}, null, new int[]{0, 1, 8}, new int[]{0, 2, 7}, AirshipCrew::straightLegs, 1)));
 
     static final String STEAMBOAT_PUBLIC_KIND = "steamboat_public";
     /**
@@ -279,8 +279,8 @@ final class Deployables {
     static final int STATION_GRASS_Y = -1;
 
     /** Bounding box of the whole prefab (x 1..25, y -1..9, z -6..10): nothing can be placed inside the station. */
-    private static final int[] STATION_PLACE_MIN = {1, -1, -6};
-    private static final int[] STATION_PLACE_MAX = {25, 9, 10};
+    static final int[] STATION_PLACE_MIN = {1, -1, -6};
+    static final int[] STATION_PLACE_MAX = {25, 9, 10};
 
     /** The balloon station: marker = a brazier of the mod (one of the 6 braziers of the prefab), no burner, locked like the tents. */
     static final Kind STATION = new Kind(STATION_KIND, "Balloon_Landing_zone.prefab.json", "Balloon_Station_Marker", false,
@@ -322,8 +322,8 @@ final class Deployables {
             {0f, 0.6f, 7f}, {1f, 0.6f, 7f}, {2f, 0.6f, 7f}, {3f, 0.6f, 7f},
             {0f, 0.6f, 8f}, {1f, 0.6f, 8f}, {2f, 0.6f, 8f}, {3f, 0.6f, 8f}};
     static final Rotation BOAT_STATION_BERTH_ROTATION = Rotation.Ninety;
-    private static final int[] BOAT_STATION_PLACE_MIN = {-6, -10, 1};
-    private static final int[] BOAT_STATION_PLACE_MAX = {5, 3, 11};
+    static final int[] BOAT_STATION_PLACE_MIN = {-6, -10, 1};
+    static final int[] BOAT_STATION_PLACE_MAX = {5, 3, 11};
 
     /** The boat station: marker = Boat_Station_Map, no burner, locked like the tents. */
     static final Kind BOAT_STATION = new Kind(BOAT_STATION_KIND, "Boat_Station.prefab.json", "Boat_Station_Map", false,
@@ -536,8 +536,11 @@ final class Deployables {
         }
     }
 
-    /** Where an NPC pilot stands, rests and walks on a ship, and where the captain sits during a voyage (prefab frame). */
-    record CrewSpec(int[] helm, int[] rest, int[] door, int[] captainSeat, int[] desk, WalkPlan walk) {
+    /**
+     * Where an NPC pilot stands, rests and walks on a ship, and where the captain sits during a voyage (prefab frame).
+     * restRotation is the block rotation (0 to 3) of the seat at rest, which gives the way the seated mannequin faces.
+     */
+    record CrewSpec(int[] helm, int[] rest, int[] door, int[] captainSeat, int[] desk, WalkPlan walk, int restRotation) {
         /** Steps (prefab frame, block units) from a position to a post, excluding the post itself. */
         interface WalkPlan {
             List<double[]> legs(double[] from, CrewRecord.Post target);

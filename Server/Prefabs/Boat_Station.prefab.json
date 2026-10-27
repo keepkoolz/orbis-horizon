@@ -801,6 +801,150 @@
       "y": -5,
       "z": 10,
       "name": "Wood_Ash_Trunk"
+    },
+    {
+      "x": -5,
+      "y": -1,
+      "z": 3,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -5,
+      "y": -1,
+      "z": 4,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -5,
+      "y": -1,
+      "z": 5,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -5,
+      "y": -1,
+      "z": 6,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -4,
+      "y": -1,
+      "z": 3,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -4,
+      "y": -1,
+      "z": 4,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -4,
+      "y": -1,
+      "z": 5,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -4,
+      "y": -1,
+      "z": 6,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -3,
+      "y": -1,
+      "z": 3,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -3,
+      "y": -1,
+      "z": 4,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -3,
+      "y": -1,
+      "z": 5,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -3,
+      "y": -1,
+      "z": 6,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -5,
+      "y": -2,
+      "z": 3,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -5,
+      "y": -2,
+      "z": 4,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -5,
+      "y": -2,
+      "z": 5,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -5,
+      "y": -2,
+      "z": 6,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -4,
+      "y": -2,
+      "z": 3,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -4,
+      "y": -2,
+      "z": 4,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -4,
+      "y": -2,
+      "z": 5,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -4,
+      "y": -2,
+      "z": 6,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -3,
+      "y": -2,
+      "z": 3,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -3,
+      "y": -2,
+      "z": 4,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -3,
+      "y": -2,
+      "z": 5,
+      "name": "Wood_Hardwood_Planks"
+    },
+    {
+      "x": -3,
+      "y": -2,
+      "z": 6,
+      "name": "Wood_Hardwood_Planks"
     }
   ],
   "fluids": []

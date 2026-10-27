@@ -977,6 +977,17 @@ public final class BalloonManager {
     }
 
     /** Seated mannequin of the NPC pilot on the rest stool: same seat offset as a passenger, twin on the observer entity if dual. Never throws. */
+    /**
+     * Turns the crew mannequin of a balloon each tick: the client keeps the yaw of a mounted entity's own transform, so it is set to the
+     * balloon heading (its placement rotation, the balloon does not turn in flight) plus the mannequin's local yaw. Never throws.
+     */
+    private static void faceCrew(Store<EntityStore> store, BalloonFlight flight) {
+        AirshipCrew.Mannequin m = flight.crewMan;
+        if (m != null) {
+            AirshipCrew.faceYaw(store, m, (float) flight.rotation.getRadians() + m.localYaw);
+        }
+    }
+
     private void spawnCrewMannequin(Store<EntityStore> store, BalloonFlight flight, Deployables.Kind kind, Rotation rotation,
                                     CrewRecord crew, Object[] look, boolean standingAtHelm) {
         try {
@@ -986,6 +997,9 @@ public final class BalloonManager {
             flight.crewMan = AirshipCrew.createMannequin(store, flight.balloonUuid, flight.balloonRef, flight.dual ? flight.observerRef : null,
                     flight.pilotUuid, prefabPoint(flight.entityPos, rotation, seat), attachOffset(kind, seat), look, System.currentTimeMillis(),
                     standingAtHelm ? AirshipCrew.POSE_STAND : AirshipCrew.POSE_SIT);
+            if (flight.crewMan != null && !standingAtHelm) {
+                flight.crewMan.localYaw = AirshipCrew.seatYaw(Deployables.crewOf(kind.id).restRotation());
+            }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pilote de la montgolfière : mannequin non créé");
             Telemetry.error("balloon.flight", e, Telemetry.kindId(kind), null);
@@ -2053,6 +2067,7 @@ public final class BalloonManager {
             VehicleView.sync(store, flight.balloonRef, flight.observerRef);
             VehicleParts.sync(store, flight.parts, flight.balloonRef, flight.observerRef);
             PilotMannequin.sync(store, flight.pilotMan, flight.observerRef, flight.pilotRef, System.currentTimeMillis());
+            faceCrew(store, flight);
             AirshipCrew.syncMannequin(store, flight.crewMan, System.currentTimeMillis());
             BalloonLights.follow(store, flight);
             CageAnimals.follow(store, flight);
@@ -4435,6 +4450,7 @@ public final class BalloonManager {
         flight.entityPos.y = y;
         balloonTransform.setPosition(displayPosition(flight.kind, flight.entityPos, flight.rotation));
         VehicleParts.sync(store, flight.parts, flight.balloonRef, flight.observerRef);
+        faceCrew(store, flight);
         AirshipCrew.syncMannequin(store, flight.crewMan, now);
         BalloonLights.follow(store, flight);
         CageAnimals.follow(store, flight);

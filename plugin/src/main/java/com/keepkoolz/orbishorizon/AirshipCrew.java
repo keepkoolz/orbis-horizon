@@ -313,6 +313,25 @@ final class AirshipCrew {
         int anims;
         /** Animation replayed in the Movement slot: Sit on the stool, Idle standing at the helm. */
         String animId = POSE_SIT;
+        /** Yaw of the mannequin in the ship frame, added to the ship heading (0 at the helm, the seat's facing on a stool). */
+        float localYaw;
+    }
+
+    /**
+     * Ship-frame yaw of a seat block of the prefab, for the entity convention forward = (-sin yaw, -cos yaw) with the bow at
+     * the prefab -z (yaw 0). Block rotation 1 looks toward +x, 3 toward -x, 0 toward +z, 2 toward -z. Pure.
+     */
+    static float seatYaw(int rotation) {
+        switch (((rotation % 4) + 4) % 4) {
+            case 1:
+                return (float) (-Math.PI / 2);
+            case 3:
+                return (float) (Math.PI / 2);
+            case 0:
+                return (float) Math.PI;
+            default:
+                return 0f;
+        }
     }
 
     static final String POSE_SIT = "Sit";
@@ -453,6 +472,31 @@ final class AirshipCrew {
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pilote : pose assise du mannequin impossible");
+            Telemetry.error("airship.crew", e, null, null);
+        }
+    }
+
+    /**
+     * Turns a mounted mannequin to a world yaw (a mannequin keeps the yaw of its own transform whatever the entity it is mounted on turns
+     * to, so it is set explicitly, like PilotMannequin). An entity looks along (-sin yaw, -cos yaw): the bow heading of the ship
+     * (yawSign * theta) makes the pilot face the helm in front of him. Both renderings. Never throws.
+     */
+    static void faceYaw(Store<EntityStore> store, Mannequin m, float yaw) {
+        if (m == null) {
+            return;
+        }
+        try {
+            for (Ref<EntityStore> r : java.util.Arrays.asList(m.ref, m.twin)) {
+                if (!PassengerSeatView.valid(r)) {
+                    continue;
+                }
+                TransformComponent t = store.getComponent(r, TransformComponent.getComponentType());
+                if (t != null && t.getRotation().y != yaw) {
+                    t.setRotation(yawRotation(yaw));
+                }
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilote : lacet du mannequin non réglé");
             Telemetry.error("airship.crew", e, null, null);
         }
     }

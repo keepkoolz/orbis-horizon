@@ -148,11 +148,15 @@ final class HeldCratePreview {
             return;
         }
         BiomeWood.Wood wood = null;
+        BiomeStone.Stone stone = null;
         if (itemId.equals("Boat_Station_Crate")) {
             // Read only when the origin, rotation or item changed (this point is only reached then).
             wood = BiomeWood.woodAt(world, p.origin().x, p.origin().z, false);
+        } else if (itemId.equals("Balloon_Station_Crate")) {
+            wood = BiomeWood.stationWoodAt(world, p.origin().x, p.origin().z, false);
+            stone = BiomeStone.stoneAt(world, p.origin().x, p.origin().z, false);
         }
-        EditorBlocksChange blocks = encoded(crate.prefabPath(), p.rotation(), wood);
+        EditorBlocksChange blocks = encoded(crate.prefabPath(), p.rotation(), wood, stone, itemId.equals("Balloon_Station_Crate"));
         if (blocks == null) {
             return;
         }
@@ -186,9 +190,16 @@ final class HeldCratePreview {
      * The prefab turned like PrefabUtil.paste turns it (BlockSelection.rotate(Y, degrees) and Rotation use the same convention,
      * checked on a block: Ninety sends (x, z) to (z, -x) in both), in its network form. Null if the prefab is unreadable.
      */
-    private static EditorBlocksChange encoded(String prefabPath, Rotation rotation, BiomeWood.Wood wood) {
-        boolean remap = wood != null && !wood.equals(BiomeWood.DEFAULT);
-        String key = prefabPath + "#" + rotation.getDegrees() + (remap ? "#" + wood.species() : "");
+    private static EditorBlocksChange encoded(String prefabPath, Rotation rotation, BiomeWood.Wood wood, BiomeStone.Stone stone,
+                                              boolean balloonStation) {
+        boolean customWood = wood != null && (balloonStation || !wood.equals(BiomeWood.DEFAULT));
+        boolean customStone = stone != null && !stone.equals(BiomeStone.DEFAULT);
+        boolean remap = customWood || customStone;
+        String key = prefabPath + "#" + rotation.getDegrees() + (customWood ? "#" + wood.species() : "")
+                + (customStone ? "#" + stone.family() : "");
+        java.util.function.UnaryOperator<String> rename = balloonStation
+                ? n -> BiomeStone.remap(BiomeWood.remapStation(n, wood), stone)
+                : n -> BiomeWood.remap(n, wood);
         EditorBlocksChange cached = CACHE.get(key);
         if (cached != null) {
             return cached;
@@ -206,7 +217,7 @@ final class HeldCratePreview {
             }
             EditorBlocksChange pkt = sel.toPacket();
             if (remap) {
-                pkt = remapped(pkt, wood);
+                pkt = remapped(pkt, rename);
             }
             CACHE.put(key, pkt);
             return pkt;
@@ -216,8 +227,8 @@ final class HeldCratePreview {
         }
     }
 
-    /** Copy of the packet whose wood block ids are renamed to the biome wood (the cached unmapped packet is left untouched). */
-    private static EditorBlocksChange remapped(EditorBlocksChange src, BiomeWood.Wood wood) {
+    /** Copy of the packet whose block ids are renamed by the biome wood and zone stone (the cached unmapped packet is left untouched). */
+    private static EditorBlocksChange remapped(EditorBlocksChange src, java.util.function.UnaryOperator<String> rename) {
         if (src.blocksChange == null) {
             return src;
         }
@@ -231,7 +242,7 @@ final class HeldCratePreview {
                 if (type == null) {
                     return id;
                 }
-                String name = BiomeWood.remap(type.getId(), wood);
+                String name = rename.apply(type.getId());
                 int renamed = name.equals(type.getId()) ? id
                         : BlockType.getAssetMap().getIndex(name);
                 return renamed < 0 ? id : renamed;

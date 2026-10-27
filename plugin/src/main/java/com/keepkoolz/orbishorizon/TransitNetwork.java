@@ -118,6 +118,14 @@ final class TransitNetwork {
         return null;
     }
 
+    /** The station of this world whose origin has these x and z (any height), null if none. */
+    Station atColumn(String world, int x, int z) {
+        for (Station s : stations) {
+            if (s.world.equals(world) && s.origin.x == x && s.origin.z == z) return s;
+        }
+        return null;
+    }
+
     Station nearest(String world, Vector3d pos, double maxDist) {
         Station best = null;
         double bestD = maxDist * maxDist;

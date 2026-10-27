@@ -34,9 +34,14 @@ final class OwnedMarkerProvider implements WorldMapManager.MarkerProvider {
         world.getWorldMapManager().addMarkerProvider(PROVIDER_ID, INSTANCE);
     }
 
-    /** True if the viewer may see the marker: owner, or anyone when shared. A structure without owner has none. */
+    /** True if the viewer may see the marker: owner, or anyone when shared and sharing is on. A structure without owner has none. */
     static boolean visibleTo(Ownership own, UUID viewer) {
-        return own.owner() != null && (own.shared() || own.owner().equals(viewer));
+        return visibleTo(own, viewer, TransitSettings.markerSharing());
+    }
+
+    /** Pure form of visibleTo: with sharing off the shared flag is ignored and only the owner sees the marker. */
+    static boolean visibleTo(Ownership own, UUID viewer, boolean sharingOn) {
+        return own.owner() != null && ((sharingOn && own.shared()) || own.owner().equals(viewer));
     }
 
     /** Map icon file of a structure type, null when it gets no marker (stations, public balloons). */
@@ -123,7 +128,7 @@ final class OwnedMarkerProvider implements WorldMapManager.MarkerProvider {
         }
         MapMarkerBuilder marker = new MapMarkerBuilder(markerId(own.id()), icon, new Transform(p.x, p.y, p.z))
                 .withName(name);
-        if (own.owner().equals(viewer)) {
+        if (own.owner().equals(viewer) && TransitSettings.markerSharing()) {
             // Menu entry: translation key as name, command without the leading slash (the client adds its own).
             String action = own.shared() ? "unshare" : "share";
             marker.withContextMenuItem(new ContextMenuItem("server.orbis_horizon.map.menu." + action,

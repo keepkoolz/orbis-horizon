@@ -70,6 +70,8 @@ final class BoatQuay {
         /** A launch is scheduled on the world thread. */
         volatile boolean busy;
         volatile long retryAtMs;
+        /** The moored shuttle lies the other way round (opposite of the usual berth heading), see BoatRoutes.berthRotation. */
+        volatile boolean flipped;
         /** Departures that failed since the shuttle docked: the shuttle is taken away after MAX_DEPART_TRIES. */
         volatile int departFailures;
         /** Until then nothing comes to the berth: gap after a shuttle left it. */
@@ -485,13 +487,15 @@ final class BoatQuay {
         if (q.busy) {
             return;
         }
-        if (BalloonRegistry.get(world, BoatRoutes.berthOrigin(s), BoatRoutes.berthRotation(s), Deployables.STEAMBOAT_PUBLIC.id) == null) {
+        Rotation moored = mooredRotation(world, s);
+        if (moored == null) {
             LOGGER.at(Level.INFO).log("Station maritime %s : navette à quai disparue, quai libéré", s.name);
             MooredPilot.remove(world, BoatRoutes.berthOrigin(s));
             q.cleared(now);
             return;
         }
-        MooredPilot.tick(store, world, s, now); // the pilot stands at the helm while the shuttle waits at the pier
+        q.flipped = moored == BoatRoutes.berthRotation(s, true);
+        MooredPilot.tick(store, world, s, q.flipped, now); // the pilot stands at the helm while the shuttle waits at the pier
         long leftMs = q.deadlineMs - now;
         int seconds = (int) Math.ceil(leftMs / 1000.0);
         int announce = -1;
@@ -529,7 +533,9 @@ final class BoatQuay {
     private static void depart(Store<EntityStore> store, World world, TransitNetwork.Station s, Quay q) throws IOException {
         long now = System.currentTimeMillis();
         Vector3i origin = BoatRoutes.berthOrigin(s);
-        Rotation rotation = BoatRoutes.berthRotation(s);
+        Rotation found = mooredRotation(world, s);
+        boolean flipped = found != null ? found == BoatRoutes.berthRotation(s, true) : q.flipped;
+        Rotation rotation = BoatRoutes.berthRotation(s, flipped);
         if (!areaLoaded(world, s, BoatRoutes.berthCentre(s))) {
             loadArea(world, s, BoatRoutes.berthCentre(s));
             q.deadlineMs = now + RETRY_MS;
@@ -577,7 +583,7 @@ final class BoatQuay {
             unmoored = true;
             ShuttleState st = new ShuttleState(s, dest, route, ShuttleState.Phase.SAIL, now);
             st.listener = LISTENER;
-            f = am.launchShuttle(store, world, BoatRoutes.berthPivot(s), BoatRoutes.berthTheta(s), st, riders,
+            f = am.launchShuttle(store, world, BoatRoutes.berthPivot(s, flipped), BoatRoutes.berthTheta(s, flipped), st, riders,
                     BoatAutopilot.masterLook(store, world, s));
         } catch (IOException | RuntimeException e) {
             // The riders were prepared but no flight holds them: release them and put them down on the pier.
@@ -649,8 +655,8 @@ final class BoatQuay {
                 broadcast(world, s, Texts.t("transit.boat.approachFailed"));
             }
             Vector3i origin = BoatRoutes.berthOrigin(s);
-            Rotation rotation = BoatRoutes.berthRotation(s);
-            if (BalloonRegistry.get(world, origin, rotation, Deployables.STEAMBOAT_PUBLIC.id) != null) {
+            Rotation rotation = mooredRotation(world, s);
+            if (rotation != null) {
                 AirshipManager.get().unmoorShuttle(world, origin, rotation);
             }
         } catch (IOException | RuntimeException e) {
@@ -781,7 +787,9 @@ final class BoatQuay {
                 TRIPS.remove(f.id);
                 TransitNetwork.Station s = t.station;
                 Quay q = quay(s);
-                if (am.moorShuttle(store, f, BoatRoutes.berthOrigin(s), BoatRoutes.berthRotation(s))) {
+                boolean flip = f.shuttle != null && f.shuttle.flipped(); // the heading the shuttle arrived with
+                if (am.moorShuttle(store, f, BoatRoutes.berthOrigin(s), BoatRoutes.berthRotation(s, flip))) {
+                    q.flipped = flip;
                     q.docked(now);
                     String head = TransitNetwork.get().queueHead(s);
                     broadcast(f.world, s, Texts.t("transit.boat.docked").param("name", head != null ? head : s.name)
@@ -917,9 +925,9 @@ final class BoatQuay {
     private static void removeMoored(World world, TransitNetwork.Station removed, boolean firstTry) {
         try {
             Vector3i origin = BoatRoutes.berthOrigin(removed);
-            Rotation rotation = BoatRoutes.berthRotation(removed);
             MooredPilot.remove(world, origin); // the pilot is an entity of his own: gone whatever happens to the blocks
-            if (BalloonRegistry.get(world, origin, rotation, Deployables.STEAMBOAT_PUBLIC.id) == null) {
+            Rotation rotation = mooredRotation(world, removed);
+            if (rotation == null) {
                 return;
             }
             Vector3d centre = BoatRoutes.berthCentre(removed);
@@ -1029,8 +1037,9 @@ final class BoatQuay {
             world.execute(() -> {
                 for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName(), Deployables.BOAT_STATION_KIND)) {
                     Quay q = quay(s);
-                    if (q.state == QuayState.FREE && BalloonRegistry.get(world, BoatRoutes.berthOrigin(s), BoatRoutes.berthRotation(s),
-                            Deployables.STEAMBOAT_PUBLIC.id) != null) {
+                    Rotation moored = q.state == QuayState.FREE ? mooredRotation(world, s) : null;
+                    if (moored != null) {
+                        q.flipped = moored == BoatRoutes.berthRotation(s, true);
                         LOGGER.at(Level.INFO).log("Station maritime %s : navette à quai retrouvée, compte à rebours de %d s", s.name,
                                 TransitConstants.COUNTDOWN_SECONDS);
                         q.docked(System.currentTimeMillis());
@@ -1043,6 +1052,18 @@ final class BoatQuay {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /** Rotation of the shuttle moored in blocks at the berth of this station (registry, the usual heading or the opposite one), null when none. */
+    static Rotation mooredRotation(World world, TransitNetwork.Station s) {
+        Vector3i origin = BoatRoutes.berthOrigin(s);
+        for (boolean flipped : new boolean[] {false, true}) {
+            Rotation r = BoatRoutes.berthRotation(s, flipped);
+            if (BalloonRegistry.get(world, origin, r, Deployables.STEAMBOAT_PUBLIC.id) != null) {
+                return r;
+            }
+        }
+        return null;
+    }
 
     /** Sections of the berth and of the point (a shuttle spawn point or the berth centre), from under the hull to above the funnels. */
     private static boolean areaLoaded(World world, TransitNetwork.Station s, Vector3d point) {

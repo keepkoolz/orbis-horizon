@@ -33,6 +33,7 @@ final class WaterLog {
     /** Arrival cell kept out of the station zone for any heading: zone radius plus the hull reach. */
     static final int STATION_STANDOFF = TransitConstants.STATION_ZONE_RADIUS + HULL_REACH;
 
+    private static final int MAX_EXPANDED = 200_000; // cells expanded by one log search
     private static final int START_SEARCH = 8;  // cells around the start looked at for the nearest log cell
     private static final int[][] DIRS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
 
@@ -216,7 +217,7 @@ final class WaterLog {
                 found = true;
                 break;
             }
-            if (++expanded > WaterRoute.MAX_EXPANDED) {
+            if (++expanded > MAX_EXPANDED) {
                 break;
             }
             double cg = g.get(ck);

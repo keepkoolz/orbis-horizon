@@ -1,0 +1,16 @@
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Left;
+  Anchor: (Bottom: 8);
+
+  Label #Label {
+    FlexWeight: 1;
+    Anchor: (Left: 6);
+    Style: (...$C.@DefaultLabelStyle, VerticalAlignment: Center, Wrap: true);
+  }
+
+  $C.@DropdownBox #Input {
+    @Anchor = (Right: 6);
+  }
+}

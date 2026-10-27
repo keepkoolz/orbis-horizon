@@ -83,7 +83,14 @@
         "transit.boatTrip",
         "cage.capture",
         "glider.jump",
-        "camp.upgrade"
+        "camp.upgrade",
+        "worldgen.station.air",
+        "worldgen.station.boat",
+        "worldgen.station.abandoned",
+        "worldgen.boat.built.first",
+        "worldgen.boat.built.fallback",
+        "worldgen.boat.built.repaired",
+        "worldgen.boat.exhausted"
       ],
       "details": {
         "deploy.balloon": {
@@ -248,6 +255,55 @@
           }
         },
         "camp.upgrade": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "worldgen.station.air": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "worldgen.station.boat": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "worldgen.station.abandoned": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "worldgen.boat.built.first": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "worldgen.boat.built.fallback": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "worldgen.boat.built.repaired": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "worldgen.boat.exhausted": {
           "allowedFields": {
             "count": {
               "type": "number"

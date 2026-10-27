@@ -48,7 +48,14 @@ final class BalloonRegistry {
      */
     record Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
                  java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall,
-                 java.util.List<ShipLadder.Saved> ladders, String wood, WaterLog water, SkyLog sky) {
+                 java.util.List<ShipLadder.Saved> ladders, String wood, WaterLog water, SkyLog sky, String stone) {
+        /** An entry without a stone family (the original basalt). */
+        Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
+              java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall,
+              java.util.List<ShipLadder.Saved> ladders, String wood, WaterLog water, SkyLog sky) {
+            this(world, x, y, z, rotation, kind, owner, descent, open, animals, id, ownerName, shared, crew, recall, ladders, wood, water, sky, null);
+        }
+
         /** An entry without a sky log (everything but a vehicle whose pilot learns destinations). */
         Entry(String world, int x, int y, int z, Rotation rotation, String kind, UUID owner, int descent, boolean open,
               java.util.List<CageAnimals.Animal> animals, UUID id, String ownerName, boolean shared, CrewRecord crew, Recall recall,
@@ -205,6 +212,11 @@ final class BalloonRegistry {
         if (base != null && e.wood() != null && Deployables.BOAT_STATION_KIND.equals(e.kind())) {
             return BOAT_WOOD_SHAPES.computeIfAbsent(e.wood(), w -> remapShape(base, BiomeWood.woodOf(w)));
         }
+        if (base != null && (e.wood() != null || e.stone() != null) && Deployables.STATION_KIND.equals(e.kind())) {
+            return STATION_SHAPES.computeIfAbsent(e.wood() + "/" + e.stone(), k -> remapStationShape(base,
+                    e.wood() == null ? null : BiomeWood.woodOf(e.wood()),
+                    e.stone() == null ? null : new BiomeStone.Stone(e.stone()), BiomeWood::blockExists));
+        }
         if (base == null || !TransportCage.isTransport(kind)) {
             return base;
         }
@@ -212,10 +224,22 @@ final class BalloonRegistry {
     }
 
     private static final java.util.Map<String, StructureShape> BOAT_WOOD_SHAPES = new ConcurrentHashMap<>();
+    private static final java.util.Map<String, StructureShape> STATION_SHAPES = new ConcurrentHashMap<>();
 
     /** The shape with every block name passed through BiomeWood.remap (same positions, fillers and rotations of the prefab). */
     static StructureShape remapShape(StructureShape base, BiomeWood.Wood wood) {
         return remapShape(base, wood, BiomeWood::blockExists);
+    }
+
+    /** The balloon station shape with its Softwood renamed to the biome wood and its basalt bricks to the zone stone. */
+    static StructureShape remapStationShape(StructureShape base, BiomeWood.Wood wood, BiomeStone.Stone stone,
+                                            java.util.function.Predicate<String> exists) {
+        java.util.List<StructureShape.Cell> cells = new java.util.ArrayList<>(base.cells().size());
+        for (StructureShape.Cell c : base.cells()) {
+            String name = BiomeStone.remap(BiomeWood.remapStation(c.name(), wood, exists), stone, exists);
+            cells.add(new StructureShape.Cell(c.x(), c.y(), c.z(), name, c.filler()));
+        }
+        return base.withCells(cells);
     }
 
     static StructureShape remapShape(StructureShape base, BiomeWood.Wood wood, java.util.function.Predicate<String> exists) {
@@ -268,7 +292,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, old.crew, recall, old.ladders, old.wood, old.water, old.sky);
+                old.animals, old.id, old.ownerName, old.shared, old.crew, recall, old.ladders, old.wood, old.water, old.sky, old.stone);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -288,7 +312,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, descent, open, old.animals,
-                old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water, old.sky);
+                old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water, old.sky, old.stone);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         cageDirty = true;
@@ -308,7 +332,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, java.util.List.copyOf(ladders), old.wood, old.water, old.sky);
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, java.util.List.copyOf(ladders), old.wood, old.water, old.sky, old.stone);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         cageDirty = true;
@@ -328,7 +352,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                java.util.List.copyOf(animals), old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water, old.sky);
+                java.util.List.copyOf(animals), old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water, old.sky, old.stone);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -345,7 +369,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, crew, old.recall, old.ladders, old.wood, old.water, old.sky);
+                old.animals, old.id, old.ownerName, old.shared, crew, old.recall, old.ladders, old.wood, old.water, old.sky, old.stone);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -359,7 +383,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water, sky);
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water, sky, old.stone);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -373,7 +397,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, water, old.sky);
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, water, old.sky, old.stone);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -398,7 +422,32 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, wood, old.water, old.sky);
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, wood, old.water, old.sky, old.stone);
+        ENTRIES.remove(old);
+        ENTRIES.add(next);
+        save();
+        return next;
+    }
+
+    /** Sets the stone family of a placed balloon station (null: the original basalt), written at once. Null if not registered. */
+    static synchronized Entry setStone(World world, Vector3i origin, Rotation rotation, String kind, String family) {
+        return setStoneNamed(world.getName(), origin, rotation, kind, family);
+    }
+
+    /** Same as setStone with the world name (also used by tests). */
+    static synchronized Entry setStoneNamed(String worldName, Vector3i origin, Rotation rotation, String kind, String family) {
+        Entry old = null;
+        for (Entry e : ENTRIES) {
+            if (e.world.equals(worldName) && e.x == origin.x && e.y == origin.y && e.z == origin.z && e.rotation == rotation
+                    && e.kind.equals(kind)) {
+                old = e;
+            }
+        }
+        if (old == null) {
+            return null;
+        }
+        Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
+                old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water, old.sky, family);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -475,7 +524,7 @@ final class BalloonRegistry {
             return null;
         }
         Entry next = new Entry(old.world, old.x, old.y, old.z, old.rotation, old.kind, old.owner, old.descent, old.open,
-                old.animals, old.id, old.ownerName, shared, old.crew, old.recall, old.ladders, old.wood, old.water, old.sky);
+                old.animals, old.id, old.ownerName, shared, old.crew, old.recall, old.ladders, old.wood, old.water, old.sky, old.stone);
         ENTRIES.remove(old);
         ENTRIES.add(next);
         save();
@@ -681,6 +730,9 @@ final class BalloonRegistry {
         if (e.wood != null) {
             d.put("wood", new BsonString(e.wood));
         }
+        if (e.stone != null) {
+            d.put("stone", new BsonString(e.stone));
+        }
         if (e.water != null && !e.water.isEmpty()) {
             d.put("water", e.water.toBson());
         }
@@ -726,7 +778,8 @@ final class BalloonRegistry {
                 d.containsKey("ladders") ? laddersFromBson(d.getArray("ladders")) : java.util.List.of(),
                 d.containsKey("wood") ? d.getString("wood").getValue() : null,
                 d.containsKey("water") ? WaterLog.fromBson(d.getDocument("water")) : null,
-                d.containsKey("sky") ? SkyLog.fromBson(d.getDocument("sky")) : null);
+                d.containsKey("sky") ? SkyLog.fromBson(d.getDocument("sky")) : null,
+                d.containsKey("stone") ? d.getString("stone").getValue() : null);
     }
 
     private static void load() {

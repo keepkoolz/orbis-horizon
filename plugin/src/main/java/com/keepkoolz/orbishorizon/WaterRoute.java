@@ -37,8 +37,12 @@ final class WaterRoute {
     private static final int TURN_DATA_RETRIES = 3;
     /** Turn circles judged per step call at most with the tick budget of 2,000 nodes (each is about 1,100 column reads). */
     private static final int TURN_BUDGET = 6;
-    static final int MAX_LENGTH = 1500;
-    static final int MAX_EXPANDED = 200_000;
+    /** Distance from a berth within which the open water check looks for a way out. */
+    static final int EXIT_RADIUS = 64;
+    /** Distance from the berth a free turn circle must be at, to count as open water. */
+    static final int EXIT_MIN_DISTANCE = 40;
+    static final int MAX_LENGTH = 4000;
+    static final int MAX_EXPANDED = 550_000;
 
     private WaterRoute() {
     }
@@ -46,6 +50,17 @@ final class WaterRoute {
     /** Key of a world column in the set given to {@link Search#avoiding}. */
     static long columnKey(int x, int z) {
         return ((long) x << 32) | (z & 0xFFFFFFFFL);
+    }
+
+    /**
+     * True when a shuttle moored at (fromX, fromZ) can sail out to open water under the route rules: a flood fill over the grid
+     * nodes whose point keeps the leg clearance (tapered near the start like a route), reaching a node at least EXIT_MIN_DISTANCE
+     * from the start whose whole turn circle is water. An unloaded column counts as blocked.
+     */
+    static boolean exitsToOpenWater(ColumnProbe probe, int fromX, int fromZ) {
+        int half = EXIT_RADIUS + TURN_CLEARANCE;
+        return new Search(probe, fromX, fromZ, fromX, fromZ, fromX - half, fromZ - half, fromX + half, fromZ + half)
+                .reachesOpenWater(EXIT_MIN_DISTANCE);
     }
 
     enum Status { RUNNING, NEED_DATA, FOUND, NO_ROUTE }
@@ -345,6 +360,39 @@ final class WaterRoute {
                 }
             }
             return done = Status.NO_ROUTE;
+        }
+
+        /**
+         * Flood fill from the start node through passable nodes (8 neighbours, as in step). True as soon as a reached node centre is at
+         * least minDistance from the start and its whole turn circle is clear. Nodes with an unloaded column count as blocked.
+         */
+        boolean reachesOpenWater(int minDistance) {
+            if (!nodeInGrid(startGx, startGz) || nodeState(startGx, startGz) != YES) {
+                return false;
+            }
+            java.util.ArrayDeque<int[]> queue = new java.util.ArrayDeque<>();
+            closed[nodeIndex(startGx, startGz)] = true;
+            queue.add(new int[] {startGx, startGz});
+            while (!queue.isEmpty()) {
+                int[] n = queue.poll();
+                int cx = centre(n[0]);
+                int cz = centre(n[1]);
+                if (Math.hypot(cx - fromX, cz - fromZ) >= minDistance && Boolean.TRUE.equals(turnClear(cx, cz))) {
+                    return true;
+                }
+                for (int[] d : DIRS) {
+                    int nx = n[0] + d[0];
+                    int nz = n[1] + d[1];
+                    if (!nodeInGrid(nx, nz) || closed[nodeIndex(nx, nz)]) {
+                        continue;
+                    }
+                    if (nodeState(nx, nz) == YES) {
+                        closed[nodeIndex(nx, nz)] = true;
+                        queue.add(new int[] {nx, nz});
+                    }
+                }
+            }
+            return false;
         }
 
         private double heuristic(int gx, int gz) {

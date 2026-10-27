@@ -1,0 +1,19 @@
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Left;
+  Anchor: (Bottom: 8);
+
+  ItemIcon #Icon {
+    Anchor: (Width: 32, Height: 32, Left: 6, Right: 10);
+  }
+
+  Label #Label {
+    FlexWeight: 1;
+    Style: (...$C.@DefaultLabelStyle, VerticalAlignment: Center, Wrap: true);
+  }
+
+  $C.@CheckBox #Input {
+    Anchor: (Width: 26, Height: 26, Right: 6);
+  }
+}

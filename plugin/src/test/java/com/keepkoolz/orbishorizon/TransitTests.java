@@ -13,7 +13,9 @@ import java.util.Map;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.SplittableRandom;
 import java.util.UUID;
+import java.util.concurrent.PriorityBlockingQueue;
 
 /** Plain test harness: one static method per test, no library. */
 public class TransitTests {
@@ -125,14 +127,736 @@ public class TransitTests {
         check(!LegacyCamps.bagCellFree(false, true), "water");
     }
 
+    /** Fake terrain from a character map: one cell is 16 blocks, x grows along a row, z grows down the rows. */
+    static class GridProbe implements TerrainProbe {
+        private final String[] rows;
+
+        GridProbe(String... rows) {
+            this.rows = rows;
+        }
+
+        private char cell(int x, int z) {
+            int r = Math.max(0, Math.min(rows.length - 1, Math.floorDiv(z, 16)));
+            String row = rows[r];
+            int c = Math.max(0, Math.min(row.length() - 1, Math.floorDiv(x, 16)));
+            return row.charAt(c);
+        }
+
+        @Override
+        public int height(int x, int z) {
+            return cell(x, z) == '#' ? 120 : 100;
+        }
+
+        @Override
+        public String zone(int x, int z) {
+            return switch (cell(x, z)) {
+                case '~' -> "Oceans";
+                case 's' -> "Zone1_Shore";
+                default -> "Zone1_Tier1";
+            };
+        }
+
+        @Override
+        public String biome(int x, int z) {
+            return switch (cell(x, z)) {
+                case 'l' -> "Lake";
+                case 'r' -> "River";
+                case 's' -> "Tile.Beach";
+                default -> "";
+            };
+        }
+    }
+
+    static void seaRulesSeaVsLake() {
+        GridProbe g = new GridProbe("#~lrs");
+        int[] x = {8, 24, 40, 56, 72};
+        boolean[] sea = {false, true, false, false, true};
+        boolean[] water = {false, true, true, true, true};
+        for (int i = 0; i < x.length; i++) {
+            check(SeaRules.isSea(g, x[i], 8) == sea[i], "isSea cell " + i);
+            check(SeaRules.isWater(g, x[i], 8) == water[i], "isWater cell " + i);
+            check(SeaRules.isLand(g, x[i], 8) == !water[i], "isLand cell " + i);
+        }
+        eq(114, SeaRules.SEA_LEVEL);
+    }
+
+
+    /** One row of the given runs: a character repeated for a number of 16 block cells. */
+    private static GridProbe strip(Object... runs) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < runs.length; i += 2) {
+            sb.append(String.valueOf(runs[i]).repeat((Integer) runs[i + 1]));
+        }
+        return new GridProbe(sb.toString());
+    }
+
+    private static List<WorldStationPlanner.PlannedSite> plan(TerrainProbe t, int cellX, List<int[]> existing) {
+        return WorldStationPlanner.planSeaCell(5L, cellX, 0, t, existing);
+    }
+
+    static void facingMatchesPierEnd() {
+        for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+            Vector3i v = WorldStationPlanner.facing(d[0], d[1]).rotateYaw(new Vector3i(0, 0, 1), new Vector3i());
+            eq(d[0], v.x);
+            eq(d[1], v.z);
+        }
+        eq(Rotation.None, WorldStationPlanner.facing(0, 1));
+        eq(Rotation.OneEighty, WorldStationPlanner.facing(0, -1));
+        eq(0, WorldStationPlanner.cellOf(2047));
+        eq(-1, WorldStationPlanner.cellOf(-1));
+    }
+
+    static void seaCellPicksShore() {
+        GridProbe g = strip('~', 64, '#', 64);
+        List<WorldStationPlanner.PlannedSite> sites = plan(g, 0, List.of());
+        check(!sites.isEmpty(), "a station is planned");
+        WorldStationPlanner.PlannedSite s = sites.get(0);
+        eq(Deployables.BOAT_STATION_KIND, s.kind());
+        eq(1024, s.x());
+        check(!s.partner(), "not a partner");
+        eq(WorldStationPlanner.facing(-1, 0), s.rotation());
+        check(SeaRules.isLand(g, s.x(), s.z()), "on land");
+        check(SeaRules.isSea(g, s.x() - 8, s.z()), "sea ahead");
+    }
+
+    /** Fake terrain recording the heights asked for: land everywhere, or sea (zone Oceans) from x seaFromX on. */
+    private static class CountingProbe implements TerrainProbe {
+        final int seaFromX;
+        int heightCalls;
+        int minHeightX = Integer.MAX_VALUE;
+
+        CountingProbe(int seaFromX) {
+            this.seaFromX = seaFromX;
+        }
+
+        @Override
+        public int height(int x, int z) {
+            heightCalls++;
+            minHeightX = Math.min(minHeightX, x);
+            return x >= seaFromX ? 100 : 120;
+        }
+
+        @Override
+        public String zone(int x, int z) {
+            return x >= seaFromX ? "Oceans" : "Zone1_Tier1";
+        }
+
+        @Override
+        public String biome(int x, int z) {
+            return "";
+        }
+    }
+
+    static void seaCellRejectsInland() {
+        CountingProbe p = new CountingProbe(Integer.MAX_VALUE);
+        check(plan(p, 0, List.of()).isEmpty(), "no station inland");
+        eq(0, p.heightCalls);
+        check(WorldStationPlanner.seaSamples(p, 0, 0).isEmpty(), "no sea sample inland");
+    }
+
+    static void seaCellSkipsFarColumns() {
+        CountingProbe p = new CountingProbe(1900);
+        check(!WorldStationPlanner.seaSamples(p, 0, 0).isEmpty(), "sea sampled");
+        List<WorldStationPlanner.PlannedSite> sites = plan(p, 0, List.of());
+        check(!sites.isEmpty(), "a station is planned");
+        check(p.minHeightX >= 1900 - WorldStationPlanner.SEA_NEAR - WorldStationPlanner.ZONE_STEP,
+            "no height asked far from the sea: " + p.minHeightX);
+        WorldStationPlanner.PlannedSite s = sites.get(0);
+        check(SeaRules.isLand(p, s.x(), s.z()), "on land");
+        check(s.x() > 1800 && s.x() < 1900, "on the coast: " + s.x());
+    }
+
+    private static boolean pierEndIsSea(TerrainProbe t, WorldStationPlanner.PlannedSite s) {
+        Vector3i end = s.rotation().rotateYaw(new Vector3i(Deployables.BOAT_STATION_PIER_END[0],
+                Deployables.BOAT_STATION_PIER_END[1], Deployables.BOAT_STATION_PIER_END[2]), new Vector3i());
+        return SeaRules.isSea(t, s.x() + end.x, s.z() + end.z);
+    }
+
+    /** Straight shore along one axis: land where (coordinate * sign) is below edge * sign, sea beyond. */
+    private static TerrainProbe straightShore(boolean alongX, int edge, int sign) {
+        return new TerrainProbe() {
+            private boolean sea(int x, int z) {
+                int c = alongX ? x : z;
+                return sign > 0 ? c >= edge : c < edge;
+            }
+
+            @Override
+            public int height(int x, int z) {
+                return sea(x, z) ? 100 : 120;
+            }
+
+            @Override
+            public String zone(int x, int z) {
+                return sea(x, z) ? "Oceans" : "Zone1_Tier1";
+            }
+
+            @Override
+            public String biome(int x, int z) {
+                return "";
+            }
+        };
+    }
+
+    static void seaCellAnyShoreOffset() {
+        Object[][] cases = {
+            {true, 1, 1009, 1, 0}, {true, -1, 1010, -1, 0}, {false, 1, 1009, 0, 1}, {false, -1, 1010, 0, -1}};
+        for (Object[] c : cases) {
+            boolean alongX = (Boolean) c[0];
+            int sign = (Integer) c[1];
+            TerrainProbe t = straightShore(alongX, 1010, sign);
+            List<WorldStationPlanner.PlannedSite> sites = plan(t, 0, List.of());
+            check(!sites.isEmpty(), "station for shore " + alongX + " " + sign);
+            WorldStationPlanner.PlannedSite s = sites.get(0);
+            eq((Integer) c[2], alongX ? s.x() : s.z());
+            eq(WorldStationPlanner.facing((Integer) c[3], (Integer) c[4]), s.rotation());
+            check(pierEndIsSea(t, s), "pier end on sea " + alongX + " " + sign);
+        }
+    }
+
+    static void seaCellDeterministic() {
+        GridProbe g = strip('~', 64, '#', 64);
+        eq(plan(g, 0, List.of()), plan(g, 0, List.of()));
+    }
+
+    static void seaCellIgnoresLake() {
+        eq(0, plan(strip('#', 64, 'l', 64), 0, List.of()).size());
+        eq(0, plan(strip('l', 128), 0, List.of()).size());
+    }
+
+    private interface Heights {
+        int at(int x, int z);
+    }
+
+    private static TerrainProbe heights(Heights h) {
+        return new TerrainProbe() {
+            @Override
+            public int height(int x, int z) {
+                return h.at(x, z);
+            }
+
+            @Override
+            public String zone(int x, int z) {
+                return "Zone1_Tier1";
+            }
+
+            @Override
+            public String biome(int x, int z) {
+                return "";
+            }
+        };
+    }
+
+    /** True when the station footprint (rotated box) lies outside the square of half PORTAL_HALF around the portal. */
+    private static boolean outsidePortal(WorldStationPlanner.PlannedSite s, int px, int pz) {
+        Vector3i a = s.rotation().rotateYaw(new Vector3i(Deployables.STATION_PLACE_MIN[0], 0, Deployables.STATION_PLACE_MIN[2]), new Vector3i());
+        Vector3i b = s.rotation().rotateYaw(new Vector3i(Deployables.STATION_PLACE_MAX[0], 0, Deployables.STATION_PLACE_MAX[2]), new Vector3i());
+        int h = WorldStationPlanner.PORTAL_HALF;
+        return s.x() + Math.max(a.x, b.x) < px - h || s.x() + Math.min(a.x, b.x) > px + h
+                || s.z() + Math.max(a.z, b.z) < pz - h || s.z() + Math.min(a.z, b.z) > pz + h;
+    }
+
+    static void portalPicksFlatSpot() {
+        TerrainProbe t = heights((x, z) -> 120 + Math.max(0, 30 - z));
+        WorldStationPlanner.PlannedSite s = WorldStationPlanner.planPortal(0, 0, t, List.of());
+        check(s != null, "a station is planned");
+        eq(Deployables.STATION_KIND, s.kind());
+        check(!s.partner(), "not a partner");
+        check(s.z() >= 30, "south of the portal, off the hill");
+        check(outsidePortal(s, 0, 0), "outside the portal square");
+        long d2 = (long) s.x() * s.x() + (long) s.z() * s.z();
+        check(d2 >= 40L * 40 && d2 <= 90L * 90, "within the ring");
+    }
+
+    static void portalAvoidsWater() {
+        TerrainProbe t = heights((x, z) -> x >= 30 ? 100 : 120);
+        WorldStationPlanner.PlannedSite s = WorldStationPlanner.planPortal(0, 0, t, List.of());
+        check(s != null, "a station is planned");
+        check(s.x() < 30, "on the dry side");
+        check(outsidePortal(s, 0, 0), "outside the portal square");
+    }
+
+    static void portalRespectsNetwork() {
+        TerrainProbe t = heights((x, z) -> 120);
+        check(WorldStationPlanner.planPortal(0, 0, t, List.of(new int[] {1300, 0})) == null, "air station at 1300");
+        check(WorldStationPlanner.planPortal(0, 0, t, List.of(new int[] {1500, 0})) != null, "air station at exactly 1500");
+    }
+
+    static void portalSecondInRangeRefused() {
+        TerrainProbe t = heights((x, z) -> 120);
+        WorldStationPlanner.PlannedSite first = WorldStationPlanner.planPortal(0, 0, t, List.of());
+        check(first != null, "first portal planned");
+        List<int[]> air = new ArrayList<>();
+        air.add(new int[] {first.x(), first.z()});
+        check(WorldStationPlanner.planPortal(900, 0, t, air) == null, "second portal at 900 refused");
+    }
+
+    static void portalNoFlatSpot() {
+        TerrainProbe t = heights((x, z) -> 120 + 3 * Math.floorDiv(x, 6));
+        check(WorldStationPlanner.planPortal(0, 0, t, List.of()) == null, "staircase everywhere");
+    }
+
+    static void seaCellRespectsNetwork() {
+        GridProbe g = strip('~', 64, '#', 64);
+        WorldStationPlanner.PlannedSite s = plan(g, 0, List.of()).get(0);
+        // a station in the middle of the cell's shore is within SPACING of every candidate
+        eq(0, plan(g, 0, List.of(new int[] {s.x(), 1024})).size());
+        int[] near = {s.x() + 1000, s.z()};
+        for (WorldStationPlanner.PlannedSite p : plan(g, 0, List.of(near))) {
+            if (!p.partner()) {
+                long dx = p.x() - near[0], dz = p.z() - near[1];
+                check(dx * dx + dz * dz >= (long) WorldStationPlanner.SPACING * WorldStationPlanner.SPACING, "main site keeps its spacing");
+            }
+        }
+        check(!plan(g, 0, List.<int[]>of(new int[] {s.x() + 1600, s.z()})).isEmpty(), "far station does not block");
+    }
+
+    static void seaCellSkipsSpacedMain() {
+        TerrainProbe t = straightShore(true, 1010, 1);
+        WorldStationPlanner.PlannedSite s = plan(t, 0, List.of()).get(0);
+        // a station just within SPACING of the closest candidate, on the side away from the rest of the shore
+        int[] other = {s.x(), s.z() < WorldStationPlanner.CELL / 2 ? s.z() - 1490 : s.z() + 1490};
+        List<WorldStationPlanner.PlannedSite> sites = plan(t, 0, List.of(other));
+        check(!sites.isEmpty(), "a farther candidate is planned");
+        WorldStationPlanner.PlannedSite main = sites.get(0);
+        check(!main.partner(), "main site first");
+        check(main.x() != s.x() || main.z() != s.z(), "the closest candidate is skipped");
+        long dx = main.x() - other[0], dz = main.z() - other[1];
+        check(dx * dx + dz * dz >= (long) WorldStationPlanner.SPACING * WorldStationPlanner.SPACING, "main site keeps its spacing");
+        check(WorldStationPlanner.boatSiteFits(t, main.x(), main.z(), main.rotation()), "the main site fits");
+        for (WorldStationPlanner.Site f : main.fallbacks()) {
+            long fx = f.x() - other[0], fz = f.z() - other[1];
+            check(fx * fx + fz * fz >= (long) WorldStationPlanner.SPACING * WorldStationPlanner.SPACING, "fallback keeps its spacing");
+        }
+    }
+
+    private interface LandAt {
+        boolean at(int x, int z);
+    }
+
+    /** Land at height 120 where the predicate is true, open ocean at height 100 elsewhere. */
+    private static TerrainProbe coast(LandAt land) {
+        return new TerrainProbe() {
+            @Override
+            public int height(int x, int z) {
+                return land.at(x, z) ? 120 : 100;
+            }
+
+            @Override
+            public String zone(int x, int z) {
+                return land.at(x, z) ? "Zone1_Tier1" : "Oceans";
+            }
+
+            @Override
+            public String biome(int x, int z) {
+                return "";
+            }
+        };
+    }
+
+    static void repairCandidatesOrder() {
+        WorldStationPlanner.Site planned = new WorldStationPlanner.Site(1000, 500, Rotation.None);
+        List<WorldStationPlanner.Site> c = BoatSiteRepair.candidates(planned);
+        eq(new WorldStationPlanner.Site(1008, 500, Rotation.None), c.get(0));
+        eq(new WorldStationPlanner.Site(992, 500, Rotation.None), c.get(1));
+        check(c.size() <= 22, "at most 22 candidates");
+        eq(c.size(), new java.util.HashSet<>(c).size());
+        check(!c.contains(planned), "planned site not a candidate");
+    }
+
+    static void repairFindsNeighbour() {
+        WorldStationPlanner.Site planned = new WorldStationPlanner.Site(1000, 500, Rotation.None);
+        WorldStationPlanner.Site target = new WorldStationPlanner.Site(984, 500, Rotation.None);
+        BoatSiteRepair.Result r = BoatSiteRepair.search(planned, s -> true, s -> s.equals(target));
+        eq(target, r.site());
+        eq(4, r.tries());
+    }
+
+    static void repairSkipsUnready() {
+        WorldStationPlanner.Site planned = new WorldStationPlanner.Site(1000, 500, Rotation.None);
+        int[] calls = {0};
+        BoatSiteRepair.Result r = BoatSiteRepair.search(planned, s -> s.x() >= planned.x(), s -> {
+            calls[0]++;
+            check(s.x() >= planned.x(), "fits called on an unready site");
+            return false;
+        });
+        check(r.site() == null, "nothing fits");
+        eq(calls[0], r.tries());
+        check(calls[0] > 0, "ready sites were tried");
+    }
+
+    static void boatSiteFitsJaggedCoast() {
+        Rotation east = WorldStationPlanner.facing(1, 0);
+        TerrainProbe t = coast((x, z) -> x < 1010 || (x < 1030 && z >= 1000 && z <= 1002));
+        check(!WorldStationPlanner.boatSiteFits(t, 1009, 1001, east), "site centred on the tooth is blocked");
+        check(WorldStationPlanner.boatSiteFits(t, 1009, 1021, east), "site 20 blocks away fits");
+        check(WorldStationPlanner.boatSiteFits(t, 1009, 981, east), "site 20 blocks the other way fits");
+    }
+
+    static void boatSiteFitsShallowBerth() {
+        Rotation east = WorldStationPlanner.facing(1, 0);
+        for (int[] c : new int[][] {{114, 0}, {113, 1}, {106, 1}}) {
+            int seabed = c[0];
+            TerrainProbe t = new TerrainProbe() {
+                @Override
+                public int height(int x, int z) {
+                    return x < 1010 ? 120 : seabed;
+                }
+
+                @Override
+                public String zone(int x, int z) {
+                    return x < 1010 ? "Zone1_Tier1" : "Oceans";
+                }
+
+                @Override
+                public String biome(int x, int z) {
+                    return "";
+                }
+            };
+            check(WorldStationPlanner.boatSiteFits(t, 1009, 1000, east) == (c[1] == 1), "seabed at " + seabed);
+        }
+    }
+
+    /** The probe with a single column set to the given height, every other column unchanged. */
+    private static TerrainProbe withColumn(TerrainProbe base, int cx, int cz, int height) {
+        return new TerrainProbe() {
+            @Override
+            public int height(int x, int z) {
+                return x == cx && z == cz ? height : base.height(x, z);
+            }
+
+            @Override
+            public String zone(int x, int z) {
+                return base.zone(x, z);
+            }
+
+            @Override
+            public String biome(int x, int z) {
+                return base.biome(x, z);
+            }
+        };
+    }
+
+    static void boatSiteFitsPierEndLand() {
+        Rotation east = WorldStationPlanner.facing(1, 0);
+        TerrainProbe base = coast((x, z) -> x < 1010);
+        Vector3i end = east.rotateYaw(new Vector3i(Deployables.BOAT_STATION_PIER_END[0], 0,
+                Deployables.BOAT_STATION_PIER_END[2]), new Vector3i());
+        int ex = 1009 + end.x, ez = 1000 + end.z;
+        check(WorldStationPlanner.boatSiteFits(base, 1009, 1000, east), "the plain coast fits");
+        check(!WorldStationPlanner.boatSiteFits(withColumn(base, ex, ez, 114), 1009, 1000, east), "land at the pier end blocks the site");
+        check(WorldStationPlanner.boatSiteFits(withColumn(base, ex, ez, 100), 1009, 1000, east), "sea at the pier end fits");
+    }
+
+    static void boatSiteFitsFloorOnLand() {
+        Rotation east = WorldStationPlanner.facing(1, 0);
+        TerrainProbe base = coast((x, z) -> x < 1010);
+        check(WorldStationPlanner.boatSiteFits(base, 1009, 1000, east), "the plain coast fits");
+        Vector3i berth = east.rotateYaw(new Vector3i(Deployables.BOAT_STATION_BERTH_ORIGIN[0], 0,
+                Deployables.BOAT_STATION_BERTH_ORIGIN[2]), new Vector3i());
+        Rotation berthRotation = east.add(Deployables.BOAT_STATION_BERTH_ROTATION);
+        check(!WorldStationPlanner.shuttleFloorColumns().isEmpty(), "the shuttle has floor columns");
+        for (Vector3i cell : WorldStationPlanner.shuttleFloorColumns()) {
+            Vector3i p = berthRotation.rotateYaw(cell, new Vector3i());
+            TerrainProbe t = withColumn(base, 1009 + berth.x + p.x, 1000 + berth.z + p.z, 115);
+            check(!WorldStationPlanner.boatSiteFits(t, 1009, 1000, east), "land under the floor column " + cell + " blocks the site");
+        }
+    }
+
+    static void boatSiteFitsLandInPlaceBox() {
+        Rotation east = WorldStationPlanner.facing(1, 0);
+        Vector3i hut = east.rotateYaw(new Vector3i(-4, 0, 4), new Vector3i());
+        int hx = 1009 + hut.x, hz = 1000 + hut.z;
+        TerrainProbe t = withColumn(coast((x, z) -> x < 1010), hx, hz, 130);
+        check(WorldStationPlanner.boatSiteFits(t, 1009, 1000, east), "land under the hut does not block the site");
+    }
+
+    static void shuttleFloorMatchesPrefab() throws Exception {
+        Set<Vector3i> expected = new java.util.HashSet<>();
+        for (StructureShape.Cell c : prefabShape("Steamboat_Public.prefab.json").cells()) {
+            if (c.y() == 0) {
+                expected.add(new Vector3i(c.x(), 0, c.z()));
+            }
+        }
+        eq(expected, WorldStationPlanner.shuttleFloorColumns());
+    }
+
+    static void seaCellSkipsBlockedShore() {
+        // An offshore bar blocks the pier box everywhere in the cell except along z 1000..1300.
+        TerrainProbe t = coast((x, z) -> x < 1010 || (x >= 1018 && x <= 1020 && (z < 1000 || z > 1300)));
+        List<WorldStationPlanner.PlannedSite> sites = plan(t, 0, List.of());
+        check(!sites.isEmpty(), "a station is planned on the straight stretch");
+        WorldStationPlanner.PlannedSite s = sites.get(0);
+        check(WorldStationPlanner.boatSiteFits(t, s.x(), s.z(), s.rotation()), "the site fits");
+        check(s.z() >= 1000 && s.z() <= 1300, "the station is on the straight stretch");
+    }
+
+    static void partnerShiftsAlongShore() {
+        TerrainProbe base = coast((x, z) -> x < 1010 || x >= 1500);
+        List<WorldStationPlanner.PlannedSite> before = plan(base, 0, List.of());
+        eq(2, before.size());
+        WorldStationPlanner.PlannedSite p0 = before.get(1);
+        Vector3i f = p0.rotation().rotateYaw(new Vector3i(0, 0, 1), new Vector3i());
+        int lx = Math.abs(f.z), lz = Math.abs(f.x);
+        // Land under the pier end column of the first landing.
+        Vector3i end = p0.rotation().rotateYaw(new Vector3i(Deployables.BOAT_STATION_PIER_END[0], 0,
+                Deployables.BOAT_STATION_PIER_END[2]), new Vector3i());
+        TerrainProbe t = coast((x, z) -> {
+            if (base.height(x, z) > SeaRules.SEA_LEVEL) {
+                return true;
+            }
+            return x == p0.x() + end.x && z == p0.z() + end.z;
+        });
+        List<WorldStationPlanner.PlannedSite> sites = plan(t, 0, List.of());
+        eq(2, sites.size());
+        WorldStationPlanner.PlannedSite p = sites.get(1);
+        check(p.partner(), "partner flag");
+        eq(p0.rotation(), p.rotation());
+        check(!WorldStationPlanner.boatSiteFits(t, p0.x(), p0.z(), p0.rotation()), "the crossing landing is blocked");
+        int shift = Math.abs((p.x() - p0.x()) * lx + (p.z() - p0.z()) * lz);
+        check(shift > 0 && shift % 8 == 0 && shift <= 48, "shifted along the shore by a multiple of 8");
+        check(WorldStationPlanner.boatSiteFits(t, p.x(), p.z(), p.rotation()), "the partner fits");
+    }
+
+    static void seaCellRanksSites() {
+        TerrainProbe t = straightShore(true, 1010, 1);
+        List<WorldStationPlanner.PlannedSite> sites = plan(t, 0, List.of());
+        check(!sites.isEmpty(), "a station is planned");
+        WorldStationPlanner.PlannedSite main = sites.get(0);
+        eq(WorldStationPlanner.MAX_SITES - 1, main.fallbacks().size());
+        // Mirrors the seed of planSeaCell for cell (0, 0).
+        SplittableRandom rnd = new SplittableRandom(5L ^ (0 * 0x9E3779B97F4A7C15L) ^ (0 * 0xC2B2AE3D27D4EB4FL) ^ 0x5EA);
+        int drawX = rnd.nextInt(WorldStationPlanner.CELL), drawZ = rnd.nextInt(WorldStationPlanner.CELL);
+        long last = (long) (main.x() - drawX) * (main.x() - drawX) + (long) (main.z() - drawZ) * (main.z() - drawZ);
+        for (WorldStationPlanner.Site f : main.fallbacks()) {
+            check(WorldStationPlanner.boatSiteFits(t, f.x(), f.z(), f.rotation()), "the fallback fits at " + f.x() + "," + f.z());
+            check(pierEndIsSea(t, new WorldStationPlanner.PlannedSite(main.kind(), f.x(), f.z(), f.rotation(), false)),
+                    "the fallback pier end is sea");
+            check(f.x() != main.x() || f.z() != main.z(), "the fallback differs from the main site");
+            long d = (long) (f.x() - drawX) * (f.x() - drawX) + (long) (f.z() - drawZ) * (f.z() - drawZ);
+            check(d >= last, "the fallbacks follow the candidate order");
+            last = d;
+        }
+        List<WorldStationPlanner.Site> all = new ArrayList<>(main.fallbacks());
+        all.add(0, new WorldStationPlanner.Site(main.x(), main.z(), main.rotation()));
+        for (int i = 0; i < all.size(); i++) {
+            for (int j = i + 1; j < all.size(); j++) {
+                check(Math.max(Math.abs(all.get(i).x() - all.get(j).x()), Math.abs(all.get(i).z() - all.get(j).z()))
+                        >= WorldStationPlanner.FALLBACK_GAP, "kept sites are at least FALLBACK_GAP apart");
+            }
+        }
+    }
+
+    static void crossingKeepsFallbacks() {
+        TerrainProbe base = coast((x, z) -> x < 1010 || x >= 1500);
+        List<WorldStationPlanner.PlannedSite> before = plan(base, 0, List.of());
+        eq(2, before.size());
+        WorldStationPlanner.PlannedSite p0 = before.get(1);
+        Vector3i f = p0.rotation().rotateYaw(new Vector3i(0, 0, 1), new Vector3i());
+        int lx = Math.abs(f.z), lz = Math.abs(f.x);
+        // Land under the pier end column of the first landing.
+        Vector3i end = p0.rotation().rotateYaw(new Vector3i(Deployables.BOAT_STATION_PIER_END[0], 0,
+                Deployables.BOAT_STATION_PIER_END[2]), new Vector3i());
+        TerrainProbe t = coast((x, z) -> {
+            if (base.height(x, z) > SeaRules.SEA_LEVEL) {
+                return true;
+            }
+            return x == p0.x() + end.x && z == p0.z() + end.z;
+        });
+        List<WorldStationPlanner.PlannedSite> sites = plan(t, 0, List.of());
+        eq(2, sites.size());
+        WorldStationPlanner.PlannedSite p = sites.get(1);
+        check(p.partner(), "partner flag");
+        check(!p.fallbacks().isEmpty(), "the partner keeps lateral fallbacks");
+        eq(WorldStationPlanner.PARTNER_FALLBACKS, p.fallbacks().size());
+        check(p.fallbacks().size() <= WorldStationPlanner.PARTNER_FALLBACKS, "at most PARTNER_FALLBACKS fallbacks");
+        for (WorldStationPlanner.Site s : p.fallbacks()) {
+            check(WorldStationPlanner.boatSiteFits(t, s.x(), s.z(), s.rotation()), "the partner fallback fits");
+            check(Math.max(Math.abs(s.x() - p.x()), Math.abs(s.z() - p.z())) >= WorldStationPlanner.FALLBACK_GAP,
+                    "the partner fallback is at least FALLBACK_GAP from the partner");
+        }
+    }
+
+    static void crossingFindsPartners() {
+        GridProbe g = strip('#', 27, '~', 37, '#', 64);
+        List<WorldStationPlanner.PlannedSite> sites = plan(g, 0, List.of());
+        eq(2, sites.size());
+        WorldStationPlanner.PlannedSite partner = sites.get(1);
+        check(partner.partner(), "partner flag");
+        eq(Deployables.BOAT_STATION_KIND, partner.kind());
+        eq(WorldStationPlanner.facing(1, 0), partner.rotation());
+        check(SeaRules.isLand(g, partner.x(), partner.z()), "partner on land");
+        eq(431, partner.x());
+        check(pierEndIsSea(g, partner), "partner pier end on sea");
+    }
+
+    static void crossingTooFar() {
+        GridProbe g = strip('#', 167, '~', 281, '#', 64);
+        List<WorldStationPlanner.PlannedSite> sites = plan(g, 3, List.of());
+        eq(1, sites.size());
+    }
+
+    static void crossingStopsAtInlandWater() {
+        GridProbe g = strip('#', 20, 'l', 10, '~', 34, '#', 64);
+        eq(1, plan(g, 0, List.of()).size());
+    }
+
+    static void crossingReusesNearby() {
+        GridProbe g = strip('#', 292, '~', 156, '#', 64);
+        List<WorldStationPlanner.PlannedSite> sites = plan(g, 3, List.of());
+        eq(2, sites.size());
+        WorldStationPlanner.PlannedSite partner = sites.get(1);
+        List<int[]> existing = List.<int[]>of(new int[] {partner.x() - 300, partner.z()});
+        eq(1, plan(g, 3, existing).size());
+    }
+
+    static void namesDeterministic() {
+        List<String> taken = List.of("Port Olhane");
+        eq(StationNames.generate(7L, 100, -200, Deployables.STATION_KIND, "Zone3_Tier1", taken),
+            StationNames.generate(7L, 100, -200, Deployables.STATION_KIND, "Zone3_Tier1", taken));
+    }
+
+    static void namesKindPrefix() {
+        String sea = StationNames.generate(1L, 5, 9, Deployables.BOAT_STATION_KIND, "Oceans", List.of());
+        String air = StationNames.generate(1L, 5, 9, Deployables.STATION_KIND, "Zone1_Tier1", List.of());
+        check(sea.startsWith("Port "), "sea name has the Port prefix");
+        check(!air.startsWith("Port "), "air name has no prefix");
+        check(Character.isUpperCase(StationNames.core(sea).charAt(0)), "capital letter");
+        eq("Valmère", StationNames.core("Port Valmère III"));
+    }
+
+    static void namesTooClose() {
+        check(StationNames.tooClose("Valmère", "Valmere"), "accent only");
+        check(StationNames.tooClose("Kerath", "Kerasse"), "four first letters");
+        check(!StationNames.tooClose("Olhane", "Brivat"), "different names");
+    }
+
+    static void namesNoNearDuplicates() {
+        String[] zones = {"Zone1_Tier1", "Zone2_Tier1", "Zone3_Tier1", "Zone4_Tier1", "Oceans"};
+        List<String> taken = new ArrayList<>();
+        int roman = 0;
+        for (int i = 0; i < 500; i++) {
+            String kind = i % 3 == 0 ? Deployables.BOAT_STATION_KIND : Deployables.STATION_KIND;
+            String name = StationNames.generate(42L, i * 2048, (i % 7) * 2048, kind, zones[i % zones.length], taken);
+            eq(TransitNetwork.NameCheck.OK, TransitNetwork.checkName(name, taken));
+            if (name.matches(".* [IVXL]+$")) {
+                roman++;
+            } else {
+                for (String t : taken) {
+                    if (!t.matches(".* [IVXL]+$")) {
+                        check(!StationNames.tooClose(StationNames.core(name), StationNames.core(t)), name + " close to " + t);
+                    }
+                }
+            }
+            taken.add(name);
+        }
+        check(roman < 5, "roman numerals: " + roman);
+    }
+
+    static void namesFallbackAlwaysValid() {
+        for (String kind : new String[] {Deployables.STATION_KIND, Deployables.BOAT_STATION_KIND}) {
+            List<String> cores = StationNames.candidates(5L, 300, 400, "Zone3_Tier1");
+            List<String> taken = new ArrayList<>(cores);
+            String suffixed = StationNames.generate(5L, 300, 400, kind, "Zone3_Tier1", taken);
+            eq(TransitNetwork.NameCheck.OK, TransitNetwork.checkName(suffixed, taken));
+            check(suffixed.matches(".* [IVXL]+$"), "roman suffix: " + suffixed);
+            List<String> full = new ArrayList<>(taken);
+            for (String c : cores) {
+                for (String r : new String[] {"II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV",
+                        "XV", "XVI", "XVII", "XVIII", "XIX", "XX"}) {
+                    full.add(c + " " + r);
+                    full.add("Port " + c + " " + r);
+                }
+            }
+            String auto = StationNames.generate(5L, 300, 400, kind, "Zone3_Tier1", full);
+            eq(TransitNetwork.NameCheck.OK, TransitNetwork.checkName(auto, full));
+            eq(TransitNetwork.autoName(full), auto);
+        }
+        List<String> taken = new ArrayList<>(StationNames.candidates(9L, 1, 1, "Zone1_Tier1"));
+        eq(TransitNetwork.NameCheck.OK, TransitNetwork.checkName(
+            StationNames.generate(9L, 1, 1, Deployables.BOAT_STATION_KIND, "Zone1_Tier1", taken), taken));
+    }
+
+    static void namesSyllableLists() {
+        check(StationNames.minSyllables() >= 12, "at least 12 syllables per list");
+    }
+
+    static void seaRulesBiomePrefix() {
+        TerrainProbe t = new TerrainProbe() {
+            public int height(int x, int z) { return 100; }
+            public String zone(int x, int z) { return "Zone1_Shore"; }
+            public String biome(int x, int z) { return "Custom.Lake_Moss"; }
+        };
+        check(SeaRules.isWater(t, 0, 0), "under water");
+        check(!SeaRules.isSea(t, 0, 0), "Custom.Lake_Moss is not sea");
+        TerrainProbe beach = new TerrainProbe() {
+            public int height(int x, int z) { return 100; }
+            public String zone(int x, int z) { return "Zone2_Shallow_Ocean_Tier1"; }
+            public String biome(int x, int z) { return "Tile.Reef"; }
+        };
+        check(SeaRules.isSea(beach, 0, 0), "shallow ocean with prefixed biome is sea");
+    }
+
     public static void main(String[] args) throws Exception {
         run("airshipCaptainChest", TransitTests::airshipCaptainChest);
+        run("nextSiteSkipsTooClose", TransitTests::nextSiteSkipsTooClose);
+        run("namesDeterministic", TransitTests::namesDeterministic);
+        run("namesKindPrefix", TransitTests::namesKindPrefix);
+        run("namesTooClose", TransitTests::namesTooClose);
+        run("facingMatchesPierEnd", TransitTests::facingMatchesPierEnd);
+        run("seaCellPicksShore", TransitTests::seaCellPicksShore);
+        run("seaCellRejectsInland", TransitTests::seaCellRejectsInland);
+        run("seaCellSkipsFarColumns", TransitTests::seaCellSkipsFarColumns);
+        run("seaCellAnyShoreOffset", TransitTests::seaCellAnyShoreOffset);
+        run("seaCellDeterministic", TransitTests::seaCellDeterministic);
+        run("seaCellIgnoresLake", TransitTests::seaCellIgnoresLake);
+        run("seaCellRespectsNetwork", TransitTests::seaCellRespectsNetwork);
+        run("seaCellSkipsSpacedMain", TransitTests::seaCellSkipsSpacedMain);
+        run("portalPicksFlatSpot", TransitTests::portalPicksFlatSpot);
+        run("portalAvoidsWater", TransitTests::portalAvoidsWater);
+        run("portalRespectsNetwork", TransitTests::portalRespectsNetwork);
+        run("portalSecondInRangeRefused", TransitTests::portalSecondInRangeRefused);
+        run("portalNoFlatSpot", TransitTests::portalNoFlatSpot);
+        run("boatSiteFitsJaggedCoast", TransitTests::boatSiteFitsJaggedCoast);
+        run("repairCandidatesOrder", TransitTests::repairCandidatesOrder);
+        run("repairFindsNeighbour", TransitTests::repairFindsNeighbour);
+        run("repairSkipsUnready", TransitTests::repairSkipsUnready);
+        run("boatSiteFitsShallowBerth", TransitTests::boatSiteFitsShallowBerth);
+        run("boatSiteFitsPierEndLand", TransitTests::boatSiteFitsPierEndLand);
+        run("boatSiteFitsFloorOnLand", TransitTests::boatSiteFitsFloorOnLand);
+        run("boatSiteFitsLandInPlaceBox", TransitTests::boatSiteFitsLandInPlaceBox);
+        run("shuttleFloorMatchesPrefab", TransitTests::shuttleFloorMatchesPrefab);
+        run("seaCellSkipsBlockedShore", TransitTests::seaCellSkipsBlockedShore);
+        run("partnerShiftsAlongShore", TransitTests::partnerShiftsAlongShore);
+        run("seaCellRanksSites", TransitTests::seaCellRanksSites);
+        run("crossingKeepsFallbacks", TransitTests::crossingKeepsFallbacks);
+        run("crossingFindsPartners", TransitTests::crossingFindsPartners);
+        run("crossingTooFar", TransitTests::crossingTooFar);
+        run("crossingStopsAtInlandWater", TransitTests::crossingStopsAtInlandWater);
+        run("crossingReusesNearby", TransitTests::crossingReusesNearby);
+        run("namesNoNearDuplicates", TransitTests::namesNoNearDuplicates);
+        run("namesFallbackAlwaysValid", TransitTests::namesFallbackAlwaysValid);
+        run("namesSyllableLists", TransitTests::namesSyllableLists);
+        run("seaRulesSeaVsLake", TransitTests::seaRulesSeaVsLake);
+        run("seaRulesBiomePrefix", TransitTests::seaRulesBiomePrefix);
         run("balloonCrewSpec", TransitTests::balloonCrewSpec);
         run("balloonNoCrewUnchanged", TransitTests::balloonNoCrewUnchanged);
         run("balloonResumeKeepsCrew", TransitTests::balloonResumeKeepsCrew);
         run("hireBlockRule", TransitTests::hireBlockRule);
         run("pilotOwnedByOther", TransitTests::pilotOwnedByOther);
         run("usageCountersSnapshot", TransitTests::usageCountersSnapshot);
+        run("genClearRemovable", TransitTests::genClearRemovable);
+        run("planTaskOrder", TransitTests::planTaskOrder);
+        run("footprintCoversDome", TransitTests::footprintCoversDome);
+        run("domeShape", TransitTests::domeShape);
+        run("domeCellsRotated", TransitTests::domeCellsRotated);
+        run("fillPlanColumns", TransitTests::fillPlanColumns);
+        run("attachColumnsToShore", TransitTests::attachColumnsToShore);
+        run("boatStationHutFoundation", TransitTests::boatStationHutFoundation);
+        run("masterCheck", TransitTests::masterCheck);
+        run("refusalCarriesHullFlag", TransitTests::refusalCarriesHullFlag);
+        run("boatFootprintCoversBerthedBoat", TransitTests::boatFootprintCoversBerthedBoat);
+        run("emptiedCellsReadAsEmpty", TransitTests::emptiedCellsReadAsEmpty);
+        run("roomRefusalKeysUnchanged", TransitTests::roomRefusalKeysUnchanged);
         run("errorThrottleWindow", TransitTests::errorThrottleWindow);
         run("telemetryWithoutBeacon", TransitTests::telemetryWithoutBeacon);
         run("shutdownFlushSettled", TransitTests::shutdownFlushSettled);
@@ -177,6 +901,12 @@ public class TransitTests {
         run("corruptFileIsKept", TransitTests::corruptFileIsKept);
         run("grassLayerCells", TransitTests::grassLayerCells);
         run("settingsRoundTrip", TransitTests::settingsRoundTrip);
+        run("markerSharingSetting", TransitTests::markerSharingSetting);
+        run("ownedMarkerSharingSwitch", TransitTests::ownedMarkerSharingSwitch);
+        run("knownStationsSharingSwitch", TransitTests::knownStationsSharingSwitch);
+        run("settingsDisabledRecipes", TransitTests::settingsDisabledRecipes);
+        run("recipeTogglesWithoutUniverse", TransitTests::recipeTogglesWithoutUniverse);
+        run("configSearch", TransitTests::configSearch);
         run("packBackShownTier", TransitTests::packBackShownTier);
         run("reservationIsExclusive", TransitTests::reservationIsExclusive);
         run("queueRules", TransitTests::queueRules);
@@ -198,10 +928,14 @@ public class TransitTests {
         run("boatStationRoomRule", TransitTests::boatStationRoomRule);
         run("waterSurfaceSearch", TransitTests::waterSurfaceSearch);
         run("steamboatFitCheck", TransitTests::steamboatFitCheck);
+        run("steamboatFaultCell", TransitTests::steamboatFaultCell);
+        run("shuttleBerthWaterline", TransitTests::shuttleBerthWaterline);
         run("steamboatWaterlineLayer", TransitTests::steamboatWaterlineLayer);
         run("gliderAllowedKinds", TransitTests::gliderAllowedKinds);
         run("steamboatAnchor", TransitTests::steamboatAnchor);
         run("steamboatCrewSpec", TransitTests::steamboatCrewSpec);
+        run("crewSeatYaw", TransitTests::crewSeatYaw);
+        run("crewRestRotationMatchesPrefab", TransitTests::crewRestRotationMatchesPrefab);
         run("crewOptionsWithoutVoyage", TransitTests::crewOptionsWithoutVoyage);
         run("boatCrewOrders", TransitTests::boatCrewOrders);
         run("boatStationBerth", TransitTests::boatStationBerth);
@@ -231,6 +965,7 @@ public class TransitTests {
         run("viewResend", TransitTests::viewResend);
         run("protectionRules", TransitTests::protectionRules);
         run("protectedFileRoundTrip", TransitTests::protectedFileRoundTrip);
+        run("passengerProtectionModePersists", TransitTests::passengerProtectionModePersists);
         run("registryOwnershipRoundTrip", TransitTests::registryOwnershipRoundTrip);
         run("registryWoodRoundTrip", TransitTests::registryWoodRoundTrip);
         run("boatStationShapeOfWood", TransitTests::boatStationShapeOfWood);
@@ -330,9 +1065,15 @@ public class TransitTests {
         run("shipTextKeys", TransitTests::shipTextKeys);
         run("stationSpecPoints", TransitTests::stationSpecPoints);
         run("boatStationOrigin", TransitTests::boatStationOrigin);
+        run("boatStationOriginBlockerCell", TransitTests::boatStationOriginBlockerCell);
         run("biomeWoodLookup", TransitTests::biomeWoodLookup);
         run("chooseSpecies", TransitTests::chooseSpecies);
         run("woodRemap", TransitTests::woodRemap);
+        run("stoneRemap", TransitTests::stoneRemap);
+        run("stoneTableZones", TransitTests::stoneTableZones);
+        run("stationWoodRemap", TransitTests::stationWoodRemap);
+        run("stationWoodAsh", TransitTests::stationWoodAsh);
+        run("registryStoneRoundTrip", TransitTests::registryStoneRoundTrip);
         run("shortcutOpenWater", TransitTests::shortcutOpenWater);
         run("shortcutKeepsUnknown", TransitTests::shortcutKeepsUnknown);
         run("shortcutAroundLand", TransitTests::shortcutAroundLand);
@@ -347,17 +1088,30 @@ public class TransitTests {
         run("waterRouteNegativeOffset", TransitTests::waterRouteNegativeOffset);
         run("waterRouteResumedSame", TransitTests::waterRouteResumedSame);
         run("waterRouteTooLong", TransitTests::waterRouteTooLong);
+        run("waterRouteLongCrossing", TransitTests::waterRouteLongCrossing);
         run("waterRouteTurnClearance", TransitTests::waterRouteTurnClearance);
         run("waterRouteAvoid", TransitTests::waterRouteAvoid);
         run("waterRouteFreeStart", TransitTests::waterRouteFreeStart);
         run("waterRouteTurnData", TransitTests::waterRouteTurnData);
+        run("waterExitOpen", TransitTests::waterExitOpen);
+        run("waterExitPond", TransitTests::waterExitPond);
+        run("waterExitShore", TransitTests::waterExitShore);
+        run("waterExitNarrowChannel", TransitTests::waterExitNarrowChannel);
+        run("waterExitWideChannel", TransitTests::waterExitWideChannel);
+        run("waterExitUnknown", TransitTests::waterExitUnknown);
         run("boatLookAhead", TransitTests::boatLookAhead);
         run("boatDetour", TransitTests::boatDetour);
         run("paddleSlideWheels", TransitTests::paddleSlideWheels);
         run("boatRoutesFileRoundTrip", TransitTests::boatRoutesFileRoundTrip);
+        run("crossMaxLeavesRoomForRoute", TransitTests::crossMaxLeavesRoomForRoute);
+        run("newChunksWorldMismatch", TransitTests::newChunksWorldMismatch);
+        run("generatedWorldMismatch", TransitTests::generatedWorldMismatch);
         run("boatRoutesInvalidate", TransitTests::boatRoutesInvalidate);
         run("berthPivotRotation", TransitTests::berthPivotRotation);
         run("mooredPilot", TransitTests::mooredPilot);
+        run("mooredPilotFlipped", TransitTests::mooredPilotFlipped);
+        run("berthStepBothHeadings", TransitTests::berthStepBothHeadings);
+        run("berthHeadingChoice", TransitTests::berthHeadingChoice);
         run("berthCentreRotation", TransitTests::berthCentreRotation);
         run("boatDropPoints", TransitTests::boatDropPoints);
         run("boatQuayRules", TransitTests::boatQuayRules);
@@ -394,6 +1148,35 @@ public class TransitTests {
         run("boatGoalOfStop", TransitTests::boatGoalOfStop);
         run("shipLandingRetryNeverClimbs", TransitTests::shipLandingRetryNeverClimbs);
         run("boatBackoffPoints", TransitTests::boatBackoffPoints);
+        run("newChunksMarkAndQuery", TransitTests::newChunksMarkAndQuery);
+        run("newChunksRoundTrip", TransitTests::newChunksRoundTrip);
+        run("newChunksBadFile", TransitTests::newChunksBadFile);
+        run("generatedRegistryRoundTrip", TransitTests::generatedRegistryRoundTrip);
+        run("generatedPortalOnce", TransitTests::generatedPortalOnce);
+        run("generatedForgetAndUnmark", TransitTests::generatedForgetAndUnmark);
+        run("regeneratedKeepsSessionEntries", TransitTests::regeneratedKeepsSessionEntries);
+        run("generatedCellOnce", TransitTests::generatedCellOnce);
+        run("cellsAroundPlayer", TransitTests::cellsAroundPlayer);
+        run("planAheadOffWhenDisabled", TransitTests::planAheadOffWhenDisabled);
+        run("planAheadDedupe", TransitTests::planAheadDedupe);
+        run("generatedBadFile", TransitTests::generatedBadFile);
+        run("generatedBuiltSite", TransitTests::generatedBuiltSite);
+        run("generatedRegistryActiveClamped", TransitTests::generatedRegistryActiveClamped);
+        run("footprintFollowsAdvance", TransitTests::footprintFollowsAdvance);
+        run("replannedOncePerSession", TransitTests::replannedOncePerSession);
+        run("oldTerrainMovesBoat", TransitTests::oldTerrainMovesBoat);
+        run("generatedRegistrySites", TransitTests::generatedRegistrySites);
+        run("generatedRegistryOldFormat", TransitTests::generatedRegistryOldFormat);
+        run("footprintChunksCover", TransitTests::footprintChunksCover);
+        run("generatorAvailability", TransitTests::generatorAvailability);
+        run("nearestUnbuiltEntry", TransitTests::nearestUnbuiltEntry);
+        run("decideRules", TransitTests::decideRules);
+        run("newChunksOldLoadAbandons", TransitTests::newChunksOldLoadAbandons);
+        run("worldgenSettingDefault", TransitTests::worldgenSettingDefault);
+        run("modRecipesMatchAssets", TransitTests::modRecipesMatchAssets);
+        run("footprintContainsShapes", TransitTests::footprintContainsShapes);
+        run("reloadedNewChunkRetriggers", TransitTests::reloadedNewChunkRetriggers);
+        run("benchTabsFilter", TransitTests::benchTabsFilter);
         System.out.println("TransitTests: " + passed + " OK");
     }
 
@@ -418,6 +1201,94 @@ public class TransitTests {
         eq("Birch", BiomeWood.chooseSpecies(java.util.Arrays.asList(null, "Oak", "Birch", "Birch")));
         eq("Oak", BiomeWood.chooseSpecies(java.util.Arrays.asList("Oak", "Birch")));
         check(BiomeWood.chooseSpecies(java.util.Arrays.asList((String) null, null)) == null, "no sample");
+    }
+
+    private static void stoneRemap() {
+        var sand = new BiomeStone.Stone("Sandstone");
+        eq("Rock_Sandstone_Brick", BiomeStone.remap("Rock_Basalt_Brick", sand, x -> true));
+        eq("Rock_Sandstone_Brick_Half", BiomeStone.remap("Rock_Basalt_Brick_Half", sand, x -> true));
+        eq("Rock_Sandstone_Brick_Stairs", BiomeStone.remap("Rock_Basalt_Brick_Stairs", sand, x -> true));
+        eq("*Rock_Sandstone_Brick_Stairs_State_Definitions_Corner_Left",
+                BiomeStone.remap("*Rock_Basalt_Brick_Stairs_State_Definitions_Corner_Left", sand, x -> true));
+        eq("Rock_Basalt_Brick", BiomeStone.remap("Rock_Basalt_Brick", sand, x -> false));
+        eq("Rock_Stone_Brick", BiomeStone.remap("Rock_Stone_Brick", sand, x -> true));
+        eq("Soil_Grass_Full", BiomeStone.remap("Soil_Grass_Full", sand, x -> true));
+        eq("Rock_Basalt_Brick", BiomeStone.remap("Rock_Basalt_Brick", BiomeStone.DEFAULT, x -> true));
+        eq("Rock_Basalt_Brick", BiomeStone.remap("Rock_Basalt_Brick", null, x -> true));
+    }
+
+    private static void stoneTableZones() {
+        eq("Stone", BiomeStone.FAMILY.get("Zone1"));
+        eq("Sandstone", BiomeStone.FAMILY.get("Zone2"));
+        eq("Shale", BiomeStone.FAMILY.get("Zone3"));
+        eq("Volcanic", BiomeStone.FAMILY.get("Zone4"));
+        eq(4, BiomeStone.FAMILY.size());
+        eq(new BiomeStone.Stone("Shale"), BiomeStone.stoneOfZone("Zone3_Tier2"));
+        eq(BiomeStone.DEFAULT, BiomeStone.stoneOfZone("Nowhere"));
+        eq(BiomeStone.DEFAULT, BiomeStone.stoneOfZone(null));
+    }
+
+    private static void stationWoodRemap() throws Exception {
+        var birch = BiomeWood.woodOf("Birch");
+        eq("Wood_Lightwood_Planks", BiomeWood.remapStation("Wood_Softwood_Planks", birch, x -> true));
+        eq("Wood_Lightwood_Beam", BiomeWood.remapStation("Wood_Softwood_Beam", birch, x -> true));
+        eq("Wood_Lightwood_Stairs", BiomeWood.remapStation("Wood_Softwood_Stairs", birch, x -> true));
+        eq("Wood_Softwood_Planks", BiomeWood.remapStation("Wood_Softwood_Planks", birch, x -> false));
+        eq("Wood_Softwood_Planks", BiomeWood.remapStation("Wood_Softwood_Planks", null, x -> true));
+        // The shape of the real prefab: wood and stone renamed, nothing else touched, same cell count.
+        StructureShape base = prefabShape("Balloon_Landing_zone.prefab.json");
+        StructureShape out = BalloonRegistry.remapStationShape(base, birch, new BiomeStone.Stone("Sandstone"), x -> true);
+        eq(base.cells().size(), out.cells().size());
+        int wood = 0;
+        int stone = 0;
+        for (int i = 0; i < base.cells().size(); i++) {
+            String a = base.cells().get(i).name();
+            String b = out.cells().get(i).name();
+            if (a.startsWith("Wood_Softwood_")) {
+                check(b.startsWith("Wood_Lightwood_"), "softwood renamed " + a);
+                wood++;
+            } else if (a.contains("Rock_Basalt_Brick")) {
+                check(b.contains("Rock_Sandstone_Brick"), "basalt renamed " + a);
+                stone++;
+            } else {
+                eq(a, b);
+            }
+        }
+        check(wood > 0 && stone > 0, "prefab has softwood and basalt");
+    }
+
+    private static void stationWoodAsh() {
+        var ash = BiomeWood.woodOf("Ash");
+        eq("Wood_Hardwood_Planks", BiomeWood.remapStation("Wood_Softwood_Planks", ash, x -> true));
+        eq("Wood_Hardwood_Stairs", BiomeWood.remapStation("Wood_Softwood_Stairs", ash, x -> true));
+        eq("Wood_Softwood_Planks", BiomeWood.remapStation("Wood_Softwood_Planks", null, x -> true));
+        // shapeOf follows the registry: Ash renames, no wood keeps the prefab, and it matches the post-paste rewrite.
+        StructureShape base = StructureShape.ofCells(java.util.List.of(
+                new StructureShape.Cell(0, 0, 0, "Wood_Softwood_Planks"),
+                new StructureShape.Cell(1, 0, 0, "Wood_Darkwood_Roof_Shallow")));
+        StructureShape out = BalloonRegistry.remapStationShape(base, ash, null, x -> true);
+        eq("Wood_Hardwood_Planks", out.cells().get(0).name());
+        eq("Wood_Darkwood_Roof_Shallow", out.cells().get(1).name());
+        StructureShape kept = BalloonRegistry.remapStationShape(base, null, null, x -> true);
+        eq("Wood_Softwood_Planks", kept.cells().get(0).name());
+    }
+
+    private static void registryStoneRoundTrip() throws Exception {
+        Path dir = Files.createTempDirectory("registry-stone");
+        try {
+            BalloonRegistry.init(dir);
+            org.joml.Vector3i o = new org.joml.Vector3i(1, 2, 3);
+            var rot = com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None;
+            BalloonRegistry.addNamed("w", o, rot, Deployables.STATION_KIND, Ownership.of(java.util.UUID.randomUUID(), "Paul"));
+            eq(null, BalloonRegistry.entriesOfNameForTest("w").get(0).stone());
+            BalloonRegistry.setStoneNamed("w", o, rot, Deployables.STATION_KIND, "Shale");
+            BalloonRegistry.setWoodNamed("w", o, rot, Deployables.STATION_KIND, "Birch");
+            BalloonRegistry.init(dir);
+            eq("Shale", BalloonRegistry.entriesOfNameForTest("w").get(0).stone());
+            eq("Birch", BalloonRegistry.entriesOfNameForTest("w").get(0).wood());
+        } finally {
+            BalloonRegistry.init(Files.createTempDirectory("registry-stone-reset"));
+        }
     }
 
     private static void woodRemap() {
@@ -828,6 +1699,32 @@ public class TransitTests {
         check(BalloonResume.crewFromBson(null) == null, "absent key");
     }
 
+    /** Bench tabs: a category whose recipes are all disabled is dropped, anything else is kept. */
+    static void benchTabsFilter() {
+        java.util.function.Predicate<String> off = Set.of("a", "b", "c")::contains;
+        String json = "{\"title\":\"Bench\",\"categories\":["
+                + "{\"id\":\"Camp\",\"craftableRecipes\":[\"a\",\"b\"]},"
+                + "{\"id\":\"Half\",\"craftableRecipes\":[\"c\",\"x\"]},"
+                + "{\"id\":\"Vanilla\",\"craftableRecipes\":[\"x\"]},"
+                + "{\"id\":\"Empty\",\"craftableRecipes\":[]},"
+                + "{\"id\":\"Missing\"}],\"extra\":7}";
+        com.google.gson.JsonObject out = com.google.gson.JsonParser.parseString(BenchTabs.filterTabs(json, off)).getAsJsonObject();
+        java.util.List<String> ids = new ArrayList<>();
+        for (com.google.gson.JsonElement e : out.getAsJsonArray("categories")) {
+            ids.add(e.getAsJsonObject().get("id").getAsString());
+        }
+        eq(List.of("Half", "Vanilla", "Empty", "Missing"), ids);
+        eq("Bench", out.get("title").getAsString());
+        eq(7, out.get("extra").getAsInt());
+        String none = "{\"title\":\"x\"}";
+        check(BenchTabs.filterTabs(none, off) == none, "no categories: same instance");
+        String keep = "{\"categories\":[{\"id\":\"V\",\"craftableRecipes\":[\"x\"]}]}";
+        check(BenchTabs.filterTabs(keep, off) == keep, "nothing removed: same instance");
+        String bad = "{\"categories\":[";
+        check(BenchTabs.filterTabs(bad, off) == bad, "malformed json unchanged");
+        check(BenchTabs.filterTabs(null, off) == null, "null unchanged");
+    }
+
     private static void eq(Object expected, Object actual) {
         if (!java.util.Objects.equals(expected, actual)) {
             throw new AssertionError("expected " + expected + " but was " + actual);
@@ -1124,6 +2021,30 @@ public class TransitTests {
         StationMaster.release(s, b);
     }
 
+    static void passengerProtectionModePersists() throws Exception {
+        Path dir = Files.createTempDirectory("passenger-mode");
+        try {
+            PassengerProtection.load(dir);
+            eq(PassengerProtection.Mode.FULL, PassengerProtection.mode());
+            PassengerProtection.setMode(PassengerProtection.Mode.DAMAGE);
+            java.util.UUID a = java.util.UUID.randomUUID();
+            PassengerProtection.mark(a);
+            PassengerProtection.load(dir);
+            eq(PassengerProtection.Mode.DAMAGE, PassengerProtection.mode());
+            eq(true, PassengerProtection.isMarked(a));
+            Files.writeString(dir.resolve("protected.json"), "{\"players\": [], \"mode\": \"BOGUS\"}");
+            PassengerProtection.load(dir);
+            eq(PassengerProtection.Mode.FULL, PassengerProtection.mode());
+            PassengerProtection.setMode(PassengerProtection.Mode.OFF);
+            Files.delete(dir.resolve("protected.json"));
+            PassengerProtection.load(dir);
+            eq(PassengerProtection.Mode.FULL, PassengerProtection.mode());
+        } finally {
+            PassengerProtection.setMode(PassengerProtection.Mode.FULL);
+            deleteAll(dir);
+        }
+    }
+
     static void protectedFileRoundTrip() throws Exception {
         Path dir = Files.createTempDirectory("passenger-protection");
         try {
@@ -1224,27 +2145,141 @@ public class TransitTests {
         eq("Items/Camping/Camping_Pack_Tent_Big_Texture.png", PackBackView.textureOf(CampTiers.Tier.TENT_BIG));
     }
 
+    static void markerSharingSetting() throws Exception {
+        Path dir = Files.createTempDirectory("transit-settings-sharing");
+        try {
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.markerSharing());
+            TransitSettings.setMarkerSharing(false);
+            eq(false, TransitSettings.markerSharing());
+            TransitSettings.load(dir);
+            eq(false, TransitSettings.markerSharing());
+            TransitSettings.setMarkerSharing(true);
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.markerSharing());
+            Files.writeString(dir.resolve("transit-settings.json"), "{\"packBackView\": false}");
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.markerSharing());
+            Files.writeString(dir.resolve("transit-settings.json"), "{garbage");
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.markerSharing());
+        } finally {
+            TransitSettings.load(Files.createTempDirectory("transit-settings-sharing-reset"));
+        }
+    }
+
+    static void ownedMarkerSharingSwitch() {
+        java.util.UUID a = java.util.UUID.randomUUID(), b = java.util.UUID.randomUUID();
+        Ownership mine = Ownership.of(a, "A");
+        for (boolean on : new boolean[]{true, false}) {
+            check(OwnedMarkerProvider.visibleTo(mine, a, on), "owner sees own, sharing " + on);
+            check(OwnedMarkerProvider.visibleTo(mine.withShared(true), a, on), "owner sees own shared, sharing " + on);
+            check(!OwnedMarkerProvider.visibleTo(mine, b, on), "other never sees an unshared one, sharing " + on);
+            check(!OwnedMarkerProvider.visibleTo(Ownership.NONE, a, on), "NONE hidden, sharing " + on);
+        }
+        check(OwnedMarkerProvider.visibleTo(mine.withShared(true), b, true), "other sees a shared one when sharing is on");
+        check(!OwnedMarkerProvider.visibleTo(mine.withShared(true), b, false), "other does not see a shared one when sharing is off");
+    }
+
+    static void knownStationsSharingSwitch() {
+        KnownStations k = new KnownStations();
+        java.util.UUID a = java.util.UUID.randomUUID(), b = java.util.UUID.randomUUID();
+        SkyLog.Reached mine = new SkyLog.Reached(1, 64, 2), shared = new SkyLog.Reached(9, 64, 9);
+        k.add("w", a, mine);
+        k.share("w", shared);
+        for (boolean on : new boolean[]{true, false}) {
+            check(k.known("w", a, mine, on), "personal always known, sharing " + on);
+            check(!k.known("w", b, mine, on), "personal of another never known, sharing " + on);
+        }
+        check(k.known("w", b, shared, true), "shared known when sharing is on");
+        check(!k.known("w", b, shared, false), "shared ignored when sharing is off");
+        k.add("w", b, shared);
+        check(k.known("w", b, shared, false), "a shared station discovered personally stays known");
+        check(k.isShared("w", shared), "shared set untouched");
+    }
+
     static void settingsRoundTrip() throws Exception {
         Path dir = Files.createTempDirectory("transit-settings");
         try {
             TransitSettings.load(dir);
-            eq(false, TransitSettings.recipeEnabled());
-            TransitSettings.setRecipeEnabled(true);
-            eq(true, TransitSettings.recipeEnabled());
+            eq(new java.util.HashSet<>(StationSpec.CRATE_IDS), TransitSettings.disabledRecipes());
+            for (String id : StationSpec.CRATE_IDS) TransitSettings.setRecipeDisabled(id, false);
+            eq(Set.of(), TransitSettings.disabledRecipes());
             TransitSettings.load(dir);
-            eq(true, TransitSettings.recipeEnabled());
+            eq(Set.of(), TransitSettings.disabledRecipes());
             eq(true, TransitSettings.packBackView());
             TransitSettings.setPackBackView(false);
             TransitSettings.load(dir);
             eq(false, TransitSettings.packBackView());
-            eq(true, TransitSettings.recipeEnabled());
+            eq(Set.of(), TransitSettings.disabledRecipes());
             Files.writeString(dir.resolve("transit-settings.json"), "{\"recipeEnabled\": true}");
             TransitSettings.load(dir);
             eq(true, TransitSettings.packBackView());
             Files.writeString(dir.resolve("transit-settings.json"), "{garbage");
             TransitSettings.load(dir);
-            eq(false, TransitSettings.recipeEnabled());
+            eq(new java.util.HashSet<>(StationSpec.CRATE_IDS), TransitSettings.disabledRecipes());
             eq("{garbage", Files.readString(dir.resolve("transit-settings.json.bad")));
+        } finally {
+            deleteAll(dir);
+        }
+    }
+
+    static void recipeTogglesWithoutUniverse() throws Exception {
+        Path dir = Files.createTempDirectory("recipe-toggles");
+        try {
+            TransitSettings.load(dir);
+            eq(true, RecipeToggles.enabled("Steamboat_Crate"));
+            RecipeToggles.set("Steamboat_Crate", false);
+            eq(false, RecipeToggles.enabled("Steamboat_Crate"));
+            eq(false, RecipeToggles.enabled("Balloon_Station_Crate"));
+            RecipeToggles.set("Balloon_Station_Crate", true);
+            eq(true, RecipeToggles.enabled("Balloon_Station_Crate"));
+            RecipeToggles.set("Not_A_Mod_Item", false);
+            eq(false, TransitSettings.disabledRecipes().contains("Not_A_Mod_Item"));
+            TransitSettings.load(dir);
+            eq(false, RecipeToggles.enabled("Steamboat_Crate"));
+            eq(true, RecipeToggles.enabled("Balloon_Station_Crate"));
+        } finally {
+            deleteAll(dir);
+        }
+    }
+
+    static void configSearch() {
+        eq(true, ConfigSearch.matches("Montgolfière de transport", "montgolfiere"));
+        eq(true, ConfigSearch.matches("Grande tente", "TENTE"));
+        eq(true, ConfigSearch.matches("Grande tente", ""));
+        eq(true, ConfigSearch.matches("Grande tente", "   "));
+        eq(true, ConfigSearch.matches("Grande tente", null));
+        eq(false, ConfigSearch.matches("Grande tente", "dirigeable"));
+        eq("eleve", ConfigSearch.normalize(" Élève "));
+    }
+
+    static void settingsDisabledRecipes() throws Exception {
+        Path dir = Files.createTempDirectory("transit-settings-recipes");
+        try {
+            TransitSettings.load(dir);                                    // no file
+            eq(new java.util.HashSet<>(StationSpec.CRATE_IDS), TransitSettings.disabledRecipes());
+            Files.writeString(dir.resolve("transit-settings.json"), "{\"recipeEnabled\": true}");
+            TransitSettings.load(dir);
+            eq(Set.of(), TransitSettings.disabledRecipes());
+            Files.writeString(dir.resolve("transit-settings.json"), "{\"recipeEnabled\": false}");
+            TransitSettings.load(dir);
+            eq(new java.util.HashSet<>(StationSpec.CRATE_IDS), TransitSettings.disabledRecipes());
+            Files.writeString(dir.resolve("transit-settings.json"),
+                    "{\"recipeEnabled\": false, \"disabledRecipes\": [\"Steamboat_Crate\", \"Gone_Item\"]}");
+            TransitSettings.load(dir);
+            eq(Set.of("Steamboat_Crate"), TransitSettings.disabledRecipes());
+            TransitSettings.setRecipeDisabled("Camping_Pack_Tent", true);
+            String json = Files.readString(dir.resolve("transit-settings.json"));
+            eq(false, json.contains("Gone_Item"));
+            eq(false, json.contains("recipeEnabled"));
+            TransitSettings.load(dir);
+            eq(Set.of("Steamboat_Crate", "Camping_Pack_Tent"), TransitSettings.disabledRecipes());
+            TransitSettings.setRecipeDisabled("Steamboat_Crate", false);
+            eq(Set.of("Camping_Pack_Tent"), TransitSettings.disabledRecipes());
+            Files.writeString(dir.resolve("transit-settings.json"), "{garbage");
+            TransitSettings.load(dir);
+            eq(new java.util.HashSet<>(StationSpec.CRATE_IDS), TransitSettings.disabledRecipes());
         } finally {
             deleteAll(dir);
         }
@@ -1558,6 +2593,34 @@ public class TransitTests {
                 (x, y, z) -> x == 0 && z == -2 && y == 60 ? 2 : y <= 60 ? 1 : 0)), "block in turned hull cell");
     }
 
+    private static void shuttleBerthWaterline() {
+        StructureShape s = StructureShape.ofCells(List.of(
+                new StructureShape.Cell(0, 0, 0, "Floor"), new StructureShape.Cell(0, 1, 0, "Wall")));
+        Vector3i o = new Vector3i(0, 60, 0); // surface 60: the floor layer lands on the water top
+        check(DeployPlacement.steamboatFault(s, o, Rotation.None, (x, y, z) -> y <= 60 ? 1 : 0, 0) == null, "floor on water fits");
+        DeployPlacement.Fault above = DeployPlacement.steamboatFault(s, o, Rotation.None, (x, y, z) -> y <= 61 ? 1 : 0, 0);
+        eq("deploy.steamboat.blocked", above.key());
+        eq(61, above.at().y);
+        DeployPlacement.Fault floor = DeployPlacement.steamboatFault(s, o, Rotation.None, (x, y, z) -> y == 60 ? 2 : y < 60 ? 1 : 0, 0);
+        eq("deploy.steamboat.noWater", floor.key());
+        check(floor.hull(), "a solid floor cell is a hull fault");
+    }
+
+    private static void steamboatFaultCell() {
+        StructureShape s = StructureShape.ofCells(List.of(
+                new StructureShape.Cell(0, -2, 0, "A"), new StructureShape.Cell(0, -3, 0, "A"), new StructureShape.Cell(0, 0, 0, "B")));
+        Vector3i o = new Vector3i(0, 62, 0);
+        DeployPlacement.Fault above = DeployPlacement.steamboatFault(s, o, Rotation.None, (x, y, z) -> y <= 60 ? 1 : y == 62 ? 2 : 0);
+        eq("deploy.steamboat.blocked", above.key());
+        eq(62, above.at().y);
+        check(!above.hull(), "the block above water is not a hull cell");
+        DeployPlacement.Fault hull = DeployPlacement.steamboatFault(s, o, Rotation.None, (x, y, z) -> y == 60 ? 2 : y < 60 ? 1 : 0);
+        eq("deploy.steamboat.noWater", hull.key());
+        eq(60, hull.at().y);
+        check(hull.hull(), "the block in the hull is a hull cell");
+        check(DeployPlacement.steamboatFault(s, o, Rotation.None, (x, y, z) -> y <= 60 ? 1 : 0) == null, "fits: no fault");
+    }
+
     /** the steamboat sits one block lower (waterline -2), nothing that lets water in or keeps it out (rope ladder) stays under it and the hold is dry. */
     private static void steamboatWaterlineLayer() throws Exception {
         check(Deployables.STEAMBOAT.airship.waterlineY == -2, "waterline layer -2");
@@ -1604,6 +2667,38 @@ public class TransitTests {
         eq(0, c.walk().legs(new double[]{0, 4, 5}, CrewRecord.Post.STOOL).size());
         check(Deployables.voyageOf(Deployables.STEAMBOAT_KIND) && Deployables.voyageOf(Deployables.AIRSHIP_KIND), "voyage flags");
         check(Deployables.crewOf(Deployables.STEAMBOAT_PUBLIC_KIND) == null, "the shuttle has no pilot spec");
+    }
+
+    /** Entity forward (-sin yaw, -cos yaw) of the ship-frame seat yaw matches the documented facing of each block rotation. */
+    private static void crewSeatYaw() {
+        int[][] expected = {{0, 0, 1}, {1, 1, 0}, {2, 0, -1}, {3, -1, 0}}; // rotation, facing x, facing z
+        for (int[] e : expected) {
+            float yaw = AirshipCrew.seatYaw(e[0]);
+            near(e[1], -Math.sin(yaw));
+            near(e[2], -Math.cos(yaw));
+        }
+        near(AirshipCrew.seatYaw(1), AirshipCrew.seatYaw(5));
+        // with a ship heading theta the world facing is the seat yaw plus theta: the bow (yaw 0) of a ship turned a quarter looks to -x
+        near(-1, -Math.sin(Math.PI / 2 + AirshipCrew.seatYaw(2)));
+    }
+
+    /** The rest rotation of each crew spec is the rotation of the seat block at the rest cell in the prefab file. */
+    private static void crewRestRotationMatchesPrefab() throws Exception {
+        String[][] kinds = {{Deployables.AIRSHIP_KIND, "The_Cloudwork.prefab.json"}, {Deployables.STEAMBOAT_KIND, "Steamboat.prefab.json"}};
+        for (String[] k : kinds) {
+            Deployables.CrewSpec c = Deployables.crewOf(k[0]);
+            int[] r = c.rest();
+            boolean found = false;
+            var root = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Prefabs", k[1])));
+            for (var e : root.getArray("blocks")) {
+                var b = e.asDocument();
+                if (b.getInt32("x").getValue() == r[0] && b.getInt32("y").getValue() == r[1] && b.getInt32("z").getValue() == r[2]) {
+                    found = true;
+                    eq(b.containsKey("rotation") ? b.getInt32("rotation").getValue() : 0, c.restRotation());
+                }
+            }
+            check(found, k[0] + " has a block at the rest cell");
+        }
     }
 
     private static void boatCrewOrders() {
@@ -1730,6 +2825,222 @@ public class TransitTests {
     private static void steamboatSeats() throws Exception {
         int n = AirshipPassengers.seats(prefabShape("Steamboat.prefab.json")).size();
         check(n == 12, "12 seats, got " + n);
+    }
+
+    private static void genClearRemovable() {
+        check(GenClear.removable("Wood_Ash_Trunk"), "trunk");
+        check(GenClear.removable("*Wood_Oak_Trunk_Full"), "trunk with a state prefix");
+        check(GenClear.removable("Wood_Birch_Branch_Corner"), "branch");
+        check(GenClear.removable("Wood_Sticks"), "sticks");
+        check(GenClear.removable("Plant_Leaves_Oak"), "foliage");
+        check(GenClear.removable("Plant_Grass_Tall"), "plant");
+        check(GenClear.removable("Rubble_Stone"), "pebbles");
+        check(GenClear.removable("Deco_SpiderWeb_Corner"), "tree decoration");
+        check(!GenClear.removable("Rock_Stone"), "rock stays");
+        check(!GenClear.removable("Soil_Grass"), "soil stays");
+        check(!GenClear.removable("Soil_Leaves"), "soil leaves stay");
+        check(!GenClear.removable("Wood_Ash_Planks"), "planks stay");
+        check(!GenClear.removable("Forgotten_Temple_Portal_Enter"), "portal stays");
+        check(!GenClear.removable("Rock_Stone_Brick_Stairs"), "ruin bricks stay");
+        check(!GenClear.removable(null), "null");
+    }
+
+    private static void planTaskOrder() {
+        List<String> ran = new ArrayList<>();
+        PriorityBlockingQueue<PlanTask> queue = new PriorityBlockingQueue<>();
+        queue.add(new PlanTask(PlanTask.AHEAD, () -> ran.add("a")));
+        queue.add(new PlanTask(PlanTask.CHUNK, () -> ran.add("b")));
+        queue.add(new PlanTask(PlanTask.AHEAD, () -> ran.add("c")));
+        queue.add(new PlanTask(PlanTask.CHUNK, () -> ran.add("d")));
+        PlanTask task;
+        while ((task = queue.poll()) != null) {
+            task.run();
+        }
+        check(ran.equals(List.of("b", "d", "a", "c")), "chunk tasks first, arrival order kept: " + ran);
+    }
+
+    private static void footprintCoversDome() throws Exception {
+        StructureShape shuttle = prefabShape("Steamboat_Public.prefab.json");
+        for (Rotation r : Rotation.values()) {
+            for (int off : new int[] {0, 5, 11, 16, 22, 31}) {
+                int ox = 1000 + off, oz = 2000 + off;
+                Set<Long> chunks = new java.util.HashSet<>();
+                for (long[] c : GenerationListener.footprintChunks(Deployables.BOAT_STATION_KIND, ox, oz, r)) {
+                    chunks.add(c[0] * 1_000_003L + c[1]);
+                }
+                for (Vector3i p : BoatSiteGround.clearCells(new Vector3i(ox, 115, oz), r, shuttle)) {
+                    long key = (long) com.hypixel.hytale.math.util.ChunkUtil.chunkCoordinate(p.x) * 1_000_003L
+                            + com.hypixel.hytale.math.util.ChunkUtil.chunkCoordinate(p.z);
+                    check(chunks.contains(key), r + "+" + off + ": dome cell " + p + " inside the footprint chunks");
+                }
+            }
+        }
+    }
+
+    private static void domeShape() {
+        eq(24, BoatSiteGround.domeHeight(0));
+        eq(-1, BoatSiteGround.domeHeight(10));
+        eq(20, BoatSiteGround.domeHeight(5)); // floor(24 * sqrt(0.75)) = 20
+        eq(0, BoatSiteGround.domeHeight(9.999));
+        eq(23, BoatSiteGround.domeHeight(0.5)); // the centre lies between columns: the highest column is 23
+    }
+
+    private static void domeCellsRotated() throws Exception {
+        StructureShape shuttle = prefabShape("Steamboat_Public.prefab.json");
+        Vector3i o = new Vector3i(100, 115, 200);
+        for (Rotation r : Rotation.values()) {
+            Set<Vector3i> cells = BoatSiteGround.clearCells(o, r, shuttle);
+            Vector3i berth = r.rotateYaw(new Vector3i(Deployables.BOAT_STATION_BERTH_ORIGIN[0], Deployables.BOAT_STATION_BERTH_ORIGIN[1],
+                    Deployables.BOAT_STATION_BERTH_ORIGIN[2]), new Vector3i()).add(o);
+            for (StructureShape.Cell c : shuttle.cells()) {
+                Vector3i p = c.rotated(r.add(Deployables.BOAT_STATION_BERTH_ROTATION)).add(berth);
+                check(cells.contains(new Vector3i(p.x, 115 + 5, p.z)), r + ": shuttle column " + p + " cleared to the safety floor");
+            }
+            Vector3i centre = r.rotateYaw(new Vector3i(0, 0, 6), new Vector3i()).add(o);
+            check(cells.contains(new Vector3i(centre.x, 115 + 23, centre.z)), r + ": centre column cleared to 23");
+            check(!cells.contains(new Vector3i(centre.x, 115 + 24, centre.z)), r + ": nothing above the dome");
+            check(cells.stream().noneMatch(p -> p.y < 115), r + ": nothing under the deck level");
+        }
+    }
+
+    private static void fillPlanColumns() {
+        Vector3i o = new Vector3i(0, 115, 0);
+        // water down to 110, sand at 109
+        Map<Vector3i, String> plan = BoatSiteGround.fillPlan(o, Rotation.None, (x, y, z) -> y >= 110 ? (y <= 114 ? 1 : 0) : 2,
+                p -> "Soil_Sand_White");
+        Vector3i master = new Vector3i(-4, 114, 5);
+        eq("Soil_Sand_White", plan.get(master));
+        eq("Soil_Sand_White", plan.get(new Vector3i(-4, 110, 5)));
+        check(!plan.containsKey(new Vector3i(-4, 109, 5)), "the solid block stays");
+        check(!plan.containsKey(new Vector3i(1, 114, 8)), "the pier on posts is never filled");
+        // no solid within FILL_DEPTH anywhere: default block on FILL_DEPTH cells
+        Map<Vector3i, String> deep = BoatSiteGround.fillPlan(o, Rotation.None, (x, y, z) -> 1, p -> null);
+        eq(BoatSiteGround.FILL_DEFAULT, deep.get(new Vector3i(-4, 114 - BoatSiteGround.FILL_DEPTH + 1, 5)));
+        check(!deep.containsKey(new Vector3i(-4, 114 - BoatSiteGround.FILL_DEPTH, 5)), "at most FILL_DEPTH cells");
+        // 20 cells of water over the sea floor: filled down to the floor
+        Map<Vector3i, String> sea = BoatSiteGround.fillPlan(o, Rotation.None, (x, y, z) -> y >= 95 ? 1 : 2, p -> "Soil_Sand");
+        eq("Soil_Sand", sea.get(new Vector3i(-4, 95, 5)));
+        eq("Soil_Sand", sea.get(new Vector3i(-4, 114, 5)));
+        check(!sea.containsKey(new Vector3i(-4, 94, 5)), "the sea floor stays");
+        // one deep column takes the most frequent block of the others
+        Map<Vector3i, String> mixed = BoatSiteGround.fillPlan(o, Rotation.None,
+                (x, y, z) -> x == -4 && z == 5 ? 1 : y < 114 ? 2 : 0, p -> "Rock_Stone");
+        eq("Rock_Stone", mixed.get(new Vector3i(-4, 107, 5)));
+    }
+
+    /** Land at the given prefab cell columns: solid at y 114 only there, water elsewhere above 100, solid below. */
+    private static DeployPlacement.CellState shoreAt(Vector3i o, Rotation r, java.util.function.BiPredicate<Integer, Integer> landPrefab) {
+        return (x, y, z) -> {
+            if (y < 100) return 2;
+            for (int px = -12; px <= 11; px++) {
+                for (int pz = -6; pz <= 18; pz++) {
+                    Vector3i w = r.rotateYaw(new Vector3i(px, 0, pz), new Vector3i()).add(o.x, 0, o.z);
+                    if (w.x == x && w.z == z) {
+                        return landPrefab.test(px, pz) && y <= 114 ? 2 : y <= 114 ? 1 : 0;
+                    }
+                }
+            }
+            return y <= 114 ? 1 : 0;
+        };
+    }
+
+    private static void attachColumnsToShore() {
+        Vector3i o = new Vector3i(0, 115, 0);
+        // land from pz -2 backwards: the columns pz 0 and -1 behind the back edge are the gap
+        var state = shoreAt(o, Rotation.None, (px, pz) -> pz <= -2);
+        var cols = BoatSiteGround.attachColumns(o, Rotation.None, state);
+        check(cols.contains(new Vector3i(-3, 114, 0)), "gap behind the back edge, pz 0");
+        check(cols.contains(new Vector3i(-3, 114, -1)), "gap behind the back edge, pz -1");
+        check(!cols.contains(new Vector3i(-3, 114, -2)), "the land column is not filled");
+        eq(12 * 2, cols.size());
+        Map<Vector3i, String> plan = BoatSiteGround.fillPlan(o, Rotation.None, state, p -> "Soil_Sand");
+        eq("Soil_Sand", plan.get(new Vector3i(-3, 114, 0)));
+        eq("Soil_Sand", plan.get(new Vector3i(-3, 101, -1)));
+        // no land within ATTACH_REACH: nothing added
+        var far = shoreAt(o, Rotation.None, (px, pz) -> pz <= -1 - BoatSiteGround.ATTACH_REACH);
+        eq(0, BoatSiteGround.attachColumns(o, Rotation.None, far).size());
+        // land right next to the edge: no gap
+        eq(0, BoatSiteGround.attachColumns(o, Rotation.None, shoreAt(o, Rotation.None, (px, pz) -> pz <= 0)).size());
+        // side edges: land at px <= -8 on the left, px >= 7 on the right
+        var sides = BoatSiteGround.attachColumns(o, Rotation.None, shoreAt(o, Rotation.None, (px, pz) -> px <= -8 || px >= 7));
+        check(sides.contains(new Vector3i(-7, 114, 3)), "left gap");
+        check(sides.contains(new Vector3i(6, 114, 3)), "right gap");
+        check(!sides.contains(new Vector3i(6, 114, 7)), "no right line beyond pz 5");
+        // rotated: same shape in the prefab frame, world columns turned
+        for (Rotation r : new Rotation[] {Rotation.Ninety, Rotation.OneEighty, Rotation.TwoSeventy}) {
+            var rc = BoatSiteGround.attachColumns(o, r, shoreAt(o, r, (px, pz) -> pz <= -2));
+            eq(24, rc.size());
+            Vector3i w = r.rotateYaw(new Vector3i(-3, 0, 0), new Vector3i()).add(o.x, 114, o.z);
+            check(rc.contains(w), r + ": rotated gap column");
+        }
+    }
+
+    private static void masterCheck() {
+        Vector3i o = new Vector3i(0, 115, 0);
+        check(BoatSiteGround.masterFault(o, Rotation.None, (x, y, z) -> y < 115 ? 2 : 0) == null, "solid ground and two free cells");
+        eq(new Vector3i(-4, 114, 5), BoatSiteGround.masterFault(o, Rotation.None, (x, y, z) -> y < 115 ? 1 : 0));
+        eq(new Vector3i(-4, 116, 5), BoatSiteGround.masterFault(o, Rotation.None, (x, y, z) -> y < 115 || y == 116 ? 2 : 0));
+        DeployPlacement.CellState sim = BoatSiteGround.simulated((x, y, z) -> 1, Set.of(), Set.of(new Vector3i(-4, 114, 5)));
+        eq(new Vector3i(-4, 115, 5), BoatSiteGround.masterFault(o, Rotation.None, sim)); // water still in the master cell
+    }
+
+    /** Every chunk touched by the pier and by the moored steamboat shape is in the footprint, for the four rotations. */
+    private static void boatFootprintCoversBerthedBoat() throws Exception {
+        StructureShape pier = prefabShape(Deployables.BOAT_STATION.prefabPath);
+        StructureShape boat = prefabShape("Steamboat_Public.prefab.json");
+        int[] b = Deployables.BOAT_STATION_BERTH_ORIGIN;
+        for (Rotation rot : Rotation.values()) {
+            for (int[] at : new int[][] {{1000, 500}, {-1003, 77}, {15, -1021}}) {
+                Set<Long> chunks = new java.util.HashSet<>();
+                for (long[] c : GenerationListener.footprintChunks(Deployables.BOAT_STATION_KIND, at[0], at[1], rot)) {
+                    chunks.add(c[0] * 1_000_000L + c[1]);
+                }
+                Vector3i origin = new Vector3i(at[0], 62, at[1]);
+                Vector3i berth = rot.rotateYaw(new Vector3i(b[0], b[1], b[2]), new Vector3i()).add(origin);
+                List<Vector3i> cells = new ArrayList<>();
+                for (StructureShape.Cell c : pier.cells()) {
+                    cells.add(c.rotated(rot).add(origin));
+                }
+                for (StructureShape.Cell c : boat.cells()) {
+                    cells.add(c.rotated(rot.add(Deployables.BOAT_STATION_BERTH_ROTATION)).add(berth));
+                }
+                for (Vector3i p : cells) {
+                    long key = (long) com.hypixel.hytale.math.util.ChunkUtil.chunkCoordinate(p.x) * 1_000_000L
+                            + com.hypixel.hytale.math.util.ChunkUtil.chunkCoordinate(p.z);
+                    check(chunks.contains(key), "chunk of " + p + " covered at " + at[0] + "," + at[1] + " rotation " + rot);
+                }
+            }
+        }
+    }
+
+    private static void emptiedCellsReadAsEmpty() {
+        DeployPlacement.CellState base = (x, y, z) -> 2;
+        DeployPlacement.CellState sim = DeployPlacement.withEmptied(base, Set.of(new Vector3i(1, 2, 3)));
+        eq(0, sim.at(1, 2, 3));
+        eq(2, sim.at(1, 2, 4));
+    }
+
+    private static void refusalCarriesHullFlag() {
+        eq(null, DeployStationInteraction.Refusal.of("k").hull());
+        eq(null, DeployStationInteraction.Refusal.at("k", "b", 1, 2, 3).hull());
+        eq(null, new DeployStationInteraction.Refusal(null, null, null, null).hull());
+        eq(Boolean.TRUE, new DeployStationInteraction.Refusal("k", "b", new Vector3i(), "d", true).hull());
+    }
+
+    /** The refusals keep the keys and parameters the crate path sent before the extraction. */
+    private static void roomRefusalKeysUnchanged() {
+        DeployStationInteraction.Refusal at = DeployStationInteraction.Refusal.at("transit.deploy.noSpaceAt", "Rock_Stone", 1, 2, 3);
+        eq("transit.deploy.noSpaceAt", at.key());
+        eq("Rock_Stone", at.block());
+        eq(new org.joml.Vector3i(1, 2, 3), at.at());
+        eq(null, at.detailKey());
+        eq("deploy.underwater", DeployStationInteraction.Refusal.of("deploy.underwater").key());
+        check(DeployStationInteraction.blocksRoom("Plant_Leaves_Oak", true, false), "crate: foliage blocks");
+        check(!DeployStationInteraction.blocksRoom("Plant_Leaves_Oak", true, true), "generated: foliage counts as empty");
+        check(DeployStationInteraction.blocksRoom("Rock_Stone", true, true), "generated: rock blocks");
+        check(!DeployStationInteraction.blocksRoom("Rock_Stone", false, false), "non solid never blocks");
+        check(DeployStationInteraction.boatCellAllowed(-1, true, true), "boat rule kept");
+        check(!DeployStationInteraction.boatCellAllowed(0, true, false), "boat deck rule kept");
     }
 
     /** Boat station room rule: the posts (prefab y below 0) may stand in the lake bed or the water, the deck and above must be free. */
@@ -1942,6 +3253,23 @@ public class TransitTests {
     }
 
     /** Only the listed items show in the creative library, every other item JSON is hidden. */
+    /** Two layers of planks under every column of the hut, at y -1 and -2. */
+    private static void boatStationHutFoundation() throws Exception {
+        var root = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Prefabs/Boat_Station.prefab.json")));
+        java.util.Set<String> planks = new java.util.HashSet<>();
+        for (var e : root.getArray("blocks")) {
+            var b = e.asDocument();
+            if (b.getString("name").getValue().equals("Wood_Hardwood_Planks")) {
+                planks.add(b.getInt32("x").getValue() + "," + b.getInt32("y").getValue() + "," + b.getInt32("z").getValue());
+            }
+        }
+        for (int y = -2; y <= -1; y++) {
+            for (int x = -5; x <= -3; x++) {
+                for (int z = 3; z <= 6; z++) check(planks.contains(x + "," + y + "," + z), "plank " + x + "," + y + "," + z);
+            }
+        }
+    }
+
     /** Cleaned boat station prefab: no terrain, no fluids, extended posts, decor blocks swapped. */
     private static void boatStationPrefab() throws Exception {
         var root = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Prefabs/Boat_Station.prefab.json")));
@@ -2576,6 +3904,14 @@ public class TransitTests {
         check(DeployPlacement.boatStationOrigin(walled, computed, Rotation.Ninety) == null, "solid column: refused");
     }
 
+    static void boatStationOriginBlockerCell() {
+        org.joml.Vector3i computed = new org.joml.Vector3i(100, 70, 200);
+        DeployPlacement.CellState lake = (x, y, z) -> x == 111 && z == 199 ? (y <= 66 && y >= 60 ? 1 : (y < 60 ? 2 : 0)) : 2;
+        check(DeployPlacement.boatStationOriginBlocker(lake, computed, Rotation.Ninety) == null, "lake: nothing blocks");
+        DeployPlacement.CellState walled = (x, y, z) -> 2;
+        eq(new org.joml.Vector3i(111, 73, 199), DeployPlacement.boatStationOriginBlocker(walled, computed, Rotation.Ninety));
+    }
+
     private static void shipKinds() throws Exception {
         check(Deployables.SHIPS.contains(Deployables.AIRSHIP), "SHIPS has AIRSHIP");
         check(AirshipManager.spec(Deployables.AIRSHIP) == Deployables.AIRSHIP.airship, "spec(kind)");
@@ -3200,7 +4536,11 @@ public class TransitTests {
         check(s.get("deploy.tent") == 2L && s.get("glider.jump") == 1L, "counts");
         check(new ArrayList<>(s.keySet()).equals(List.of("deploy.tent", "glider.jump")), "NAMES order");
         check(c.snapshotAndReset().isEmpty(), "reset after snapshot");
-        check(UsageCounters.NAMES.size() == 24, "24 counters");
+        check(UsageCounters.NAMES.size() == 31, "31 counters");
+        for (String n : List.of("first", "fallback", "repaired")) {
+            check(UsageCounters.NAMES.contains("worldgen.boat.built." + n), "boat built counter " + n);
+        }
+        check(UsageCounters.NAMES.contains("worldgen.boat.exhausted"), "boat exhausted counter");
         check(UsageCounters.NAMES.contains("transit.boatTrip"), "boat trip counter");
         check(UsageCounters.NAMES.contains("deploy.steamboat") && UsageCounters.NAMES.contains("takeoff.steamboat"), "steamboat counters");
         check(UsageCounters.NAMES.indexOf("deploy.steamboat") == UsageCounters.NAMES.indexOf("deploy.airship") + 1, "deploy order");
@@ -3609,6 +4949,11 @@ public class TransitTests {
         check(d.get("w", "A", "B") == null && Files.exists(dir.resolve("boat-routes.json.bad")), "fichier illisible renommé");
     }
 
+    private static void crossMaxLeavesRoomForRoute() {
+        check(WorldStationPlanner.CROSS_MAX < WaterRoute.MAX_LENGTH, "crossing limit under the route limit");
+        eq(3800, WorldStationPlanner.CROSS_MAX);
+    }
+
     private static void boatRoutesInvalidate() {
         BoatRoutes.Book b = new BoatRoutes.Book();
         b.addStation("w", "A", List.of("A"));
@@ -3634,11 +4979,11 @@ public class TransitTests {
             Vector3i o = BoatRoutes.berthOrigin(s);
             org.joml.Vector3f pv = AirshipManager.pivot(Deployables.STEAMBOAT_PUBLIC);
             Vector3d rot = AirshipMath.rotateY(pv.x, pv.y, pv.z, BoatRoutes.berthRotation(s).getRadians(), new Vector3d());
-            Vector3d p = MooredPilot.helmPoint(s);
+            Vector3d p = MooredPilot.helmPoint(s, false);
             check(Math.abs(p.x - (o.x + Math.round(rot.x) + 0.5)) < 1e-6 && Math.abs(p.z - (o.z + Math.round(rot.z) + 0.5)) < 1e-6
                     && Math.abs(p.y - (o.y + Math.round(rot.y))) < 1e-6, "pivot du prefab tourné, rotation " + r + " : " + p);
             // Facing: forward (-sin yaw, -cos yaw) is the bow of the prefab (0, 0, -1) turned by the berth rotation, whatever the station's.
-            double yaw = MooredPilot.facingYaw(s);
+            double yaw = MooredPilot.facingYaw(s, false);
             Vector3d bow = AirshipMath.rotateY(0, 0, -1, BoatRoutes.berthRotation(s).getRadians(), new Vector3d());
             near(bow.x, -Math.sin(yaw));
             near(bow.z, -Math.cos(yaw));
@@ -3647,6 +4992,127 @@ public class TransitTests {
             check(!id.equals(MooredPilot.uuidFor("w", new Vector3i(o.x + 1, o.y, o.z))), "un identifiant par ponton");
             check(!id.equals(MooredPilot.uuidFor("autre", o)), "un identifiant par monde");
         }
+    }
+
+    private static TransitNetwork.Station stationAt(Rotation r) {
+        return new TransitNetwork.Station("S", "w", new Vector3i(100, 64, 200), r, null, null, new ArrayList<>(), Deployables.BOAT_STATION_KIND);
+    }
+
+    private static final Rotation[] ALL_ROTATIONS = {Rotation.None, Rotation.Ninety, Rotation.OneEighty, Rotation.TwoSeventy};
+
+    /** The pilot of a shuttle moored the other way round: pivot turned a half turn about the berth origin, looking the opposite way. */
+    private static void mooredPilotFlipped() {
+        for (Rotation r : ALL_ROTATIONS) {
+            TransitNetwork.Station s = stationAt(r);
+            Vector3i o = BoatRoutes.berthOrigin(s);
+            Vector3d pn = MooredPilot.helmPoint(s, false);
+            Vector3d pf = MooredPilot.helmPoint(s, true);
+            // Half turn about the prefab origin: the two pivots are symmetric about the origin cell centre.
+            near(2 * (o.x + 0.5), pn.x + pf.x);
+            near(2 * (o.z + 0.5), pn.z + pf.z);
+            near(pn.y, pf.y);
+            // The pivot cell of the prefab turned by the flipped rotation.
+            org.joml.Vector3f pv = AirshipManager.pivot(Deployables.STEAMBOAT_PUBLIC);
+            Vector3d rot = AirshipMath.rotateY(pv.x, pv.y, pv.z, BoatRoutes.berthRotation(s, true).getRadians(), new Vector3d());
+            near(o.x + Math.round(rot.x) + 0.5, pf.x);
+            near(o.z + Math.round(rot.z) + 0.5, pf.z);
+            // Facing: forward (-sin yaw, -cos yaw) is the prefab bow turned by the flipped berth rotation, opposite to the usual one.
+            double yaw = MooredPilot.facingYaw(s, true);
+            Vector3d bow = AirshipMath.rotateY(0, 0, -1, BoatRoutes.berthRotation(s, true).getRadians(), new Vector3d());
+            near(bow.x, -Math.sin(yaw));
+            near(bow.z, -Math.cos(yaw));
+            near(Math.PI, Math.abs(AirshipMath.wrapPi(yaw - MooredPilot.facingYaw(s, false))));
+            near(BoatRoutes.berthTheta(s, true), yaw);
+            // The rotation centre does not depend on the heading.
+            Vector3d c = BoatRoutes.berthCentre(s);
+            Vector3d cf = AirshipManager.get().centerWorld(Deployables.STEAMBOAT_PUBLIC, pf, BoatRoutes.berthTheta(s, true));
+            near(c.x, cf.x);
+            near(c.z, cf.z);
+            check(BoatRoutes.berthRotation(s, true) == BoatRoutes.berthRotation(s).add(Rotation.OneEighty), "flipped rotation " + r);
+            check(BoatRoutes.berthRotation(s, false) == BoatRoutes.berthRotation(s), "usual rotation " + r);
+        }
+    }
+
+    /**
+     * A boarding step touches the last pier plank for both berth headings and the 4 station rotations (the steps are symmetric about the
+     * prefab origin), and neither hull overlaps a block of the station.
+     */
+    private static void berthStepBothHeadings() throws Exception {
+        StructureShape station = prefabShape("Boat_Station.prefab.json");
+        StructureShape boat = prefabShape("Steamboat_Public.prefab.json");
+        Vector3i pierEnd = new Vector3i(1, 0, 12); // station frame: against the last deck plank (1, 0, 11)
+        for (Rotation r : ALL_ROTATIONS) {
+            TransitNetwork.Station s = stationAt(r);
+            Vector3i expected = r.rotateYaw(new Vector3i(pierEnd), new Vector3i()).add(s.origin);
+            Set<String> taken = new java.util.HashSet<>();
+            for (StructureShape.Cell c : station.cells()) {
+                Vector3i p = c.rotated(r).add(s.origin);
+                taken.add(p.x + "," + p.y + "," + p.z);
+            }
+            for (boolean flipped : new boolean[] {false, true}) {
+                Rotation br = BoatRoutes.berthRotation(s, flipped);
+                boolean touches = false;
+                for (StructureShape.Cell c : boat.cells()) {
+                    Vector3i w = c.rotated(br).add(BoatRoutes.berthOrigin(s));
+                    check(!taken.contains(w.x + "," + w.y + "," + w.z), "hull cell on a station block " + w + ", flipped " + flipped + ", " + r);
+                    if (c.y() == 1 && Math.abs(c.x()) == 2 && c.z() == 0 && w.equals(expected)) {
+                        touches = true;
+                    }
+                }
+                check(touches, "a boarding step at " + expected + ", flipped " + flipped + ", station " + r);
+            }
+        }
+        // Along the pier (station x) the flipped hull is the usual one mirrored about the berth origin column: the columns of its
+        // cells go from origin - maxZ to origin - minZ, and the place box of the prefab (z -5..6) gains the column at -5 and loses 7.
+        int minZ = Integer.MAX_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (StructureShape.Cell c : boat.cells()) {
+            minZ = Math.min(minZ, c.z());
+            maxZ = Math.max(maxZ, c.z());
+        }
+        int ox = Deployables.BOAT_STATION_BERTH_ORIGIN[0];
+        int usualMin = Integer.MAX_VALUE, usualMax = Integer.MIN_VALUE, turnedMin = Integer.MAX_VALUE, turnedMax = Integer.MIN_VALUE;
+        for (StructureShape.Cell c : boat.cells()) {
+            int a = c.rotated(BoatRoutes.berthRotation(Rotation.None, false)).x + ox;
+            int b = c.rotated(BoatRoutes.berthRotation(Rotation.None, true)).x + ox;
+            usualMin = Math.min(usualMin, a);
+            usualMax = Math.max(usualMax, a);
+            turnedMin = Math.min(turnedMin, b);
+            turnedMax = Math.max(turnedMax, b);
+        }
+        eq(ox + minZ, usualMin);
+        eq(ox + maxZ, usualMax);
+        eq(ox - maxZ, turnedMin);
+        eq(ox - minZ, turnedMax);
+        int[] box = {Deployables.STEAMBOAT_PUBLIC_PLACE_MIN[2], Deployables.STEAMBOAT_PUBLIC_PLACE_MAX[2]};
+        eq(ox + box[0], -4);
+        eq(ox + box[1], 7);
+        eq(ox - box[1], -5);
+        eq(ox - box[0], 6);
+    }
+
+    /** The berth heading is the one closest to the heading of the shuttle, with the wrap-around at +-pi. */
+    private static void berthHeadingChoice() {
+        for (Rotation r : ALL_ROTATIONS) {
+            TransitNetwork.Station s = stationAt(r);
+            double usual = BoatRoutes.berthTheta(s);
+            check(!BoatRoutes.preferFlipped(usual, usual), "same heading keeps the usual one, " + r);
+            check(BoatRoutes.preferFlipped(usual + Math.PI, usual), "opposite heading flips, " + r);
+            check(BoatRoutes.preferFlipped(usual - Math.PI, usual), "opposite heading (other side of the wrap) flips, " + r);
+            check(!BoatRoutes.preferFlipped(usual + Math.toRadians(80), usual), "80 degrees off keeps the usual one, " + r);
+            check(!BoatRoutes.preferFlipped(usual - Math.toRadians(80), usual), "-80 degrees off keeps the usual one, " + r);
+            check(BoatRoutes.preferFlipped(usual + Math.toRadians(100), usual), "100 degrees off flips, " + r);
+            check(BoatRoutes.preferFlipped(usual - Math.toRadians(100), usual), "-100 degrees off flips, " + r);
+            check(!BoatRoutes.preferFlipped(usual + Math.PI / 2, usual) && !BoatRoutes.preferFlipped(usual - Math.PI / 2, usual),
+                    "a quarter turn keeps the usual one, " + r);
+            // A heading near the flipped berth heading flips.
+            check(BoatRoutes.preferFlipped(BoatRoutes.berthTheta(s, true) + 0.3, usual), "heading near the flipped one, " + r);
+        }
+        // Wrap-around at +-pi for the usual heading pi (station Ninety): -0.9 pi is 0.1 pi away, 0.1 pi is 0.9 pi away.
+        check(!BoatRoutes.preferFlipped(-Math.PI * 0.9, Math.PI), "-0.9 pi is next to pi");
+        check(BoatRoutes.preferFlipped(Math.PI * 0.1, Math.PI), "0.1 pi is next to the opposite of pi");
+        check(!BoatRoutes.preferFlipped(Math.PI * 0.95, Math.PI), "0.95 pi is next to pi");
+        check(BoatRoutes.preferFlipped(-Math.PI * 0.05, Math.PI), "-0.05 pi is next to the opposite of pi");
     }
 
     private static void berthPivotRotation() {
@@ -3661,7 +5127,15 @@ public class TransitTests {
         check(Math.abs(BoatRoutes.berthTheta(s) - Math.PI) < 1e-6, "cap");
         eq(63, BoatRoutes.surfaceY(s));
         check(!BoatRoutes.tooFar(new Vector3i(0, 0, 0), new Vector3i(1000, 0, 1000)), "1414 blocs : cherché");
-        check(BoatRoutes.tooFar(new Vector3i(0, 0, 0), new Vector3i(1100, 0, 1100)), "1556 blocs : coupé");
+        check(BoatRoutes.tooFar(new Vector3i(0, 0, 0), new Vector3i(3000, 0, 3000)), "4243 blocs : coupé");
+    }
+
+    private static void waterRouteLongCrossing() {
+        WaterRoute.ColumnProbe sea = (x, z) -> z >= 0 && z < 60 ? WaterRoute.Cell.WATER : WaterRoute.Cell.BLOCKED;
+        WaterRoute.Search s = new WaterRoute.Search(sea, 20, 30, 3520, 30, 0, 0, 3540, 59);
+        check(s.step(1_000_000) == WaterRoute.Status.FOUND, "traversée de 3500 blocs");
+        check(!BoatRoutes.tooFar(new Vector3i(0, 0, 0), new Vector3i(3500, 0, 0)), "3500 blocs : cherché");
+        check(BoatRoutes.tooFar(new Vector3i(0, 0, 0), new Vector3i(4500, 0, 0)), "4500 blocs : coupé");
     }
 
     private static void waterRouteTooLong() {
@@ -3768,6 +5242,62 @@ public class TransitTests {
         WaterRoute.Search a = waterSearch(m, 20, 60, 100, 60).withFreeStart()
                 .avoiding(java.util.Set.of(WaterRoute.columnKey(21, 60)));
         check(a.step(100000) == WaterRoute.Status.FOUND, "départ libre avec colonne interdite : encore une route");
+    }
+
+    // ---- WaterRoute.exitsToOpenWater ----
+
+    /** Open-water check on a 400 x 400 map: land (#) everywhere, then the given water; start at (200, 200). */
+    private static boolean exitsAt(java.util.function.Consumer<char[][]> fill, char base) {
+        char[][] m = new char[400][400];
+        for (char[] row : m) {
+            java.util.Arrays.fill(row, base);
+        }
+        fill.accept(m);
+        WaterRoute.ColumnProbe p = (x, z) -> {
+            if (x < 0 || z < 0 || x >= 400 || z >= 400) {
+                return WaterRoute.Cell.BLOCKED;
+            }
+            char c = m[x][z];
+            return c == '.' ? WaterRoute.Cell.WATER : c == '?' ? WaterRoute.Cell.UNKNOWN : WaterRoute.Cell.BLOCKED;
+        };
+        return WaterRoute.exitsToOpenWater(p, 200, 200);
+    }
+
+    private static void waterExitOpen() {
+        check(exitsAt(m -> { }, '.'), "pleine mer : sortie");
+    }
+
+    private static void waterExitPond() {
+        check(!exitsAt(m -> waterRect(m, 165, 235, 165, 235, '.'), '#'), "étang de 71 blocs : pas de sortie");
+    }
+
+    private static void waterExitShore() {
+        // Small cove around the start, a 5-block wall of land, then open sea.
+        check(!exitsAt(m -> {
+            waterRect(m, 185, 210, 185, 215, '.');
+            waterRect(m, 216, 399, 0, 399, '.');
+        }, '#'), "mur de terre face au poste : pas de sortie");
+    }
+
+    private static void waterExitNarrowChannel() {
+        // Basin around the start, then a channel of 2 * CLEARANCE (18) wide, one block too narrow, to open sea.
+        check(!exitsAt(m -> {
+            waterRect(m, 180, 215, 180, 220, '.');
+            waterRect(m, 216, 235, 191, 208, '.');
+            waterRect(m, 236, 399, 0, 399, '.');
+        }, '#'), "chenal de 18 : pas de sortie");
+    }
+
+    private static void waterExitWideChannel() {
+        check(exitsAt(m -> {
+            waterRect(m, 180, 215, 180, 220, '.');
+            waterRect(m, 216, 235, 190, 210, '.');
+            waterRect(m, 236, 399, 0, 399, '.');
+        }, '#'), "chenal de 21 : sortie");
+    }
+
+    private static void waterExitUnknown() {
+        check(!exitsAt(m -> { }, '?'), "colonnes inconnues partout : pas de sortie");
     }
 
     private static void boatLookAhead() {
@@ -4429,6 +5959,124 @@ public class TransitTests {
         eq(Rotation.Ninety.rotateYaw(new Vector3i(-2, 9, 3), new Vector3i()).add(origin), AirshipCaptainChest.worldPosition(origin, Rotation.Ninety));
     }
 
+    static void newChunksMarkAndQuery() {
+        NewChunks n = new NewChunks();
+        check(!n.dirty(), "empty map is clean");
+        int[][] marked = {{0, 0}, {31, 31}, {32, 32}, {-1, -1}, {-32, -33}, {-1, 0}, {1000, -2000}};
+        for (int[] c : marked) {
+            check(!n.isNew(c[0], c[1]), "not new before mark " + c[0] + "," + c[1]);
+        }
+        for (int[] c : marked) {
+            n.mark(c[0], c[1]);
+        }
+        check(n.dirty(), "dirty after mark");
+        for (int[] c : marked) {
+            check(n.isNew(c[0], c[1]), "new after mark " + c[0] + "," + c[1]);
+        }
+        // Neighbours across the region edges stay unmarked.
+        check(!n.isNew(30, 31), "30,31");
+        check(!n.isNew(31, 32), "31,32");
+        check(!n.isNew(32, 31), "32,31");
+        check(!n.isNew(0, -1), "0,-1");
+        check(!n.isNew(-2, -1), "-2,-1");
+        check(!n.isNew(1, 0), "1,0");
+    }
+
+    static void newChunksRoundTrip() throws Exception {
+        Path dir = Files.createTempDirectory("new-chunks");
+        Path f = dir.resolve("sub").resolve("generated-chunks-w.bin");
+        NewChunks n = new NewChunks();
+        int[][] marked = {{0, 0}, {31, 31}, {32, 32}, {-1, -1}, {-33, 64}, {5000, -5000}};
+        for (int[] c : marked) {
+            n.mark(c[0], c[1]);
+        }
+        n.write(f);
+        check(!n.dirty(), "clean after write");
+        check(Files.exists(f), "file written");
+        check(!Files.exists(f.resolveSibling(f.getFileName() + ".tmp")), "no tmp left");
+        NewChunks r = NewChunks.read(f);
+        check(!r.dirty(), "read map is clean");
+        for (int[] c : marked) {
+            check(r.isNew(c[0], c[1]), "read new " + c[0] + "," + c[1]);
+        }
+        check(!r.isNew(1, 1), "1,1 not new");
+        check(!r.isNew(-1, 0), "-1,0 not new");
+        check(NewChunks.read(dir.resolve("absent.bin")).isNew(0, 0) == false, "absent file is empty");
+    }
+
+    static void newChunksBadFile() throws Exception {
+        Path dir = Files.createTempDirectory("new-chunks-bad");
+        Path f = dir.resolve("generated-chunks-w.bin");
+        NewChunks n = new NewChunks();
+        n.mark(3, 4);
+        n.mark(100, 100);
+        n.write(f);
+        byte[] all = Files.readAllBytes(f);
+        Files.write(f, Arrays.copyOf(all, all.length - 10));
+        NewChunks r = NewChunks.read(f);
+        check(!r.isNew(3, 4) && !r.isNew(100, 100), "truncated file gives an empty map");
+        check(!Files.exists(f), "bad file moved away");
+        check(Files.exists(f.resolveSibling(f.getFileName() + ".bad")), "renamed to .bad");
+        Files.write(f, new byte[] {1, 2, 3});
+        check(!NewChunks.read(f).isNew(0, 0), "garbage gives an empty map");
+    }
+
+    static void newChunksWorldMismatch() throws Exception {
+        java.util.UUID a = java.util.UUID.randomUUID(), b = java.util.UUID.randomUUID();
+        Path dir = Files.createTempDirectory("new-chunks-uuid");
+        Path f = dir.resolve("generated-chunks-w.bin");
+        NewChunks n = NewChunks.read(f, a);
+        n.mark(7, 8);
+        n.write(f);
+        check(NewChunks.read(f, a).isNew(7, 8), "same identity keeps the map");
+        check(NewChunks.read(f, null).isNew(7, 8), "unknown current identity keeps the map");
+        NewChunks other = NewChunks.read(f, b);
+        check(!other.isNew(7, 8), "other identity gives an empty map");
+        check(other.dirty(), "empty map is written next time");
+        check(!Files.exists(f) && Files.exists(f.resolveSibling(f.getFileName() + ".old")), "old file renamed .old");
+        other.mark(1, 1);
+        other.write(f);
+        check(NewChunks.read(f, b).isNew(1, 1) && !NewChunks.read(f, b).isNew(7, 8), "new identity stored");
+        // A file without identity (first format) is adopted.
+        Path legacy = dir.resolve("legacy.bin");
+        try (java.io.DataOutputStream out = new java.io.DataOutputStream(Files.newOutputStream(legacy))) {
+            out.writeInt(1);
+            out.writeInt(1);
+            out.writeInt(0);
+            out.writeInt(0);
+            for (int i = 0; i < 16; i++) out.writeLong(i == 0 ? 1L : 0L);
+        }
+        NewChunks adopted = NewChunks.read(legacy, a);
+        check(adopted.isNew(0, 0) && adopted.dirty(), "file without identity is adopted");
+        adopted.write(legacy);
+        check(!NewChunks.read(legacy, b).isNew(0, 0), "adopted identity is then enforced");
+    }
+
+    static void generatedWorldMismatch() throws Exception {
+        java.util.UUID a = java.util.UUID.randomUUID(), b = java.util.UUID.randomUUID();
+        Path dir = Files.createTempDirectory("generated-uuid");
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        check(!g.adoptWorld("w", a), "first use adopts");
+        g.adoptWorld("other", a);
+        g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 1, 2, Rotation.None, false));
+        g.add("other", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 3, 4, Rotation.None, false));
+        g.markPortal("w", 0, 0);
+        g.markCell("w", 1, 1);
+        g.markPortal("other", 0, 0);
+        g.load(dir);
+        check(!g.adoptWorld("w", a), "same identity after reload");
+        eq(1, g.entries("w").size());
+        check(g.adoptWorld("w", b), "other identity drops the world");
+        eq(0, g.entries("w").size());
+        check(g.markPortal("w", 0, 0) && g.markCell("w", 1, 1), "portals and cells dropped");
+        eq(1, g.entries("other").size());
+        check(!g.markPortal("other", 0, 0), "other world keeps its portal");
+        g.load(dir);
+        check(!g.adoptWorld("w", b), "new identity persisted");
+        eq(1, g.entries("other").size());
+    }
+
     private static void collectGems(org.bson.BsonValue v, List<String> out) {
         if (v.isDocument()) {
             org.bson.BsonDocument d = v.asDocument();
@@ -4443,5 +6091,485 @@ public class TransitTests {
                 collectGems(c, out);
             }
         }
+    }
+
+    static void generatedRegistryRoundTrip() throws Exception {
+        Path dir = Files.createTempDirectory("generated-stations");
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        GeneratedStations.Entry a = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 100, 200, Rotation.None, false));
+        GeneratedStations.Entry b = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, -50, 70, Rotation.Ninety, true));
+        check(g.markPortal("w", 10, 20), "portal marked");
+        check(g.markCell("w", 3, -4), "cell marked");
+        g.setState(a, GeneratedStations.State.BUILT);
+        eq(2, g.pending("w").size() + 1);
+        eq(b, g.pending("w").get(0));
+        eq(a, g.at("w", 103, 198));
+        check(g.at("w", 105, 200) == null, "at is limited to 4 blocks");
+        g.load(dir);
+        List<GeneratedStations.Entry> es = g.entries("w");
+        eq(2, es.size());
+        eq(Deployables.STATION_KIND, es.get(0).kind);
+        eq(100, es.get(0).x);
+        eq(200, es.get(0).z);
+        eq(Rotation.None, es.get(0).rotation);
+        check(!es.get(0).partner, "first not partner");
+        eq(GeneratedStations.State.BUILT, es.get(0).state);
+        eq(Deployables.BOAT_STATION_KIND, es.get(1).kind);
+        eq(Rotation.Ninety, es.get(1).rotation);
+        check(es.get(1).partner, "second partner");
+        eq(GeneratedStations.State.PLANNED, es.get(1).state);
+        check(!g.markPortal("w", 12, 22), "portal remembered");
+        check(!g.markCell("w", 3, -4), "cell remembered");
+        eq(1, g.positions("w", Deployables.STATION_KIND).size());
+        g.setState(es.get(0), GeneratedStations.State.REMOVED);
+        eq(0, g.positions("w", Deployables.STATION_KIND).size());
+        eq(0, g.entries("other").size());
+    }
+
+    static void generatedRegistrySites() throws Exception {
+        Path dir = Files.createTempDirectory("generated-sites");
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        WorldStationPlanner.Site s1 = new WorldStationPlanner.Site(150, 210, Rotation.Ninety);
+        WorldStationPlanner.Site s2 = new WorldStationPlanner.Site(-30, 400, Rotation.OneEighty);
+        GeneratedStations.Entry e = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 100, 200,
+                Rotation.None, true, List.of(s1, s2)));
+        check(e.thisSession, "entry added this session");
+        eq(3, e.sites.size());
+        eq(0, e.active);
+        check(g.advance(e), "first advance");
+        check(g.advance(e), "second advance");
+        check(!g.advance(e), "list exhausted");
+        eq(-30, e.x);
+        eq(400, e.z);
+        eq(Rotation.OneEighty, e.rotation);
+        eq(2, e.active);
+        g.load(dir);
+        GeneratedStations.Entry r = g.entries("w").get(0);
+        check(!r.thisSession, "entry read from disk");
+        eq(2, r.active);
+        eq(e.sites, r.sites);
+        eq(-30, r.x);
+        eq(400, r.z);
+        eq(Rotation.OneEighty, r.rotation);
+        check(r.partner, "partner kept");
+        check(!g.advance(r), "still exhausted after reload");
+    }
+
+    static void nextSiteSkipsTooClose() throws Exception {
+        Path dir = Files.createTempDirectory("generated-next-site");
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        WorldStationPlanner.Site s1 = new WorldStationPlanner.Site(5000, 0, Rotation.None);
+        WorldStationPlanner.Site s2 = new WorldStationPlanner.Site(-5000, 0, Rotation.Ninety);
+        GeneratedStations.Entry e = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 0, 0,
+                Rotation.None, false, List.of(s1, s2)));
+        check(GenerationListener.moveToNextSite(g, e, List.of(new int[] {6000, 0})), "site 2 is far enough");
+        eq(2, e.active);
+        eq(-5000, e.x);
+        GeneratedStations.Entry f = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 0, 0,
+                Rotation.None, false, List.of(s1, s2)));
+        check(!GenerationListener.moveToNextSite(g, f, List.of(new int[] {6000, 0}, new int[] {-4000, 0})), "both fallbacks too close");
+        GeneratedStations.Entry p = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 0, 0,
+                Rotation.None, true, List.of(s1, s2)));
+        check(GenerationListener.moveToNextSite(g, p, List.of(new int[] {6000, 0})), "a partner only keeps its reuse distance");
+        eq(1, p.active);
+    }
+
+    static void generatedBuiltSite() throws Exception {
+        Path dir = Files.createTempDirectory("generated-built-site");
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        WorldStationPlanner.Site fallback = new WorldStationPlanner.Site(5000, 0, Rotation.None);
+        GeneratedStations.Entry e = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 0, 0,
+                Rotation.None, false, List.of(fallback)));
+        g.setBuiltSite(e, 40, 8, Rotation.Ninety);
+        g.setState(e, GeneratedStations.State.BUILT);
+        eq(e, g.at("w", 41, 7));
+        check(g.at("w", 0, 0) == null, "planned site no longer matches");
+        eq(1, g.positions("w", Deployables.BOAT_STATION_KIND).size());
+        eq(40, g.positions("w", Deployables.BOAT_STATION_KIND).get(0)[0]);
+        eq(8, g.positions("w", Deployables.BOAT_STATION_KIND).get(0)[1]);
+        eq(new WorldStationPlanner.Site(40, 8, Rotation.Ninety), g.activeSite(e));
+        eq(chunkSet(GenerationListener.footprintChunks(Deployables.BOAT_STATION_KIND, 40, 8, Rotation.Ninety)),
+                chunkSet(GenerationListener.footprintChunks(e)));
+        g.load(dir);
+        GeneratedStations.Entry r = g.entries("w").get(0);
+        eq(List.of(new WorldStationPlanner.Site(40, 8, Rotation.Ninety), fallback), r.sites);
+        eq(0, r.active);
+        eq(40, r.x);
+        eq(8, r.z);
+        eq(Rotation.Ninety, r.rotation);
+        eq(r, g.at("w", 40, 8));
+    }
+
+    static void generatedRegistryActiveClamped() throws Exception {
+        Path dir = Files.createTempDirectory("generated-active-clamped");
+        String sites = "\"sites\": [{\"x\": 1, \"z\": 2, \"rotation\": \"None\"}, {\"x\": 300, \"z\": 400, \"rotation\": \"Ninety\"}]";
+        String json = "{\"version\": 1, \"entries\": ["
+                + "{\"world\": \"w\", \"kind\": \"" + Deployables.BOAT_STATION_KIND + "\", \"x\": 1, \"z\": 2, \"rotation\": \"None\", "
+                + sites + ", \"active\": 7, \"partner\": false, \"state\": \"PLANNED\"},"
+                + "{\"world\": \"w\", \"kind\": \"" + Deployables.BOAT_STATION_KIND + "\", \"x\": 1, \"z\": 2, \"rotation\": \"None\", "
+                + sites + ", \"active\": -3, \"partner\": false, \"state\": \"PLANNED\"},"
+                + "{\"world\": \"w\", \"kind\": \"" + Deployables.BOAT_STATION_KIND + "\", \"x\": 1, \"z\": 2, \"rotation\": \"None\", "
+                + sites + ", \"partner\": false, \"state\": \"PLANNED\"}],"
+                + " \"portals\": [], \"cells\": [], \"worlds\": []}";
+        Files.writeString(dir.resolve("generated-stations.json"), json);
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        check(!Files.exists(dir.resolve("generated-stations.json.bad")), "no .bad file");
+        List<GeneratedStations.Entry> es = g.entries("w");
+        eq(3, es.size());
+        eq(1, es.get(0).active);
+        eq(300, es.get(0).x);
+        eq(Rotation.Ninety, es.get(0).rotation);
+        eq(0, es.get(1).active);
+        eq(1, es.get(1).x);
+        eq(0, es.get(2).active);
+        eq(2, es.get(2).z);
+    }
+
+    static void footprintFollowsAdvance() throws Exception {
+        GeneratedStations g = GeneratedStations.get();
+        g.load(Files.createTempDirectory("footprint-advance"));
+        WorldStationPlanner.Site fallback = new WorldStationPlanner.Site(5000, -3000, Rotation.OneEighty);
+        GeneratedStations.Entry e = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 0, 0,
+                Rotation.None, false, List.of(fallback)));
+        eq(chunkSet(GenerationListener.footprintChunks(Deployables.BOAT_STATION_KIND, 0, 0, Rotation.None)),
+                chunkSet(GenerationListener.footprintChunks(e)));
+        check(g.advance(e), "advanced");
+        Set<String> moved = chunkSet(GenerationListener.footprintChunks(e));
+        eq(chunkSet(GenerationListener.footprintChunks(Deployables.BOAT_STATION_KIND, 5000, -3000, Rotation.OneEighty)), moved);
+        check(!moved.contains("0,0"), "the old site is left");
+        long[] first = GenerationListener.footprintChunks(e).get(0);
+        eq(List.of(e), GenerationListener.touching(g.entries("w"), (int) first[0], (int) first[1]));
+        eq(0, GenerationListener.touching(g.entries("w"), 0, 0).size());
+    }
+
+    static void replannedOncePerSession() throws Exception {
+        GeneratedStations g = GeneratedStations.get();
+        g.load(Files.createTempDirectory("replanned-once"));
+        Set<String> replanned = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        g.markCell("w", 1, 2);
+        check(GenerationListener.unmarkOnce(replanned, g, "w", 1, 2), "first restoration un-marks");
+        check(!g.cellMarked("w", 1, 2), "cell un-marked");
+        g.markCell("w", 1, 2);
+        check(!GenerationListener.unmarkOnce(replanned, g, "w", 1, 2), "second restoration keeps the cell");
+        check(g.cellMarked("w", 1, 2), "cell still planned");
+        g.markCell("other", 1, 2);
+        check(GenerationListener.unmarkOnce(replanned, g, "other", 1, 2), "other world is its own cell");
+        check(!GenerationListener.unmarkOnce(replanned, g, "w", 3, 3), "unknown cell is not un-marked");
+    }
+
+    static void oldTerrainMovesBoat() throws Exception {
+        GeneratedStations g = GeneratedStations.get();
+        g.load(Files.createTempDirectory("old-terrain-moves"));
+        WorldStationPlanner.Site s1 = new WorldStationPlanner.Site(5000, 0, Rotation.None);
+        WorldStationPlanner.Site s2 = new WorldStationPlanner.Site(-5000, 0, Rotation.Ninety);
+        GeneratedStations.Entry boat = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 0, 0,
+                Rotation.None, false, List.of(s1, s2)));
+        // another main pier near the first fallback
+        g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 5500, 0, Rotation.None, false));
+        check(GenerationListener.moveOffOldTerrain(g, boat, "w"), "boat moves to a site far from the other pier");
+        eq(2, boat.active);
+        eq(-5000, boat.x);
+        eq(GeneratedStations.State.PLANNED, boat.state);
+        check(!GenerationListener.moveOffOldTerrain(g, boat, "w"), "sites used up");
+        eq(2, boat.active);
+        GeneratedStations.Entry air = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 0, 0, Rotation.None, false,
+                List.of(s1)));
+        check(!GenerationListener.moveOffOldTerrain(g, air, "w"), "a balloon station never moves");
+        eq(0, air.active);
+    }
+
+    static void generatedRegistryOldFormat() throws Exception {
+        Path dir = Files.createTempDirectory("generated-old-format");
+        String json = "{\"version\": 1, \"entries\": [{\"world\": \"w\", \"kind\": \"" + Deployables.STATION_KIND
+                + "\", \"x\": 12, \"z\": -34, \"rotation\": \"Ninety\", \"partner\": false, \"state\": \"BUILT\"}],"
+                + " \"portals\": [], \"cells\": [], \"worlds\": []}";
+        Files.writeString(dir.resolve("generated-stations.json"), json);
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        check(!Files.exists(dir.resolve("generated-stations.json.bad")), "no .bad file");
+        eq(1, g.entries("w").size());
+        GeneratedStations.Entry e = g.entries("w").get(0);
+        eq(List.of(new WorldStationPlanner.Site(12, -34, Rotation.Ninety)), e.sites);
+        eq(0, e.active);
+        eq(12, e.x);
+        eq(-34, e.z);
+        eq(Rotation.Ninety, e.rotation);
+        eq(GeneratedStations.State.BUILT, e.state);
+        check(!g.advance(e), "single site cannot advance");
+    }
+
+    static void generatedForgetAndUnmark() throws Exception {
+        Path dir = Files.createTempDirectory("generated-forget");
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        GeneratedStations.Entry a = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 0, 0, Rotation.None, false));
+        GeneratedStations.Entry far = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 5000, 5000, Rotation.None, false));
+        g.setState(a, GeneratedStations.State.BUILT);
+        // the entries a regenerated chunk forgets are those whose footprint contains it, whatever their state
+        eq(List.of(a), GenerationListener.touching(g.entries("w"), 0, 0));
+        eq(0, GenerationListener.touching(g.entries("w"), 40, 40).size());
+        g.forget(a);
+        eq(List.of(far), g.entries("w"));
+        g.load(dir);
+        eq(1, g.entries("w").size());
+        check(g.at("w", 0, 0) == null, "forgotten entry stays forgotten after reload");
+        check(g.markCell("w", 1, 2), "cell marked");
+        check(!g.unmarkCell("w", 2, 1), "unknown cell");
+        check(g.unmarkCell("w", 1, 2), "cell unmarked");
+        check(g.markCell("w", 1, 2), "cell planned again");
+        g.markPortal("w", 10, 10);
+        g.markPortal("w", 500, 500);
+        eq(1, g.forgetPortals("w", 0, 0, 31, 31));
+        check(g.markPortal("w", 10, 10), "portal inside the box forgotten");
+        check(!g.markPortal("w", 500, 500), "portal outside the box kept");
+        eq(0, g.forgetPortals("other", 0, 0, 31, 31));
+    }
+
+    static void regeneratedKeepsSessionEntries() throws Exception {
+        Path dir = Files.createTempDirectory("generated-regenerated");
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 0, 0, Rotation.None, false));
+        // reloaded from disk: no longer an entry of this session
+        g.load(dir);
+        GeneratedStations.Entry old = g.at("w", 0, 0);
+        check(old != null && !old.thisSession, "entry loaded from disk");
+        GeneratedStations.Entry fresh = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 20, 20, Rotation.None, false));
+        check(fresh.thisSession, "entry added after the load");
+        eq(List.of(old), GenerationListener.forgettable(List.of(old, fresh)));
+        g.setState(fresh, GeneratedStations.State.BUILT);
+        eq(List.of(old, fresh), GenerationListener.forgettable(List.of(old, fresh)));
+    }
+
+    static void generatedPortalOnce() throws Exception {
+        GeneratedStations g = GeneratedStations.get();
+        g.load(Files.createTempDirectory("generated-portal"));
+        check(g.markPortal("w", 0, 0), "first portal");
+        check(!g.markPortal("w", 40, 40), "within 64 blocks");
+        check(g.markPortal("w", 64, 0), "64 blocks away is new");
+        check(g.markPortal("other", 0, 0), "other world is new");
+    }
+
+    static void generatedCellOnce() throws Exception {
+        GeneratedStations g = GeneratedStations.get();
+        g.load(Files.createTempDirectory("generated-cell"));
+        check(g.markCell("w", 1, 2), "first cell");
+        check(!g.markCell("w", 1, 2), "same cell");
+        check(g.markCell("w", 2, 1), "other cell");
+        check(g.markCell("other", 1, 2), "other world");
+    }
+
+    static void cellsAroundPlayer() {
+        List<int[]> cells = GenerationListener.cellsAround(-1, 4095);
+        eq(9, cells.size());
+        eq(-1, cells.get(0)[0]);
+        eq(1, cells.get(0)[1]);
+        Set<String> seen = new java.util.HashSet<>();
+        for (int[] c : cells) {
+            seen.add(c[0] + ":" + c[1]);
+            check(Math.abs(c[0] + 1) <= 1 && Math.abs(c[1] - 1) <= 1, "within one cell");
+        }
+        eq(9, seen.size());
+    }
+
+    static void planAheadOffWhenDisabled() throws Exception {
+        Path dir = Files.createTempDirectory("plan-ahead-off");
+        try {
+            TransitSettings.load(dir);
+            TransitSettings.setWorldgenEnabled(false);
+            GenerationListener.planAhead();
+        } finally {
+            TransitSettings.setWorldgenEnabled(true);
+            deleteAll(dir);
+        }
+    }
+
+    static void planAheadDedupe() throws Exception {
+        GeneratedStations g = GeneratedStations.get();
+        g.load(Files.createTempDirectory("ahead-dedupe"));
+        Set<String> queued = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        check(GenerationListener.claimAhead(queued, g, "w", 1, 2), "first claim");
+        check(!GenerationListener.claimAhead(queued, g, "w", 1, 2), "already queued");
+        check(GenerationListener.claimAhead(queued, g, "other", 1, 2), "other world");
+        queued.remove(GenerationListener.aheadKey("w", 1, 2));
+        check(GenerationListener.claimAhead(queued, g, "w", 1, 2), "claimed again after release");
+        queued.clear();
+        g.markCell("w", 1, 2);
+        check(!GenerationListener.claimAhead(queued, g, "w", 1, 2), "already planned");
+        eq(0, queued.size());
+    }
+
+    static void generatedBadFile() throws Exception {
+        Path dir = Files.createTempDirectory("generated-bad");
+        Files.writeString(dir.resolve("generated-stations.json"), "{ not json");
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        check(Files.exists(dir.resolve("generated-stations.json.bad")), "corrupt file renamed .bad");
+        check(!Files.exists(dir.resolve("generated-stations.json")), "corrupt file moved away");
+        eq(0, g.entries("w").size());
+        g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 1, 2, Rotation.None, false));
+        check(Files.exists(dir.resolve("generated-stations.json")), "new file written");
+        eq("{ not json", Files.readString(dir.resolve("generated-stations.json.bad")));
+    }
+    private static java.util.Set<String> chunkSet(List<long[]> chunks) {
+        java.util.Set<String> out = new java.util.TreeSet<>();
+        for (long[] c : chunks) out.add(c[0] + "," + c[1]);
+        return out;
+    }
+
+    private static void nearestUnbuiltEntry() throws Exception {
+        Path dir = Files.createTempDirectory("nearest-unbuilt");
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        GeneratedStations.Entry built = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 10, 0, com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None, false));
+        GeneratedStations.Entry far = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 500, 0, com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None, false));
+        GeneratedStations.Entry abandoned = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 100, 0, com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None, false));
+        g.setState(built, GeneratedStations.State.BUILT);
+        g.setState(abandoned, GeneratedStations.State.ABANDONED);
+        eq(abandoned, StationCommand.nearestUnbuilt(g.entries("w"), 0, 0));
+        eq(far, StationCommand.nearestUnbuilt(g.entries("w"), 450, 0));
+        eq(null, StationCommand.nearestUnbuilt(g.entries("other"), 0, 0));
+    }
+
+    private static void generatorAvailability() {
+        eq(GeneratorProbe.Availability.WAIT, GeneratorProbe.availability(false, null));
+        eq(GeneratorProbe.Availability.OFF, GeneratorProbe.availability(true, null));
+        eq(GeneratorProbe.Availability.OFF, GeneratorProbe.availability(false, new Object()));
+    }
+
+    static void footprintChunksCover() {
+        GeneratedStations.Entry rotated = new GeneratedStations.Entry("w", Deployables.STATION_KIND, 0, 0, Rotation.Ninety, false,
+                GeneratedStations.State.PLANNED);
+        eq(java.util.Set.of("-1,-1", "0,-1"), chunkSet(GenerationListener.footprintChunks(rotated)));
+        GeneratedStations.Entry plain = new GeneratedStations.Entry("w", Deployables.STATION_KIND, 0, 0, Rotation.None, false,
+                GeneratedStations.State.PLANNED);
+        eq(java.util.Set.of("0,-1", "0,0"), chunkSet(GenerationListener.footprintChunks(plain)));
+        GeneratedStations.Entry boat = new GeneratedStations.Entry("w", Deployables.BOAT_STATION_KIND, 0, 0, Rotation.None, false,
+                GeneratedStations.State.PLANNED);
+        eq(java.util.Set.of("-1,-1", "-1,0", "0,-1", "0,0"), chunkSet(GenerationListener.footprintChunks(boat)));
+        GeneratedStations.Entry far = new GeneratedStations.Entry("w", Deployables.STATION_KIND, -4000, 3000, Rotation.None, false,
+                GeneratedStations.State.PLANNED);
+        check(chunkSet(GenerationListener.footprintChunks(far)).contains("-125,93"), "negative x chunk of the origin");
+    }
+
+    static void decideRules() {
+        List<long[]> chunks = List.of(new long[]{0, 0}, new long[]{1, 0});
+        java.util.function.Predicate<long[]> all = c -> true;
+        java.util.function.Predicate<long[]> none = c -> false;
+        java.util.function.Predicate<long[]> firstOnly = c -> c[0] == 0;
+        eq(GenerationListener.Decision.BUILD, GenerationListener.decide(chunks, all, none));
+        eq(GenerationListener.Decision.ABANDON, GenerationListener.decide(chunks, firstOnly, c -> c[0] == 1));
+        eq(GenerationListener.Decision.WAIT, GenerationListener.decide(chunks, firstOnly, none));
+        eq(GenerationListener.Decision.ABANDON, GenerationListener.decide(chunks, all, c -> c[0] == 0));
+    }
+
+    static void newChunksOldLoadAbandons() {
+        GeneratedStations.Entry e = new GeneratedStations.Entry("w", Deployables.STATION_KIND, 0, 0, Rotation.None, false,
+                GeneratedStations.State.PLANNED);
+        NewChunks news = new NewChunks();
+        news.mark(0, -1);
+        List<long[]> chunks = GenerationListener.footprintChunks(e);
+        // chunk (0, 0) is loaded and was never marked new: old terrain.
+        java.util.function.Predicate<long[]> loaded = c -> c[0] == 0 && c[1] == 0;
+        GenerationListener.Decision d = GenerationListener.decide(chunks, c -> news.isNew((int) c[0], (int) c[1]),
+                c -> loaded.test(c) && !news.isNew((int) c[0], (int) c[1]));
+        eq(GenerationListener.Decision.ABANDON, d);
+    }
+
+    static void modRecipesMatchAssets() throws Exception {
+        java.util.TreeSet<String> expected = new java.util.TreeSet<>();
+        try (var files = Files.walk(Path.of("Server/Item/Items"))) {
+            for (Path f : (Iterable<Path>) files.filter(x -> x.toString().endsWith(".json"))::iterator) {
+                if (org.bson.BsonDocument.parse(Files.readString(f)).containsKey("Recipe")) {
+                    String name = f.getFileName().toString();
+                    expected.add(name.substring(0, name.length() - ".json".length()));
+                }
+            }
+        }
+        try (var files = Files.list(Path.of("Server/Item/Recipes/OrbisHorizon"))) {
+            for (Path f : (Iterable<Path>) files.filter(x -> x.toString().endsWith(".json"))::iterator) {
+                var out = org.bson.BsonDocument.parse(Files.readString(f)).getArray("Output").get(0).asDocument();
+                expected.add(out.getString("ItemId").getValue());
+            }
+        }
+        eq(expected, new java.util.TreeSet<>(ModRecipes.ITEMS));
+        eq(ModRecipes.ITEMS.size(), new java.util.HashSet<>(ModRecipes.ITEMS).size());
+        eq(true, ModRecipes.isModItem("Hotair_Balloon_Crate"));
+        eq(false, ModRecipes.isModItem("Wood_Hardwood_Planks"));
+    }
+
+    static void worldgenSettingDefault() throws Exception {
+        Path dir = Files.createTempDirectory("worldgen-settings");
+        try {
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.worldgenEnabled());
+            TransitSettings.setWorldgenEnabled(false);
+            TransitSettings.load(dir);
+            eq(false, TransitSettings.worldgenEnabled());
+            TransitSettings.setWorldgenEnabled(true);
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.worldgenEnabled());
+            Files.writeString(dir.resolve("transit-settings.json"), "{\"recipeEnabled\": true}");
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.worldgenEnabled());
+        } finally {
+            deleteAll(dir);
+        }
+    }
+
+    static void footprintContainsShapes() throws Exception {
+        StructureShape station = prefabShape("Balloon_Landing_zone.prefab.json");
+        StructureShape balloon = prefabShape("Balloon_Public_Transport.prefab.json");
+        StructureShape boatStation = prefabShape("Boat_Station.prefab.json");
+        StructureShape shuttle = prefabShape("Steamboat_Public.prefab.json");
+        // origins near a chunk corner, on both sides of zero
+        int[][] origins = {{31, 31}, {0, 0}, {-1, -1}, {-33, 62}};
+        for (Rotation r : new Rotation[] {Rotation.None, Rotation.Ninety, Rotation.OneEighty, Rotation.TwoSeventy}) {
+            for (int[] o : origins) {
+                Vector3i origin = new Vector3i(o[0], 70, o[1]);
+                GeneratedStations.Entry air = new GeneratedStations.Entry("w", Deployables.STATION_KIND, o[0], o[1], r, false,
+                        GeneratedStations.State.PLANNED);
+                Set<String> airChunks = chunkSet(GenerationListener.footprintChunks(air));
+                for (StructureShape.Cell c : station.cells()) {
+                    check(airChunks.contains(chunkOf(c.rotated(r).add(origin))), "station cell in footprint " + r + " " + c);
+                }
+                Vector3i dock = DeployStationInteraction.dockOrigin(origin, r);
+                for (StructureShape.Cell c : balloon.cells()) {
+                    check(airChunks.contains(chunkOf(c.rotated(r).add(dock))), "docked balloon cell in footprint " + r + " " + c);
+                }
+                GeneratedStations.Entry boat = new GeneratedStations.Entry("w", Deployables.BOAT_STATION_KIND, o[0], o[1], r, false,
+                        GeneratedStations.State.PLANNED);
+                Set<String> boatChunks = chunkSet(GenerationListener.footprintChunks(boat));
+                for (StructureShape.Cell c : boatStation.cells()) {
+                    check(boatChunks.contains(chunkOf(c.rotated(r).add(origin))), "boat station cell in footprint " + r + " " + c);
+                }
+                int[] b = Deployables.BOAT_STATION_BERTH_ORIGIN;
+                Vector3i berth = r.rotateYaw(new Vector3i(b[0], b[1], b[2]), new Vector3i()).add(origin);
+                Rotation boatRot = r.add(Deployables.BOAT_STATION_BERTH_ROTATION);
+                for (StructureShape.Cell c : shuttle.cells()) {
+                    check(boatChunks.contains(chunkOf(c.rotated(boatRot).add(berth))), "shuttle cell in footprint " + r + " " + c);
+                }
+            }
+        }
+    }
+
+    private static String chunkOf(Vector3i p) {
+        return Math.floorDiv(p.x, 32) + "," + Math.floorDiv(p.z, 32);
+    }
+
+    static void reloadedNewChunkRetriggers() {
+        GeneratedStations.Entry a = new GeneratedStations.Entry("w", Deployables.STATION_KIND, 0, 0, Rotation.None, false,
+                GeneratedStations.State.PLANNED);
+        GeneratedStations.Entry far = new GeneratedStations.Entry("w", Deployables.STATION_KIND, 5000, 5000, Rotation.None, false,
+                GeneratedStations.State.PLANNED);
+        List<GeneratedStations.Entry> pending = List.of(a, far);
+        eq(List.of(a), GenerationListener.touching(pending, 0, 0));
+        eq(List.of(far), GenerationListener.touching(pending, 5000 / 32, 5000 / 32));
+        eq(0, GenerationListener.touching(pending, 40, 40).size());
     }
 }

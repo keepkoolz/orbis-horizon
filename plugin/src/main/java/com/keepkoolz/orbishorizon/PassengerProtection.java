@@ -67,6 +67,7 @@ public final class PassengerProtection {
     public static void setMode(Mode m) {
         if (m != null) {
             mode = m;
+            save();
         }
     }
 
@@ -80,15 +81,23 @@ public final class PassengerProtection {
         return addedByMod && !spectating;
     }
 
-    /** Reads protected.json. Missing: empty. Unreadable: empty, and the file is kept as .bad. Never throws. */
+    /** Reads protected.json: the marked players and the mode. Missing or unknown mode: FULL. Missing file: empty. Unreadable: empty, and the file is kept as .bad. Never throws. */
     static synchronized void load(Path dataDir) {
         MARKED.clear();
+        mode = Mode.FULL;
         try {
             file = dataDir.resolve("protected.json");
             if (!Files.isRegularFile(file)) return;
             BsonDocument doc = BsonDocument.parse(Files.readString(file, StandardCharsets.UTF_8));
             for (BsonValue v : doc.getArray("players")) {
                 MARKED.add(UUID.fromString(v.asString().getValue()));
+            }
+            if (doc.containsKey("mode") && doc.get("mode").isString()) {
+                try {
+                    mode = Mode.valueOf(doc.getString("mode").getValue());
+                } catch (IllegalArgumentException e) {
+                    mode = Mode.FULL;
+                }
             }
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("protected.json illisible, liste des marqueurs posés vide");
@@ -131,6 +140,7 @@ public final class PassengerProtection {
             }
             BsonDocument doc = new BsonDocument();
             doc.put("players", arr);
+            doc.put("mode", new BsonString(mode.name()));
             Files.createDirectories(f.getParent());
             Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
             Files.writeString(tmp, doc.toJson(), StandardCharsets.UTF_8);

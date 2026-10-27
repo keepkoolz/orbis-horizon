@@ -1,0 +1,10 @@
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Top;
+  Anchor: (Top: 10);
+
+  $C.@Subtitle #Label {
+    @Text = "";
+  }
+}
