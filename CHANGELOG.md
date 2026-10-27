@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.12.1
+
+### Added
+
+- The anonymous telemetry now also reports slow moments, as plain durations. A take-off, a landing or the building of a generated station that takes 50 ms or more is reported with the type of vehicle or station, and once an hour the worst and the average tick of the flight systems are reported when the worst was 50 ms or more. Nothing identifying is attached, and the same switches turn it off.
+
 ## v1.12
 
 ### Added

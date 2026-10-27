@@ -844,6 +844,9 @@ public class TransitTests {
         run("hireBlockRule", TransitTests::hireBlockRule);
         run("pilotOwnedByOther", TransitTests::pilotOwnedByOther);
         run("usageCountersSnapshot", TransitTests::usageCountersSnapshot);
+        run("tickTimingsAggregate", TransitTests::tickTimingsAggregate);
+        run("tickTimingsRounding", TransitTests::tickTimingsRounding);
+        run("performanceDescriptor", TransitTests::performanceDescriptor);
         run("genClearRemovable", TransitTests::genClearRemovable);
         run("planTaskOrder", TransitTests::planTaskOrder);
         run("footprintCoversDome", TransitTests::footprintCoversDome);
@@ -4547,6 +4550,47 @@ public class TransitTests {
         check(UsageCounters.NAMES.indexOf("takeoff.steamboat") == UsageCounters.NAMES.indexOf("takeoff.airship") + 1, "takeoff order");
     }
 
+    static void tickTimingsAggregate() {
+        TickTimings t = new TickTimings();
+        t.record("tick.balloon", 2_000_000L);
+        t.record("tick.balloon", 6_000_000L);
+        t.record("tick.balloon", 1_000_000L);
+        t.record("tick.airship", 50_000_000L);
+        t.record("not.a.system", 9L);
+        t.record("tick.airship", -5L);
+        Map<String, TickTimings.Snapshot> s = t.snapshotAndReset();
+        check(s.size() == 2, "two systems ticked");
+        check(new ArrayList<>(s.keySet()).equals(List.of("tick.balloon", "tick.airship")), "NAMES order");
+        TickTimings.Snapshot b = s.get("tick.balloon");
+        check(b.ticks() == 3 && b.totalNanos() == 9_000_000L && b.maxNanos() == 6_000_000L, "balloon count, total and max");
+        check(b.maxMs() == 6, "max in ms");
+        check(Math.abs(b.meanMs() - 3.0) < 1e-9, "mean in ms");
+        check(s.get("tick.airship").ticks() == 1, "negative duration ignored");
+        check(t.snapshotAndReset().isEmpty(), "reset after snapshot");
+        t.record("tick.airship", 1_000_000L);
+        check(t.snapshotAndReset().get("tick.airship").maxNanos() == 1_000_000L, "max restarts after reset");
+    }
+
+    static void tickTimingsRounding() {
+        check(TickTimings.ceilMs(0) == 0 && TickTimings.ceilMs(-1) == 0, "no duration");
+        check(TickTimings.ceilMs(1) == 1, "one ns rounds up to 1 ms");
+        check(TickTimings.ceilMs(1_000_000L) == 1, "exact ms kept");
+        check(TickTimings.ceilMs(1_000_001L) == 2, "just over rounds up");
+        check(TickTimings.ceilMs(49_000_001L) == 50, "49 ms and a bit reaches the 50 ms threshold");
+        check(TickTimings.ceilMs(Long.MAX_VALUE) == Integer.MAX_VALUE, "capped");
+        check(new TickTimings.Snapshot(0, 0, 0).meanMs() == 0, "mean of nothing");
+    }
+
+    static void performanceDescriptor() throws Exception {
+        String json = java.nio.file.Files.readString(java.nio.file.Path.of("Server/Beacon/project.json"));
+        int at = json.indexOf("\"performance\"");
+        check(at > 0, "performance block");
+        String perf = json.substring(at);
+        check(perf.contains("\"supported\": true") && perf.contains("\"thresholdMs\": 50"), "performance on, threshold 50 ms");
+        for (String n : TickTimings.NAMES) check(perf.contains("\"" + n + "\""), "descriptor declares " + n);
+        for (String n : List.of("takeoff", "land", "worldgen.station")) check(perf.contains("\"" + n + "\""), "descriptor declares " + n);
+    }
+
     static void shutdownFlushSettled() {
         check(!Telemetry.flushSettled("a", "b", true, 0, 5000), "in progress never settled");
         check(Telemetry.flushSettled("a", "a", false, 0, 0), "nothing pending");
@@ -4560,6 +4604,9 @@ public class TransitTests {
         Telemetry.count("deploy.tent");
         Telemetry.count("unknown.counter");
         Telemetry.error("balloon.takeoff", new RuntimeException("x"), null, null);
+        check(Telemetry.start() == 0L, "no measure without Beacon");
+        Telemetry.timing("takeoff", Telemetry.start(), "balloon");
+        Telemetry.tick("tick.balloon", Telemetry.start());
         Telemetry.stop();
         check(true, "no exception without start");
     }

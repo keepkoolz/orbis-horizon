@@ -14,6 +14,7 @@ import java.util.logging.Level;
  */
 final class Telemetry {
     private static final UsageCounters COUNTERS = new UsageCounters();
+    private static final TickTimings TICKS = new TickTimings();
     private static final ErrorThrottle THROTTLE = new ErrorThrottle(ErrorThrottle.WINDOW_MS, ErrorThrottle.MAX_ENTRIES);
     private static final long FLUSH_PERIOD_S = 3600;
     private static final long SHUTDOWN_FLUSH_CAP_MS = 5000;
@@ -47,6 +48,33 @@ final class Telemetry {
         COUNTERS.increment(name);
     }
 
+    /** Start mark for timing and tick, 0 when telemetry is off so that nothing is measured. */
+    static long start() {
+        return bridge == null || unavailable ? 0L : (System.nanoTime() | 1L);
+    }
+
+    /** Ends a timing begun by start() (call it in a finally): one performance event, kept by Beacon above its threshold. kind may be null. */
+    static void timing(String name, long startNanos, String kind) {
+        if (startNanos == 0L) return;
+        BeaconBridge b = bridge;
+        if (b == null || unavailable) return;
+        try {
+            b.performance(name, TickTimings.ceilMs(System.nanoTime() - startNanos), null, kind, null);
+        } catch (Throwable e) {
+            fail(e);
+        }
+    }
+
+    /** Ends a tick begun by start(): added to the hourly aggregate of the system. */
+    static void tick(String name, long startNanos) {
+        if (startNanos == 0L) return;
+        try {
+            TICKS.record(name, System.nanoTime() - startNanos);
+        } catch (Throwable e) {
+            fail(e);
+        }
+    }
+
     /** kind and phase may be null. */
     static void error(String zone, Throwable t, String kind, String phase) {
         BeaconBridge b = bridge;
@@ -68,6 +96,10 @@ final class Telemetry {
         if (b == null || unavailable) return;
         try {
             for (Map.Entry<String, Long> e : COUNTERS.snapshotAndReset().entrySet()) b.usage(e.getKey(), e.getValue());
+            for (Map.Entry<String, TickTimings.Snapshot> e : TICKS.snapshotAndReset().entrySet()) {
+                TickTimings.Snapshot t = e.getValue();
+                b.performance(e.getKey(), t.maxMs(), t.meanMs(), null, t.ticks());
+            }
             b.flush();
         } catch (Throwable e) {
             fail(e);

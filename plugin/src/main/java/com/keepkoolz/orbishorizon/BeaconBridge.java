@@ -31,6 +31,14 @@ final class BeaconBridge {
         service.recordUsageWithContext(name, TelemetryEventContext.usage().detail("count", count).build());
     }
 
+    /** Beacon drops it under the descriptor threshold. kind and ticks may be null and are then left out. */
+    void performance(String name, int durationMs, Double value, String kind, Long ticks) {
+        TelemetryEventContext.Builder b = TelemetryEventContext.performance();
+        if (kind != null) b.detail("kind", cap(kind, 32));
+        if (ticks != null) b.detail("ticks", ticks);
+        service.recordPerformanceWithContext(name, durationMs, value, b.build());
+    }
+
     /** Null values are never passed on: Beacon rejects them. */
     void error(String zone, RuntimeException redacted, String kind, String phase, long repeats) {
         TelemetryEventContext.Builder b = TelemetryEventContext.error();

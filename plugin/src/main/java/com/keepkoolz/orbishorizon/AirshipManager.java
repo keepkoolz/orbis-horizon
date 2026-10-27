@@ -1197,7 +1197,18 @@ final class AirshipManager {
         return s.inBounds((int) Math.round(local.x), (int) Math.floor(local.y), (int) Math.round(local.z));
     }
 
+    /** Timed take-off (prefab to entity). */
     private Message launch(Deployables.Kind kind, Store<EntityStore> store, World world, StructureShape s, Vector3i origin, Rotation rotation,
+                           Ref<EntityStore> pilotRef, PlayerRef player, List<AirshipPassengers.Rider> riders) {
+        long t0 = Telemetry.start();
+        try {
+            return launchUntimed(kind, store, world, s, origin, rotation, pilotRef, player, riders);
+        } finally {
+            Telemetry.timing("takeoff", t0, Telemetry.kindId(kind));
+        }
+    }
+
+    private Message launchUntimed(Deployables.Kind kind, Store<EntityStore> store, World world, StructureShape s, Vector3i origin, Rotation rotation,
                            Ref<EntityStore> pilotRef, PlayerRef player, List<AirshipPassengers.Rider> riders) {
         Deployables.AirshipSpec spec = spec(kind);
         if (spec.ladders && !ShipLadder.allUp(world, origin, rotation)) {
@@ -3197,6 +3208,15 @@ final class AirshipManager {
      * removes the entity and the lights, deletes the resume file. Used by every way of ending the flight.
      */
     private void finishLanding(Store<EntityStore> store, AirshipFlight f, Vector3i origin, Rotation rotation) {
+        long t0 = Telemetry.start();
+        try {
+            finishLandingUntimed(store, f, origin, rotation);
+        } finally {
+            Telemetry.timing("land", t0, Telemetry.kindId(f.kind));
+        }
+    }
+
+    private void finishLandingUntimed(Store<EntityStore> store, AirshipFlight f, Vector3i origin, Rotation rotation) {
         if (flights.get(f.id) != f) {
             return;
         }

@@ -9,6 +9,11 @@ public final class AirshipFlightSystem extends TickingSystem<EntityStore> {
 
     @Override
     public void tick(float dt, int index, Store<EntityStore> store) {
-        AirshipManager.get().tick(store, store.getExternalData().getWorld());
+        long t0 = Telemetry.start();
+        try {
+            AirshipManager.get().tick(store, store.getExternalData().getWorld());
+        } finally {
+            Telemetry.tick("tick.airship", t0);
+        }
     }
 }

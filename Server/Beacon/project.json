@@ -313,7 +313,50 @@
       }
     },
     "performance": {
-      "supported": false
+      "supported": true,
+      "defaultEnabled": true,
+      "sampleRate": 1.0,
+      "thresholdMs": 50,
+      "details": {
+        "takeoff": {
+          "allowedFields": {
+            "kind": {
+              "type": "string",
+              "maxLength": 32
+            }
+          }
+        },
+        "land": {
+          "allowedFields": {
+            "kind": {
+              "type": "string",
+              "maxLength": 32
+            }
+          }
+        },
+        "worldgen.station": {
+          "allowedFields": {
+            "kind": {
+              "type": "string",
+              "maxLength": 32
+            }
+          }
+        },
+        "tick.balloon": {
+          "allowedFields": {
+            "ticks": {
+              "type": "number"
+            }
+          }
+        },
+        "tick.airship": {
+          "allowedFields": {
+            "ticks": {
+              "type": "number"
+            }
+          }
+        }
+      }
     },
     "diagnostics": {
       "supported": false

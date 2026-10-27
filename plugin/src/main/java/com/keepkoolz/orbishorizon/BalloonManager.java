@@ -781,7 +781,19 @@ public final class BalloonManager {
     record VoyageLaunch(PlayerRef captain, java.util.function.Consumer<BalloonFlight> setup) {
     }
 
+    /** Timed take-off (prefab to entity); a dry run is not timed. */
     private Message launch(Store<EntityStore> store, World world, StructureShape prefabShape, Found found, ProcessingBenchBlock bench,
+                          Ref<EntityStore> pilotRef, PlayerRef player, boolean dry, List<Occupant> passengers, int groundCage,
+                          VoyageLaunch voyageLaunch) {
+        long t0 = dry ? 0L : Telemetry.start();
+        try {
+            return launchUntimed(store, world, prefabShape, found, bench, pilotRef, player, dry, passengers, groundCage, voyageLaunch);
+        } finally {
+            Telemetry.timing("takeoff", t0, Telemetry.kindId(found.kind()));
+        }
+    }
+
+    private Message launchUntimed(Store<EntityStore> store, World world, StructureShape prefabShape, Found found, ProcessingBenchBlock bench,
                           Ref<EntityStore> pilotRef, PlayerRef player, boolean dry, List<Occupant> passengers, int groundCage,
                           VoyageLaunch voyageLaunch) {
         StructureShape s = groundCage > 0 ? TransportCage.noCageShape(prefabShape) : prefabShape;
@@ -1536,7 +1548,18 @@ public final class BalloonManager {
         return error;
     }
 
+    /** Timed landing (entity to prefab). */
     private Message landWith(Store<EntityStore> store, BalloonFlight flight, TransformComponent pilot, Rotation newRotation,
+                             boolean voluntary) {
+        long t0 = Telemetry.start();
+        try {
+            return landWithUntimed(store, flight, pilot, newRotation, voluntary);
+        } finally {
+            Telemetry.timing("land", t0, Telemetry.kindId(flight.kind));
+        }
+    }
+
+    private Message landWithUntimed(Store<EntityStore> store, BalloonFlight flight, TransformComponent pilot, Rotation newRotation,
                              boolean voluntary) {
         // Pilot position in the prefab frame (measured at take-off), then the origin
         // that keeps the pilot at the same spot in the gondola with the new orientation.

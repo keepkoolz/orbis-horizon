@@ -8,6 +8,15 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
     @Override
     public void tick(float dt, int index, Store<EntityStore> store) {
+        long t0 = Telemetry.start();
+        try {
+            tickAll(store);
+        } finally {
+            Telemetry.tick("tick.balloon", t0);
+        }
+    }
+
+    private static void tickAll(Store<EntityStore> store) {
         BalloonManager.get().tick(store, store.getExternalData().getWorld());
         // cage of the transport balloons placed in this world (steps due, registry write).
         TransportCage.tick(store.getExternalData().getWorld());

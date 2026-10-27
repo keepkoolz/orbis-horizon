@@ -65,7 +65,7 @@ The wiki has the exact recipes, how to fly each vehicle and the operator command
 
 ## Telemetry
 
-The mod quietly reports how many servers use it and which features get used, and it reports its own errors, so bugs can be found faster. No player name, position or world ever leaves your server, and the server owner can switch it off at any time. The details are in the [wiki](https://github.com/keepkoolz/orbis-horizon/wiki#telemetry).
+The mod quietly reports how many servers use it and which features get used, how long the slowest take-offs, landings and flight updates take, and it reports its own errors, so bugs can be found faster. No player name, position or world ever leaves your server, and the server owner can switch it off at any time. The details are in the [wiki](https://github.com/keepkoolz/orbis-horizon/wiki#telemetry).
 
 ## Changelog
 

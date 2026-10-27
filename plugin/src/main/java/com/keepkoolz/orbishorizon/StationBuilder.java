@@ -48,7 +48,17 @@ final class StationBuilder {
         build(world, e, true);
     }
 
+    /** Timed: the section load is asynchronous and ends the call, only the work done on the world thread is measured. */
     private static void build(World world, GeneratedStations.Entry e, boolean mayLoad) {
+        long t0 = Telemetry.start();
+        try {
+            buildUntimed(world, e, mayLoad);
+        } finally {
+            Telemetry.timing("worldgen.station", t0, e.kind);
+        }
+    }
+
+    private static void buildUntimed(World world, GeneratedStations.Entry e, boolean mayLoad) {
         WorldStationPlanner.Site planned = null;
         try {
             if (e.state != GeneratedStations.State.PLANNED) {
