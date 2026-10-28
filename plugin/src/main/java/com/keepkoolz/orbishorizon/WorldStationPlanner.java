@@ -26,7 +26,10 @@ final class WorldStationPlanner {
     static final int MAX_SITES = 4;
     static final int PARTNER_FALLBACKS = 3;
     static final int CELL = 2048;
-    static final int SPACING = 1500;
+    /** Minimum distance between two balloon stations, planned or built. */
+    static final int BALLOON_SPACING = 1500;
+    /** Minimum distance between two main boat stations, and from a main boat station to any other, planned or built. */
+    static final int BOAT_SPACING = 1500;
     static final int SHORE_STEP = 32;
     static final int SEA_AHEAD = 40;
     static final int ZONE_STEP = 128;
@@ -121,13 +124,13 @@ final class WorldStationPlanner {
             int cx = (int) c[1], cz = (int) c[2];
             if (rotation == null) {
                 // The main site is the closest fitting candidate that keeps its distance from the other boat stations.
-                if (!near(existingBoat, cx, cz, SPACING) && boatSiteFits(t, cx, cz, r)) {
+                if (!near(existingBoat, cx, cz, BOAT_SPACING) && boatSiteFits(t, cx, cz, r)) {
                     bestX = cx;
                     bestZ = cz;
                     rotation = r;
                 }
             } else if (farFromSites(fallbacks, bestX, bestZ, cx, cz)
-                    && !near(existingBoat, cx, cz, SPACING) && boatSiteFits(t, cx, cz, r)) {
+                    && !near(existingBoat, cx, cz, BOAT_SPACING) && boatSiteFits(t, cx, cz, r)) {
                 fallbacks.add(new Site(cx, cz, r));
             }
         }
@@ -332,10 +335,11 @@ final class WorldStationPlanner {
     /**
      * Plans the balloon station beside a temple portal.
      * @param existingAir positions {x, z} of the balloon stations already planned or built
-     * @return the site (origin of the station prefab), or null when a balloon station is within SPACING blocks or no spot fits
+     * @return the site (origin of the station prefab), or null when no spot fits at BALLOON_SPACING blocks at least from every
+     *         balloon station
      */
     static PlannedSite planPortal(int portalX, int portalZ, TerrainProbe t, List<int[]> existingAir) {
-        if (near(existingAir, portalX, portalZ, SPACING)) {
+        if (near(existingAir, portalX, portalZ, BALLOON_SPACING - RING_MAX)) {
             return null;
         }
         int[] min = Deployables.STATION_PLACE_MIN, max = Deployables.STATION_PLACE_MAX;
@@ -350,6 +354,9 @@ final class WorldStationPlanner {
                     continue;
                 }
                 int x = portalX + dx, z = portalZ + dz;
+                if (near(existingAir, x, z, BALLOON_SPACING)) {
+                    continue;
+                }
                 for (Rotation r : ROTATIONS) {
                     Vector3i a = r.rotateYaw(new Vector3i(min[0], 0, min[2]), new Vector3i());
                     Vector3i b = r.rotateYaw(new Vector3i(max[0], 0, max[2]), new Vector3i());

@@ -334,7 +334,7 @@ final class GenerationListener {
                 BalloonRegistry.remove(world, s.origin, s.rotation, StationSpec.of(s.kind).structure().id);
                 LOGGER.at(Level.INFO).log("Station « %s » retirée du réseau : son terrain a été regénéré", s.name);
             } catch (RuntimeException | LinkageError ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("Station générée : retrait du réseau impossible en (%d, %d)", e.x, e.z);
+                LOGGER.at(Level.WARNING).withCause(ex).log("%s : retrait du réseau impossible en (%d, %d)", logName(e.kind), e.x, e.z);
                 Telemetry.error("worldgen", ex, e.kind, "rollback");
             }
         }
@@ -411,14 +411,14 @@ final class GenerationListener {
                 }
                 site = reg.activeSite(e);
                 if (!REQUESTED.contains(e) && moveOffOldTerrain(reg, e, name)) {
-                    LOGGER.at(Level.INFO).log("Station générée : terrain ancien rechargé en (%d, %d), site suivant %d/%d", site.x(), site.z(),
+                    LOGGER.at(Level.INFO).log("%s : terrain ancien rechargé en (%d, %d), site suivant %d/%d", logName(e.kind), site.x(), site.z(),
                             e.active + 1, e.sites.size());
                     decideAgain(world, e);
                 } else {
                     abandon(e, "terrain ancien rechargé");
                 }
             } catch (RuntimeException | LinkageError ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("Station générée : terrain ancien non traité en (%d, %d)",
+                LOGGER.at(Level.WARNING).withCause(ex).log("%s : terrain ancien non traité en (%d, %d)", logName(e.kind),
                         site == null ? e.x : site.x(), site == null ? e.z : site.z());
                 Telemetry.error("worldgen", ex, e.kind, "chunk");
             }
@@ -445,9 +445,9 @@ final class GenerationListener {
         try {
             GeneratedStations.get().setState(e, GeneratedStations.State.ABANDONED);
             Telemetry.count("worldgen.station.abandoned");
-            LOGGER.at(Level.INFO).log("Station générée abandonnée en (%d, %d) (%s) : %s", e.x, e.z, e.kind, reason);
+            LOGGER.at(Level.INFO).log("%s abandonnée en (%d, %d) : %s", logName(e.kind), e.x, e.z, reason);
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Station générée : abandon non enregistré");
+            LOGGER.at(Level.WARNING).withCause(ex).log("%s : abandon non enregistré", logName(e.kind));
             Telemetry.error("worldgen", ex, e.kind, "abandon");
         }
     }
@@ -507,16 +507,20 @@ final class GenerationListener {
                         existing(name, Deployables.STATION_KIND));
                 if (site != null) {
                     touched.add(reg.add(name, site));
+                    LOGGER.at(Level.INFO).log("Station aérienne générée : portail (%d, %d) planifié, site en (%d, %d)", portal[0], portal[1],
+                            site.x(), site.z());
+                } else {
+                    LOGGER.at(Level.INFO).log("Station aérienne générée : portail (%d, %d) sans site", portal[0], portal[1]);
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : portail en (%d, %d) non planifié", portal[0], portal[1]);
+            LOGGER.at(Level.WARNING).withCause(e).log("Station aérienne générée : portail en (%d, %d) non planifié", portal[0], portal[1]);
             Telemetry.error("worldgen", e, Deployables.STATION_KIND, "plan");
         }
         try {
             touched.addAll(planCell(world, probe, WorldStationPlanner.cellOf(cx * 32 + 16), WorldStationPlanner.cellOf(cz * 32 + 16)));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : cellule autour du chunk (%d, %d) non planifiée", cx, cz);
+            LOGGER.at(Level.WARNING).withCause(e).log("Station maritime générée : cellule autour du chunk (%d, %d) non planifiée", cx, cz);
             Telemetry.error("worldgen", e, Deployables.BOAT_STATION_KIND, "plan");
         }
         try {
@@ -547,9 +551,9 @@ final class GenerationListener {
                 added.add(reg.add(name, s));
             }
             long ms = (System.nanoTime() - start) / 1_000_000;
-            LOGGER.at(Level.INFO).log("Station générée : cellule (%d, %d) planifiée en %d ms, %d site(s)", cellX, cellZ, ms, sites.size());
+            LOGGER.at(Level.INFO).log("Station maritime générée : cellule (%d, %d) planifiée en %d ms, %d site(s)", cellX, cellZ, ms, sites.size());
             if (ms > SLOW_CELL_MS) {
-                LOGGER.at(Level.WARNING).log("Station générée : la cellule (%d, %d) a pris plus de %d ms", cellX, cellZ, SLOW_CELL_MS);
+                LOGGER.at(Level.WARNING).log("Station maritime générée : la cellule (%d, %d) a pris plus de %d ms", cellX, cellZ, SLOW_CELL_MS);
             }
         }
         return added;
@@ -671,11 +675,16 @@ final class GenerationListener {
                 world.execute(() -> decideAll(world, added));
             }
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : cellule (%d, %d) non planifiée en avance", cellX, cellZ);
+            LOGGER.at(Level.WARNING).withCause(e).log("Station maritime générée : cellule (%d, %d) non planifiée en avance", cellX, cellZ);
             Telemetry.error("worldgen", e, Deployables.BOAT_STATION_KIND, "ahead");
         } finally {
             AHEAD_QUEUED.remove(aheadKey(world.getName(), cellX, cellZ));
         }
+    }
+
+    /** Log prefix naming the kind of a generated station: aerial (balloon) or maritime (boat). */
+    static String logName(String kind) {
+        return Deployables.BOAT_STATION_KIND.equals(kind) ? "Station maritime générée" : "Station aérienne générée";
     }
 
     private static List<int[]> existing(String world, String kind) {
@@ -689,13 +698,13 @@ final class GenerationListener {
 
     /**
      * World thread only, like every change of site, so that a site never changes between a BUILD decision and the build.
-     * Advances an entry to its next site that keeps its distance from the other boat stations: SPACING for a main pier, PARTNER_REUSE
+     * Advances an entry to its next site that keeps its distance from the other boat stations: BOAT_SPACING for a main pier, PARTNER_REUSE
      * for a partner (partners sit far from their main pier, so the main spacing would refuse most of their sites). The radius comes
      * from the entry, the caller gives the positions {x, z} to keep away from. False when the sites are used up, the caller then
      * abandons the entry.
      */
     static boolean moveToNextSite(GeneratedStations reg, GeneratedStations.Entry e, List<int[]> others) {
-        int radius = e.partner ? WorldStationPlanner.PARTNER_REUSE : WorldStationPlanner.SPACING;
+        int radius = e.partner ? WorldStationPlanner.PARTNER_REUSE : WorldStationPlanner.BOAT_SPACING;
         long r2 = (long) radius * radius;
         while (reg.advance(e)) {
             WorldStationPlanner.Site site = reg.activeSite(e);
@@ -771,7 +780,7 @@ final class GenerationListener {
                     }
                     case ABANDON -> {
                         if (moveOffOldTerrain(GeneratedStations.get(), e, world.getName())) {
-                            LOGGER.at(Level.INFO).log("Station générée : terrain ancien en (%d, %d), site suivant %d/%d", site.x(), site.z(),
+                            LOGGER.at(Level.INFO).log("%s : terrain ancien en (%d, %d), site suivant %d/%d", logName(e.kind), site.x(), site.z(),
                                     e.active + 1, e.sites.size());
                             decideAgain(world, e);
                         } else {
@@ -782,7 +791,7 @@ final class GenerationListener {
                     }
                 }
             } catch (RuntimeException | LinkageError ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("Station générée : décision impossible en (%d, %d)",
+                LOGGER.at(Level.WARNING).withCause(ex).log("%s : décision impossible en (%d, %d)", logName(e.kind),
                         site == null ? e.x : site.x(), site == null ? e.z : site.z());
                 Telemetry.error("worldgen", ex, e.kind, "decide");
             }

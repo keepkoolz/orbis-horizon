@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.12.2
+
+### Changed
+
+- Generated balloon stations and generated ports are spaced out separately. Each kind keeps at least 1,500 blocks between two of its stations, and a balloon station now measures that distance from where it is built, not from its temple portal.
+- The server log says whether each generated station is a balloon station or a port.
+
 ## v1.12.1
 
 ### Added

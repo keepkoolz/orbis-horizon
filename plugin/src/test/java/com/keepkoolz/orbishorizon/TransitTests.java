@@ -378,7 +378,13 @@ public class TransitTests {
     static void portalRespectsNetwork() {
         TerrainProbe t = heights((x, z) -> 120);
         check(WorldStationPlanner.planPortal(0, 0, t, List.of(new int[] {1300, 0})) == null, "air station at 1300");
-        check(WorldStationPlanner.planPortal(0, 0, t, List.of(new int[] {1500, 0})) != null, "air station at exactly 1500");
+        WorldStationPlanner.PlannedSite s = WorldStationPlanner.planPortal(0, 0, t, List.of(new int[] {1500, 0}));
+        check(s != null, "air station at 1500 from the portal");
+        long dx = s.x() - 1500L, dz = s.z();
+        check(dx * dx + dz * dz >= (long) WorldStationPlanner.BALLOON_SPACING * WorldStationPlanner.BALLOON_SPACING,
+                "the site keeps its spacing, not only the portal");
+        check(WorldStationPlanner.planPortal(0, 0, t, List.of(new int[] {1500 + WorldStationPlanner.RING_MAX, 0})) != null,
+                "air station beyond the ring");
     }
 
     static void portalSecondInRangeRefused() {
@@ -398,13 +404,13 @@ public class TransitTests {
     static void seaCellRespectsNetwork() {
         GridProbe g = strip('~', 64, '#', 64);
         WorldStationPlanner.PlannedSite s = plan(g, 0, List.of()).get(0);
-        // a station in the middle of the cell's shore is within SPACING of every candidate
+        // a station in the middle of the cell's shore is within BOAT_SPACING of every candidate
         eq(0, plan(g, 0, List.of(new int[] {s.x(), 1024})).size());
         int[] near = {s.x() + 1000, s.z()};
         for (WorldStationPlanner.PlannedSite p : plan(g, 0, List.of(near))) {
             if (!p.partner()) {
                 long dx = p.x() - near[0], dz = p.z() - near[1];
-                check(dx * dx + dz * dz >= (long) WorldStationPlanner.SPACING * WorldStationPlanner.SPACING, "main site keeps its spacing");
+                check(dx * dx + dz * dz >= (long) WorldStationPlanner.BOAT_SPACING * WorldStationPlanner.BOAT_SPACING, "main site keeps its spacing");
             }
         }
         check(!plan(g, 0, List.<int[]>of(new int[] {s.x() + 1600, s.z()})).isEmpty(), "far station does not block");
@@ -413,7 +419,7 @@ public class TransitTests {
     static void seaCellSkipsSpacedMain() {
         TerrainProbe t = straightShore(true, 1010, 1);
         WorldStationPlanner.PlannedSite s = plan(t, 0, List.of()).get(0);
-        // a station just within SPACING of the closest candidate, on the side away from the rest of the shore
+        // a station just within BOAT_SPACING of the closest candidate, on the side away from the rest of the shore
         int[] other = {s.x(), s.z() < WorldStationPlanner.CELL / 2 ? s.z() - 1490 : s.z() + 1490};
         List<WorldStationPlanner.PlannedSite> sites = plan(t, 0, List.of(other));
         check(!sites.isEmpty(), "a farther candidate is planned");
@@ -421,11 +427,11 @@ public class TransitTests {
         check(!main.partner(), "main site first");
         check(main.x() != s.x() || main.z() != s.z(), "the closest candidate is skipped");
         long dx = main.x() - other[0], dz = main.z() - other[1];
-        check(dx * dx + dz * dz >= (long) WorldStationPlanner.SPACING * WorldStationPlanner.SPACING, "main site keeps its spacing");
+        check(dx * dx + dz * dz >= (long) WorldStationPlanner.BOAT_SPACING * WorldStationPlanner.BOAT_SPACING, "main site keeps its spacing");
         check(WorldStationPlanner.boatSiteFits(t, main.x(), main.z(), main.rotation()), "the main site fits");
         for (WorldStationPlanner.Site f : main.fallbacks()) {
             long fx = f.x() - other[0], fz = f.z() - other[1];
-            check(fx * fx + fz * fz >= (long) WorldStationPlanner.SPACING * WorldStationPlanner.SPACING, "fallback keeps its spacing");
+            check(fx * fx + fz * fz >= (long) WorldStationPlanner.BOAT_SPACING * WorldStationPlanner.BOAT_SPACING, "fallback keeps its spacing");
         }
     }
 
