@@ -59,9 +59,6 @@ public final class StationCommand extends AbstractCommandCollection {
                     .append("\n  countdown ").append(StationQueue.secondsLeft(s)).append(" s")
                     .append("\n  dock origin ").append(StationQueue.dockOrigin(s)).append(", pad y ").append(StationQueue.padY(s))
                     .append("\n  master point ").append(StationMaster.masterPoint(s));
-            if (Deployables.BOAT_STATION_KIND.equals(s.kind)) {
-                b.append(BoatRoutes.describe(s));
-            }
         }
         return b.toString();
     }
@@ -96,6 +93,11 @@ public final class StationCommand extends AbstractCommandCollection {
                     : TransitNetwork.get().nearest(world.getName(), pos, TransitConstants.REMOVE_RADIUS);
             ctx.sendMessage(Message.raw(s == null ? "No station within " + (int) TransitConstants.REMOVE_RADIUS + " blocks."
                     : describe(s, true)));
+            if (s != null && Deployables.BOAT_STATION_KIND.equals(s.kind)) {
+                for (Message m : BoatBerth.describe(s)) {
+                    ctx.sendMessage(m);
+                }
+            }
         }
     }
 
@@ -184,7 +186,6 @@ public final class StationCommand extends AbstractCommandCollection {
             StationMaster.remove(store, s);
             TransitNetwork.get().remove(s);
             TransitNetwork.get().save();
-            BoatRoutes.stationRemoved(world, s);
             StationNameType.stationsChanged();
             // 4. Quay (QUAYS entry), approaching or departing flight, docked balloon, flights heading here, other queues. World thread.
             StationQueue.onStationRemoved(world, s);
@@ -497,6 +498,7 @@ public final class StationCommand extends AbstractCommandCollection {
         Worldgen() {
             super("worldgen", Texts.cmd("station.worldgen.desc"));
             setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+            addUsageVariant(new OldTerrain());
         }
 
         @Override
@@ -511,6 +513,36 @@ public final class StationCommand extends AbstractCommandCollection {
                 case "show" -> ctx.sendMessage(Texts.t("transit.worldgen.show")
                         .param("state", TransitSettings.worldgenEnabled() ? "on" : "off"));
                 default -> ctx.sendMessage(Texts.t("transit.worldgen.usage"));
+            }
+        }
+    }
+
+    /** /orbishorizon station worldgen oldterrain on|off|show: lets the generated stations also be built on terrain explored before. */
+    static final class OldTerrain extends AbstractPlayerCommand {
+        private final RequiredArg<String> topic = withRequiredArg("topic", Texts.cmd("station.worldgen.oldterrain.topic"), ArgTypes.STRING);
+        private final RequiredArg<String> mode = withRequiredArg("mode", Texts.cmd("station.worldgen.mode"), ArgTypes.STRING);
+
+        OldTerrain() {
+            super(Texts.cmd("station.worldgen.oldterrain.desc"));
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            if (!topic.get(ctx).trim().equalsIgnoreCase("oldterrain")) {
+                ctx.sendMessage(Texts.t("transit.worldgen.oldTerrain.usage"));
+                return;
+            }
+            String m = mode.get(ctx).trim().toLowerCase(java.util.Locale.ROOT);
+            switch (m) {
+                case "on", "off" -> {
+                    boolean on = m.equals("on");
+                    TransitSettings.setWorldgenOldTerrain(on);
+                    ctx.sendMessage(Texts.t(on ? "transit.worldgen.oldTerrain.on" : "transit.worldgen.oldTerrain.off"));
+                }
+                case "show" -> ctx.sendMessage(Texts.t("transit.worldgen.oldTerrain.show")
+                        .param("state", TransitSettings.worldgenOldTerrain() ? "on" : "off"));
+                default -> ctx.sendMessage(Texts.t("transit.worldgen.oldTerrain.usage"));
             }
         }
     }

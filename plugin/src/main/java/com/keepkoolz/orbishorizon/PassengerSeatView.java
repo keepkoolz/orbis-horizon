@@ -55,9 +55,12 @@ final class PassengerSeatView {
     private PassengerSeatView() {
     }
 
-    /** What the caller knows about the vehicle and the seat, for one tick. view: the vehicle as the external view sees it (balloons and airship). */
+    /**
+     * What the caller knows about the vehicle and the seat, for one tick. view: the vehicle as the external view sees it (balloons and airship).
+     * facingYaw: world yaw the mannequins are turned to every tick (a mounted entity keeps its own yaw), NaN to leave them as created.
+     */
     record Ctx(UUID vehicleUuid, Ref<EntityStore> main, Ref<EntityStore> observer, boolean dual, UUID pilot, Vector3f seatOffset,
-               Vector3d seatWorld, List<State> registry, PassengerCamera.Source view) {
+               Vector3d seatWorld, List<State> registry, PassengerCamera.Source view, float facingYaw) {
     }
 
     /** Entities of one passenger's seat view. */
@@ -111,6 +114,10 @@ final class PassengerSeatView {
             }
             place(store, s.mannequin, c.seatWorld());
             place(store, s.twin, c.seatWorld());
+            if (!Float.isNaN(c.facingYaw())) {
+                face(store, s.mannequin, c.facingYaw());
+                face(store, s.twin, c.facingYaw());
+            }
             replayAnimation(store, p, s, now);
             // external view, re-sent when the travel direction changes or the entity the client sees changes.
             NetworkId tn = store.getComponent(target, NetworkId.getComponentType());
@@ -141,6 +148,19 @@ final class PassengerSeatView {
         TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
         if (t != null) {
             t.setPosition(new Vector3d(pos));
+        }
+    }
+
+    /** Turns an auxiliary entity to a world yaw (pitch and roll zero). */
+    private static void face(Store<EntityStore> store, Ref<EntityStore> ref, float yaw) {
+        if (!valid(ref)) {
+            return;
+        }
+        TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
+        if (t != null && t.getRotation().y != yaw) {
+            Rotation3f r = new Rotation3f();
+            r.setYaw(yaw);
+            t.setRotation(r);
         }
     }
 

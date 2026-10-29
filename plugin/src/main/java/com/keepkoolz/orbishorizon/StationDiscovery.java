@@ -20,6 +20,8 @@ import java.util.logging.Level;
 final class StationDiscovery {
     /** Time between two looks at the stations of the world (ms). */
     static final long SCAN_INTERVAL_MS = 1000;
+    /** Horizontal distance (blocks) at which a player on foot or aboard discovers a station, set apart from the vehicle reach. */
+    static final double DISCOVERY_RADIUS = 40;
     private static final float TITLE_DURATION_S = 4f;
     private static final float TITLE_FADE_IN_S = 0.5f;
     private static final float TITLE_FADE_OUT_S = 1.5f;
@@ -67,7 +69,7 @@ final class StationDiscovery {
                         continue;
                     }
                     Vector3d p = StationMarkerProvider.markerPoint(s);
-                    if (SkyLog.stationInReach(px, pz, p.x, p.z) && KnownStations.learn(world.getName(), pr.getUuid(), s)) {
+                    if (SkyLog.stationInReach(px, pz, p.x, p.z, DISCOVERY_RADIUS) && KnownStations.learn(world.getName(), pr.getUuid(), s)) {
                         show(pr, s.name);
                     }
                 }

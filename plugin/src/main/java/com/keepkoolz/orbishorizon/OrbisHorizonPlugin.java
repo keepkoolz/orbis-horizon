@@ -94,7 +94,8 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         GeneratedStations.get().load(getDataDirectory());
         NewChunks.init(getDataDirectory());
         TransitFare.loadRefunds(getDataDirectory());
-        BoatRoutes.load(getDataDirectory());
+        deleteStoredRoutes(getDataDirectory());
+        SeaCharts.start(getDataDirectory());
         TransitSettings.load(getDataDirectory());
         PassengerProtection.load(getDataDirectory());
         CampRespawn.load(getDataDirectory());
@@ -223,6 +224,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         getEventRegistry().registerGlobal(StartWorldEvent.class, event -> {
             BalloonManager.get().recoverWorld(event.getWorld());
             GenerationListener.onWorldStart(event.getWorld());
+            SeaCharts.onWorldStart(event.getWorld());
             CageAnimals.recoverWorld(event.getWorld());
             StationMaster.recoverWorld(event.getWorld());
             StationQueue.recoverWorld(event.getWorld());
@@ -317,6 +319,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des lieux de réveil non enregistrés pour %s", world.getName());
             }
             GenerationListener.onWorldStart(world);
+            SeaCharts.onWorldStart(world);
             // One failing resume must never stop the plugin: StartWorldEvent calls them again when the world is ready.
             try {
                 BalloonManager.get().recoverWorld(world);
@@ -359,8 +362,24 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         AirshipManager.get().landAll();
         BalloonRegistry.flushCage();
         GenerationListener.stop();
+        SeaCharts.stop();
         BenchTabs.unregister();
         Telemetry.stop();
+    }
+
+    /** Deletes the file of stored boat routes (and its .bad copy), which is not read any more, with one log line. */
+    private void deleteStoredRoutes(java.nio.file.Path dataDir) {
+        boolean deleted = false;
+        for (String name : new String[] {"boat-routes.json", "boat-routes.json.bad"}) {
+            try {
+                deleted |= java.nio.file.Files.deleteIfExists(dataDir.resolve(name));
+            } catch (java.io.IOException | RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("%s : suppression impossible", name);
+            }
+        }
+        if (deleted) {
+            getLogger().at(Level.INFO).log("boat-routes.json supprimé : les routes d'eau enregistrées ne sont plus utilisées");
+        }
     }
 
     /** Airship: the head-yaw reader (before ProcessPlayerInput) and the flight tick. A failure is logged and the system is skipped. */

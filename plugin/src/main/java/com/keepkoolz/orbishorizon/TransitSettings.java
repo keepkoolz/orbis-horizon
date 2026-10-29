@@ -24,6 +24,7 @@ final class TransitSettings {
     private static volatile boolean packBackView = true;
     private static volatile boolean worldgenEnabled = true;
     private static volatile boolean markerSharing = true;
+    private static volatile boolean worldgenOldTerrain = false;
     private static volatile Path file;
 
     private TransitSettings() {
@@ -52,6 +53,11 @@ final class TransitSettings {
         return worldgenEnabled;
     }
 
+    /** Whether stations may also be generated on terrain explored before the mod generated stations. Default: off. */
+    static boolean worldgenOldTerrain() {
+        return worldgenOldTerrain;
+    }
+
     /** Whether map markers (vehicles, tents, stations) can be shared between players. Default: on. */
     static boolean markerSharing() {
         return markerSharing;
@@ -64,6 +70,7 @@ final class TransitSettings {
         packBackView = true;
         worldgenEnabled = true;
         markerSharing = true;
+        worldgenOldTerrain = false;
         if (!Files.isRegularFile(file)) return;
         try {
             BsonDocument doc = BsonDocument.parse(Files.readString(file, StandardCharsets.UTF_8));
@@ -78,6 +85,7 @@ final class TransitSettings {
             }
             packBackView = !doc.containsKey("packBackView") || doc.getBoolean("packBackView").getValue();
             worldgenEnabled = !doc.containsKey("worldgenEnabled") || doc.getBoolean("worldgenEnabled").getValue();
+            worldgenOldTerrain = doc.containsKey("worldgenOldTerrain") && doc.getBoolean("worldgenOldTerrain").getValue();
             markerSharing = !doc.containsKey("markerSharing") || doc.getBoolean("markerSharing").getValue();
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("transit-settings.json illisible, réglages par défaut");
@@ -95,9 +103,30 @@ final class TransitSettings {
         save();
     }
 
-    static synchronized void setWorldgenEnabled(boolean on) {
-        worldgenEnabled = on;
-        save();
+    /** Sets the setting and saves it. When it goes from off to on with worldgenOldTerrain on, the abandoned entries are taken up (see reviveAll). */
+    static void setWorldgenEnabled(boolean on) {
+        boolean revive;
+        synchronized (TransitSettings.class) {
+            revive = on && !worldgenEnabled && worldgenOldTerrain;
+            worldgenEnabled = on;
+            save();
+        }
+        if (revive) {
+            GenerationListener.reviveAll();
+        }
+    }
+
+    /** Sets the setting, saves it, and when it goes from off to on takes up the abandoned entries of every world (see GenerationListener.reviveAll). */
+    static void setWorldgenOldTerrain(boolean on) {
+        boolean was;
+        synchronized (TransitSettings.class) {
+            was = worldgenOldTerrain;
+            worldgenOldTerrain = on;
+            save();
+        }
+        if (on && !was) {
+            GenerationListener.reviveAll();
+        }
     }
 
     static synchronized void setMarkerSharing(boolean on) {
@@ -118,6 +147,7 @@ final class TransitSettings {
             doc.put("packBackView", new BsonBoolean(packBackView));
             doc.put("worldgenEnabled", new BsonBoolean(worldgenEnabled));
             doc.put("markerSharing", new BsonBoolean(markerSharing));
+            doc.put("worldgenOldTerrain", new BsonBoolean(worldgenOldTerrain));
             Files.createDirectories(f.getParent());
             Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
             Files.writeString(tmp, doc.toJson(), StandardCharsets.UTF_8);

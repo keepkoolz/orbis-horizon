@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.12.3
+
+### Added
+
+- In icy seas the steamboat and the shuttle boat break through the ice floes and leave an open channel behind them. Icebergs cannot be crossed, so sail around them.
+- Generated balloon stations now stand across the land as well, not only near the portals of the Forgotten Temple.
+- Operators can let generated stations be built on land that was explored before, with the Stations on explored terrain line of the configuration window or `/orbishorizon station worldgen oldterrain on|off|show`. Stations that were given up on such land are then tried again.
+
+### Changed
+
+- Shuttle boats find their own way across the water. Each sea and lake of the world is charted, and a station master only offers the ports on the same water as his own. While the water is still being charted, the destination shows Charting in progress, and a trip the shuttle could not finish is marked as an incomplete route.
+- A station near you shows on your world map with its name before you discover it.
+- Every vehicle travels 20% faster.
+- Seated passengers on the shuttle boat face the bow.
+- Station masters are clean-shaven, including those already standing in your world.
+
+### Fixed
+
+- A generated port is no longer built where the water under its pier sits lower than the sea.
+
 ## v1.12.2
 
 ### Changed

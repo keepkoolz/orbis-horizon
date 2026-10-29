@@ -27,12 +27,12 @@ final class WaterRoute {
     static final int CLEARANCE = 9;
     /**
      * Radius kept clear around a waypoint, where the ship turns on the spot: the hull then sweeps a circle around its rotation centre
-     * (about 17.2 blocks, see BoatRoutes), far more than the beam. Checked on the intermediate waypoints only.
+     * (about 17.2 blocks), far more than the beam. Checked on the intermediate waypoints only.
      */
     static final int TURN_CLEARANCE = 19;
     /**
      * NEED_DATA answers for one unloaded column of the turn clearance check after which that column counts as not clear (kept under
-     * BoatRoutes.MAX_LOAD_ATTEMPTS, so the search itself never gives up on it).
+     * BoatBerth.MAX_LOAD_ATTEMPTS).
      */
     private static final int TURN_DATA_RETRIES = 3;
     /** Turn circles judged per step call at most with the tick budget of 2,000 nodes (each is about 1,100 column reads). */
@@ -41,7 +41,6 @@ final class WaterRoute {
     static final int EXIT_RADIUS = 64;
     /** Distance from the berth a free turn circle must be at, to count as open water. */
     static final int EXIT_MIN_DISTANCE = 40;
-    static final int MAX_LENGTH = 4000;
     static final int MAX_EXPANDED = 550_000;
 
     private WaterRoute() {
@@ -61,6 +60,21 @@ final class WaterRoute {
         int half = EXIT_RADIUS + TURN_CLEARANCE;
         return new Search(probe, fromX, fromZ, fromX, fromZ, fromX - half, fromZ - half, fromX + half, fromZ + half)
                 .reachesOpenWater(EXIT_MIN_DISTANCE);
+    }
+
+    /**
+     * True when every column of the disc of the given radius around (x, z) is water: the full clearance rule of a search, with no
+     * taper at the ends. A blocked or unloaded column counts as not clear.
+     */
+    static boolean clearAround(ColumnProbe probe, int x, int z, int radius) {
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                if (dx * dx + dz * dz <= radius * radius && probe.at(x + dx, z + dz) != Cell.WATER) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     enum Status { RUNNING, NEED_DATA, FOUND, NO_ROUTE }
@@ -83,11 +97,14 @@ final class WaterRoute {
         private final int maxX;
         private final int maxZ;
         private final int height;
-        private int maxLength = MAX_LENGTH;
         /** Columns that are never navigable (cells a shuttle just hit), over the probe. */
         private java.util.Set<Long> avoid = java.util.Set.of();
         /** The start is the position of a stuck ship: it is accepted as it is, and its surroundings get no start taper. */
         private boolean freeStart;
+        private HullClearance hull = HullClearance.SHIP;
+        /** False keeps the full clearance around the goal: only the start is tapered. */
+        private boolean taperGoal = true;
+        private int maxExpanded = MAX_EXPANDED;
         private boolean goalFound;
         /** NEED_DATA answers per unloaded column of a turn circle. */
         private final java.util.Map<Long, Integer> columnRetries = new java.util.HashMap<>();
@@ -149,15 +166,6 @@ final class WaterRoute {
             goalGz = Math.floorDiv(toZ, GRID);
         }
 
-        /**
-         * Overrides the maximum length in blocks (default {@link #MAX_LENGTH}). The length is measured
-         * along the chain of node centres, a few blocks off the exact start and goal.
-         */
-        Search withMaxLength(int blocks) {
-            this.maxLength = blocks;
-            return this;
-        }
-
         /** World columns (see {@link WaterRoute#columnKey}) that count as blocked whatever the probe says. */
         Search avoiding(java.util.Set<Long> columns) {
             this.avoid = columns == null ? java.util.Set.of() : columns;
@@ -168,6 +176,57 @@ final class WaterRoute {
         Search withFreeStart() {
             this.freeStart = true;
             return this;
+        }
+
+        /** Clearances of the hull (default {@link HullClearance#SHIP}). */
+        Search clearance(HullClearance c) {
+            this.hull = c == null ? HullClearance.SHIP : c;
+            return this;
+        }
+
+        /** False: the clearance tapers around the start only, never around the goal (default true). */
+        Search taperGoal(boolean taper) {
+            this.taperGoal = taper;
+            return this;
+        }
+
+        /** Overrides the number of expanded nodes after which the search gives up (default {@link #MAX_EXPANDED}). */
+        Search maxExpanded(int nodes) {
+            this.maxExpanded = nodes;
+            return this;
+        }
+
+        /**
+         * Centre column of the grid node closest to (x, z) within radius blocks whose point passes the full leg clearance of the
+         * hull (no taper), or null when there is none. An unloaded column counts as not clear.
+         */
+        int[] nearestClear(int x, int z, int radius) {
+            int[] savedMissing = missing;
+            try {
+                int[] best = null;
+                double bestD = Double.MAX_VALUE;
+                int gxMin = Math.floorDiv(x - radius, GRID);
+                int gxMax = Math.floorDiv(x + radius, GRID);
+                int gzMin = Math.floorDiv(z - radius, GRID);
+                int gzMax = Math.floorDiv(z + radius, GRID);
+                for (int gx = gxMin; gx <= gxMax; gx++) {
+                    for (int gz = gzMin; gz <= gzMax; gz++) {
+                        int cx = centre(gx);
+                        int cz = centre(gz);
+                        double d = Math.hypot(cx - x, cz - z);
+                        if (d > radius || d >= bestD) {
+                            continue;
+                        }
+                        if (clearState(cx, cz, hull.leg(), false, false) == YES) {
+                            best = new int[] {cx, cz};
+                            bestD = d;
+                        }
+                    }
+                }
+                return best;
+            } finally {
+                missing = savedMissing;
+            }
         }
 
         List<int[]> waypoints() {
@@ -220,7 +279,7 @@ final class WaterRoute {
             if (points[pi] != UNSET) {
                 return points[pi];
             }
-            byte state = clearState(x, z, CLEARANCE, false);
+            byte state = clearState(x, z, hull.leg(), false);
             if (state != UNKNOWN) {
                 points[pi] = state;
             }
@@ -229,14 +288,21 @@ final class WaterRoute {
 
         /** Tri-state test of the columns within radius around (x, z), the radius tapering near the endpoints. Remembers an unknown column. */
         private byte clearState(int x, int z, int radius, boolean lenient) {
+            return clearState(x, z, radius, lenient, true);
+        }
+
+        private byte clearState(int x, int z, int radius, boolean lenient, boolean taper) {
             if (x < minX || x > maxX || z < minZ || z > maxZ) {
                 return NO;
             }
             int[] unknown = null;
             // Clearance tapers near the endpoints (berths sit next to piers and shore). A free start keeps the taper: a ship stuck by
             // a side contact must be able to leave; the avoided columns stay blocked.
-            double d = Math.min(Math.hypot(x - fromX, z - fromZ), Math.hypot(x - toX, z - toZ));
-            int r = Math.min(radius, (int) Math.floor(d / 2));
+            double d = Math.hypot(x - fromX, z - fromZ);
+            if (taperGoal) {
+                d = Math.min(d, Math.hypot(x - toX, z - toZ));
+            }
+            int r = taper ? Math.min(radius, (int) Math.floor(d / 2)) : radius;
             for (int dx = -r; dx <= r; dx++) {
                 for (int dz = -r; dz <= r; dz++) {
                     if (dx * dx + dz * dz > r * r) {
@@ -336,7 +402,7 @@ final class WaterRoute {
                 }
                 open.poll();
                 closed[ni] = true;
-                if (++expanded > MAX_EXPANDED) {
+                if (++expanded > maxExpanded) {
                     return done = Status.NO_ROUTE;
                 }
                 double g = bestG[ni];
@@ -348,9 +414,6 @@ final class WaterRoute {
                     int nz = gz + DIRS[i][1];
                     double ng = g + GRID * Math.hypot(DIRS[i][0], DIRS[i][1]);
                     double f = ng + heuristic(nx, nz);
-                    if (f > maxLength) {
-                        continue; // exact: the heuristic never overestimates
-                    }
                     int nk = nodeIndex(nx, nz);
                     if (ng < bestG[nk]) {
                         bestG[nk] = ng;
@@ -461,7 +524,7 @@ final class WaterRoute {
             }
             int[] savedMissing = missing;
             try {
-                byte c = clearState(x, z, TURN_CLEARANCE, false);
+                byte c = clearState(x, z, hull.turn(), false);
                 if (c == UNKNOWN) {
                     return null;
                 }
@@ -525,7 +588,7 @@ final class WaterRoute {
                 return -1;
             }
             turnBudget--;
-            byte c = clearState(x, z, TURN_CLEARANCE, true);
+            byte c = clearState(x, z, hull.turn(), true);
             if (c != UNKNOWN) {
                 turnPoints[pi] = c;
             }

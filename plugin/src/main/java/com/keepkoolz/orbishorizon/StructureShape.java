@@ -242,6 +242,11 @@ public final class StructureShape {
         return byPosition.get(pack(x, y, z));
     }
 
+    /** The box {minX, minY, minZ, maxX, maxY, maxZ} that contains all the prefab blocks (prefab frame, before rotation), as a copy. */
+    public int[] bounds() {
+        return bounds.clone();
+    }
+
     /** True if the position (prefab frame) is in the box that contains all the prefab blocks. */
     public boolean inBounds(int x, int y, int z) {
         return x >= bounds[0] && y >= bounds[1] && z >= bounds[2] && x <= bounds[3] && y <= bounds[4] && z <= bounds[5];

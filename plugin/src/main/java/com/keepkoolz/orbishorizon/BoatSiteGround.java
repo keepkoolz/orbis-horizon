@@ -4,6 +4,7 @@ import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
 import org.joml.Vector3i;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Ground work around a boat station, without any world access: the dome of cells to clear above the deck level, the columns to fill
@@ -84,6 +86,30 @@ final class BoatSiteGround {
             }
         }
         return out;
+    }
+
+    /**
+     * Cells of the shuttle floor to dig so that they hold water: those that are usable (loaded and inside the height limit) and not
+     * already water (state 1 in the ground state). Order is kept.
+     */
+    static Set<Vector3i> dredgeCells(Collection<Vector3i> floor, Predicate<Vector3i> usable, DeployPlacement.CellState ground) {
+        Set<Vector3i> out = new LinkedHashSet<>();
+        for (Vector3i p : floor) {
+            if (usable.test(p) && ground.at(p.x, p.y, p.z) != 1) {
+                out.add(p);
+            }
+        }
+        return out;
+    }
+
+    /** True when a dredged cell is also a cell to fill or a cell of the station prefab: the dredge is then dropped. */
+    static boolean dredgeConflicts(Set<Vector3i> dredged, Set<Vector3i> filled, Set<Vector3i> prefabCells) {
+        for (Vector3i p : dredged) {
+            if (filled.contains(p) || prefabCells.contains(p)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The world columns (x, origin.y - 1, z) under the hut to fill. */

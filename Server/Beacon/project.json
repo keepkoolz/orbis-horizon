@@ -90,7 +90,11 @@
         "worldgen.boat.built.first",
         "worldgen.boat.built.fallback",
         "worldgen.boat.built.repaired",
-        "worldgen.boat.exhausted"
+        "worldgen.boat.exhausted",
+        "worldgen.boat.dredged",
+        "worldgen.air.built.first",
+        "worldgen.air.built.fallback",
+        "worldgen.air.exhausted"
       ],
       "details": {
         "deploy.balloon": {
@@ -304,6 +308,34 @@
           }
         },
         "worldgen.boat.exhausted": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "worldgen.boat.dredged": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "worldgen.air.built.first": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "worldgen.air.built.fallback": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "worldgen.air.exhausted": {
           "allowedFields": {
             "count": {
               "type": "number"

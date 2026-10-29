@@ -106,8 +106,8 @@ final class AirshipManager {
     volatile double turnSpeedMin = 0.8;
     /** Travel within this angle (degrees) of the stern direction counts as reversing: no rotation. */
     volatile double reverseConeDeg = 100;
-    /** Factor applied to the pilot's flight speeds at the next take-off (the balloon uses 0.5). */
-    volatile float flySpeedFactor = 0.5f;
+    /** Factor applied to the pilot's flight speeds at the next take-off (the balloon uses 0.6). */
+    volatile float flySpeedFactor = 0.6f;
     volatile Steer steer = Steer.TRAVEL;
     /**
      * Smoothness. yawJerk (deg/s3, 0 = off: linear rate ramp as before) limits the change of the yaw acceleration, so the turn
@@ -266,16 +266,43 @@ final class AirshipManager {
         final double[] dz;
         /** True for a hull cell under the waterline: it must be in water, not just free of blocks. */
         final boolean[] wet;
+        /** True for a waterborne hull, which breaks ice floes (see {@link IceBreaker}). */
+        final boolean icebreaker;
+        /** Waterline height relative to the pivot, same frame as dy. 0 for an airship. */
+        final double surfaceDy;
+        /** Height of the highest cell of the shape relative to the pivot, same frame as dy. 0 for an airship. */
+        final double topDy;
+        /** Height of the lowest cell of the shape relative to the pivot, same frame as dy. 0 for an airship. */
+        final double bottomDy;
 
-        Hull(double[] dx, double[] dy, double[] dz, boolean[] wet) {
+        Hull(double[] dx, double[] dy, double[] dz, boolean[] wet, boolean icebreaker, double surfaceDy, double topDy, double bottomDy) {
             this.dx = dx;
             this.dy = dy;
             this.dz = dz;
             this.wet = wet;
+            this.icebreaker = icebreaker;
+            this.surfaceDy = surfaceDy;
+            this.topDy = topDy;
+            this.bottomDy = bottomDy;
         }
 
         int size() {
             return dx.length;
+        }
+
+        /** World height of the waterline cell for a pose at height py. */
+        int surfaceY(double py) {
+            return (int) Math.floor(py + 0.5 + surfaceDy);
+        }
+
+        /** World height of the highest hull cell for a pose at height py. */
+        int topY(double py) {
+            return (int) Math.floor(py + 0.5 + topDy);
+        }
+
+        /** World height of the lowest cell of the shape for a pose at height py. */
+        int bottomY(double py) {
+            return (int) Math.floor(py + 0.5 + bottomDy);
         }
     }
 
@@ -321,7 +348,11 @@ final class AirshipManager {
                 wet[i] = hull.get(i).y() <= waterlineY;
             }
         }
-        return new Hull(dx, dy, dz, wet);
+        if (waterlineY == null) {
+            return new Hull(dx, dy, dz, wet, false, 0, 0, 0);
+        }
+        return new Hull(dx, dy, dz, wet, true, waterlineY - pv.y, IceBreaker.maxCellY(shape) - pv.y,
+                IceBreaker.minCellY(shape) - pv.y);
     }
 
     /**
@@ -331,8 +362,20 @@ final class AirshipManager {
      */
     static int blocked(World world, Hull h, double px, double py, double pz, double theta, int limit) {
         SectionReader reader = new SectionReader(world.getChunkStore());
-        return blocked((x, y, z, wet) -> wet ? !SteamboatWater.isWaterCell(reader, x, y, z) : BalloonManager.blocksBalloon(reader, x, y, z),
-                h, px, py, pz, theta, limit);
+        return blocked(cellTest(reader, h, py), h, px, py, pz, theta, limit);
+    }
+
+    /**
+     * Default cell test of a hull pose at height py. An airship hull blocks on any solid or liquid block, or on non-water under the
+     * waterline. An ice-breaker hull follows {@link IceBreaker#hullCellBlocks}, where ice above the hull top (an iceberg) blocks.
+     */
+    static CellTest cellTest(SectionReader reader, Hull h, double py) {
+        if (!h.icebreaker) {
+            return (x, y, z, wet) -> wet ? !SteamboatWater.isWaterCell(reader, x, y, z) : BalloonManager.blocksBalloon(reader, x, y, z);
+        }
+        int surfaceY = h.surfaceY(py);
+        IceBreaker.CellReader cells = (x, y, z) -> IceBreaker.kindAt(reader, x, y, z);
+        return (x, y, z, wet) -> IceBreaker.hullCellBlocks(cells, x, y, z, wet, surfaceY);
     }
 
     /**
@@ -343,8 +386,9 @@ final class AirshipManager {
         SectionReader reader = new SectionReader(world.getChunkStore());
         int[][] hit = new int[1][];
         int[] seen = new int[1];
+        CellTest base = cellTest(reader, h, py);
         blocked((x, y, z, wet) -> {
-            boolean b = wet ? !SteamboatWater.isWaterCell(reader, x, y, z) : BalloonManager.blocksBalloon(reader, x, y, z);
+            boolean b = base.blocks(x, y, z, wet);
             if (b && ++seen[0] == allowed + 1) {
                 hit[0] = new int[] {x, y, z, wet ? 1 : 0}; // the first cell beyond the ones the hull may already touch
             }
@@ -1015,6 +1059,7 @@ final class AirshipManager {
         }
         f.finishing = true;
         flights.remove(f.id);
+        ShuttleNav.removed(f.shuttle); // a trip in progress learns nothing
         try {
             passengers.releaseAll(store, f);
             removeLights(store, f);
@@ -2318,6 +2363,9 @@ final class AirshipManager {
         if (f.finishing) {
             return; // landed during this tick: the entity is gone
         }
+        if (hull.icebreaker) {
+            IceBreaker.breakUnderHull(store, world, hull, f);
+        }
         if (f.landing || f.pilotless()) {
             writeEntity(store, f);
         }
@@ -3225,6 +3273,7 @@ final class AirshipManager {
         stopCarry(store, f);
         removeLights(store, f);
         cancelSmoke(f);
+        breakLandingIce(store, f.world, f.kind, origin, rotation);
         BalloonManager.get().pastePrefab(f.kind, f.world, store, origin, rotation,
                 Ownership.landingOwner(f.ownership, f.pilotRef != null ? f.pilotUuid : null, f.pilotRef != null ? f.pilotName : null,
                         f.pilotRef == null || !AirshipLimit.countsForLimit(f.kind) || !AirshipLimit.ownsAirship(f.pilotUuid)));
@@ -3390,9 +3439,19 @@ final class AirshipManager {
     boolean poseBlocked(World world, Deployables.Kind kind, StructureShape s, Vector3i origin, Rotation rotation) {
         if (spec(kind).waterborne()) {
             return BalloonManager.exceedsHeight(s, origin, rotation)
-                    || DeployPlacement.steamboatFit(s, origin, rotation, DeployPlacement.worldState(world)) != null;
+                    || DeployPlacement.steamboatFault(s, origin, rotation, DeployPlacement.iceState(world, origin.y
+                    + Deployables.STEAMBOAT.airship.waterlineY),
+                    Deployables.STEAMBOAT.airship.waterlineY) != null;
         }
         return BalloonManager.collides(world, s, origin, rotation);
+    }
+
+    /** A boat about to be pasted on floe ice breaks it first, as the hull does when sailing. Airships are left alone. */
+    private static void breakLandingIce(Store<EntityStore> store, World world, Deployables.Kind kind, Vector3i origin, Rotation rotation) {
+        StructureShape s = kind.shapeOrNull();
+        if (s != null && spec(kind).waterborne()) {
+            IceBreaker.breakFootprint(store, world, kind, s, origin, rotation);
+        }
     }
 
     private static void floodHull(World world, Deployables.Kind kind, StructureShape s, Vector3i origin, Rotation rotation) {
@@ -3956,6 +4015,7 @@ final class AirshipManager {
                     }
                 }
             }
+            breakLandingIce(store, world, kind, origin, q);
             BalloonManager.get().pastePrefab(kind, world, store, origin, q,
                     Ownership.landingOwner(rec.ownership(), rec.pilot(), null, rec.pilot() == null || !AirshipLimit.countsForLimit(kind) || !AirshipLimit.ownsAirship(rec.pilot())));
             drainHull(world, kind, s, origin, q);

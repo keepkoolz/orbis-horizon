@@ -35,6 +35,11 @@ final class GeneratorProbe implements TerrainProbe {
         return generator instanceof ChunkGenerator ? Availability.READY : Availability.OFF;
     }
 
+    /** Availability for the sea chart: the same, whether or not the world is deleted when it is removed. */
+    static Availability chartAvailability(Object generator) {
+        return availability(false, generator);
+    }
+
     static Availability availability(World world) {
         return availability(world.getWorldConfig().isDeleteOnRemove(), world.getChunkStore().getGenerator());
     }
@@ -53,6 +58,15 @@ final class GeneratorProbe implements TerrainProbe {
             LOGGER.at(Level.INFO).log("Stations générées : le monde %s est supprimé à sa fermeture ou n'utilise pas le générateur du jeu, fonction inactive pour ce monde", world.getName());
         }
         return null;
+    }
+
+    /** The probe of a world for the sea chart (a throwaway world is accepted), or null while the generator loads or when it is not the game's. */
+    static GeneratorProbe forChart(World world) {
+        Object generator = world.getChunkStore().getGenerator();
+        if (chartAvailability(generator) != Availability.READY) {
+            return null;
+        }
+        return new GeneratorProbe((ChunkGenerator) generator, (int) world.getWorldConfig().getSeed());
     }
 
     @Override

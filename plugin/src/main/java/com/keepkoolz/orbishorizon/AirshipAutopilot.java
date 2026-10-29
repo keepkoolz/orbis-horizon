@@ -354,9 +354,10 @@ final class AirshipAutopilot {
     /**
      * One tick of the yaw controller of the player-piloted ship toward a heading error (radians): the rate ramps up and brakes
      * before the target, the last step snaps on it. The ship turns around its centre, so the pivot moves on the arc. Every
-     * pose goes through AirshipManager.move. Also used by the maritime shuttle (BoatAutopilot).
+     * pose goes through AirshipManager.move. Also used by the maritime shuttle (BoatAutopilot). Returns true when the pose was refused
+     * (a collision, whatever part of the move was still accepted).
      */
-    static void yawStep(World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f, double err, double dt, long now) {
+    static boolean yawStep(World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f, double err, double dt, long now) {
         double maxRate = Math.toRadians(am.maxYawRateDeg);
         double accel = Math.toRadians(am.yawAccelDeg);
         double desired = Math.signum(err) * Math.min(maxRate, am.brakingRate(Math.abs(err), accel));
@@ -369,7 +370,7 @@ final class AirshipAutopilot {
             f.yawAcc = 0;
         }
         // Turn around the ship centre, not around the helm: the pivot cell moves on the arc.
-        am.move(world, f, hull, am.pivotAfterTurn(f.kind, f.pos, f.theta, f.theta + step), f.theta + step, now);
+        return am.move(world, f, hull, am.pivotAfterTurn(f.kind, f.pos, f.theta, f.theta + step), f.theta + step, now);
     }
 
     private static void cruise(Store<EntityStore> store, World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f,

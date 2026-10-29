@@ -88,6 +88,9 @@ final class AirshipFlight {
     final Vector3d pos = new Vector3d();
     /** Heading in radians, continuous (not wrapped). */
     double theta;
+    /** Pose at which the ice under the hull was last broken (ice-breaker only), so an unchanged pose is not walked again. */
+    boolean iceBrokenPose;
+    double iceX, iceY, iceZ, iceTheta;
     /** Yaw rate (rad/s). */
     double yawRate;
     /** yaw acceleration (rad/s2) of the jerk-limited rate controller. */

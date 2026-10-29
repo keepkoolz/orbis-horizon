@@ -34,10 +34,9 @@ import java.util.function.Predicate;
 import java.util.logging.Level;
 
 /**
- * Stations generated with the world. Each newly generated chunk is marked, a temple portal in it is looked for, and the sea cell
- * around its centre and the portal are planned on a dedicated thread. A planned station is built on the world thread once every
- * chunk of its footprint is new. Old terrain in its footprint moves a boat station to its next site and abandons a balloon station
- * (or a boat station without a next site).
+ * Stations generated with the world. Each newly generated chunk is marked, a temple portal in it is looked for, and the portal, the
+ * sea cell and the land cell around its centre are planned on a dedicated thread. A planned station is built on the world thread once every
+ * chunk of its footprint is new. Old terrain in its footprint moves a station to its next site and abandons it when none is left.
  */
 final class GenerationListener {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
@@ -181,18 +180,24 @@ final class GenerationListener {
         }
     }
 
-    /** ABANDON when a chunk is loaded without being new, BUILD when all are new, else WAIT. */
-    static Decision decide(List<long[]> chunks, Predicate<long[]> isNew, Predicate<long[]> loadedOld) {
-        boolean allNew = true;
+    /**
+     * Setting off: ABANDON when a chunk is loaded without being new, BUILD when all are new, else WAIT.
+     * Setting on (oldTerrain): never ABANDON, BUILD when every chunk is new or loaded, else WAIT.
+     */
+    static Decision decide(List<long[]> chunks, Predicate<long[]> isNew, Predicate<long[]> loadedOld, boolean oldTerrain) {
+        boolean ready = true;
         for (long[] c : chunks) {
             if (loadedOld.test(c)) {
-                return Decision.ABANDON;
+                if (!oldTerrain) {
+                    return Decision.ABANDON;
+                }
+                continue;
             }
             if (!isNew.test(c)) {
-                allNew = false;
+                ready = false;
             }
         }
-        return allNew ? Decision.BUILD : Decision.WAIT;
+        return ready ? Decision.BUILD : Decision.WAIT;
     }
 
     /** The entries among those given whose footprint contains the chunk. */
@@ -229,7 +234,10 @@ final class GenerationListener {
             String name = world.getName();
             int cx = ev.getChunk().getX(), cz = ev.getChunk().getZ();
             if (!ev.isNewlyGenerated()) {
-                if (!newChunksOf(world).isNew(cx, cz)) {
+                boolean old = !newChunksOf(world).isNew(cx, cz);
+                if (old && TransitSettings.worldgenOldTerrain()) {
+                    onExploredChunk(world, probe, name, cx, cz, ev.getHolder());
+                } else if (old) {
                     abandonOnOldChunk(world, name, cx, cz);
                 } else {
                     // a new chunk reloaded: a station that was waiting for it (or lost at shutdown) is decided again.
@@ -272,9 +280,45 @@ final class GenerationListener {
     }
 
     /**
+     * Event thread, setting on: a chunk loaded from disk that is not new. The pending entries touching it are decided again on the
+     * world thread and the chunk is searched for a temple portal, which is planned on the planner thread. The sea and land cells
+     * are planned by the new-chunk path and by planAhead, whatever the terrain.
+     */
+    private static void onExploredChunk(World world, GeneratorProbe probe, String name, int cx, int cz, Holder<ChunkStore> holder) {
+        List<GeneratedStations.Entry> again = touching(GeneratedStations.get().pending(name), cx, cz);
+        if (!again.isEmpty()) {
+            world.execute(() -> decideAll(world, again));
+        }
+        int[] portal = findPortal(holder, cx, cz);
+        if (portal == null) {
+            return;
+        }
+        ExecutorService ex;
+        synchronized (LOCK) {
+            ex = planner;
+        }
+        if (ex == null) {
+            return;
+        }
+        ex.execute(new PlanTask(PlanTask.CHUNK, () -> {
+            try {
+                Set<GeneratedStations.Entry> touched = new LinkedHashSet<>();
+                planPortalSite(world, probe, portal, touched);
+                if (!touched.isEmpty()) {
+                    List<GeneratedStations.Entry> list = new ArrayList<>(touched);
+                    world.execute(() -> decideAll(world, list));
+                }
+            } catch (RuntimeException | LinkageError e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Station générée : portail du chunk (%d, %d) non planifié", cx, cz);
+                Telemetry.error("worldgen", e, null, "plan");
+            }
+        }));
+    }
+
+    /**
      * A chunk generated again although the map already holds it as new: the world was restored from a backup that does not contain
      * the mod's files. Entries from before this session whose footprint contains the chunk are forgotten, and so are the built ones
-     * (which also leave the network). The sea cell is un-marked the first time only, and the portals inside the chunk are forgotten:
+     * (which also leave the network). The sea cell and the land cell are un-marked the first time only, and the portals inside the chunk are forgotten:
      * both are planned again by the normal flow that follows. Event thread: registry only, the network is handled on the world thread.
      */
     private static void onRegenerated(World world, String name, int cx, int cz) {
@@ -294,7 +338,10 @@ final class GenerationListener {
             }
             int cellX = WorldStationPlanner.cellOf(cx * 32 + 16);
             int cellZ = WorldStationPlanner.cellOf(cz * 32 + 16);
-            boolean unmarked = unmarkOnce(REPLANNED, reg, name, cellX, cellZ);
+            boolean unmarkedSea = unmarkOnce(REPLANNED, reg, name, cellX, cellZ);
+            boolean unmarkedLand = unmarkLandOnce(REPLANNED, reg, name, WorldStationPlanner.landCellOf(cx * 32 + 16),
+                    WorldStationPlanner.landCellOf(cz * 32 + 16));
+            boolean unmarked = unmarkedSea || unmarkedLand;
             reg.forgetPortals(name, cx * 32, cz * 32, cx * 32 + 31, cz * 32 + 31);
             if (!forgotten.isEmpty() || unmarked) {
                 LOGGER.at(Level.INFO).log("Station générée : chunk (%d, %d) regénéré, sauvegarde restaurée : %d station(s) oubliée(s), cellule %s",
@@ -314,6 +361,11 @@ final class GenerationListener {
         return replanned.add(cellKey(world, cellX, cellZ)) && reg.unmarkCell(world, cellX, cellZ);
     }
 
+    /** Same as {@link #unmarkOnce} for a land cell. */
+    static boolean unmarkLandOnce(Set<String> replanned, GeneratedStations reg, String world, int cellX, int cellZ) {
+        return replanned.add(aheadLandKey(world, cellX, cellZ)) && reg.unmarkLandCell(world, cellX, cellZ);
+    }
+
     /** World thread: removes the network stations of forgotten built entries, without touching any block. */
     private static void removeBuilt(World world, List<GeneratedStations.Entry> built) {
         for (GeneratedStations.Entry e : built) {
@@ -326,7 +378,6 @@ final class GenerationListener {
                 StationMaster.remove(world.getEntityStore().getStore(), s);
                 TransitNetwork.get().remove(s);
                 TransitNetwork.get().save();
-                BoatRoutes.stationRemoved(world, s);
                 StationCommand.StationNameType.stationsChanged();
                 // Quay, flights heading here, shuttles and the other queues, as for a removal by command.
                 StationQueue.onStationRemoved(world, s);
@@ -352,6 +403,9 @@ final class GenerationListener {
             List<GeneratedStations.Entry> pending = GeneratedStations.get().pending(world.getName());
             if (!pending.isEmpty()) {
                 world.execute(() -> decideAll(world, pending));
+            }
+            if (TransitSettings.worldgenOldTerrain()) {
+                world.execute(() -> reviveWorld(world));
             }
         } catch (RuntimeException | LinkageError e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Station générée : reprise des stations en attente impossible pour %s", world.getName());
@@ -397,8 +451,8 @@ final class GenerationListener {
     }
 
     /**
-     * World thread: each entry still PLANNED whose active site still covers the old chunk. A boat entry whose build is not requested
-     * moves to its next site and is decided again; the others, and a boat entry without a next site, are abandoned.
+     * World thread: each entry still PLANNED whose active site still covers the old chunk. An entry whose build is not requested
+     * moves to its next site and is decided again; the others, and an entry without a next site, are abandoned.
      */
     private static void onOldTerrain(World world, List<GeneratedStations.Entry> entries, int cx, int cz) {
         GeneratedStations reg = GeneratedStations.get();
@@ -410,12 +464,13 @@ final class GenerationListener {
                     continue;
                 }
                 site = reg.activeSite(e);
+                e.oldTerrainSeen = true;
                 if (!REQUESTED.contains(e) && moveOffOldTerrain(reg, e, name)) {
                     LOGGER.at(Level.INFO).log("%s : terrain ancien rechargé en (%d, %d), site suivant %d/%d", logName(e.kind), site.x(), site.z(),
                             e.active + 1, e.sites.size());
                     decideAgain(world, e);
                 } else {
-                    abandon(e, "terrain ancien rechargé");
+                    abandon(e, "terrain ancien rechargé", GeneratedStations.Reason.OLD_TERRAIN);
                 }
             } catch (RuntimeException | LinkageError ex) {
                 LOGGER.at(Level.WARNING).withCause(ex).log("%s : terrain ancien non traité en (%d, %d)", logName(e.kind),
@@ -426,24 +481,21 @@ final class GenerationListener {
     }
 
     /**
-     * Old terrain under the active site of a planned entry: a boat entry moves to its next site that keeps its distance from the
-     * other boat stations, and true is returned. False for a balloon station, or for a boat entry whose sites are used up (counted
-     * as worldgen.boat.exhausted): the caller abandons the entry.
+     * Old terrain under the active site of a planned entry: the entry moves to its next site that keeps its distance from the
+     * other stations of its kind, and true is returned. False when its sites are used up (counted as worldgen.boat.exhausted or
+     * worldgen.air.exhausted): the caller abandons the entry.
      */
     static boolean moveOffOldTerrain(GeneratedStations reg, GeneratedStations.Entry e, String world) {
-        if (!Deployables.BOAT_STATION_KIND.equals(e.kind)) {
-            return false;
-        }
-        if (moveToNextSite(reg, e, otherBoatSites(world, e))) {
+        if (moveToNextSite(reg, e, otherSites(world, e))) {
             return true;
         }
-        Telemetry.count("worldgen.boat.exhausted");
+        Telemetry.count(Deployables.BOAT_STATION_KIND.equals(e.kind) ? "worldgen.boat.exhausted" : "worldgen.air.exhausted");
         return false;
     }
 
-    private static void abandon(GeneratedStations.Entry e, String reason) {
+    private static void abandon(GeneratedStations.Entry e, String reason, GeneratedStations.Reason why) {
         try {
-            GeneratedStations.get().setState(e, GeneratedStations.State.ABANDONED);
+            GeneratedStations.get().abandon(e, why);
             Telemetry.count("worldgen.station.abandoned");
             LOGGER.at(Level.INFO).log("%s abandonnée en (%d, %d) : %s", logName(e.kind), e.x, e.z, reason);
         } catch (RuntimeException ex) {
@@ -501,27 +553,18 @@ final class GenerationListener {
         String name = world.getName();
         GeneratedStations reg = GeneratedStations.get();
         Set<GeneratedStations.Entry> touched = new LinkedHashSet<>();
-        try {
-            if (portal != null && reg.markPortal(name, portal[0], portal[1])) {
-                WorldStationPlanner.PlannedSite site = WorldStationPlanner.planPortal(portal[0], portal[1], probe,
-                        existing(name, Deployables.STATION_KIND));
-                if (site != null) {
-                    touched.add(reg.add(name, site));
-                    LOGGER.at(Level.INFO).log("Station aérienne générée : portail (%d, %d) planifié, site en (%d, %d)", portal[0], portal[1],
-                            site.x(), site.z());
-                } else {
-                    LOGGER.at(Level.INFO).log("Station aérienne générée : portail (%d, %d) sans site", portal[0], portal[1]);
-                }
-            }
-        } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station aérienne générée : portail en (%d, %d) non planifié", portal[0], portal[1]);
-            Telemetry.error("worldgen", e, Deployables.STATION_KIND, "plan");
-        }
+        planPortalSite(world, probe, portal, touched);
         try {
             touched.addAll(planCell(world, probe, WorldStationPlanner.cellOf(cx * 32 + 16), WorldStationPlanner.cellOf(cz * 32 + 16)));
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Station maritime générée : cellule autour du chunk (%d, %d) non planifiée", cx, cz);
             Telemetry.error("worldgen", e, Deployables.BOAT_STATION_KIND, "plan");
+        }
+        try {
+            touched.addAll(planLandCell(world, probe, WorldStationPlanner.landCellOf(cx * 32 + 16), WorldStationPlanner.landCellOf(cz * 32 + 16)));
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Station aérienne générée : cellule terrestre autour du chunk (%d, %d) non planifiée", cx, cz);
+            Telemetry.error("worldgen", e, Deployables.STATION_KIND, "plan");
         }
         try {
             touched.addAll(touching(reg.pending(name), cx, cz));
@@ -532,6 +575,32 @@ final class GenerationListener {
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Station générée : décision impossible après le chunk (%d, %d)", cx, cz);
             Telemetry.error("worldgen", e, null, "decide");
+        }
+    }
+
+    /** Planner thread: plans the station of a temple portal unless one was seen nearby, adds its entry to touched. Never throws. */
+    private static void planPortalSite(World world, GeneratorProbe probe, int[] portal, Set<GeneratedStations.Entry> touched) {
+        if (portal == null) {
+            return;
+        }
+        String name = world.getName();
+        GeneratedStations reg = GeneratedStations.get();
+        try {
+            if (reg.markPortal(name, portal[0], portal[1])) {
+                WorldStationPlanner.PlannedSite site = WorldStationPlanner.planPortal(portal[0], portal[1], probe,
+                        existing(name, Deployables.STATION_KIND, true));
+                if (site != null) {
+                    touched.add(reg.add(name, site, GeneratedStations.Origin.PORTAL));
+                    world.execute(() -> displaceLandEntries(world, site));
+                    LOGGER.at(Level.INFO).log("Station aérienne générée : portail (%d, %d) planifié, site en (%d, %d)", portal[0], portal[1],
+                            site.x(), site.z());
+                } else {
+                    LOGGER.at(Level.INFO).log("Station aérienne générée : portail (%d, %d) sans site", portal[0], portal[1]);
+                }
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Station aérienne générée : portail en (%d, %d) non planifié", portal[0], portal[1]);
+            Telemetry.error("worldgen", e, Deployables.STATION_KIND, "plan");
         }
     }
 
@@ -546,7 +615,7 @@ final class GenerationListener {
         if (reg.markCell(name, cellX, cellZ)) {
             long start = System.nanoTime();
             List<WorldStationPlanner.PlannedSite> sites = WorldStationPlanner.planSeaCell(world.getWorldConfig().getSeed(), cellX, cellZ,
-                    probe, existing(name, Deployables.BOAT_STATION_KIND));
+                    probe, existing(name, Deployables.BOAT_STATION_KIND, false));
             for (WorldStationPlanner.PlannedSite s : sites) {
                 added.add(reg.add(name, s));
             }
@@ -559,9 +628,42 @@ final class GenerationListener {
         return added;
     }
 
+    /**
+     * Planner thread: plans a land cell unless it already is, and returns the entry it added to the registry (empty when the cell was
+     * planned before or has no site). The caller decides on it. Throws what the planning throws.
+     */
+    private static List<GeneratedStations.Entry> planLandCell(World world, GeneratorProbe probe, int cellX, int cellZ) {
+        String name = world.getName();
+        GeneratedStations reg = GeneratedStations.get();
+        List<GeneratedStations.Entry> added = new ArrayList<>();
+        if (reg.markLandCell(name, cellX, cellZ)) {
+            long start = System.nanoTime();
+            WorldStationPlanner.PlannedSite site = WorldStationPlanner.planLandCell(world.getWorldConfig().getSeed(), cellX, cellZ, probe,
+                    existing(name, Deployables.STATION_KIND, false));
+            if (site != null) {
+                added.add(reg.add(name, site, GeneratedStations.Origin.LAND));
+            }
+            long ms = (System.nanoTime() - start) / 1_000_000;
+            LOGGER.at(Level.INFO).log("Station aérienne générée : cellule terrestre (%d, %d) planifiée en %d ms, %s", cellX, cellZ, ms,
+                    site == null ? "sans site" : "site en (" + site.x() + ", " + site.z() + ")");
+            if (ms > SLOW_CELL_MS) {
+                LOGGER.at(Level.WARNING).log("Station aérienne générée : la cellule terrestre (%d, %d) a pris plus de %d ms", cellX, cellZ, SLOW_CELL_MS);
+            }
+        }
+        return added;
+    }
+
+    /** The land cell of the point and its 8 neighbours as {cellX, cellZ}, the cell of the point first. */
+    static List<int[]> landCellsAround(double x, double z) {
+        return around(WorldStationPlanner.landCellOf((int) Math.floor(x)), WorldStationPlanner.landCellOf((int) Math.floor(z)));
+    }
+
     /** The cell of the point and its 8 neighbours as {cellX, cellZ}, the cell of the point first. */
     static List<int[]> cellsAround(double x, double z) {
-        int cx = WorldStationPlanner.cellOf((int) Math.floor(x)), cz = WorldStationPlanner.cellOf((int) Math.floor(z));
+        return around(WorldStationPlanner.cellOf((int) Math.floor(x)), WorldStationPlanner.cellOf((int) Math.floor(z)));
+    }
+
+    private static List<int[]> around(int cx, int cz) {
         List<int[]> out = new ArrayList<>();
         out.add(new int[]{cx, cz});
         for (int dx = -1; dx <= 1; dx++) {
@@ -583,6 +685,19 @@ final class GenerationListener {
             return false;
         }
         return queued.add(aheadKey(world, cellX, cellZ));
+    }
+
+    /** Same as {@link #claimAhead} for a land cell, under its own key. */
+    static boolean claimAheadLand(Set<String> queued, GeneratedStations reg, String world, int cellX, int cellZ) {
+        if (reg.landCellMarked(world, cellX, cellZ)) {
+            return false;
+        }
+        return queued.add(aheadLandKey(world, cellX, cellZ));
+    }
+
+    /** Key of a land cell in the set of cells queued ahead. */
+    static String aheadLandKey(String world, int cellX, int cellZ) {
+        return "land:" + cellKey(world, cellX, cellZ);
     }
 
     /** Key of a cell in the set of cells queued ahead. */
@@ -660,6 +775,16 @@ final class GenerationListener {
                         }
                     }
                 }
+                for (int[] cell : landCellsAround(t.getPosition().x, t.getPosition().z)) {
+                    if (claimAheadLand(AHEAD_QUEUED, reg, name, cell[0], cell[1])) {
+                        try {
+                            ex.execute(new PlanTask(PlanTask.AHEAD, () -> planAheadLandCell(world, probe, cell[0], cell[1])));
+                        } catch (RejectedExecutionException rejected) {
+                            AHEAD_QUEUED.remove(aheadLandKey(name, cell[0], cell[1]));
+                            return;
+                        }
+                    }
+                }
             }
         } catch (RuntimeException | LinkageError e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Station générée : cellules en avance non mises en file pour %s", world.getName());
@@ -682,57 +807,219 @@ final class GenerationListener {
         }
     }
 
+    /** Planner thread: plans a land cell queued ahead and decides on the entry it created. */
+    private static void planAheadLandCell(World world, GeneratorProbe probe, int cellX, int cellZ) {
+        try {
+            List<GeneratedStations.Entry> added = planLandCell(world, probe, cellX, cellZ);
+            if (!added.isEmpty()) {
+                world.execute(() -> decideAll(world, added));
+            }
+        } catch (RuntimeException | LinkageError e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Station aérienne générée : cellule terrestre (%d, %d) non planifiée en avance", cellX, cellZ);
+            Telemetry.error("worldgen", e, Deployables.STATION_KIND, "ahead");
+        } finally {
+            AHEAD_QUEUED.remove(aheadLandKey(world.getName(), cellX, cellZ));
+        }
+    }
+
     /** Log prefix naming the kind of a generated station: aerial (balloon) or maritime (boat). */
     static String logName(String kind) {
         return Deployables.BOAT_STATION_KIND.equals(kind) ? "Station maritime générée" : "Station aérienne générée";
     }
 
-    private static List<int[]> existing(String world, String kind) {
+    /**
+     * The positions {x, z} the planning of a station keeps away from: the network stations of the kind and the registry entries
+     * PLANNED or BUILT. A portal passes skipPlannedLand: the land entries still planned give way to it (see displaceLandEntries).
+     */
+    private static List<int[]> existing(String world, String kind, boolean skipPlannedLand) {
         List<int[]> out = new ArrayList<>();
         for (TransitNetwork.Station s : TransitNetwork.get().stations(world, kind)) {
             out.add(new int[]{s.origin.x, s.origin.z});
         }
-        out.addAll(GeneratedStations.get().positions(world, kind));
+        out.addAll(GeneratedStations.get().positions(world, kind, skipPlannedLand));
         return out;
     }
 
     /**
+     * The land entries to move for a portal station at (px, pz): PLANNED, of land-cell origin, not requested, and whose active site is
+     * closer than BALLOON_SPACING to the portal site.
+     */
+    static List<GeneratedStations.Entry> landEntriesNear(List<GeneratedStations.Entry> all, Set<GeneratedStations.Entry> requested,
+                                                         int px, int pz) {
+        long r2 = (long) WorldStationPlanner.BALLOON_SPACING * WorldStationPlanner.BALLOON_SPACING;
+        List<GeneratedStations.Entry> out = new ArrayList<>();
+        for (GeneratedStations.Entry e : all) {
+            if (!Deployables.STATION_KIND.equals(e.kind) || e.origin != GeneratedStations.Origin.LAND
+                    || e.state != GeneratedStations.State.PLANNED || requested.contains(e)) {
+                continue;
+            }
+            long dx = e.x - px, dz = e.z - pz;
+            if (dx * dx + dz * dz < r2) {
+                out.add(e);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * World thread: a portal station was planned at its site. The land entries still planned and too close to it move to their next
+     * site that keeps its distance from the other balloon sites, or are abandoned when their sites are used up.
+     */
+    private static void displaceLandEntries(World world, WorldStationPlanner.PlannedSite portal) {
+        GeneratedStations reg = GeneratedStations.get();
+        String name = world.getName();
+        try {
+            for (GeneratedStations.Entry e : landEntriesNear(reg.entries(name), REQUESTED, portal.x(), portal.z())) {
+                if (e.state != GeneratedStations.State.PLANNED || REQUESTED.contains(e)) {
+                    continue;
+                }
+                int fromX = e.x, fromZ = e.z;
+                if (moveOffOldTerrain(reg, e, name)) {
+                    LOGGER.at(Level.INFO).log("%s : trop près du portail en (%d, %d), site (%d, %d) remplacé par le suivant %d/%d",
+                            logName(e.kind), portal.x(), portal.z(), fromX, fromZ, e.active + 1, e.sites.size());
+                    decideAgain(world, e);
+                } else {
+                    abandon(e, "trop près d'une station de portail", GeneratedStations.Reason.OTHER);
+                }
+            }
+        } catch (RuntimeException | LinkageError ex) {
+            LOGGER.at(Level.WARNING).withCause(ex).log("Station aérienne générée : stations terrestres proches du portail (%d, %d) non déplacées",
+                    portal.x(), portal.z());
+            Telemetry.error("worldgen", ex, Deployables.STATION_KIND, "decide");
+        }
+    }
+
+    /**
      * World thread only, like every change of site, so that a site never changes between a BUILD decision and the build.
-     * Advances an entry to its next site that keeps its distance from the other boat stations: BOAT_SPACING for a main pier, PARTNER_REUSE
-     * for a partner (partners sit far from their main pier, so the main spacing would refuse most of their sites). The radius comes
+     * Advances an entry to its next site that keeps its distance from the other stations of its kind: BALLOON_SPACING for a balloon
+     * station, BOAT_SPACING for a main pier, PARTNER_REUSE for a partner (partners sit far from their main pier, so the main spacing would refuse most of their sites). The radius comes
      * from the entry, the caller gives the positions {x, z} to keep away from. False when the sites are used up, the caller then
      * abandons the entry.
      */
     static boolean moveToNextSite(GeneratedStations reg, GeneratedStations.Entry e, List<int[]> others) {
-        int radius = e.partner ? WorldStationPlanner.PARTNER_REUSE : WorldStationPlanner.BOAT_SPACING;
-        long r2 = (long) radius * radius;
         while (reg.advance(e)) {
-            WorldStationPlanner.Site site = reg.activeSite(e);
-            boolean clear = true;
-            for (int[] p : others) {
-                long dx = p[0] - site.x(), dz = p[1] - site.z();
-                if (dx * dx + dz * dz < r2) {
-                    clear = false;
-                    break;
-                }
-            }
-            if (clear) {
+            if (keepsSpacing(e, reg.activeSite(e), others)) {
                 return true;
             }
         }
         return false;
     }
 
+    /** True when a site of the entry keeps the spacing of the entry's kind from every position {x, z} given. */
+    static boolean keepsSpacing(GeneratedStations.Entry e, WorldStationPlanner.Site site, List<int[]> others) {
+        int radius = e.partner ? WorldStationPlanner.PARTNER_REUSE
+                : Deployables.BOAT_STATION_KIND.equals(e.kind) ? WorldStationPlanner.BOAT_SPACING : WorldStationPlanner.BALLOON_SPACING;
+        long r2 = (long) radius * radius;
+        for (int[] p : others) {
+            long dx = p[0] - site.x(), dz = p[1] - site.z();
+            if (dx * dx + dz * dz < r2) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Index of the first site of the entry that keeps its spacing from the positions given, or -1 when none does. */
+    static int firstFittingSite(GeneratedStations.Entry e, List<int[]> others) {
+        for (int i = 0; i < e.sites.size(); i++) {
+            if (keepsSpacing(e, e.sites.get(i), others)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     /**
-     * The boat positions {x, z} an entry must keep away from when it moves to another site. For a main pier, the other main piers of
-     * the registry (PLANNED or BUILT). For a partner, every other boat entry of the registry (PLANNED or BUILT) and the boat
-     * stations of the network.
+     * The entries to take up again among those of a world, in order: ABANDONED with the reason OLD_TERRAIN or UNKNOWN (never REMOVED,
+     * never another reason). Each goes back to PLANNED on the first of its sites that keeps its spacing from the PLANNED and BUILT
+     * entries (the ones revived before it included) and from the network stations of its kind, or stays abandoned when none does.
+     * Network positions come from networkOf (kind to positions {x, z}). Returns the entries taken up.
      */
-    static List<int[]> otherBoatSites(String world, GeneratedStations.Entry e) {
+    static List<GeneratedStations.Entry> reviveEntries(GeneratedStations reg, List<GeneratedStations.Entry> all,
+                                                       java.util.function.Function<String, List<int[]>> networkOf) {
+        List<GeneratedStations.Entry> revived = new ArrayList<>();
+        for (GeneratedStations.Entry e : all) {
+            if (e.state != GeneratedStations.State.ABANDONED || e.reason == GeneratedStations.Reason.OTHER) {
+                continue;
+            }
+            List<int[]> others = otherSites(all, e, networkOf.apply(e.kind));
+            int site = firstFittingSite(e, others);
+            if (site >= 0) {
+                reg.revive(e, site);
+                REQUESTED.remove(e);
+                revived.add(e);
+            }
+        }
+        return revived;
+    }
+
+    /** Every world the feature runs in, taken up again when the setting goes from off to on. Never throws. */
+    static void reviveAll() {
+        try {
+            if (!TransitSettings.worldgenEnabled() || Universe.get() == null) {
+                return;
+            }
+            for (World world : Universe.get().getWorlds().values()) {
+                try {
+                    if (probeOf(world) != null) {
+                        world.execute(() -> reviveWorld(world));
+                    }
+                } catch (RuntimeException | LinkageError e) {
+                    LOGGER.at(Level.WARNING).withCause(e).log("Station générée : reprise des abandons impossible pour %s", world.getName());
+                    Telemetry.error("worldgen", e, null, "revive");
+                }
+            }
+        } catch (RuntimeException | LinkageError e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : reprise des abandons interrompue");
+            Telemetry.error("worldgen", e, null, "revive");
+        }
+    }
+
+    /** World thread: takes up the abandoned entries of the world (see {@link #reviveEntries}) and decides on them. */
+    private static void reviveWorld(World world) {
+        try {
+            if (!TransitSettings.worldgenEnabled() || !TransitSettings.worldgenOldTerrain()) {
+                return;
+            }
+            String name = world.getName();
+            GeneratedStations reg = GeneratedStations.get();
+            List<GeneratedStations.Entry> revived = reviveEntries(reg, reg.entries(name), kind -> {
+                List<int[]> out = new ArrayList<>();
+                for (TransitNetwork.Station s : TransitNetwork.get().stations(name, kind)) {
+                    out.add(new int[]{s.origin.x, s.origin.z});
+                }
+                return out;
+            });
+            LOGGER.at(Level.INFO).log("Stations générées : %d station(s) abandonnée(s) reprise(s) dans le monde %s", revived.size(), name);
+            if (!revived.isEmpty()) {
+                decideAll(world, revived);
+            }
+        } catch (RuntimeException | LinkageError e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : reprise des abandons impossible pour %s", world.getName());
+            Telemetry.error("worldgen", e, null, "revive");
+        }
+    }
+
+    /**
+     * The positions {x, z} of the same kind an entry must keep away from when it moves to another site. For a balloon station or a
+     * main pier, the active site of every other entry of the kind (PLANNED or BUILT, partners excluded for a main pier) and, for a
+     * balloon station, the balloon stations of the network. For a partner, every other boat entry of the registry (PLANNED or BUILT)
+     * and the boat stations of the network.
+     */
+    static List<int[]> otherSites(String world, GeneratedStations.Entry e) {
+        List<int[]> network = new ArrayList<>();
+        for (TransitNetwork.Station s : TransitNetwork.get().stations(world, e.kind)) {
+            network.add(new int[]{s.origin.x, s.origin.z});
+        }
+        return otherSites(GeneratedStations.get().entries(world), e, network);
+    }
+
+    /** Same as {@link #otherSites(String, GeneratedStations.Entry)} over the given entries and the positions {x, z} of the network stations of the entry's kind. */
+    static List<int[]> otherSites(List<GeneratedStations.Entry> entries, GeneratedStations.Entry e, List<int[]> network) {
         GeneratedStations reg = GeneratedStations.get();
         List<int[]> out = new ArrayList<>();
-        for (GeneratedStations.Entry o : reg.entries(world)) {
-            if (o == e || !Deployables.BOAT_STATION_KIND.equals(o.kind) || (!e.partner && o.partner)) {
+        for (GeneratedStations.Entry o : entries) {
+            if (o == e || !o.kind.equals(e.kind) || (!e.partner && o.partner)) {
                 continue;
             }
             if (o.state == GeneratedStations.State.PLANNED || o.state == GeneratedStations.State.BUILT) {
@@ -740,10 +1027,8 @@ final class GenerationListener {
                 out.add(new int[]{s.x(), s.z()});
             }
         }
-        if (e.partner) {
-            for (TransitNetwork.Station s : TransitNetwork.get().stations(world, Deployables.BOAT_STATION_KIND)) {
-                out.add(new int[]{s.origin.x, s.origin.z});
-            }
+        if (e.partner || !Deployables.BOAT_STATION_KIND.equals(e.kind)) {
+            out.addAll(network);
         }
         return out;
     }
@@ -773,18 +1058,19 @@ final class GenerationListener {
                     var ref = store.getChunkReference(ChunkUtil.indexChunk((int) c[0], (int) c[1]));
                     return ref != null && ref.isValid() && !isNew.test(c);
                 };
-                switch (decide(footprintChunks(e.kind, site.x(), site.z(), site.rotation()), isNew, loadedOld)) {
+                switch (decide(footprintChunks(e.kind, site.x(), site.z(), site.rotation()), isNew, loadedOld, TransitSettings.worldgenOldTerrain())) {
                     case BUILD -> {
                         REQUESTED.add(e);
                         StationBuilder.build(world, e);
                     }
                     case ABANDON -> {
+                        e.oldTerrainSeen = true;
                         if (moveOffOldTerrain(GeneratedStations.get(), e, world.getName())) {
                             LOGGER.at(Level.INFO).log("%s : terrain ancien en (%d, %d), site suivant %d/%d", logName(e.kind), site.x(), site.z(),
                                     e.active + 1, e.sites.size());
                             decideAgain(world, e);
                         } else {
-                            abandon(e, "terrain ancien dans l'emprise");
+                            abandon(e, "terrain ancien dans l'emprise", GeneratedStations.Reason.OLD_TERRAIN);
                         }
                     }
                     case WAIT -> {

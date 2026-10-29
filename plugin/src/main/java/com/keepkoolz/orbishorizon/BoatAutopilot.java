@@ -15,13 +15,14 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * Pilotless sailing of the maritime shuttle (AirshipFlight.shuttle) along the waypoints of its water route. The waypoints are
+ * Pilotless sailing of the maritime shuttle (AirshipFlight.shuttle) along waypoints: the paths of the local pilot on a sea corridor
+ * (ShuttleNav), or a stored water route for the approach shuttle. The waypoints are
  * followed by the ship's rotation centre (AirshipManager.centerWorld), which a turn keeps fixed, not by its pivot. Called by
  * AirshipManager.tickOne on every tick of a shuttle flight. SAIL: turn on the spot toward the next waypoint (yaw controller of the
  * player-piloted ship, AirshipAutopilot.yawStep), then sail straight to it at the height locked on the waterline, next waypoint
  * once within 3 blocks. ARRIVE (last waypoint = berth centre): stop with the centre exactly on the berth centre, turn around it to
- * the berth heading (the pivot then lands on the berth pivot), then DOCKED and {@link ShuttleState.Listener#onArrived}. Blocked hull (no progress for 5 s): a one-off route from the
- * current position is asked to BoatRoutes; no route, or still no progress for 30 s: {@link ShuttleState.Listener#onRescue}. LEAVE:
+ * the berth heading (the pivot then lands on the berth pivot), then DOCKED and {@link ShuttleState.Listener#onArrived}. Blocked hull (no progress for 5 s): the local pilot searches again
+ * from the current position; no path, or still no progress for 30 s: {@link ShuttleState.Listener#onRescue}. LEAVE:
  * sailed like SAIL, {@link ShuttleState.Listener#onRouteEnd} at the last waypoint or after 5 s without progress. The other phases
  * (HOLD, DROP, APPROACH, DOCKED) are held still. Nothing is ever burnt: the wheels, the thrust models and the engine sound follow the movement.
  */
@@ -42,9 +43,9 @@ final class BoatAutopilot {
     private static final double NO_REAIM_RANGE = 1.5;
     private static final long WINDOW_MS = 250;
     private static final double PROGRESS_MOVE = 0.2;
-    /** No progress this long: a one-off route is asked from the current position. */
+    /** No progress this long: the local pilot searches again from the current position. */
     static final long REROUTE_AFTER_MS = 5_000L;
-    /** One-off routes asked per stuck episode, at most. */
+    /** Searches asked per stuck episode, at most. */
     static final int MAX_REROUTES = 2;
     /** The sideways slide at a berth goes at this share of the sailing speed. */
     static final double SLIDE_SPEED_FACTOR = 0.5;
@@ -67,12 +68,53 @@ final class BoatAutopilot {
     static final int TRIES_PER_SCAN = 2;
     /** An obstacle nearer than this along the leg: the shuttle holds still while a detour is searched. */
     static final double IMMINENT = 10.0;
+    /** Longest back-off astern (blocks), most back-offs per turn, and how often a wedged hull is judged again. */
+    static final int BACK_MAX = 3;
+    static final int MAX_BACKOFFS = 2;
+    /** Back-offs per trip at most. */
+    static final int BACK_TRIP_MAX = 6;
+    /** No new back-off within this distance (blocks) of the previous one unless the remaining route shrank by BACK_PROGRESS. */
+    static final double BACK_GUARD_RANGE = 8.0;
+    static final double BACK_PROGRESS = 4.0;
+    static final long BACK_CHECK_MS = 500L;
+    /** A back-off step is refused this many ticks in a row: the back-off ends and the watchdog takes over. */
+    static final int BACK_REFUSALS = 4;
+    /** A back-off step may be this many plain steps long when the plain one is refused. */
+    static final int HOP_MAX = 4;
+    /** An intermediate waypoint whose turn is blocked is judged again after this long. */
+    static final long CAPTURE_RECHECK_MS = 100L;
     static final long RESCUE_AFTER_MS = TransitConstants.RESCUE_NO_PROGRESS_SECONDS * 1000L;
 
     private BoatAutopilot() {
     }
 
     // ------------------------------------------------------------------ pure helpers (tested in TransitTests)
+
+    /** The watchdog sleeps only on a tick where the shuttle is held still for unloaded sections: that wait has its own bound. */
+    static boolean watchdogSuspended(boolean heldForData) {
+        return heldForData;
+    }
+
+    /** True when the local pilot is frozen: the shuttle is within ARRIVAL_DECIDE_RANGE of the arrival berth centre (blocks). */
+    static boolean localNavFrozen(double distToBerth) {
+        return distToBerth <= ARRIVAL_DECIDE_RANGE;
+    }
+
+    /**
+     * Starts the navigation of a shuttle toward a station: a corridor on the sea chart and the local pilot that follows it, which give the
+     * waypoints from now on. Used at the departure and when the destination changes in flight. World thread. Never throws.
+     */
+    static void startNavigation(World world, AirshipFlight f, TransitNetwork.Station to) {
+        ShuttleNav.start(world, f, to);
+    }
+
+    /**
+     * Starts the navigation of the empty approach shuttle toward its own station: same corridor and local pilot, but no trip is
+     * recorded in the sea chart book (an approach is not a pair of stations). World thread. Never throws.
+     */
+    static void startApproach(World world, AirshipFlight f, TransitNetwork.Station to) {
+        ShuttleNav.start(world, f, to, false);
+    }
 
     /** Heading (radians) that points the bow at the centre of a waypoint column {x, z} (bow = (-sin theta, -cos theta)). */
     static double targetHeading(double px, double pz, int[] wp) {
@@ -120,6 +162,104 @@ final class BoatAutopilot {
             }
         }
         return false;
+    }
+
+    /**
+     * Whether the ship at (cx, cz) with this heading takes the waypoint wp (x, z column; next is the one after it, null for the last)
+     * and turns toward the next one now. Within BERTH_RADIUS of the node centre: always. Farther, within WAYPOINT_RADIUS: only when
+     * the turn on the spot toward the next waypoint is clear here. Else it sails on to the node centre, where the look-ahead and the
+     * search judged that turn (the hull sweeps a circle of about 7 blocks, so a turn 3 blocks short of the node is another turn).
+     */
+    static boolean captureHere(PoseTest t, double cx, double cz, double theta, int[] wp, int[] next) {
+        if (!reached(cx, cz, wp, WAYPOINT_RADIUS)) {
+            return false;
+        }
+        if (next == null || reached(cx, cz, wp, BERTH_RADIUS)) {
+            return true;
+        }
+        return !turnBlocked(t, cx, cz, theta, targetHeading(cx, cz, next));
+    }
+
+    /**
+     * Whether the sideways arrival may turn at the pre-berth point: the turn on the spot from the approach heading to the berth heading
+     * is clear all along (sampled), not only the berth pose at its end.
+     */
+    static boolean sideArrivalClear(PoseTest t, double px, double pz, double approach, double berthTheta) {
+        return !turnBlocked(t, px, pz, approach, berthTheta);
+    }
+
+    /** Consecutive refused yaw steps, with the heading moved less than WEDGE_EPS over them, that make a wedge. */
+    static final int WEDGE_STEPS = 4;
+    static final double WEDGE_EPS = Math.toRadians(0.5);
+
+    /**
+     * A refused yaw step can still turn the hull around the unmoved pivot (AirshipManager.move), so one refusal is not a wedge: it takes
+     * WEDGE_STEPS refused steps in a row over which the heading did not move.
+     */
+    static boolean wedgedFor(int refusedSteps, double headingChange) {
+        return refusedSteps >= WEDGE_STEPS && headingChange < WEDGE_EPS;
+    }
+
+    /**
+     * The hull is wedged: the turn toward the target heading touches something from this pose. The ship never moves ahead while it
+     * turns, so a free bow does not free it.
+     */
+    static boolean wedged(PoseTest t, double cx, double cz, double theta, double target) {
+        return turnBlocked(t, cx, cz, theta, target);
+    }
+
+    /**
+     * Whether a new back-off may start: fewer than BACK_TRIP_MAX done on this trip, and, within BACK_GUARD_RANGE of the previous
+     * back-off point, only when the remaining route is BACK_PROGRESS shorter than it was then (the ship went on toward its goal).
+     */
+    static boolean backOffAllowed(int done, double cx, double cz, boolean hasLast, double lastX, double lastZ, double lastRemaining,
+                                  double remaining) {
+        if (done >= BACK_TRIP_MAX) {
+            return false;
+        }
+        if (!hasLast || Math.hypot(cx - lastX, cz - lastZ) > BACK_GUARD_RANGE) {
+            return true;
+        }
+        return remaining <= lastRemaining - BACK_PROGRESS;
+    }
+
+    /**
+     * Smallest distance (blocks, 1 to BACK_MAX) to back off astern at this fixed heading after which the turn toward the target heading
+     * is no longer blocked, with every whole block of the way astern free. -1 when there is none. Poses closer than one block are not
+     * judged: a step of the slide that is refused there is jumped over by {@link #hop}.
+     */
+    static double backOff(PoseTest t, double cx, double cz, double theta, double target) {
+        double sx = Math.sin(theta); // astern = -bow = (sin theta, cos theta)
+        double sz = Math.cos(theta);
+        for (int k = 1; k <= BACK_MAX; k++) {
+            if (t.blocked(cx + sx * k, cz + sz * k, theta)) {
+                return -1; // the hull cannot go back this far: farther is no better
+            }
+            double x = cx + sx * k;
+            double z = cz + sz * k;
+            if (!turnBlocked(t, x, z, theta, target)) {
+                return k;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Distance to move this tick along the back-off: the plain step, or the first of a few multiples of it (up to HOP_MAX steps, never
+     * beyond what is left) at which the hull is free. Steps the move itself refuses would stall the slide on a one-cell pocket of the
+     * hull sampling.
+     */
+    static double hop(PoseTest t, double cx, double cz, double ux, double uz, double theta, double move, double left) {
+        for (int m = 1; m <= HOP_MAX; m++) {
+            double d = Math.min(move * m, left);
+            if (!t.blocked(cx + ux * d, cz + uz * d, theta)) {
+                return d;
+            }
+            if (d >= left) {
+                break;
+            }
+        }
+        return Math.min(move, left);
     }
 
     /**
@@ -261,7 +401,6 @@ final class BoatAutopilot {
                 st.windowTheta = f.theta;
                 markProgress(f, st, now);
             }
-            takeReroute(store, f, st, now);
             if ((st.from != null || st.to != null) && now >= st.lookRetryMs && (f.crewMan == null || f.crewMan.ref == null || !f.crewMan.ref.isValid())) {
                 st.lookRetryMs = now + LOOK_RETRY_MS; // the shuttle has no (valid) pilot mannequin: try again
                 if (f.crewMan != null) {
@@ -274,9 +413,14 @@ final class BoatAutopilot {
             if (f.finishing) {
                 return;
             }
+            st.heldForData = false; // set again by the navigation on a tick it holds the shuttle for data
+            boolean held = st.nav != null && ShuttleNav.tick(store, world, am, f, st, now); // no path yet, sections loading
+            if (f.finishing) {
+                return;
+            }
             boolean sailing = st.phase == ShuttleState.Phase.SAIL || st.phase == ShuttleState.Phase.ARRIVE
                     || st.phase == ShuttleState.Phase.LEAVE;
-            if (sailing) {
+            if (sailing && !held) {
                 sail(store, world, am, hull, f, st, d, now);
             } else {
                 f.yawRate = 0; // the other phases are driven by the boat station logic: the shuttle holds still
@@ -290,7 +434,9 @@ final class BoatAutopilot {
             ShuttleState.Phase after = st.phase; // the arrival callback may have moved it on (DROP): no watchdog then
             if (sailing && (after == ShuttleState.Phase.SAIL || after == ShuttleState.Phase.ARRIVE
                     || after == ShuttleState.Phase.LEAVE)) {
-                watchdog(store, world, f, st, now);
+                if (!watchdogSuspended(st.heldForData)) {
+                    watchdog(store, world, f, st, now);
+                }
             }
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Navette : erreur dans le tick de %s", f.id);
@@ -325,7 +471,22 @@ final class BoatAutopilot {
             wps = st.waypoints;
         }
         int last = wps.size() - 1;
+        PoseTest capture = null;
         while (st.index < last && reached(c.x, c.z, wps.get(st.index), WAYPOINT_RADIUS)) {
+            // Taken early (within the radius) only where the turn toward the next waypoint is clear: else the ship sails on to the node,
+            // where the look-ahead and the search judged that turn.
+            if (!reached(c.x, c.z, wps.get(st.index), BERTH_RADIUS)) {
+                if (now < st.captureHoldMs) {
+                    break;
+                }
+                if (capture == null) {
+                    capture = poseTest(world, am, hull, f);
+                }
+                if (!captureHere(capture, c.x, c.z, f.theta, wps.get(st.index), wps.get(st.index + 1))) {
+                    st.captureHoldMs = now + CAPTURE_RECHECK_MS;
+                    break;
+                }
+            }
             if (!st.detourKeys.contains(WaterRoute.columnKey(wps.get(st.index)[0], wps.get(st.index)[1]))) {
                 st.shifts = 0; // a detour point does not give the next obstacle a fresh budget
             }
@@ -333,7 +494,13 @@ final class BoatAutopilot {
             st.shiftTry = 0;
             st.turning = true; // aim at the next waypoint before sailing on
         }
-        if (st.index >= last && st.phase == ShuttleState.Phase.SAIL) {
+        boolean openEnded = st.nav != null && !st.navFinal; // a local path: its end is not the berth
+        if (openEnded && st.index >= last && reached(c.x, c.z, wps.get(last), WAYPOINT_RADIUS)) {
+            f.yawRate = 0; // the end of the path: hold still until the local pilot gives the next one
+            f.yawAcc = 0;
+            return;
+        }
+        if (st.index >= last && st.phase == ShuttleState.Phase.SAIL && !openEnded) {
             st.setPhase(ShuttleState.Phase.ARRIVE, now);
         }
         if (st.phase == ShuttleState.Phase.LEAVE && st.index >= last && reached(c.x, c.z, wps.get(last), WAYPOINT_RADIUS)) {
@@ -354,10 +521,27 @@ final class BoatAutopilot {
         if (st.turning) {
             if (Math.abs(err) < Math.toRadians(TURN_DONE_DEG) || dist < NO_REAIM_RANGE) {
                 st.turning = false;
+                st.backOffs = 0;
+                st.refusedSteps = 0;
                 f.yawRate = 0;
                 f.yawAcc = 0;
             } else {
-                AirshipAutopilot.yawStep(world, am, hull, f, err, dt, now);
+                double before = f.theta;
+                if (AirshipAutopilot.yawStep(world, am, hull, f, err, dt, now)) {
+                    if (st.refusedSteps == 0) {
+                        st.refusedTheta = before;
+                    }
+                    st.refusedSteps++;
+                    if (headingChange(st.refusedTheta, f.theta) >= WEDGE_EPS) {
+                        st.refusedSteps = 1; // the heading moves: an ordinary turn, counted again from here
+                        st.refusedTheta = f.theta;
+                    }
+                    if (wedgedFor(st.refusedSteps, headingChange(st.refusedTheta, f.theta))) {
+                        backOffIfWedged(world, am, hull, f, st, wp, now);
+                    }
+                } else {
+                    st.refusedSteps = 0;
+                }
                 return;
             }
         } else if (dist >= NO_REAIM_RANGE && Math.abs(err) > Math.toRadians(REAIM_DEG)) {
@@ -375,11 +559,71 @@ final class BoatAutopilot {
             int[] b = wps.get(i + 1);
             remaining += Math.hypot(b[0] - a[0], b[1] - a[1]);
         }
+        if (openEnded) {
+            remaining += SLOW_RANGE; // the end of a local path is not a stop: no slowing down there
+        }
         double speed = sailSpeed(remaining, BalloonManager.defaultHorizontalSpeed(world, store));
         double move = Math.min(speed * dt, dist);
         double y = Double.isNaN(f.lockedY) ? f.pos.y : f.lockedY; // never climb: the hull stays on the waterline
         Vector3d next = am.pivotFromCenter(f.kind, new Vector3d(c.x + dx / dist * move, y, c.z + dz / dist * move), f.theta);
         am.move(world, f, hull, next, f.theta, now);
+    }
+
+    /** Pose test of the live world for the hull of this flight (rotation centre at the pose, the height locked on the waterline). */
+    private static PoseTest poseTest(World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f) {
+        double y = Double.isNaN(f.lockedY) ? f.pos.y : f.lockedY;
+        int allowed = f.blockedNow;
+        return (x, z, th) -> {
+            Vector3d pv = am.pivotFromCenter(f.kind, new Vector3d(x, y, z), th);
+            return AirshipManager.blocked(world, hull, pv.x, pv.y, pv.z, th, allowed) > allowed;
+        };
+    }
+
+    /**
+     * A turn on the spot toward the waypoint was refused: when the hull is wedged (the turn is blocked from this pose and so is the way
+     * ahead) and a few blocks astern clear the turn, the ship backs off at its fixed heading (slide BACK), then turns. Judged at most
+     * every BACK_CHECK_MS, twice per turn. Nothing found: the old course (a new search, then the rescue). Never throws.
+     */
+    private static void backOffIfWedged(World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f, ShuttleState st, int[] wp,
+                                        long now) {
+        try {
+            if (st.backOffs >= MAX_BACKOFFS || st.tripBackOffs >= BACK_TRIP_MAX || now < st.backCheckMs) {
+                return;
+            }
+            st.backCheckMs = now + BACK_CHECK_MS;
+            Vector3d c = am.centerWorld(f.kind, f.pos, f.theta);
+            double remaining = BoatQuay.remaining(st.waypoints, st.index, c.x, c.z);
+            if (!backOffAllowed(st.tripBackOffs, c.x, c.z, st.hasLastBack, st.lastBackX, st.lastBackZ, st.lastBackRemaining, remaining)) {
+                return; // too close to the previous back-off with no progress since: the old course (search, then rescue)
+            }
+            PoseTest test = poseTest(world, am, hull, f);
+            double target = targetHeading(c.x, c.z, wp);
+            if (!wedged(test, c.x, c.z, f.theta, target)) {
+                return;
+            }
+            double k = backOff(test, c.x, c.z, f.theta, target);
+            if (k < 0) {
+                LOGGER.at(Level.INFO).log("Navette %s : coque coincée en (%.1f, %.1f), aucun recul possible", f.id, c.x, c.z);
+                return;
+            }
+            st.backX = c.x + Math.sin(f.theta) * k;
+            st.backZ = c.z + Math.cos(f.theta) * k;
+            st.backOffs++;
+            st.tripBackOffs++;
+            st.hasLastBack = true;
+            st.lastBackX = c.x;
+            st.lastBackZ = c.z;
+            st.lastBackRemaining = remaining;
+            st.backRefused = 0;
+            st.refusedSteps = 0;
+            st.slide = ShuttleState.Slide.BACK;
+            f.yawRate = 0;
+            f.yawAcc = 0;
+            LOGGER.at(Level.INFO).log("Navette %s : coque coincée en (%.1f, %.1f), recul de %.0f bloc(s) avant de tourner", f.id, c.x, c.z, k);
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Navette %s : recul d'une coque coincée en échec", f.id);
+            Telemetry.error("transit", e, Telemetry.kindId(f.kind), st.phase.name());
+        }
     }
 
     /**
@@ -401,12 +645,7 @@ final class BoatAutopilot {
             st.holdUntilMs = 0;
             List<int[]> wps = st.waypoints;
             int last = wps.size() - 1;
-            double y = Double.isNaN(f.lockedY) ? f.pos.y : f.lockedY;
-            int allowed = f.blockedNow;
-            PoseTest test = (x, z, th) -> {
-                Vector3d pv = am.pivotFromCenter(f.kind, new Vector3d(x, y, z), th);
-                return AirshipManager.blocked(world, hull, pv.x, pv.y, pv.z, th, allowed) > allowed;
-            };
+            PoseTest test = poseTest(world, am, hull, f);
             int[] wp = wps.get(Math.min(st.index, last));
             double[] hit = blockedAhead(test, c.x, c.z, wp, st.index < last ? wps.get(st.index + 1) : null);
             if (hit == null) {
@@ -452,7 +691,7 @@ final class BoatAutopilot {
         }
     }
 
-    /** No detour is free: asks a one-off route that avoids the blocking cell, before any contact. */
+    /** No detour is free: asks a new search that avoids the blocking cell, before any contact. */
     private static boolean earlyReroute(World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f, ShuttleState st,
                                      double[] hit) {
         if (st.reroutes >= MAX_REROUTES || (st.to == null && st.router == null)) {
@@ -484,6 +723,9 @@ final class BoatAutopilot {
         List<int[]> wps = st.waypoints;
         st.preparedFor = wps;
         st.slide = ShuttleState.Slide.NONE; // a new list starts a new manoeuvre
+        st.backOffs = 0; // per turn: the per-trip count (tripBackOffs) goes on across lists
+        st.backCheckMs = 0;
+        st.captureHoldMs = 0;
         st.slideIn = false;
         st.fullRoute = null;
         st.berthFlip = null; // a new list is a new arrival: the berth heading is chosen again
@@ -493,11 +735,11 @@ final class BoatAutopilot {
         ShuttleState.Phase ph = st.phase;
         TransitNetwork.Station dep = ph == ShuttleState.Phase.LEAVE ? st.to : st.from;
         if (st.index == 0 && dep != null && (ph == ShuttleState.Phase.SAIL || ph == ShuttleState.Phase.LEAVE)) {
-            Vector3d b = BoatRoutes.berthCentre(dep);
+            Vector3d b = BoatBerth.berthCentre(dep);
             if (Math.hypot(c.x - b.x, c.z - b.z) < 1.0) {
-                Vector3i pre = BoatRoutes.preBerthCell(dep);
+                Vector3i pre = BoatBerth.preBerthCell(dep);
                 if (openWater(world, am, hull, f, pre)) {
-                    List<int[]> out = BoatRoutes.departRoute(wps, BoatRoutes.berthCentreCell(dep), pre, BoatRoutes.BERTH_STANDOFF);
+                    List<int[]> out = BoatBerth.departRoute(wps, BoatBerth.berthCentreCell(dep), pre, BoatBerth.BERTH_STANDOFF);
                     if (out.size() < 2) {
                         return; // nothing to sail beyond the pre-berth point: no manoeuvre
                     }
@@ -523,11 +765,15 @@ final class BoatAutopilot {
         List<int[]> wps = st.waypoints;
         TransitNetwork.Station arr = st.to;
         ShuttleState.Phase ph = st.phase;
+        if (st.nav != null && !st.navFinal) {
+            st.arrivalFor = wps; // a local path: only the list completed to the berth centre gets the arrival decision
+            return;
+        }
         if (wps.isEmpty() || arr == null || st.sidewaysAbandoned || (ph != ShuttleState.Phase.SAIL && ph != ShuttleState.Phase.ARRIVE)) {
             st.arrivalFor = wps;
             return;
         }
-        Vector3i berth = BoatRoutes.berthCentreCell(arr);
+        Vector3i berth = BoatBerth.berthCentreCell(arr);
         int[] end = wps.get(wps.size() - 1);
         if (end[0] != berth.x || end[1] != berth.z) {
             st.arrivalFor = wps;
@@ -538,7 +784,7 @@ final class BoatAutopilot {
         if (BoatQuay.remaining(wps, st.index, c.x, c.z) > ARRIVAL_DECIDE_RANGE) {
             return; // too far: decided later, once the destination is near (and loaded)
         }
-        Vector3i pre = BoatRoutes.preBerthCell(arr);
+        Vector3i pre = BoatBerth.preBerthCell(arr);
         int minX = Math.min(berth.x, pre.x) - 20;
         int maxX = Math.max(berth.x, pre.x) + 20;
         int minZ = Math.min(berth.z, pre.z) - 20;
@@ -554,23 +800,24 @@ final class BoatAutopilot {
         }
         st.arrivalFor = wps;
         double dBerth = Math.hypot(c.x - (berth.x + 0.5), c.z - (berth.z + 0.5));
-        if (dBerth < BoatRoutes.BERTH_STANDOFF) {
+        if (dBerth < BoatBerth.BERTH_STANDOFF) {
             LOGGER.at(Level.INFO).log("Navette %s : déjà à moins de %d blocs du pont de %s, arrivée sans manœuvre par le travers", f.id,
-                    BoatRoutes.BERTH_STANDOFF, arr.name);
+                    BoatBerth.BERTH_STANDOFF, arr.name);
         } else {
-            List<int[]> out = BoatRoutes.arriveRoute(wps, berth, pre, BoatRoutes.BERTH_STANDOFF);
+            List<int[]> out = BoatBerth.arriveRoute(wps, berth, pre, BoatBerth.BERTH_STANDOFF);
             // The shuttle will reach the pre-berth point heading along its last leg: that heading picks the berth heading.
             double approach = f.theta;
             if (out.size() >= 2) {
                 int[] before = out.get(out.size() - 2);
                 approach = targetHeading(before[0] + 0.5, before[1] + 0.5, out.get(out.size() - 1));
             }
+            PoseTest test = poseTest(world, am, hull, f);
             boolean flip = chooseBerth(world, st, arr, approach);
-            boolean open = openWater(world, am, hull, f, pre, BoatRoutes.berthTheta(arr, flip));
+            boolean open = sideArrivalOpen(world, am, hull, f, pre, BoatBerth.berthTheta(arr, flip), approach, test);
             if (!open && flip) {
                 st.berthFlip = false; // the opposite heading does not have the room at the pre-berth point: the usual one
                 flip = false;
-                open = openWater(world, am, hull, f, pre, BoatRoutes.berthTheta(arr, false));
+                open = sideArrivalOpen(world, am, hull, f, pre, BoatBerth.berthTheta(arr, false), approach, test);
             }
             if (open) {
                 st.fullRoute = wps;
@@ -598,7 +845,7 @@ final class BoatAutopilot {
         if (decided != null) {
             return decided;
         }
-        boolean flip = BoatRoutes.preferFlipped(theta, BoatRoutes.berthTheta(arr)) && berthFits(world, arr, true);
+        boolean flip = BoatBerth.preferFlipped(theta, BoatBerth.berthTheta(arr)) && berthFits(world, arr, true);
         st.berthFlip = flip;
         if (flip) {
             LOGGER.at(Level.INFO).log("Navette vers %s : amarrage dans le sens d'arrivée (cap opposé au cap habituel)", arr.name);
@@ -609,8 +856,8 @@ final class BoatAutopilot {
     /** True when the shuttle hull at the berth of this station with this heading is on clear water (the placement test). Never throws. */
     static boolean berthFits(World world, TransitNetwork.Station s, boolean flipped) {
         try {
-            DeployPlacement.Fault fault = DeployPlacement.steamboatFault(Deployables.STEAMBOAT_PUBLIC.shape(), BoatRoutes.berthOrigin(s),
-                    BoatRoutes.berthRotation(s, flipped), DeployPlacement.worldState(world), 0);
+            DeployPlacement.Fault fault = DeployPlacement.steamboatFault(Deployables.STEAMBOAT_PUBLIC.shape(), BoatBerth.berthOrigin(s),
+                    BoatBerth.berthRotation(s, flipped), DeployPlacement.worldState(world), 0);
             if (fault != null) {
                 LOGGER.at(Level.INFO).log("Station maritime %s : amarrage dans l'autre sens impossible (%s en %s)", s.name, fault.key(),
                         fault.at());
@@ -637,12 +884,18 @@ final class BoatAutopilot {
         st.waypoints = full;
         st.preparedFor = full;
         st.arrivalFor = full; // not trimmed again
-        st.index = Math.max(0, BoatRoutes.firstDropped(full, trimmed) - st.detoursSinceTrim); // detours inserted after the trim are not in full
+        st.index = Math.max(0, BoatBerth.firstDropped(full, trimmed, st.detoursSinceTrim));
         st.detoursSinceTrim = 0;
         st.turning = true;
         markProgress(f, st, now);
         LOGGER.at(Level.INFO).log("Navette %s : dernier tronçon vers le pré-amarrage bloqué, arrivée sans manœuvre par le travers", f.id);
         return true;
+    }
+
+    /** True when the hull has the room at the pre-berth point: the berth pose is free and so is the whole turn from the approach heading. */
+    private static boolean sideArrivalOpen(World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f, Vector3i pre,
+                                           double berthTheta, double approach, PoseTest test) {
+        return openWater(world, am, hull, f, pre, berthTheta) && sideArrivalClear(test, pre.x + 0.5, pre.z + 0.5, approach, berthTheta);
     }
 
     private static boolean openWater(World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f, Vector3i preCell) {
@@ -658,22 +911,25 @@ final class BoatAutopilot {
     }
 
     /**
-     * One tick of a sideways slide, heading fixed: OUT toward the pre-berth point (then the shuttle aims at its first waypoint), IN toward
-     * the berth centre (then docked).
+     * One tick of a slide of the centre, heading fixed: OUT toward the pre-berth point (then the shuttle aims at its first waypoint), IN
+     * toward the berth centre (then docked), BACK toward the point a few blocks astern that frees a wedged turn (then it turns again).
      */
     private static void slide(Store<EntityStore> store, World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f,
                               ShuttleState st, Vector3d c, double dt, long now) {
         f.yawRate = 0;
         f.yawAcc = 0;
-        boolean out = st.slide == ShuttleState.Slide.OUT;
+        ShuttleState.Slide kind = st.slide;
         double tx;
         double tz;
-        if (out) {
+        if (kind == ShuttleState.Slide.OUT) {
             int[] pre = st.waypoints.get(0);
             tx = pre[0] + 0.5;
             tz = pre[1] + 0.5;
+        } else if (kind == ShuttleState.Slide.BACK) {
+            tx = st.backX;
+            tz = st.backZ;
         } else {
-            Vector3d b = BoatRoutes.berthCentre(st.to);
+            Vector3d b = BoatBerth.berthCentre(st.to);
             tx = b.x;
             tz = b.z;
         }
@@ -682,25 +938,37 @@ final class BoatAutopilot {
         double dist = Math.hypot(dx, dz);
         if (dist <= BERTH_RADIUS) {
             st.slide = ShuttleState.Slide.NONE;
-            if (out) {
-                st.turning = true; // aim at the first waypoint of the route
-            } else {
+            if (kind == ShuttleState.Slide.IN) {
                 st.slideIn = false;
                 dock(f, st, now);
+            } else {
+                st.turning = true; // aim at the first waypoint of the route (OUT), or turn again where the ship was wedged (BACK)
             }
             return;
         }
         double speed = slideSpeed(dist, BalloonManager.defaultHorizontalSpeed(world, store));
         double move = Math.min(speed * dt, dist);
+        if (kind == ShuttleState.Slide.BACK) {
+            move = hop(poseTest(world, am, hull, f), c.x, c.z, dx / dist, dz / dist, f.theta, move, dist);
+        }
         double y = Double.isNaN(f.lockedY) ? f.pos.y : f.lockedY;
         Vector3d next = am.pivotFromCenter(f.kind, new Vector3d(c.x + dx / dist * move, y, c.z + dz / dist * move), f.theta);
-        am.move(world, f, hull, next, f.theta, now);
+        boolean refused = am.move(world, f, hull, next, f.theta, now);
+        if (kind == ShuttleState.Slide.BACK) {
+            // Backing off counts as progress only while the hull moves: refused steps end it, the watchdog goes on from there.
+            st.backRefused = refused ? st.backRefused + 1 : 0;
+            if (st.backRefused >= BACK_REFUSALS) {
+                st.slide = ShuttleState.Slide.NONE;
+                st.turning = true;
+                LOGGER.at(Level.INFO).log("Navette %s : recul refusé par la coque, abandonné", f.id);
+            }
+        }
     }
 
     /** Centre on the berth centre (or on the pre-berth point): turn around it to the berth heading, slide in if needed, then docked. */
     private static void berth(Store<EntityStore> store, World world, AirshipManager am, AirshipManager.Hull hull, AirshipFlight f,
                               ShuttleState st, double dt, long now) {
-        double goal = st.to != null ? BoatRoutes.berthTheta(st.to, chooseBerth(world, st, st.to, f.theta)) : st.goalTheta;
+        double goal = st.to != null ? BoatBerth.berthTheta(st.to, chooseBerth(world, st, st.to, f.theta)) : st.goalTheta;
         double err = Double.isNaN(goal) ? 0 : AirshipMath.wrapPi(goal - f.theta);
         if (Math.abs(err) > 1e-4) {
             AirshipAutopilot.yawStep(world, am, hull, f, err, dt, now); // the centre stays where it is
@@ -718,6 +986,9 @@ final class BoatAutopilot {
     private static void dock(AirshipFlight f, ShuttleState st, long now) {
         f.yawRate = 0;
         f.yawAcc = 0;
+        if (st.nav != null) {
+            ShuttleNav.arrived(st); // the trip is kept, the pair is no longer incomplete
+        }
         st.setPhase(ShuttleState.Phase.DOCKED, now);
         LOGGER.at(Level.INFO).log("Navette : arrivée%s", st.to != null ? " à " + st.to.name : "");
         ShuttleState.Listener l = st.listener;
@@ -748,16 +1019,20 @@ final class BoatAutopilot {
         f.reversing = false; // the shuttle always sails bow first
     }
 
-    private static void markProgress(AirshipFlight f, ShuttleState st, long now) {
+    static void markProgress(AirshipFlight f, ShuttleState st, long now) {
         st.progressX = f.pos.x;
         st.progressZ = f.pos.z;
         st.progressTheta = f.theta;
         st.lastProgressMs = now;
     }
 
-    /** Blocked hull: a one-off route after 5 s without progress (twice at most), the rescue after 30 s. */
+    /** Blocked hull: a new search after 5 s without progress (twice at most), the rescue after 30 s. */
     private static void watchdog(Store<EntityStore> store, World world, AirshipFlight f, ShuttleState st, long now) {
         double moved = Math.abs(f.pos.x - st.progressX) + Math.abs(f.pos.z - st.progressZ);
+        if (st.slide == ShuttleState.Slide.BACK && moved > PROGRESS_MOVE) {
+            markProgress(f, st, now); // the back-off keeps the watchdog quiet while the hull moves, and never gives the reroutes back
+            return;
+        }
         if (moved > PROGRESS_MOVE || headingChange(st.progressTheta, f.theta) > Math.toRadians(1)) {
             markProgress(f, st, now);
             st.reroutes = 0;
@@ -783,16 +1058,12 @@ final class BoatAutopilot {
         }
     }
 
-    /**
-     * Asks for a one-off route from the shuttle's position to the berth of this station and makes it the shuttle's destination: the
-     * answer is applied by the next step (new waypoints, or the rescue when there is none). A request in flight is superseded.
-     */
-    static void rerouteTo(World world, AirshipFlight f, ShuttleState st, TransitNetwork.Station target) {
-        rerouteTo(world, f, st, target, false);
-    }
-
-    /** One-off route for this state: its router (voyage to a plain point), else toward the station it sails to. */
+    /** New path for this state: the local pilot searches again, its router (voyage to a plain point) or a new corridor to the station it sails to. */
     static void reroute(World world, AirshipFlight f, ShuttleState st, boolean stuck) {
+        if (st.nav != null) {
+            ShuttleNav.requestSearch(f, st, stuck); // a shuttle on the sea corridor: the local pilot searches again
+            return;
+        }
         if (st.router == null && st.to == null) {
             LOGGER.at(Level.INFO).log("Navette %s : nouvelle route impossible, ni station ni routeur", f.id);
             return;
@@ -801,70 +1072,34 @@ final class BoatAutopilot {
         if (r != null) {
             r.reroute(world, f, st, stuck);
         } else {
-            rerouteTo(world, f, st, st.to, stuck);
+            int[] hitCell = st.lastHit;
+            if (stuck && hitCell != null) {
+                st.avoid.add(WaterRoute.columnKey(hitCell[0], hitCell[2]));
+            }
+            st.rerouting = true;
+            startNavigation(world, f, st.to);
         }
     }
 
-    /** Same; stuck is true when the hull is blocked: the route then starts free of the clearance taper and avoids the cell that hit. */
-    static void rerouteTo(World world, AirshipFlight f, ShuttleState st, TransitNetwork.Station target, boolean stuck) {
-        int[] hitCell = st.lastHit;
-        if (stuck && hitCell != null) {
-            st.avoid.add(WaterRoute.columnKey(hitCell[0], hitCell[2]));
-        }
-        st.to = target;
-        st.rerouting = true;
-        int token = ++st.rerouteToken;
-        LOGGER.at(Level.INFO).log("Navette %s en (%.1f, %.1f) : nouvelle route vers %s demandée", f.id, f.pos.x, f.pos.z, target.name);
-        Vector3d c = AirshipManager.get().centerWorld(f.kind, f.pos, f.theta);
-        AirshipManager am = AirshipManager.get();
-        BoatRoutes.requestReroute(world, c.x, c.z, target, () -> am.isActive(f) && f.sailState() == st && !st.rescued
-                && token == st.rerouteToken, pts -> {
-            if (token == st.rerouteToken) {
-                st.rerouteResult = pts != null && !pts.isEmpty() ? pts : ShuttleState.EMPTY_ROUTE;
+    /**
+     * The corridor to the current destination does not exist: the next station still to try becomes the destination (a new
+     * corridor). False when none is left.
+     */
+    static boolean retarget(AirshipFlight f, ShuttleState st) {
+        while (!st.fallbacks.isEmpty()) {
+            TransitNetwork.Station next = st.fallbacks.remove(0);
+            if (TransitNetwork.get().byName(f.world.getName(), next.name) != next) {
+                continue; // removed meanwhile
             }
-        }, st.avoid, stuck);
-    }
-
-    /** Applies the answer of a one-off route: the new waypoints, or the rescue when there is none. */
-    private static void takeReroute(Store<EntityStore> store, AirshipFlight f, ShuttleState st, long now) {
-        List<int[]> r = st.rerouteResult;
-        if (r == null) {
-            return;
-        }
-        st.rerouteResult = null;
-        st.rerouting = false;
-        st.avoidHold = false;
-        st.shifts = 0;
-        st.shiftTry = 0;
-        if (st.phase == ShuttleState.Phase.DOCKED || st.phase == ShuttleState.Phase.DROP || st.phase == ShuttleState.Phase.LEAVE) {
-            return; // late answer: the shuttle reached its berth meanwhile
-        }
-        if (r == ShuttleState.EMPTY_ROUTE) {
-            LOGGER.at(Level.INFO).log("Navette %s : aucune route depuis sa position", f.id);
-            while (!st.fallbacks.isEmpty()) {
-                TransitNetwork.Station next = st.fallbacks.remove(0);
-                if (TransitNetwork.get().byName(f.world.getName(), next.name) != next) {
-                    continue; // removed meanwhile
-                }
-                ShuttleState.Listener l = st.listener;
-                if (l != null) {
-                    l.onRetarget(f, next);
-                }
-                rerouteTo(f.world, f, st, next, true);
-                return;
+            ShuttleState.Listener l = st.listener;
+            if (l != null) {
+                l.onRetarget(f, next);
             }
-            rescue(store, f, st);
-            return;
+            st.rerouting = true; // held until the first path of the new corridor
+            startNavigation(f.world, f, next);
+            return true;
         }
-        st.fallbacks.clear();
-        st.detourKeys.clear();
-        st.detoursSinceTrim = 0;
-        st.waypoints = new java.util.ArrayList<>(r);
-        st.index = 0;
-        st.turning = true;
-        st.setPhase(ShuttleState.Phase.SAIL, now);
-        markProgress(f, st, now); // the new route gets its full 30 s
-        LOGGER.at(Level.INFO).log("Navette %s : nouvelle route de %d point(s)", f.id, r.size());
+        return false;
     }
 
     /**
@@ -919,14 +1154,31 @@ final class BoatAutopilot {
     }
 
     static void rescue(Store<EntityStore> store, AirshipFlight f, ShuttleState st) {
+        end(store, f, st, false);
+    }
+
+    /**
+     * No corridor to the destination: when the shuttle did not leave its berth (departure true) the listener sets the passengers down at
+     * the departure pier, else it is the rescue. Once per flight. Never throws.
+     */
+    static void noCorridor(Store<EntityStore> store, AirshipFlight f, ShuttleState st, boolean departure) {
+        end(store, f, st, departure);
+    }
+
+    private static void end(Store<EntityStore> store, AirshipFlight f, ShuttleState st, boolean noCorridor) {
         if (st == null || st.rescued) {
             return;
         }
         st.rescued = true;
+        ShuttleNav.failed(st); // the trip is forgotten and the pair noted incomplete
         ShuttleState.Listener l = st.listener;
         try {
             if (l != null) {
-                l.onRescue(f);
+                if (noCorridor) {
+                    l.onNoCorridor(f);
+                } else {
+                    l.onRescue(f);
+                }
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Navette : secours en échec, retrait du vol");

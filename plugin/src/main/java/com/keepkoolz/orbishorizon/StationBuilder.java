@@ -37,6 +37,11 @@ final class StationBuilder {
     private static final int BOX_MARGIN_DOWN = SCAN_DOWN + 4;
     /** A section load that has not completed after this long counts as failed. */
     private static final int LOAD_TIMEOUT_S = 60;
+    /**
+     * Horizontal margin, in blocks, added around the box the build writes when the scan for player constructions runs. A
+     * construction closer than this to the station is refused.
+     */
+    static final int BUILT_MARGIN = 4;
     /** Block write flag: no particles. */
     private static final int SET_NO_PARTICLES = 4;
 
@@ -86,14 +91,14 @@ final class StationBuilder {
             Vector3i guess = new Vector3i(site.x(), estimatedY, site.z());
 
             int[] box = box(station, balloon, shuttle, guess, site.rotation());
-            ChunkStoreBox cb = new ChunkStoreBox(box);
+            // On terrain explored before the mod, the box is read for player constructions: the loaded box then holds the margin too.
+            boolean scan = scanWanted(GenerationListener.newChunksOf(world), e.kind, site);
+            // One read of the area per build attempt (lazy), shared by the site check and every repair try of a pier.
+            BuiltScan builtScan = new BuiltScan(world, () -> scanArea(station, balloon, shuttle, guess, site, boat));
+            ChunkStoreBox cb = new ChunkStoreBox(scan ? widen(box, BUILT_MARGIN) : box);
             if (!cb.loaded(world)) {
                 if (!mayLoad) {
-                    if (boat) {
-                        nextSiteOrAbandon(world, e, site, "sections non chargées");
-                    } else {
-                        abandon(e, "sections non chargées");
-                    }
+                    nextSiteOrAbandon(world, e, site, "sections non chargées");
                     return;
                 }
                 cb.load(world).copy().orTimeout(LOAD_TIMEOUT_S, TimeUnit.SECONDS).whenComplete((v, t) -> {
@@ -119,6 +124,16 @@ final class StationBuilder {
                 return;
             }
 
+            if (scan) {
+                BuiltBlocks.Found built = builtNear(world, builtScan, box);
+                if (built != null) {
+                    LOGGER.at(Level.INFO).log("%s : site %d/%d refusé en (%d, %d) : construction %s en (%d, %d, %d)", GenerationListener.logName(e.kind),
+                            e.active + 1, e.sites.size(), site.x(), site.z(), built.block(), built.x(), built.y(), built.z());
+                    nextSite(world, e);
+                    return;
+                }
+            }
+
             // The site the station is built at, and for a boat how it was found: first, fallback or repaired.
             WorldStationPlanner.Site at = site;
             String boatOutcome = null;
@@ -129,7 +144,7 @@ final class StationBuilder {
                 boatOutcome = e.active > 0 ? "fallback" : "first";
                 if (attempt.origin() == null) {
                     BoatAttempt refused = attempt;
-                    BoatRepair repair = repairBoat(world, e, station, shuttle, site);
+                    BoatRepair repair = repairBoat(world, e, station, shuttle, site, builtScan);
                     attempt = repair.found();
                     if (attempt != null) {
                         boatOutcome = "repaired";
@@ -146,7 +161,7 @@ final class StationBuilder {
             } else {
                 int ground = groundY(world, site.x(), site.z(), generator.getHeight(seed, site.x(), site.z()));
                 if (ground == Integer.MIN_VALUE) {
-                    abandon(e, "aucun sol sous la station");
+                    nextSiteOrAbandon(world, e, site, "aucun sol sous la station");
                     return;
                 }
                 origin = new Vector3i(site.x(), ground + 1, site.z());
@@ -154,13 +169,13 @@ final class StationBuilder {
                 TransitNetwork.Station nearAir = DeployStationInteraction.tooClose(TransitNetwork.get().stations(world.getName()), kind.id,
                         origin, TransitConstants.MIN_STATION_DISTANCE);
                 if (nearAir != null) {
-                    abandon(e, "trop près de « " + nearAir.name + " »");
+                    nextSiteOrAbandon(world, e, site, "trop près de « " + nearAir.name + " »");
                     return;
                 }
                 DeployStationInteraction.Refusal refusal = DeployStationInteraction.balloonRoomRefusal(world, station, balloon, origin,
                         site.rotation(), true);
                 if (refusal != null) {
-                    abandon(e, refusal.key() != null ? refusal.key() : "refus sans clé");
+                    nextSiteOrAbandon(world, e, site, refusal.key() != null ? refusal.key() : "refus sans clé");
                     return;
                 }
                 int cleared = GenClear.clearBox(world, Deployables.STATION.placeMin, Deployables.STATION.placeMax, origin, site.rotation());
@@ -185,7 +200,7 @@ final class StationBuilder {
                             + fault.z + ")"), e.kind, "master");
                     // The pasted structure is registered and locked: release it so that no locked ruin stays behind.
                     BalloonRegistry.remove(world, origin, at.rotation(), StationSpec.of(kind.id).structure().id);
-                    advanceBoat(world, e);
+                    nextSite(world, e);
                     return;
                 }
             }
@@ -200,6 +215,8 @@ final class StationBuilder {
             Telemetry.count(boat ? "worldgen.station.boat" : "worldgen.station.air");
             if (boat) {
                 Telemetry.count("worldgen.boat.built." + boatOutcome);
+            } else {
+                Telemetry.count("worldgen.air.built." + (e.active > 0 ? "fallback" : "first"));
             }
             LOGGER.at(Level.INFO).log("%s « %s » construite en (%d, %d, %d)", GenerationListener.logName(e.kind), name, origin.x, origin.y, origin.z);
         } catch (IOException | RuntimeException | LinkageError ex) {
@@ -236,9 +253,9 @@ final class StationBuilder {
      * blocks to fill, both null on a refusal.
      */
     private record BoatAttempt(WorldStationPlanner.Site site, Vector3i origin, String block, Vector3i at, String face,
-                               Set<Vector3i> clear, Map<Vector3i, String> fill) {
+                               Set<Vector3i> clear, Map<Vector3i, String> fill, Set<Vector3i> dredged, SteamboatWater.Neighbour water) {
         BoatAttempt(WorldStationPlanner.Site site, Vector3i origin, String block, Vector3i at, String face) {
-            this(site, origin, block, at, face, null, null);
+            this(site, origin, block, at, face, null, null, Set.of(), null);
         }
     }
 
@@ -262,6 +279,12 @@ final class StationBuilder {
             Vector3i cell = blocker != null ? blocker : computed;
             return new BoatAttempt(site, null, blockNameAt(world, cell), cell, "hors de l'eau");
         }
+        if (!SeaRules.atSeaLevel(origin)) {
+            Vector3i end = site.rotation().rotateYaw(new Vector3i(Deployables.BOAT_STATION_PIER_END[0], Deployables.BOAT_STATION_PIER_END[1],
+                    Deployables.BOAT_STATION_PIER_END[2]), new Vector3i());
+            Vector3i cell = new Vector3i(site.x() + end.x, SeaRules.SEA_LEVEL, site.z() + end.z);
+            return new BoatAttempt(site, null, blockNameAt(world, cell), cell, "eau à y " + (origin.y - 1) + ", pas au niveau de la mer");
+        }
         DeployPlacement.CellState ground = groundState(world);
         SectionReader reader = new SectionReader(world.getChunkStore());
         Set<Vector3i> clear = BoatSiteGround.clearCells(origin, site.rotation(), shuttle);
@@ -269,7 +292,27 @@ final class StationBuilder {
             BlockType t = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
             return t != null ? t.getId() : null;
         });
-        DeployStationInteraction.Refusal refusal = DeployStationInteraction.boatRoomRefusal(world, station, origin, site.rotation(), clear);
+        // Every cell of the station prefab counts as solid (hut floor, planks under it, posts): they are placed with the station.
+        Set<Vector3i> prefabCells = new java.util.HashSet<>();
+        for (StructureShape.Cell c : station.cells()) {
+            prefabCells.add(c.rotated(site.rotation()).add(origin));
+        }
+        // The shuttle floor cells that are not water are dug and filled with water. They sit under the dome, which starts at origin.y.
+        Set<Vector3i> dredged = BoatSiteGround.dredgeCells(shuttleFloor(shuttle, origin, site.rotation()),
+                p -> !BalloonManager.outOfHeight(p.y) && reader.hasStorageInMemory(p.x, p.y, p.z), ground);
+        if (BoatSiteGround.dredgeConflicts(dredged, fill.keySet(), prefabCells)) {
+            dredged = Set.of();
+        }
+        SteamboatWater.Neighbour water = null;
+        if (!dredged.isEmpty()) {
+            water = berthWater(reader, dredged, origin, site.rotation());
+            if (water == null) {
+                Vector3i cell = dredged.iterator().next();
+                return new BoatAttempt(site, null, blockNameAt(world, cell), cell, "hors de l'eau");
+            }
+        }
+        DeployStationInteraction.Refusal refusal = DeployStationInteraction.boatRoomRefusal(world, station, origin, site.rotation(), clear,
+                dredged);
         if (refusal != null) {
             Vector3i cell = refusal.at() != null ? refusal.at() : origin;
             String face = refusal.hull() == null ? "emprise de la station" : refusal.hull() ? "coque" : "hors de l'eau";
@@ -281,16 +324,58 @@ final class StationBuilder {
         if (near != null) {
             return new BoatAttempt(site, null, "station « " + near.name + " »", near.origin, "trop près");
         }
-        // Every cell of the station prefab counts as solid (hut floor, planks under it, posts): they are placed with the station.
         Set<Vector3i> solid = new java.util.HashSet<>(fill.keySet());
-        for (StructureShape.Cell c : station.cells()) {
-            solid.add(c.rotated(site.rotation()).add(origin));
-        }
+        solid.addAll(prefabCells);
         Vector3i fault = BoatSiteGround.masterFault(origin, site.rotation(), BoatSiteGround.simulated(ground, clear, solid));
         if (fault != null) {
             return new BoatAttempt(site, null, blockNameAt(world, fault), fault, "chef de station");
         }
-        return new BoatAttempt(site, origin, null, null, null, clear, fill);
+        return new BoatAttempt(site, origin, null, null, null, clear, fill, dredged, water);
+    }
+
+    /** Cells of the shuttle at its berth whose prefab y is at most 0 (the floor, held in water), in world coordinates. */
+    private static List<Vector3i> shuttleFloor(StructureShape shuttle, Vector3i origin, Rotation rotation) {
+        Vector3i berth = rotation.rotateYaw(new Vector3i(Deployables.BOAT_STATION_BERTH_ORIGIN[0], Deployables.BOAT_STATION_BERTH_ORIGIN[1],
+                Deployables.BOAT_STATION_BERTH_ORIGIN[2]), new Vector3i()).add(origin);
+        Rotation boatRotation = rotation.add(Deployables.BOAT_STATION_BERTH_ROTATION);
+        List<Vector3i> out = new ArrayList<>();
+        for (StructureShape.Cell c : shuttle.cells()) {
+            if (c.y() <= 0) {
+                out.add(c.rotated(boatRotation).add(berth));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Fluid and level to dig the berth with: a water cell next to a dredged cell (same layer, outside the dredge), a source fluid
+     * first then the highest level, else the water at the foot of the pier end column. Null when there is none.
+     */
+    private static SteamboatWater.Neighbour berthWater(SectionReader reader, Set<Vector3i> dredged, Vector3i origin, Rotation rotation) {
+        SteamboatWater.Neighbour best = null;
+        int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (Vector3i p : dredged) {
+            for (int[] d : dirs) {
+                best = better(best, reader, dredged, p.x + d[0], p.y, p.z + d[1]);
+            }
+        }
+        if (best == null) {
+            Vector3i end = rotation.rotateYaw(new Vector3i(Deployables.BOAT_STATION_PIER_END[0], Deployables.BOAT_STATION_PIER_END[1],
+                    Deployables.BOAT_STATION_PIER_END[2]), new Vector3i());
+            best = better(null, reader, dredged, origin.x + end.x, origin.y - 1, origin.z + end.z);
+        }
+        return best;
+    }
+
+    private static SteamboatWater.Neighbour better(SteamboatWater.Neighbour best, SectionReader reader, Set<Vector3i> dredged, int x, int y, int z) {
+        if (dredged.contains(new Vector3i(x, y, z)) || BalloonManager.outOfHeight(y) || !reader.hasStorageInMemory(x, y, z)
+                || !SteamboatWater.isWaterCell(reader, x, y, z)) {
+            return best;
+        }
+        int id = reader.getFluidId(x, y, z);
+        Fluid f = Fluid.getAssetMap().getAsset(id);
+        boolean source = f != null && f.getId().endsWith("Source");
+        return SteamboatWater.betterNeighbour(best, new SteamboatWater.Neighbour(id, reader.getFluidLevel(x, y, z), source));
     }
 
     /**
@@ -337,6 +422,19 @@ final class StationBuilder {
                 }
             }
         }
+        int dredged = 0;
+        for (Vector3i p : plan.dredged()) {
+            if (BalloonManager.outOfHeight(p.y) || !reader.hasStorageInMemory(p.x, p.y, p.z)) {
+                continue;
+            }
+            if (reader.getBlock(p.x, p.y, p.z) != 0) {
+                GenClear.erase(world, p.x, p.y, p.z);
+            }
+            dredged += SectionBlocks.setFluidAt(world.getChunkStore(), p.x, p.y, p.z, plan.water().fluidId(), plan.water().level()) ? 1 : 0;
+        }
+        if (dredged > 0) {
+            Telemetry.count("worldgen.boat.dredged");
+        }
         int filled = 0;
         for (Map.Entry<Vector3i, String> f : plan.fill().entrySet()) {
             Vector3i p = f.getKey();
@@ -347,7 +445,7 @@ final class StationBuilder {
             filled += SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, f.getValue(), SET_NO_PARTICLES) ? 1 : 0;
         }
         long elapsedMs = (System.nanoTime() - started) / 1_000_000;
-        LOGGER.at(Level.INFO).log("Station maritime générée : %d case(s) dégagées et %d comblées en %d ms en (%d, %d, %d)", cleared, filled, elapsedMs,
+        LOGGER.at(Level.INFO).log("Station maritime générée : %d case(s) dégagées, %d comblées et %d creusées en %d ms en (%d, %d, %d)", cleared, filled, dredged, elapsedMs,
                 origin.x, origin.y, origin.z);
     }
 
@@ -379,16 +477,138 @@ final class StationBuilder {
     private record BoatRepair(BoatAttempt found, int tries) {
     }
 
-    /** True when every chunk of the site footprint is new and the sections of its box are loaded. Loads nothing. */
+    /**
+     * True when every chunk of the site footprint is new (or the setting allows old terrain) and the sections of its box are loaded,
+     * with the margin of the scan when a chunk is old. Loads nothing.
+     */
     private static boolean siteReady(World world, NewChunks news, String kind, StructureShape station, StructureShape shuttle,
                                      WorldStationPlanner.Site c) {
+        boolean old = hasOldChunk(news, kind, c);
+        if (old && !TransitSettings.worldgenOldTerrain()) {
+            return false;
+        }
+        int[] box = repairBox(station, shuttle, c);
+        return new ChunkStoreBox(old ? widen(box, BUILT_MARGIN) : box).loaded(world);
+    }
+
+    private static int[] repairBox(StructureShape station, StructureShape shuttle, WorldStationPlanner.Site c) {
+        Vector3i guess = new Vector3i(c.x(), SeaRules.SEA_LEVEL + 1, c.z());
+        return box(station, null, shuttle, guess, c.rotation());
+    }
+
+    /** True when a chunk of the footprint of the site is not marked new. */
+    private static boolean hasOldChunk(NewChunks news, String kind, WorldStationPlanner.Site c) {
         for (long[] chunk : GenerationListener.footprintChunks(kind, c.x(), c.z(), c.rotation())) {
             if (!news.isNew((int) chunk[0], (int) chunk[1])) {
-                return false;
+                return true;
             }
         }
-        Vector3i guess = new Vector3i(c.x(), SeaRules.SEA_LEVEL + 1, c.z());
-        return new ChunkStoreBox(box(station, null, shuttle, guess, c.rotation())).loaded(world);
+        return false;
+    }
+
+    /** True when the scan for player constructions runs for this site: the setting allows old terrain and a footprint chunk is old. */
+    private static boolean scanWanted(NewChunks news, String kind, WorldStationPlanner.Site c) {
+        return TransitSettings.worldgenOldTerrain() && hasOldChunk(news, kind, c);
+    }
+
+    /**
+     * The area read once for the scan of an attempt: the widened box of the site, and for a pier the union of the boxes of every
+     * repair candidate, so that no repair try reads the world again.
+     */
+    private static int[] scanArea(StructureShape station, StructureShape balloon, StructureShape shuttle, Vector3i guess,
+                                  WorldStationPlanner.Site site, boolean boat) {
+        int[] area = box(station, balloon, shuttle, guess, site.rotation());
+        if (boat) {
+            for (WorldStationPlanner.Site c : BoatSiteRepair.candidates(site)) {
+                int[] b = repairBox(station, shuttle, c);
+                area[0] = Math.min(area[0], b[0]);
+                area[1] = Math.min(area[1], b[1]);
+                area[2] = Math.min(area[2], b[2]);
+                area[3] = Math.max(area[3], b[3]);
+                area[4] = Math.max(area[4], b[4]);
+                area[5] = Math.max(area[5], b[5]);
+            }
+        }
+        return widen(area, BUILT_MARGIN);
+    }
+
+    /** The built cells of an area, read on first use. */
+    private static final class BuiltScan {
+        private final World world;
+        private final java.util.function.Supplier<int[]> area;
+        private java.util.List<BuiltBlocks.Found> cells;
+
+        BuiltScan(World world, java.util.function.Supplier<int[]> area) {
+            this.world = world;
+            this.area = area;
+        }
+
+        BuiltBlocks.Found first(int[] box) {
+            if (cells == null) {
+                SectionReader reader = new SectionReader(world.getChunkStore());
+                cells = BuiltBlocks.collect(area.get(), (x, y, z) -> {
+                    if (BalloonManager.outOfHeight(y)) {
+                        return null;
+                    }
+                    BlockType t = SectionBlocks.typeAt(reader, x, y, z);
+                    return t == null ? null : t.getId();
+                });
+            }
+            return BuiltBlocks.firstIn(cells, box, BUILT_MARGIN);
+        }
+    }
+
+    /** The box grown by margin blocks on x and z. */
+    private static int[] widen(int[] b, int margin) {
+        return new int[] {b[0] - margin, b[1], b[2] - margin, b[3] + margin, b[4], b[5] + margin};
+    }
+
+    /**
+     * The first player construction in the box widened by BUILT_MARGIN: a built block (BuiltBlocks.isBuilt) or a structure of the
+     * registry whose box touches the widened box. Reads loaded sections only, an unloaded cell holds nothing. World thread.
+     */
+    private static BuiltBlocks.Found builtNear(World world, BuiltScan scan, int[] box) {
+        BuiltBlocks.Found block = scan.first(box);
+        if (block != null) {
+            return block;
+        }
+        int[] wide = widen(box, BUILT_MARGIN);
+        for (BalloonRegistry.Entry r : BalloonRegistry.entriesIn(world)) {
+            int[] at = structureBox(r);
+            if (at != null && BuiltBlocks.overlaps(wide, at)) {
+                return new BuiltBlocks.Found(r.kind(), r.x(), r.y(), r.z());
+            }
+        }
+        return null;
+    }
+
+    /** World box of a deployed structure (its shape bounds rotated and placed at its origin), null when its shape is unknown. */
+    private static int[] structureBox(BalloonRegistry.Entry r) {
+        StructureShape shape = BalloonRegistry.shapeOf(r);
+        if (shape == null) {
+            return null;
+        }
+        int[] b = shape.bounds();
+        if (b[0] > b[3]) {
+            return null;
+        }
+        Vector3i origin = new Vector3i(r.x(), r.y(), r.z());
+        int[] out = {origin.x, origin.y, origin.z, origin.x, origin.y, origin.z};
+        boolean first = true;
+        for (int x : new int[] {b[0], b[3]}) {
+            for (int y : new int[] {b[1], b[4]}) {
+                for (int z : new int[] {b[2], b[5]}) {
+                    Vector3i p = r.rotation().rotateYaw(new Vector3i(x, y, z), new Vector3i()).add(origin);
+                    if (first) {
+                        out = new int[] {p.x, p.y, p.z, p.x, p.y, p.z};
+                        first = false;
+                    } else {
+                        extend(out, p);
+                    }
+                }
+            }
+        }
+        return out;
     }
 
     /**
@@ -396,10 +616,20 @@ final class StationBuilder {
      * chunks are all new and whose sections are all loaded are tried, nothing is loaded and nothing is written.
      */
     private static BoatRepair repairBoat(World world, GeneratedStations.Entry e, StructureShape station, StructureShape shuttle,
-                                         WorldStationPlanner.Site site) {
+                                         WorldStationPlanner.Site site, BuiltScan builtScan) {
         NewChunks news = GenerationListener.newChunksOf(world);
         BoatAttempt[] fitting = {null};
-        BoatSiteRepair.Result result = BoatSiteRepair.search(site, c -> siteReady(world, news, e.kind, station, shuttle, c), c -> {
+        BoatSiteRepair.Result result = BoatSiteRepair.search(site, c -> {
+            boolean ready = siteReady(world, news, e.kind, station, shuttle, c);
+            if (!ready && !TransitSettings.worldgenOldTerrain() && hasOldChunk(news, e.kind, c)) {
+                e.oldTerrainSeen = true;
+            }
+            return ready;
+        }, c -> {
+            if (scanWanted(news, e.kind, c) && builtNear(world, builtScan, repairBox(station, shuttle, c)) != null) {
+                fitting[0] = null;
+                return false;
+            }
             BoatAttempt a = boatAttempt(world, station, shuttle, Deployables.BOAT_STATION, c);
             fitting[0] = a.origin() != null ? a : null;
             return fitting[0] != null;
@@ -416,23 +646,25 @@ final class StationBuilder {
         LOGGER.at(Level.INFO).log("%s : site %d/%d refusé en (%d, %d) après %d essais : %s en (%d, %d, %d), %s", GenerationListener.logName(e.kind),
                 e.active + 1, e.sites.size(), site.x(), site.z(), tries, refused.block(), refused.at().x, refused.at().y,
                 refused.at().z, refused.face());
-        advanceBoat(world, e);
+        nextSite(world, e);
     }
 
-    /** The active boat site cannot be read: logs the reason, then goes to the next site or abandons the entry. */
+    /** The active site is refused or cannot be read: logs the reason, then goes to the next site or abandons the entry. */
     private static void nextSiteOrAbandon(World world, GeneratedStations.Entry e, WorldStationPlanner.Site site, String reason) {
         LOGGER.at(Level.INFO).log("%s : site %d/%d écarté en (%d, %d) : %s", GenerationListener.logName(e.kind), e.active + 1, e.sites.size(), site.x(), site.z(),
                 reason);
-        advanceBoat(world, e);
+        nextSite(world, e);
     }
 
-    /** Moves the entry to its next boat site, decided again at once, or abandons it when the sites are used up. */
-    private static void advanceBoat(World world, GeneratedStations.Entry e) {
-        if (GenerationListener.moveToNextSite(GeneratedStations.get(), e, GenerationListener.otherBoatSites(world.getName(), e))) {
+    /** Moves the entry to its next site, decided again at once, or abandons it when the sites are used up. */
+    private static void nextSite(World world, GeneratedStations.Entry e) {
+        boolean boat = Deployables.BOAT_STATION_KIND.equals(e.kind);
+        if (GenerationListener.moveToNextSite(GeneratedStations.get(), e, GenerationListener.otherSites(world.getName(), e))) {
             GenerationListener.decideAgain(world, e);
         } else {
-            Telemetry.count("worldgen.boat.exhausted");
-            abandon(e, "aucun site de ponton ne convient");
+            Telemetry.count(boat ? "worldgen.boat.exhausted" : "worldgen.air.exhausted");
+            abandon(e, boat ? "aucun site de ponton ne convient" : "aucun site de station ne convient",
+                    GeneratedStations.exhaustedReason(e.oldTerrainSeen));
         }
     }
 
@@ -536,10 +768,14 @@ final class StationBuilder {
     }
 
     private static void abandon(GeneratedStations.Entry e, String reason) {
+        abandon(e, reason, GeneratedStations.Reason.OTHER);
+    }
+
+    private static void abandon(GeneratedStations.Entry e, String reason, GeneratedStations.Reason why) {
         try {
             WorldStationPlanner.Site site = GeneratedStations.get().activeSite(e);
             LOGGER.at(Level.INFO).log("%s abandonnée en (%d, %d) : %s", GenerationListener.logName(e.kind), site.x(), site.z(), reason);
-            GeneratedStations.get().setState(e, GeneratedStations.State.ABANDONED);
+            GeneratedStations.get().abandon(e, why);
             Telemetry.count("worldgen.station.abandoned");
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("%s : abandon non enregistré", GenerationListener.logName(e.kind));

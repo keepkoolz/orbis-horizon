@@ -26,9 +26,10 @@ import java.util.logging.Level;
  * Destination queue and quay cycle of the boat stations (maritime shuttle). One Quay per boat station, in memory only (the queue
  * itself is saved with the station in stations.json, with the balloon stations' rules: StationQueue.addTo).
  *
- * Cycle: FREE, then (queue not empty, route to the head FOUND) APPROACH while a shuttle sails in from about 40 blocks out on the
- * route; at the berth it is put down in blocks (DOCKED) and the 30 s countdown runs while players step aboard from the pier;
- * at 0 the players aboard are seated, the blocks removed and the shuttle sails to the destination (DEPARTING until it is 40 blocks
+ * Cycle: FREE, then (queue not empty, destination on the same ocean and water level) APPROACH while an empty shuttle sails in from
+ * about 40 blocks out to sea (BoatQuay.approachSpawn), steered by the corridor and local pilot like a trip, no route to wait for;
+ * at the berth it is put down in blocks (DOCKED) and the 30 s countdown runs while players step aboard from the pier;
+ * at 0 the players aboard are seated, the blocks removed and the shuttle sails to the destination at once (DEPARTING until it is 40 blocks
  * from the berth, then a 10 s gap). At the destination the arriving shuttle takes the quay (ARRIVING) or waits out at sea (HOLD,
  * spaced by rank) while it is busy; arrivals have priority over new approaches. It stops at the berth, sets its passengers down on
  * the pier, waits 5 s, then sails 40 blocks back along its route and vanishes (no blocks). The launches go through world.execute.
@@ -38,7 +39,7 @@ final class BoatQuay {
 
     enum QuayState { FREE, APPROACH, DOCKED, DEPARTING, ARRIVING }
 
-    /** Route length (blocks) between the berth and the point where an approaching shuttle appears. */
+    /** Distance (blocks) between the pre-berth point and the point where an approaching shuttle appears, out to sea. */
     static final double SPAWN_DISTANCE = 40.0;
     /** An arriving shuttle asks for the quay this far from the berth (route length); the first one waiting holds there. */
     static final double HOLD_DISTANCE = 40.0;
@@ -57,6 +58,69 @@ final class BoatQuay {
     static final int MAX_APPROACH_TRIES = 3;
     private static final long LOAD_RETRY_MS = 2_000L;
 
+    /** Whether a boat station offers a destination: YES, CHARTING while an ocean number is unknown, NO. */
+    enum Reach { YES, CHARTING, NO }
+
+    /**
+     * Whether a shuttle can sail from one station to another. An ocean number of 0 is not known yet (CHARTING). Else both stations must
+     * lie on the same ocean and the same water level at their berth. Pure.
+     */
+    static Reach reach(int oceanFrom, int oceanTo, int surfaceFrom, int surfaceTo) {
+        if (oceanFrom == 0 || oceanTo == 0) {
+            return Reach.CHARTING;
+        }
+        return oceanFrom == oceanTo && surfaceFrom == surfaceTo ? Reach.YES : Reach.NO;
+    }
+
+    enum QueueAction { WAIT, GO, DROP }
+
+    /** The head of the queue waits this long for the ocean numbers (ms), then it is dropped. */
+    static final long CHARTING_WAIT_MS = 5 * 60_000L;
+
+    /**
+     * What the quay does with the head of its queue: wait while the ocean numbers are charted (at most CHARTING_WAIT_MS since
+     * waitingSinceMs, the first wait for this head), go, or drop it. Pure.
+     */
+    static QueueAction headAction(Reach r, long waitingSinceMs, long nowMs) {
+        return switch (r) {
+            case YES -> QueueAction.GO;
+            case CHARTING -> nowMs - waitingSinceMs > CHARTING_WAIT_MS ? QueueAction.DROP : QueueAction.WAIT;
+            case NO -> QueueAction.DROP;
+        };
+    }
+
+    /**
+     * headAction with the quay's own timer, which belongs to one queue entry (headId, TransitNetwork.queueHeadId): started at the
+     * first wait of that entry, reset by any answer other than CHARTING. A later entry, even for the same destination, waits afresh.
+     */
+    private static QueueAction chartingAction(Quay q, long headId, Reach r, long now) {
+        if (r != Reach.CHARTING) {
+            q.chartingDone();
+            return headAction(r, now, now);
+        }
+        return headAction(r, q.chartingSince(headId, now), now);
+    }
+
+    /** Reach from a station to another (ocean numbers and berth water levels). */
+    static Reach reach(TransitNetwork.Station from, TransitNetwork.Station to) {
+        return reach(from.oceanId, to.oceanId, BoatBerth.surfaceY(from), BoatBerth.surfaceY(to));
+    }
+
+    /**
+     * Column (x, z) where the approaching shuttle appears: SPAWN_DISTANCE blocks beyond the pre-berth point, on the station's +z axis
+     * (the axis the pre-berth point lies on, away from the pier, toward open water). Pure on the rotation and the berth column.
+     */
+    static int[] approachSpawn(Rotation stationRotation, Vector3i berthCentreCell) {
+        Vector3i pre = BoatBerth.preBerthCell(stationRotation, berthCentreCell, BoatBerth.BERTH_STANDOFF);
+        Vector3i axis = stationRotation.rotateYaw(new Vector3i(0, 0, 1), new Vector3i());
+        int d = (int) SPAWN_DISTANCE;
+        return new int[] {pre.x + axis.x * d, pre.z + axis.z * d};
+    }
+
+    static int[] approachSpawn(TransitNetwork.Station s) {
+        return approachSpawn(s.rotation, BoatBerth.berthCentreCell(s));
+    }
+
     // ------------------------------------------------------------------ quay state machine (pure, tested in TransitTests)
 
     /** Quay of one boat station. The transitions take the time as a parameter and touch no world. */
@@ -70,7 +134,25 @@ final class BoatQuay {
         /** A launch is scheduled on the world thread. */
         volatile boolean busy;
         volatile long retryAtMs;
-        /** The moored shuttle lies the other way round (opposite of the usual berth heading), see BoatRoutes.berthRotation. */
+        /** Queue entry (TransitNetwork.queueHeadId) the charting wait counts for, and when that wait began. */
+        private boolean charting;
+        private long chartingHeadId;
+        private long chartingSinceMs;
+
+        /** Start of the charting wait of this head entry: now for another entry, else its first wait. Reset by {@link #chartingDone}. */
+        synchronized long chartingSince(long headId, long now) {
+            if (!charting || chartingHeadId != headId) {
+                charting = true;
+                chartingHeadId = headId;
+                chartingSinceMs = now;
+            }
+            return chartingSinceMs;
+        }
+
+        synchronized void chartingDone() {
+            charting = false;
+        }
+        /** The moored shuttle lies the other way round (opposite of the usual berth heading), see BoatBerth.berthRotation. */
         volatile boolean flipped;
         /** Departures that failed since the shuttle docked: the shuttle is taken away after MAX_DEPART_TRIES. */
         volatile int departFailures;
@@ -306,6 +388,8 @@ final class BoatQuay {
         boolean arriving;
         long lastWaitMsgMs;
         long dropAtMs;
+        /** Voyage: what the head of the queue paid, given back when the departure fails after the shuttle left the pier. */
+        TransitFare.Payment payment;
 
         Trip(AirshipFlight f, Role role, TransitNetwork.Station station, TransitNetwork.Station dest) {
             this.f = f;
@@ -431,29 +515,38 @@ final class BoatQuay {
         if (!q.canApproach(now, head != null)) {
             return;
         }
-        BoatRoutes.RouteState rs = BoatRoutes.state(world.getName(), s.name, head);
-        if (rs == BoatRoutes.RouteState.COMPUTING) {
-            return; // charted later: the approach waits
+        long headId = TransitNetwork.get().queueHeadId(s);
+        TransitNetwork.Station dest = TransitNetwork.get().byName(world.getName(), head);
+        QueueAction action = dest == null || !Deployables.BOAT_STATION_KIND.equals(dest.kind) ? QueueAction.DROP : chartingAction(q, headId, reach(s, dest), now);
+        if (action == QueueAction.WAIT) {
+            return; // the ocean numbers are not known yet: the head stays queued
         }
-        List<int[]> route = BoatRoutes.route(world.getName(), s.name, head);
-        if (rs != BoatRoutes.RouteState.FOUND || route.size() < 2) {
-            LOGGER.at(Level.INFO).log("Station maritime %s : aucune route vers %s, départ retiré de la file", s.name, head);
+        if (action == QueueAction.DROP) {
+            LOGGER.at(Level.INFO).log("Station maritime %s : destination %s retirée ou hors d'atteinte, départ retiré de la file", s.name, head);
             TransitFare.refund(TransitNetwork.get().queueRemoveFirst(s, head), head);
             broadcast(world, s, Texts.t("transit.boatQueue.noRoute").param("name", head));
             return;
         }
-        List<int[]> wps = reversed(leg(route, SPAWN_DISTANCE)); // from about 40 blocks out back to the berth centre
         AirshipManager am = AirshipManager.get();
-        double y = BoatRoutes.berthPivot(s).y;
-        int[] first = wps.get(0);
-        Vector3d centre = new Vector3d(first[0] + 0.5, y, first[1] + 0.5);
-        double theta = wps.size() > 1 ? BoatAutopilot.targetHeading(centre.x, centre.z, wps.get(1)) : BoatRoutes.berthTheta(s);
-        Vector3d pivot = am.pivotFromCenter(Deployables.STEAMBOAT_PUBLIC, centre, theta);
-        if (!areaLoaded(world, s, centre)) {
-            loadArea(world, s, centre);
+        double y = BoatBerth.berthPivot(s).y;
+        int[] out = approachSpawn(s);
+        Vector3d offshore = new Vector3d(out[0] + 0.5, y, out[1] + 0.5);
+        if (!areaLoaded(world, s, offshore)) {
+            loadArea(world, s, offshore);
             q.retryAtMs = now + LOAD_RETRY_MS;
             return;
         }
+        // Offshore when a way out to open water exists from there, else from the pre-berth point like the departure.
+        int[] first = out;
+        if (!BoatBerth.offshoreSpawnClear(world, s, out[0], out[1])) {
+            Vector3i pre = BoatBerth.preBerthCell(s);
+            first = new int[] {pre.x, pre.z};
+        }
+        List<int[]> wps = new ArrayList<>(List.of(first)); // the local pilot gives the real waypoints once the navigation starts
+        Vector3d centre = new Vector3d(first[0] + 0.5, y, first[1] + 0.5);
+        Vector3i berthCell = BoatBerth.berthCentreCell(s);
+        double theta = BoatAutopilot.targetHeading(centre.x, centre.z, new int[] {berthCell.x, berthCell.z});
+        Vector3d pivot = am.pivotFromCenter(Deployables.STEAMBOAT_PUBLIC, centre, theta);
         q.busy = true;
         world.execute(() -> {
             try {
@@ -470,6 +563,7 @@ final class BoatQuay {
                     return;
                 }
                 TRIPS.put(f.id, new Trip(f, Role.APPROACH, s, null));
+                BoatAutopilot.startApproach(world, f, s);
                 q.flight = f;
                 q.approach();
                 LOGGER.at(Level.INFO).log("Station maritime %s : navette d'approche pour %s", s.name, head);
@@ -490,11 +584,11 @@ final class BoatQuay {
         Rotation moored = mooredRotation(world, s);
         if (moored == null) {
             LOGGER.at(Level.INFO).log("Station maritime %s : navette à quai disparue, quai libéré", s.name);
-            MooredPilot.remove(world, BoatRoutes.berthOrigin(s));
+            MooredPilot.remove(world, BoatBerth.berthOrigin(s));
             q.cleared(now);
             return;
         }
-        q.flipped = moored == BoatRoutes.berthRotation(s, true);
+        q.flipped = moored == BoatBerth.berthRotation(s, true);
         MooredPilot.tick(store, world, s, q.flipped, now); // the pilot stands at the helm while the shuttle waits at the pier
         long leftMs = q.deadlineMs - now;
         int seconds = (int) Math.ceil(leftMs / 1000.0);
@@ -532,20 +626,25 @@ final class BoatQuay {
     /** End of the countdown, on the world thread: the moored shuttle sails to the head of the queue with the players aboard. */
     private static void depart(Store<EntityStore> store, World world, TransitNetwork.Station s, Quay q) throws IOException {
         long now = System.currentTimeMillis();
-        Vector3i origin = BoatRoutes.berthOrigin(s);
+        Vector3i origin = BoatBerth.berthOrigin(s);
         Rotation found = mooredRotation(world, s);
-        boolean flipped = found != null ? found == BoatRoutes.berthRotation(s, true) : q.flipped;
-        Rotation rotation = BoatRoutes.berthRotation(s, flipped);
-        if (!areaLoaded(world, s, BoatRoutes.berthCentre(s))) {
-            loadArea(world, s, BoatRoutes.berthCentre(s));
+        boolean flipped = found != null ? found == BoatBerth.berthRotation(s, true) : q.flipped;
+        Rotation rotation = BoatBerth.berthRotation(s, flipped);
+        if (!areaLoaded(world, s, BoatBerth.berthCentre(s))) {
+            loadArea(world, s, BoatBerth.berthCentre(s));
             q.deadlineMs = now + RETRY_MS;
             return;
         }
         String head = TransitNetwork.get().queueHead(s);
+        long headId = TransitNetwork.get().queueHeadId(s);
         TransitNetwork.Station dest = head != null ? TransitNetwork.get().byName(world.getName(), head) : null;
-        List<int[]> route = head != null ? BoatRoutes.route(world.getName(), s.name, head) : List.of();
-        if (dest == null || !Deployables.BOAT_STATION_KIND.equals(dest.kind) || route.size() < 2) {
-            // Nowhere to go (destination removed, route lost): the shuttle is taken away, nobody aboard is left in the water.
+        QueueAction action = dest == null || !Deployables.BOAT_STATION_KIND.equals(dest.kind) ? QueueAction.DROP : chartingAction(q, headId, reach(s, dest), now);
+        if (action == QueueAction.WAIT) {
+            q.deadlineMs = now + RETRY_MS; // charting still runs: the shuttle stays moored, no failure counted
+            return;
+        }
+        if (action == QueueAction.DROP) {
+            // Nowhere to go (destination removed): the shuttle is taken away, nobody aboard is left in the water.
             if (head != null) {
                 TransitFare.refund(TransitNetwork.get().queueRemoveFirst(s, head), head);
                 broadcast(world, s, Texts.t("transit.boatQueue.noRoute").param("name", head));
@@ -581,9 +680,11 @@ final class BoatQuay {
         try {
             removed = am.unmoorShuttle(world, origin, rotation);
             unmoored = true;
-            ShuttleState st = new ShuttleState(s, dest, route, ShuttleState.Phase.SAIL, now);
+            // The waypoints come from the local pilot once the navigation starts: the shuttle holds on its berth centre until then.
+            Vector3i berthCell = BoatBerth.berthCentreCell(s);
+            ShuttleState st = new ShuttleState(s, dest, List.of(new int[] {berthCell.x, berthCell.z}), ShuttleState.Phase.SAIL, now);
             st.listener = LISTENER;
-            f = am.launchShuttle(store, world, BoatRoutes.berthPivot(s, flipped), BoatRoutes.berthTheta(s, flipped), st, riders,
+            f = am.launchShuttle(store, world, BoatBerth.berthPivot(s, flipped), BoatBerth.berthTheta(s, flipped), st, riders,
                     BoatAutopilot.masterLook(store, world, s));
         } catch (IOException | RuntimeException e) {
             // The riders were prepared but no flight holds them: release them and put them down on the pier.
@@ -610,8 +711,10 @@ final class BoatQuay {
             BalloonResume.writeStranded(r.p.uuid, world.getName(), spot.x, spot.y, spot.z);
             r.stranded = true;
         }
-        TRIPS.put(f.id, new Trip(f, Role.VOYAGE, s, dest));
-        TransitNetwork.get().queueRemoveFirst(s, head);
+        Trip trip = new Trip(f, Role.VOYAGE, s, dest);
+        TRIPS.put(f.id, trip);
+        trip.payment = TransitNetwork.get().queueRemoveFirst(s, head);
+        BoatAutopilot.startNavigation(world, f, dest);
         q.flight = f;
         q.departing();
         if (!f.riders.isEmpty()) {
@@ -654,7 +757,7 @@ final class BoatQuay {
                 TransitFare.refund(TransitNetwork.get().queueRemoveFirst(s, head), head);
                 broadcast(world, s, Texts.t("transit.boat.approachFailed"));
             }
-            Vector3i origin = BoatRoutes.berthOrigin(s);
+            Vector3i origin = BoatBerth.berthOrigin(s);
             Rotation rotation = mooredRotation(world, s);
             if (rotation != null) {
                 AirshipManager.get().unmoorShuttle(world, origin, rotation);
@@ -676,7 +779,7 @@ final class BoatQuay {
         }
         ShuttleState st = f.shuttle;
         Vector3d c = am.centerWorld(f.kind, f.pos, f.theta);
-        Vector3d b = BoatRoutes.berthCentre(s);
+        Vector3d b = BoatBerth.berthCentre(s);
         if (Math.hypot(c.x - b.x, c.z - b.z) > CLEAR_DISTANCE || (st != null && st.phase == ShuttleState.Phase.HOLD)) {
             q.cleared(now); // out of the way, or waiting out at sea for its own arrival quay
         }
@@ -702,6 +805,9 @@ final class BoatQuay {
                 if (t.arriving) {
                     return;
                 }
+                if (st.nav != null && !st.navFinal) {
+                    return; // the waypoints are a local path: the shuttle is far from the arrival berth
+                }
                 Vector3d c = am.centerWorld(f.kind, f.pos, f.theta);
                 List<int[]> wps = st.waypoints;
                 double rem = remaining(wps, st.index, c.x, c.z);
@@ -718,8 +824,8 @@ final class BoatQuay {
                 }
             }
             case HOLD -> {
-                if (st.rerouting || st.rerouteResult != null) {
-                    return; // waiting for a one-off route: no quay is claimed yet
+                if (st.rerouting) {
+                    return; // waiting for the new corridor: no quay is claimed yet
                 }
                 if (dq.tryArrive(f.id, now)) {
                     t.arriving = true;
@@ -788,7 +894,7 @@ final class BoatQuay {
                 TransitNetwork.Station s = t.station;
                 Quay q = quay(s);
                 boolean flip = f.shuttle != null && f.shuttle.flipped(); // the heading the shuttle arrived with
-                if (am.moorShuttle(store, f, BoatRoutes.berthOrigin(s), BoatRoutes.berthRotation(s, flip))) {
+                if (am.moorShuttle(store, f, BoatBerth.berthOrigin(s), BoatBerth.berthRotation(s, flip))) {
                     q.flipped = flip;
                     q.docked(now);
                     String head = TransitNetwork.get().queueHead(s);
@@ -848,6 +954,28 @@ final class BoatQuay {
             if (t != null) {
                 forget(t, now);
             }
+        }
+
+        @Override
+        public void onNoCorridor(AirshipFlight f) {
+            Trip t = TRIPS.get(f.id);
+            if (t == null || t.role != Role.VOYAGE || QUAYS.get(t.station) == null) {
+                onRescue(f);
+                return;
+            }
+            // Still at the departure berth: the passengers are set down on the departure pier, what they paid is given back.
+            Store<EntityStore> store = f.world.getEntityStore().getStore();
+            AirshipManager am = AirshipManager.get();
+            List<PlayerRef> people = am.passengers.releaseAt(store, f, dropPoints(t.station));
+            for (PlayerRef pr : people) {
+                pr.sendMessage(Texts.t("transit.boatQueue.noRoute").param("name", t.dest.name));
+            }
+            TransitFare.refund(t.payment, t.dest.name);
+            t.payment = null;
+            LOGGER.at(Level.WARNING).log("Navette de %s vers %s : aucun couloir, %d passager(s) reposé(s) sur le ponton de départ",
+                    t.station.name, t.dest.name, people.size());
+            am.endShuttle(store, f, "départ sans couloir");
+            forget(t, System.currentTimeMillis());
         }
 
         @Override
@@ -924,13 +1052,13 @@ final class BoatQuay {
      */
     private static void removeMoored(World world, TransitNetwork.Station removed, boolean firstTry) {
         try {
-            Vector3i origin = BoatRoutes.berthOrigin(removed);
+            Vector3i origin = BoatBerth.berthOrigin(removed);
             MooredPilot.remove(world, origin); // the pilot is an entity of his own: gone whatever happens to the blocks
             Rotation rotation = mooredRotation(world, removed);
             if (rotation == null) {
                 return;
             }
-            Vector3d centre = BoatRoutes.berthCentre(removed);
+            Vector3d centre = BoatBerth.berthCentre(removed);
             if (!areaLoaded(world, removed, centre)) {
                 if (!firstTry) {
                     LOGGER.at(Level.WARNING).log("Navette à quai de %s : sections du ponton toujours absentes, retrait abandonné", removed.name);
@@ -962,7 +1090,7 @@ final class BoatQuay {
     }
 
     /**
-     * The arrival station of a shuttle in flight is removed: it sails to the departure station (new route), else to the nearest other
+     * The arrival station of a shuttle in flight is removed: it sails to the departure station (new corridor), else to the nearest other
      * boat station it can reach, else the rescue sets its riders down (on the surface when no boat station is left). A shuttle already
      * at the removed pier (dropping or leaving) just vanishes. World thread.
      */
@@ -987,10 +1115,11 @@ final class BoatQuay {
         t.dest = next;
         t.arriving = false;
         tell(store, f, Texts.t("transit.boat.rerouted").param("name", next.name));
-        // Held still until the one-off route is applied (it sets SAIL): the old waypoints end at the removed berth and the new quay
+        // Held still until the first path of the new corridor is applied (it sets SAIL): the old waypoints end at the removed berth and the new quay
         // must not be claimed before the shuttle is on its new route.
         st.setPhase(ShuttleState.Phase.HOLD, System.currentTimeMillis());
-        BoatAutopilot.rerouteTo(world, f, st, next);
+        st.rerouting = true;
+        BoatAutopilot.startNavigation(world, f, next);
     }
 
     /** The departure pier is gone: the riders' crash safety entries now point to the return station. */
@@ -1039,7 +1168,7 @@ final class BoatQuay {
                     Quay q = quay(s);
                     Rotation moored = q.state == QuayState.FREE ? mooredRotation(world, s) : null;
                     if (moored != null) {
-                        q.flipped = moored == BoatRoutes.berthRotation(s, true);
+                        q.flipped = moored == BoatBerth.berthRotation(s, true);
                         LOGGER.at(Level.INFO).log("Station maritime %s : navette à quai retrouvée, compte à rebours de %d s", s.name,
                                 TransitConstants.COUNTDOWN_SECONDS);
                         q.docked(System.currentTimeMillis());
@@ -1055,9 +1184,9 @@ final class BoatQuay {
 
     /** Rotation of the shuttle moored in blocks at the berth of this station (registry, the usual heading or the opposite one), null when none. */
     static Rotation mooredRotation(World world, TransitNetwork.Station s) {
-        Vector3i origin = BoatRoutes.berthOrigin(s);
+        Vector3i origin = BoatBerth.berthOrigin(s);
         for (boolean flipped : new boolean[] {false, true}) {
-            Rotation r = BoatRoutes.berthRotation(s, flipped);
+            Rotation r = BoatBerth.berthRotation(s, flipped);
             if (BalloonRegistry.get(world, origin, r, Deployables.STEAMBOAT_PUBLIC.id) != null) {
                 return r;
             }
@@ -1077,9 +1206,9 @@ final class BoatQuay {
     }
 
     private static int[] areaBox(TransitNetwork.Station s, Vector3d point) {
-        Vector3d c = BoatRoutes.berthCentre(s);
+        Vector3d c = BoatBerth.berthCentre(s);
         int r = 18; // holds every cell of the shuttle for any heading around its centre
-        int y = BoatRoutes.surfaceY(s);
+        int y = BoatBerth.surfaceY(s);
         return new int[] {(int) Math.floor(Math.min(c.x, point.x)) - r, y - 6, (int) Math.floor(Math.min(c.z, point.z)) - r,
                 (int) Math.floor(Math.max(c.x, point.x)) + r, y + 10, (int) Math.floor(Math.max(c.z, point.z)) + r};
     }
@@ -1116,7 +1245,7 @@ final class BoatQuay {
     /** Sends the message to the players within TransitConstants.MESSAGE_RADIUS of the berth. */
     static void broadcast(World world, TransitNetwork.Station s, Message message) {
         Store<EntityStore> store = world.getEntityStore().getStore();
-        Vector3d berth = BoatRoutes.berthCentre(s);
+        Vector3d berth = BoatBerth.berthCentre(s);
         double r2 = TransitConstants.MESSAGE_RADIUS * TransitConstants.MESSAGE_RADIUS;
         for (PlayerRef p : world.getPlayerRefs()) {
             Ref<EntityStore> ref = p.getReference();

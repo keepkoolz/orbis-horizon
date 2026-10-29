@@ -14,7 +14,9 @@ final class UsageCounters {
             "airship.voyage", "balloon.voyage", "airship.recall", "airship.pilot_hired", "transit.trip", "transit.boatTrip",
             "cage.capture", "glider.jump", "camp.upgrade",
             "worldgen.station.air", "worldgen.station.boat", "worldgen.station.abandoned",
-            "worldgen.boat.built.first", "worldgen.boat.built.fallback", "worldgen.boat.built.repaired", "worldgen.boat.exhausted");
+            "worldgen.boat.built.first", "worldgen.boat.built.fallback", "worldgen.boat.built.repaired", "worldgen.boat.exhausted",
+            "worldgen.boat.dredged",
+            "worldgen.air.built.first", "worldgen.air.built.fallback", "worldgen.air.exhausted");
 
     private final Map<String, LongAdder> counters = new LinkedHashMap<>();
 

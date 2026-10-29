@@ -30,8 +30,6 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
         StationQueue.tick(store, store.getExternalData().getWorld());
         // Maritime shuttle: queues and quay cycles of the boat stations (never throws).
         BoatQuay.tick(store, store.getExternalData().getWorld());
-        // Maritime shuttle: water route searches between boat stations (never throws).
-        BoatRoutes.tick(store.getExternalData().getWorld());
         // Steamboat voyages: path plans and reroutes shortened over open water (never throws).
         ShipVoyage.tick(store.getExternalData().getWorld());
         // Lot 2: NPC pilots of landed airships waiting for their entity, outfit and wiring checks.

@@ -46,7 +46,7 @@ final class MooredPilot {
 
     /** World point where the pilot stands: the pivot of the moored shuttle (where the flight mannequin starts). Pure. */
     static Vector3d helmPoint(TransitNetwork.Station s, boolean flipped) {
-        return BoatRoutes.berthPivot(s, flipped);
+        return BoatBerth.berthPivot(s, flipped);
     }
 
     /**
@@ -55,13 +55,13 @@ final class MooredPilot {
      * of the shuttle. Pure.
      */
     static float facingYaw(TransitNetwork.Station s, boolean flipped) {
-        return (float) BoatRoutes.berthTheta(s, flipped);
+        return (float) BoatBerth.berthTheta(s, flipped);
     }
 
     /** One tick of a DOCKED quay: creates the pilot if missing, replays his pose. Never throws. */
     static void tick(Store<EntityStore> store, World world, TransitNetwork.Station s, boolean flipped, long now) {
         try {
-            Vector3i origin = BoatRoutes.berthOrigin(s);
+            Vector3i origin = BoatBerth.berthOrigin(s);
             UUID id = uuidFor(world.getName(), origin);
             Entry e = ENTRIES.computeIfAbsent(id, k -> new Entry());
             AirshipCrew.Mannequin m = e.man;

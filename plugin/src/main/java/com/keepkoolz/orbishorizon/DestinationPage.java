@@ -66,8 +66,8 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
         cmd.set("#DepHeader.Text", Message.translation("server.orbis_horizon.ui.dest.depHeader"));
         List<TransitNetwork.Station> others = new ArrayList<>();
         for (TransitNetwork.Station s : listed(world.getName())) {
-            // A boat station lists only the stations it has a route to (FOUND) or is still charting (COMPUTING).
-            if (!boat || BoatRoutes.state(world.getName(), station.name, s.name) != BoatRoutes.RouteState.NONE) {
+            // A boat station lists the stations on its ocean and water level, and those whose ocean number is not known yet.
+            if (!boat || BoatQuay.reach(station, s) != BoatQuay.Reach.NO) {
                 others.add(s);
             }
         }
@@ -89,15 +89,19 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
             // Direction in its own label: a translated Message given as a parameter was shown as "{dir}" in a page.
             cmd.set(sel + " #Dir.Text", Message.translation("server.orbis_horizon.ui.dir." + compass(dx, dz)));
             // Boat stations: distance only, no trip time.
-            boolean charting = boat && BoatRoutes.state(world.getName(), station.name, o.name) == BoatRoutes.RouteState.COMPUTING;
+            BoatQuay.Reach reach = boat ? BoatQuay.reach(station, o) : BoatQuay.Reach.YES;
+            boolean charting = reach == BoatQuay.Reach.CHARTING;
+            boolean incomplete = boat && !charting && SeaCharts.book().incomplete(world.getName(), station.name, o.name);
             cmd.set(sel + " #Dist.Text", charting
-                    ? Message.translation("server.orbis_horizon.ui.dest.routeComputing")
+                    ? Texts.t("transit.dest.charting")
+                    : incomplete
+                    ? Texts.t("transit.dest.incomplete").param("n", (int) dist)
                     : boat
                     ? Message.translation("server.orbis_horizon.ui.dest.distOnly").param("n", (int) dist)
                     : Message.translation("server.orbis_horizon.ui.dest.info")
                             .param("n", (int) dist)
                             .param("time", BalloonManager.durationText(secs)));
-            if (!charting) { // a route still being charted is listed but cannot be chosen
+            if (!charting) { // a destination whose ocean is not known yet is listed but cannot be chosen
                 events.addEventBinding(CustomUIEventBindingType.Activating, sel, EventData.of("Dest", o.name));
             }
         }
@@ -239,8 +243,9 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
                 return;
             }
             if (boat) {
-                // Only a charted route can be chosen (a crafted event for another one is ignored).
-                if (BoatRoutes.state(world.getName(), station.name, data.dest) == BoatRoutes.RouteState.FOUND) {
+                // Only a destination on the same ocean and water level can be chosen (a crafted event for another one is ignored).
+                TransitNetwork.Station chosen = TransitNetwork.get().byName(world.getName(), data.dest);
+                if (chosen != null && BoatQuay.reach(station, chosen) == BoatQuay.Reach.YES) {
                     BoatQuay.enqueue(world, station, data.dest, playerRef, store, ref);
                 }
                 finish();

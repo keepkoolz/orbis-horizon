@@ -7,6 +7,14 @@ final class SeaRules {
     private SeaRules() {
     }
 
+    /**
+     * True when a boat station origin stands on the sea surface (origin y = SEA_LEVEL + 1). The water under the pier end can be
+     * lower than the sea (a pool on the shore): a station snapped to it would sit one block or more under the sea around it.
+     */
+    static boolean atSeaLevel(org.joml.Vector3i boatStationOrigin) {
+        return boatStationOrigin != null && boatStationOrigin.y == SEA_LEVEL + 1;
+    }
+
     /** True when the terrain of the column lies under the water surface. */
     static boolean isWater(TerrainProbe t, int x, int z) {
         return t.height(x, z) < SEA_LEVEL;

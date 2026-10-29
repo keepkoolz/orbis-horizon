@@ -383,7 +383,9 @@ final class AirshipPassengers {
             // mannequins and hidden body (PassengerSeatView), the external camera is attached to the entity the rider sees.
             PassengerSeatView.sync(store, p, new PassengerSeatView.Ctx(f.shipUuid, f.shipRef, f.observerRef, f.dual, f.pilotUuid,
                     new Vector3f(-d.x, d.y, -d.z), seat, f.seatViews,
-                    new PassengerCamera.Source(f.kind, f.pos, PassengerCamera.behindHeading(f.theta)[0], PassengerCamera.behindHeading(f.theta)[1], Math.abs(f.yawRate) > PassengerCamera.TURNING_YAW_RATE)), now);
+                    new PassengerCamera.Source(f.kind, f.pos, PassengerCamera.behindHeading(f.theta)[0], PassengerCamera.behindHeading(f.theta)[1], Math.abs(f.yawRate) > PassengerCamera.TURNING_YAW_RATE),
+                    // the shuttle's riders look to the bow like its pilot
+                    f.shuttle != null ? (float) (manager.yawSign * f.theta) : Float.NaN), now);
             PassengerCamera.safetyTeleport(store, p, seat);
             return;
         }

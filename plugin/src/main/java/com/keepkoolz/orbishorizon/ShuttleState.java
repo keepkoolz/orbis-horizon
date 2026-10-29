@@ -26,12 +26,20 @@ final class ShuttleState {
         void onRescue(AirshipFlight f);
 
         /**
+         * The sea corridor to the destination does not exist (no route on the chart) and the shuttle may not have left its departure
+         * berth. Same contract as {@link #onRescue}. Defaults to the rescue.
+         */
+        default void onNoCorridor(AirshipFlight f) {
+            onRescue(f);
+        }
+
+        /**
          * LEAVE: the shuttle reached the last waypoint of its leaving leg. The flight MUST be ended; if it is still registered
          * afterwards, BoatAutopilot ends it.
          */
         void onRouteEnd(AirshipFlight f);
 
-        /** The shuttle's destination changed after a failed one-off route (next candidate station). */
+        /** The shuttle's destination changed after a failed corridor (next candidate station). */
         default void onRetarget(AirshipFlight f, TransitNetwork.Station next) {
         }
     }
@@ -58,17 +66,34 @@ final class ShuttleState {
     double windowX;
     double windowZ;
     double windowTheta;
-    /** A one-off route was asked to BoatRoutes and not answered yet. */
+    /** A new corridor was asked and its first path has not come yet. */
     boolean rerouting;
     /** Reroutes asked since the last progress. */
     int reroutes;
-    /** Answer of a reroute, consumed by the next step (null: none waiting). EMPTY_ROUTE: no route. */
-    volatile List<int[]> rerouteResult;
-    /** Token of the reroute in flight: a late answer of an older request is ignored. */
-    int rerouteToken;
-    /** Sideways slide at a berth: OUT = from the berth centre to the pre-berth point, IN = from the pre-berth point to the berth centre. */
-    enum Slide { NONE, OUT, IN }
+    /**
+     * Slide of the centre at a fixed heading: OUT = from the berth centre to the pre-berth point, IN = from the pre-berth point to the
+     * berth centre, BACK = a few blocks astern to (backX, backZ), to free a hull wedged in a turn.
+     */
+    enum Slide { NONE, OUT, IN, BACK }
     Slide slide = Slide.NONE;
+    /** Target centre of a BACK slide. */
+    double backX;
+    double backZ;
+    /** Back-offs started during the current turn, refused steps of the current back-off, and the next time a wedge is judged again. */
+    int backOffs;
+    int backRefused;
+    long backCheckMs;
+    /** Consecutive refused yaw steps and the heading when the count started (a wedge needs several, with the heading unchanged). */
+    int refusedSteps;
+    double refusedTheta;
+    /** Back-offs of this trip (across lists), and where and with how much route left the last one started. */
+    int tripBackOffs;
+    boolean hasLastBack;
+    double lastBackX;
+    double lastBackZ;
+    double lastBackRemaining;
+    /** An intermediate waypoint was judged not capturable (its turn is blocked here): not judged again before this time. */
+    long captureHoldMs;
     /** The waypoint list BoatAutopilot already adapted to the berths (identity): a new list is adapted again. */
     List<int[]> preparedFor;
     /** The waypoint list whose arrival end was already decided (trimmed or left as it is), by identity. */
@@ -98,7 +123,7 @@ final class ShuttleState {
     long lookRetryMs;
     int shiftTry;
     int shifts;
-    /** Columns of the cells the hull hit or would hit: a one-off route avoids them. */
+    /** Columns of the cells the hull hit or would hit: the local pilot avoids them. */
     final java.util.Set<Long> avoid = new java.util.HashSet<>();
     /** Last world cell that refused the hull ({x, y, z, wet}, from AirshipManager.firstBlockingCell), null when unknown. */
     volatile int[] lastHit;
@@ -106,21 +131,49 @@ final class ShuttleState {
     boolean avoidHold;
     /** The rescue was already called. */
     boolean rescued;
+    /** Local pilot following the sea corridor to {@link #to} (see ShuttleNav); null when the waypoints are fixed. */
+    LocalNav nav;
+    /** Goal column {x, z} of a boat voyage, which sails to a plain column instead of a station berth; null for a shuttle. */
+    int[] navGoal;
+    /** Columns a boat voyage sailed, one every ShipVoyage.TRACK_STEP blocks from the departure column (the back-off walks it in reverse); null for a shuttle. */
+    List<int[]> track;
+    /** The first corridor search, spread over several ticks; null once it ended. */
+    ChartRoute corridorSearch;
+    /** Segments the shuttle sails, kept or forgotten when the trip ends. */
+    SeaChartBook.Trip trip;
+    /** The corridor does not exist (the search found nothing, or the world has no chart): handled by the next tick. */
+    boolean noCorridor;
+    /** The local pilot gave a first path since the navigation started. */
+    boolean navReady;
+    /** The waypoint list ends at the arrival berth centre: the local pilot is frozen, the arrival manoeuvre takes over. */
+    boolean navFinal;
+    /** A local search is in progress, it is ticked until it gives a path. */
+    boolean navActive;
+    /** Centre of the shuttle when the last path of the local pilot was installed. */
+    double navX;
+    double navZ;
+    /** Chart cell {cx, cz} of the last tick, null before the first. */
+    int[] lastCell;
+    /** Time the wait for unloaded sections started (0: not waiting), loads asked for it, and the load in flight. */
+    long waitSinceMs;
+    int loadAttempts;
+    /** The shuttle is held still this tick for unloaded sections: set by ShuttleNav.tick, false on every other tick. */
+    boolean heldForData;
+    java.util.concurrent.CompletableFuture<?> pendingLoad;
     volatile Listener listener;
     /** Final heading when {@link #to} is null (a voyage to a plain point); NaN: none. */
     double goalTheta = Double.NaN;
 
-    /** Asks for a one-off route when {@link #to} is null (a steamboat voyage). */
+    /** Searches a new path when {@link #to} is null (a steamboat voyage). */
     interface Router {
         void reroute(World world, AirshipFlight f, ShuttleState st, boolean stuck);
     }
 
     /** Null for a shuttle. */
     volatile Router router;
-    /** Stations still to try, in order, when the one-off route to the current destination fails (station removed in flight). */
+    /** Stations still to try, in order, when the corridor to the current destination fails (station removed in flight). */
     final List<TransitNetwork.Station> fallbacks = new java.util.concurrent.CopyOnWriteArrayList<>();
 
-    static final List<int[]> EMPTY_ROUTE = List.of();
 
     ShuttleState(TransitNetwork.Station from, TransitNetwork.Station to, List<int[]> waypoints, Phase phase, long now) {
         this.from = from;

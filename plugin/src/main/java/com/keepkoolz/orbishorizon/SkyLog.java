@@ -106,9 +106,14 @@ final class SkyLog {
 
     /** Whether a vehicle centre at (cx, cz) is close enough to a station reference point (px, pz) to discover it. */
     static boolean stationInReach(double cx, double cz, double px, double pz) {
+        return stationInReach(cx, cz, px, pz, STATION_REACH);
+    }
+
+    /** As {@link #stationInReach(double, double, double, double)}, with a horizontal reach of radius blocks (inclusive). */
+    static boolean stationInReach(double cx, double cz, double px, double pz, double radius) {
         double dx = px - cx;
         double dz = pz - cz;
-        return dx * dx + dz * dz <= (double) STATION_REACH * STATION_REACH;
+        return dx * dx + dz * dz <= radius * radius;
     }
 
     /** True if a visited cell is within MARKER_REACH blocks of the point (nearest point of the cell square, horizontal distance). */

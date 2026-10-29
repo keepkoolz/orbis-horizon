@@ -5,7 +5,6 @@ import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.joml.Vector3d;
 import org.joml.Vector3i;
@@ -21,18 +20,19 @@ import java.util.function.Function;
 import java.util.logging.Level;
 
 /**
- * Steamboat voyages with the NPC pilot: destinations (stops and reached boat stations), the path planned on the water log (A*, then
- * shortened over open water across the next ticks), and the sailing itself, done by {@link BoatAutopilot} with the voyage's
- * {@link ShuttleState}. The landing, the retries and the incidents are those of the airship voyage (VoyageState, AirshipAutopilot.stop).
+ * Steamboat voyages with the NPC pilot: destinations (stops and reached boat stations), the corridor planned before the departure (the
+ * path of the water log, else a {@link ChartRoute} on the sea chart) and the sailing itself: {@link ShuttleNav} runs the {@link LocalNav}
+ * pilot along the corridor and {@link BoatAutopilot} follows its paths with the voyage's {@link ShuttleState}. The sea chart book is
+ * only read. The landing, the retries and the incidents are those of the airship voyage (VoyageState, AirshipAutopilot.stop).
  */
 final class ShipVoyage {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
-    /** Leg checks of the plans and reroutes of a world per tick (one shortcut steps per tick, at least 2 legs). */
-    static final int LEGS_PER_TICK = 40;
     /** A plan without an answer after this is given up (crew.voyage.noChart). */
     static final long PLAN_TIMEOUT_MS = 60_000L;
-    /** A reroute path of at most this many points is shortened at once, in the tick that asks for it. */
-    static final int SHORT_PATH = 16;
+    /** Blocks sailed between two points of the track of a voyage. The track is not capped: one point per 48 blocks of a voyage that is bounded by its destination and its watchdogs. */
+    static final double TRACK_STEP = 48.0;
+    /** Log cells (2 blocks each) between two points of a corridor taken from the water log: 48 blocks. */
+    static final int CORRIDOR_CELLS = 24;
 
     private ShipVoyage() {
     }
@@ -124,9 +124,70 @@ final class ShipVoyage {
         return out;
     }
 
+    /** Adds the column (x, z) to the track when it is the first or at least TRACK_STEP blocks from the last one. True when added. Pure. */
+    static boolean noteTrack(List<int[]> track, double x, double z) {
+        int[] last = track.isEmpty() ? null : track.get(track.size() - 1);
+        if (last != null && Math.hypot(x - last[0], z - last[1]) < TRACK_STEP) {
+            return false;
+        }
+        track.add(new int[] {(int) Math.floor(x), (int) Math.floor(z)});
+        return true;
+    }
+
+    /** Corridor of a path of the water log: one point every CORRIDOR_CELLS cells (48 blocks), first and last points kept. Pure. */
+    static List<int[]> corridorFromLog(List<int[]> logPath) {
+        List<int[]> out = new ArrayList<>();
+        for (int i = 0; i < logPath.size(); i++) {
+            if (i % CORRIDOR_CELLS == 0 || i == logPath.size() - 1) {
+                out.add(new int[] {logPath.get(i)[0], logPath.get(i)[1]});
+            }
+        }
+        return out;
+    }
+
+    /** The corridor points, ending on the goal column itself (a chart corridor ends on a chart cell centre). Pure. */
+    static List<int[]> endingAt(List<int[]> points, int gx, int gz) {
+        List<int[]> out = new ArrayList<>(points);
+        int[] last = out.isEmpty() ? null : out.get(out.size() - 1);
+        if (last == null || last[0] != gx || last[1] != gz) {
+            out.add(new int[] {gx, gz});
+        }
+        return out;
+    }
+
+    /**
+     * Corridor from a column to a goal column, traced in one go: the path of the log (avoiding these log cells) first, else a route on
+     * the sea chart of the world, read through the book. Null when there is none. Never writes the book.
+     */
+    static List<int[]> corridorNow(String world, WaterLog log, Set<Long> avoidCells, int fromX, int fromZ, int goalX, int goalZ) {
+        if (log != null) {
+            List<int[]> path = log.path(fromX, fromZ, goalX, goalZ, avoidCells);
+            if (!path.isEmpty()) {
+                return corridorFromLog(path);
+            }
+        }
+        SeaChart chart = SeaCharts.chart(world);
+        if (chart == null) {
+            return null;
+        }
+        return ShuttleNav.traceNow(chart, ShuttleNav.view(SeaCharts.book(), world), fromX, fromZ, goalX, goalZ);
+    }
+
+    /** Same with the chart and the view given: the log path first, else a chart route. */
+    static List<int[]> corridorNow(SeaChart chart, ChartRoute.View view, WaterLog log, Set<Long> avoidCells, int fromX, int fromZ,
+                                   int goalX, int goalZ) {
+        if (log != null) {
+            List<int[]> path = log.path(fromX, fromZ, goalX, goalZ, avoidCells);
+            if (!path.isEmpty()) {
+                return corridorFromLog(path);
+            }
+        }
+        return chart == null ? null : ShuttleNav.traceNow(chart, view, fromX, fromZ, goalX, goalZ);
+    }
+
     // ------------------------------------------------------------------ planning (world thread)
 
-    /** A path being planned for a parked boat before its departure. */
+    /** A corridor being planned for a parked boat before its departure. */
     private static final class Plan {
         final String world;
         final String key;
@@ -135,13 +196,15 @@ final class ShipVoyage {
         final VoyagePlanner.Destination dest;
         final Runnable onAccepted;
         final long startMs;
-        final SectionReader[] holder = new SectionReader[1];
-        Shortcut shortcut;
-        /** Answer of the WaterRoute fallback (null: none yet, empty: none at all). */
-        volatile List<int[]> answer;
+        final int goalX;
+        final int goalZ;
+        /** Corridor search on the sea chart, stepped over the next ticks (null when the log gave the corridor). */
+        ChartRoute search;
+        /** The corridor (null: none yet, empty: none at all). */
+        List<int[]> answer;
 
         Plan(String world, String key, PlayerRef captain, BalloonRegistry.Entry entry, VoyagePlanner.Destination dest, Runnable onAccepted,
-             long startMs) {
+             long startMs, int goalX, int goalZ) {
             this.world = world;
             this.key = key;
             this.captain = captain;
@@ -149,17 +212,15 @@ final class ShipVoyage {
             this.dest = dest;
             this.onAccepted = onAccepted;
             this.startMs = startMs;
+            this.goalX = goalX;
+            this.goalZ = goalZ;
         }
     }
-
-    /** A reroute on the log being shortened over the next ticks. */
-    private record RerouteJob(String world, AirshipFlight f, ShuttleState st, int token, Shortcut shortcut, SectionReader[] holder) {}
 
     private record Ready(VoyagePlanner.Destination dest, List<int[]> waypoints) {}
 
     /** At most one plan per boat (key: world and origin of its entry); a new order replaces the older one. */
     private static final Map<String, Plan> PLANS = new ConcurrentHashMap<>();
-    private static final List<RerouteJob> JOBS = new java.util.concurrent.CopyOnWriteArrayList<>();
     /** Plan handed to startVoyage while it runs (keys are per world, each world ticks on its own thread). */
     private static final Map<String, Ready> READY = new ConcurrentHashMap<>();
 
@@ -167,25 +228,7 @@ final class ShipVoyage {
         return world + ":" + e.x() + "," + e.y() + "," + e.z();
     }
 
-    /** Water surface level of a boat whose pivot cell is at pivotY (the waterline layer sits on the highest water cell). */
-    static int surfaceY(Deployables.Kind kind, int pivotY) {
-        Deployables.AirshipSpec sp = AirshipManager.spec(kind);
-        return pivotY - Math.round(sp.pivot.y) + sp.waterlineY;
-    }
-
-    /** Highest cell of the boat above the water surface (the probe checks up to there). */
-    static int topY(Deployables.Kind kind, int surfaceY) {
-        int top = 0;
-        StructureShape shape = kind.shapeOrNull();
-        if (shape != null) {
-            for (StructureShape.Cell c : shape.cells()) {
-                top = Math.max(top, c.y());
-            }
-        }
-        return surfaceY + top - AirshipManager.spec(kind).waterlineY;
-    }
-
-    /** Starts planning (A* now, shortcut over the next ticks) and tells the captain "crew.voyage.charting"; the plan calls back on the world thread. Returns the refusal, or null when the planning started. */
+    /** Starts planning the corridor (the log path now, else a chart search over the next ticks) and tells the captain "crew.voyage.charting"; the plan calls back on the world thread. Returns the refusal, or null when the planning started. */
     static Message plan(Store<EntityStore> store, World world, PlayerRef captain, BalloonRegistry.Entry e, VoyagePlanner.Destination d,
                         Runnable onAccepted) {
         CrewRecord crew = e != null ? e.crew() : null;
@@ -208,30 +251,36 @@ final class ShipVoyage {
             }
             int gx = (int) Math.floor(goal[0]);
             int gz = (int) Math.floor(goal[1]);
-            int surface = surfaceY(kind, (int) Math.floor(pivot.y));
-            int top = topY(kind, surface);
+            int sx = (int) Math.floor(c.x);
+            int sz = (int) Math.floor(c.z);
             String key = keyOf(world.getName(), e);
-            Plan p = new Plan(world.getName(), key, captain, e, d, onAccepted, System.currentTimeMillis());
-            List<int[]> path = w.path((int) Math.floor(c.x), (int) Math.floor(c.z), gx, gz, Set.of());
-            if (!path.isEmpty()) {
-                p.shortcut = new Shortcut(path, box -> BoatRoutes.probe(p.holder, surface, top));
+            Plan p = new Plan(world.getName(), key, captain, e, d, onAccepted, System.currentTimeMillis(), gx, gz);
+            List<int[]> logPath = w.path(sx, sz, gx, gz, Set.of());
+            String source;
+            if (!logPath.isEmpty()) {
+                p.answer = corridorFromLog(logPath);
+                source = "journal, " + logPath.size() + " case(s)";
             } else {
-                // Not on the log from here: a free WaterRoute path, like a reroute.
-                BoatRoutes.requestRerouteTo(world, c.x, c.z, gx, gz, surface, top, d.name(), () -> PLANS.get(key) == p,
-                        pts -> p.answer = pts != null ? pts : List.of(), Set.of(), false);
+                SeaChart chart = SeaCharts.chart(world.getName());
+                if (chart == null) {
+                    LOGGER.at(Level.INFO).log("Voyage du bateau : le monde %s n'a pas de carte de l'océan, aucun couloir vers %s", world.getName(), d.name());
+                    return Texts.pilot("crew.voyage.noChart", crew);
+                }
+                p.search = new ChartRoute(chart, ShuttleNav.view(SeaCharts.book(), world.getName()), sx, sz, gx, gz);
+                source = "carte de l'océan";
             }
             PLANS.put(key, p);
             captain.sendMessage(Texts.pilot("crew.voyage.charting", crew));
-            LOGGER.at(Level.INFO).log("Voyage du bateau vers %s : calcul du chemin (%d case(s) du journal)", d.name(), path.size());
+            LOGGER.at(Level.INFO).log("Voyage du bateau vers %s : calcul du couloir (%s)", d.name(), source);
             return null;
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Voyage du bateau : calcul du chemin impossible");
-            Telemetry.error("airship.autopilot", ex, e != null ? e.kind() : null, "plan");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Voyage du bateau : calcul du couloir impossible");
+            Telemetry.error("boat.corridor", ex, e != null ? e.kind() : null, "plan");
             return Texts.pilot("crew.voyage.noChart", crew);
         }
     }
 
-    /** One tick of the plans of this world (budget: 40 leg checks), called by BalloonFlightSystem like BoatRoutes.tick. */
+    /** One tick of the plans of this world (one chart search steps per tick, ShuttleNav.CORRIDOR_NODES_PER_TICK nodes), called by BalloonFlightSystem. */
     static void tick(World world) {
         try {
             String wn = world.getName();
@@ -248,58 +297,34 @@ final class ShipVoyage {
                         p.captain.sendMessage(Texts.pilot("crew.voyage.noChart", p.entry.crew()));
                         continue;
                     }
+                    if (p.answer == null && p.search != null && !stepped) {
+                        stepped = true;
+                        switch (p.search.step(ShuttleNav.CORRIDOR_NODES_PER_TICK)) {
+                            case FOUND -> p.answer = endingAt(p.search.points(), p.goalX, p.goalZ);
+                            case NONE -> p.answer = List.of();
+                            default -> {
+                            }
+                        }
+                    }
                     List<int[]> answer = p.answer;
                     if (answer != null) {
                         PLANS.remove(p.key, p);
                         if (answer.isEmpty()) {
+                            LOGGER.at(Level.INFO).log("Voyage du bateau vers %s : aucun couloir sur la carte", p.dest.name());
                             p.captain.sendMessage(Texts.pilot("crew.voyage.noChart", p.entry.crew()));
                         } else {
                             depart(world, p, answer);
-                        }
-                        continue;
-                    }
-                    if (p.shortcut != null && !stepped) {
-                        stepped = true;
-                        p.holder[0] = new SectionReader(world.getChunkStore()); // a reader lives within one tick
-                        if (p.shortcut.step(LEGS_PER_TICK)) {
-                            PLANS.remove(p.key, p);
-                            depart(world, p, p.shortcut.result());
                         }
                     }
                 } catch (RuntimeException ex) {
                     PLANS.remove(p.key, p);
                     LOGGER.at(Level.WARNING).withCause(ex).log("Voyage du bateau : plan abandonné");
-                    Telemetry.error("airship.autopilot", ex, p.entry.kind(), "plan");
-                }
-            }
-            for (RerouteJob j : JOBS) {
-                if (!j.world().equals(wn)) {
-                    continue;
-                }
-                try {
-                    if (!stillWanted(j.f(), j.st(), j.token())) {
-                        JOBS.remove(j);
-                        continue;
-                    }
-                    if (stepped) {
-                        break;
-                    }
-                    stepped = true;
-                    j.holder()[0] = new SectionReader(world.getChunkStore());
-                    if (j.shortcut().step(LEGS_PER_TICK)) {
-                        JOBS.remove(j);
-                        answer(j.st(), j.token(), j.shortcut().result());
-                    }
-                } catch (RuntimeException ex) {
-                    JOBS.remove(j);
-                    LOGGER.at(Level.WARNING).withCause(ex).log("Voyage du bateau : nouvelle route abandonnée");
-                    Telemetry.error("airship.autopilot", ex, Telemetry.kindId(j.f().kind), "reroute");
-                    answer(j.st(), j.token(), List.of());
+                    Telemetry.error("boat.corridor", ex, p.entry.kind(), "plan");
                 }
             }
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Voyages du bateau : tick en échec");
-            Telemetry.error("airship.autopilot", ex, Deployables.STEAMBOAT_KIND, "plan");
+            Telemetry.error("boat.corridor", ex, Deployables.STEAMBOAT_KIND, "plan");
         }
     }
 
@@ -332,9 +357,17 @@ final class ShipVoyage {
 
     // ------------------------------------------------------------------ sailing
 
-    /** Builds the ShuttleState of a departure: waypoints, goalTheta, router, listener. */
-    static ShuttleState sailing(AirshipFlight f, List<int[]> waypoints, double goalTheta) {
-        ShuttleState st = new ShuttleState(null, null, waypoints, ShuttleState.Phase.SAIL, System.currentTimeMillis());
+    /**
+     * Builds the ShuttleState of a departure: the corridor the local pilot follows (its last point is the goal column), goalTheta,
+     * router, listener. The waypoints are one point on the boat until the pilot gives its first path.
+     */
+    static ShuttleState sailing(AirshipFlight f, List<int[]> corridor, double goalTheta) {
+        Vector3d c = AirshipManager.get().centerWorld(f.kind, f.pos, f.theta);
+        List<int[]> stub = List.of(new int[] {(int) Math.floor(c.x), (int) Math.floor(c.z)});
+        ShuttleState st = new ShuttleState(null, null, stub, ShuttleState.Phase.SAIL, System.currentTimeMillis());
+        int[] goal = corridor.get(corridor.size() - 1);
+        startNav(f, st, goal[0], goal[1], corridor);
+        st.track = new ArrayList<>(List.of(new int[] {stub.get(0)[0], stub.get(0)[1]})); // starts at the departure column
         st.goalTheta = goalTheta;
         st.router = ShipVoyage::reroute;
         st.listener = new ShuttleState.Listener() {
@@ -430,7 +463,7 @@ final class ShipVoyage {
         }
         try {
             if (v.backoff == null) {
-                v.backoff = new java.util.ArrayDeque<>(backoffPoints(st.waypoints, st.index, v.homeColumn));
+                v.backoff = new java.util.ArrayDeque<>(backoffPoints(st.track != null ? st.track : List.of(), st.track != null ? st.track.size() : 0, v.homeColumn));
             } else if (!v.backoff.isEmpty()) {
                 v.backoff.pollFirst(); // the current point did not fit
             }
@@ -451,6 +484,7 @@ final class ShipVoyage {
                 return;
             }
             boolean home = v.homeColumn != null && p[0] == v.homeColumn[0] && p[1] == v.homeColumn[1] && v.backoff.size() == 1;
+            ShuttleNav.stop(st); // the back-off leg is a fixed point: the pilot sails it as a plain route (a reroute starts a pilot again)
             st.waypoints = new ArrayList<>(List.of(new int[] {p[0], p[1]}));
             st.index = 0;
             st.goalTheta = home ? v.homeTheta : Double.NaN;
@@ -462,8 +496,6 @@ final class ShipVoyage {
             st.reroutes = 0;
             st.rescued = false;
             st.rerouting = false;
-            st.rerouteResult = null;
-            st.rerouteToken++; // a reroute still in flight is for the old route
             BoatAutopilot.resume(f, st, ShuttleState.Phase.SAIL, System.currentTimeMillis());
             v.phase = VoyageState.Phase.CRUISE;
             LOGGER.at(Level.INFO).log("Voyage du bateau %s : aucun amarrage possible, repli vers (%d, %d)%s, %d point(s) restant(s)", f.id,
@@ -495,59 +527,82 @@ final class ShipVoyage {
         }
     }
 
-    /** One-off route of a boat voyage: the log first (avoiding the cells near the hits), then a free WaterRoute path. World thread. */
+    /**
+     * Starts the local pilot of a boat toward a goal column along a corridor: the hull clearances of the steamboat, the corridor traced
+     * again from the log or the sea chart when the pilot needs it, and no write in the sea chart book. The boat holds still until the
+     * first path. World thread.
+     */
+    static void startNav(AirshipFlight f, ShuttleState st, int goalX, int goalZ, List<int[]> corridor) {
+        String world = f.world.getName();
+        st.navGoal = new int[] {goalX, goalZ};
+        st.navReady = false;
+        st.navFinal = false;
+        st.navActive = false;
+        st.nav = new LocalNav(new LocalNav.Corridor() {
+            @Override
+            public List<int[]> retrace(int fromX, int fromZ) {
+                try {
+                    List<int[]> pts = corridorNow(world, f.water, cellsNear(st.avoid), fromX, fromZ, goalX, goalZ);
+                    if (pts != null) {
+                        LOGGER.at(Level.INFO).log("Voyage du bateau %s : couloir tracé de nouveau depuis (%d, %d), %d point(s)", f.id, fromX, fromZ, pts.size());
+                    }
+                    return pts;
+                } catch (RuntimeException e) {
+                    LOGGER.at(Level.WARNING).withCause(e).log("Voyage du bateau %s : nouveau tracé du couloir en échec", f.id);
+                    Telemetry.error("boat.localnav", e, Telemetry.kindId(f.kind), "retrace");
+                    return null;
+                }
+            }
+
+            @Override
+            public void close(int x, int z) {
+                // The boat of a player never writes the sea chart book.
+            }
+        }, HullClearance.SHIP, goalX, goalZ);
+        st.nav.setCorridor(corridor);
+    }
+
+    /**
+     * Router of a boat voyage, reached only while it backs off (a voyage with a pilot is handled by BoatAutopilot.reroute): the boat
+     * sails a fixed point, so a blocked one gets a pilot toward the current back-off point (log or chart corridor, else a straight one).
+     * World thread.
+     */
     static void reroute(World world, AirshipFlight f, ShuttleState st, boolean stuck) {
         VoyageState v = f.voyage;
         if (v == null) {
             return;
         }
-        int[] hit = st.lastHit;
-        if (stuck && hit != null) {
-            st.avoid.add(WaterRoute.columnKey(hit[0], hit[2]));
-        }
-        st.rerouting = true;
-        int token = ++st.rerouteToken;
-        AirshipManager am = AirshipManager.get();
-        Vector3d c = am.centerWorld(f.kind, f.pos, f.theta);
-        int[] back = v.backoff != null ? v.backoff.peekFirst() : null; // backing off: the route goes to the current back-off point
-        int gx = back != null ? back[0] : (int) Math.floor(v.destX);
-        int gz = back != null ? back[1] : (int) Math.floor(v.destZ);
-        String goalName = back != null ? "point de repli" : v.destName;
-        Set<Long> columns = new HashSet<>(st.avoid);
-        if (hit != null) {
-            columns.add(WaterRoute.columnKey(hit[0], hit[2]));
-        }
-        WaterLog w = f.water;
-        List<int[]> path = w != null ? w.path((int) Math.floor(c.x), (int) Math.floor(c.z), gx, gz, cellsNear(columns)) : List.of();
-        int surface = surfaceY(f.kind, (int) Math.floor(Double.isNaN(f.lockedY) ? f.pos.y : f.lockedY));
-        LOGGER.at(Level.INFO).log("Voyage du bateau %s en (%.1f, %.1f) : nouvelle route vers %s demandée (%s)", f.id, c.x, c.z, goalName,
-                path.isEmpty() ? "eau libre" : "journal");
-        int top = topY(f.kind, surface);
-        if (!path.isEmpty()) {
-            SectionReader[] holder = new SectionReader[1];
-            Shortcut sc = new Shortcut(path, box -> BoatRoutes.probe(holder, surface, top));
-            if (path.size() <= SHORT_PATH) {
-                holder[0] = new SectionReader(world.getChunkStore());
-                while (!sc.step(Integer.MAX_VALUE)) {
-                    // a short path is shortened in this tick
-                }
-                answer(st, token, sc.result());
-            } else {
-                JOBS.add(new RerouteJob(world.getName(), f, st, token, sc, holder));
+        try {
+            int[] back = v.backoff != null ? v.backoff.peekFirst() : null;
+            if (back == null) {
+                return;
             }
-            return;
+            Vector3d c = AirshipManager.get().centerWorld(f.kind, f.pos, f.theta);
+            int fx = (int) Math.floor(c.x);
+            int fz = (int) Math.floor(c.z);
+            List<int[]> corridor = corridorNow(world.getName(), f.water, cellsNear(st.avoid), fx, fz, back[0], back[1]);
+            if (corridor == null) {
+                corridor = List.of(new int[] {fx, fz}, new int[] {back[0], back[1]});
+            }
+            startNav(f, st, back[0], back[1], corridor);
+            LOGGER.at(Level.INFO).log("Voyage du bateau %s en (%d, %d) : pilote local vers le point de repli (%d, %d)", f.id, fx, fz, back[0], back[1]);
+            ShuttleNav.requestSearch(f, st, stuck);
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage du bateau %s : nouvelle recherche impossible", f.id);
+            Telemetry.error("boat.localnav", e, Telemetry.kindId(f.kind), "reroute");
         }
-        BoatRoutes.requestRerouteTo(world, c.x, c.z, gx, gz, surface, top, goalName, () -> stillWanted(f, st, token), pts -> answer(st, token, pts),
-                st.avoid, stuck);
     }
 
-    private static boolean stillWanted(AirshipFlight f, ShuttleState st, int token) {
-        return AirshipManager.get().isActive(f) && f.sailState() == st && !st.rescued && token == st.rerouteToken;
-    }
-
-    private static void answer(ShuttleState st, int token, List<int[]> pts) {
-        if (token == st.rerouteToken) {
-            st.rerouteResult = pts != null && !pts.isEmpty() ? pts : ShuttleState.EMPTY_ROUTE;
+    /** Notes the boat's centre in the track of the voyage (never throws). */
+    private static void recordTrack(AirshipFlight f, ShuttleState st) {
+        try {
+            if (st.track != null && st.nav != null && f.voyage != null && f.voyage.backoff == null) { // not while backing off: the track is what the back-off walks
+                Vector3d c = AirshipManager.get().centerWorld(f.kind, f.pos, f.theta);
+                noteTrack(st.track, c.x, c.z);
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage du bateau %s : route parcourue non notée", f.id);
+            Telemetry.error("boat.localnav", e, Telemetry.kindId(f.kind), "track");
         }
     }
 
@@ -578,6 +633,7 @@ final class ShipVoyage {
                         AirshipAutopilot.stop(f, "crew.voyage.dry"); // no thrust: the boat does not move off
                         return;
                     }
+                    recordTrack(f, v.water);
                     BoatAutopilot.step(store, world, f, v.water, dt, now);
                     if (f.finishing || f.landing) {
                         return;
@@ -591,120 +647,6 @@ final class ShipVoyage {
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Voyage du bateau : erreur dans le tick de %s", f.id);
             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
-        }
-    }
-
-    /** Shortens a log path piece by piece (at most PIECE points per piece, own WaterRoute.Search box = piece bounds + 20). */
-    static final class Shortcut {
-        static final int PIECE = 128;          // log points per piece
-        static final int LOOK = 64;            // farthest point tried from the current one
-        private static final int BOX_MARGIN = 20;
-
-        private final List<int[]> path;
-        private final Function<int[], WaterRoute.ColumnProbe> probeForBox;
-        private final List<int[]> out = new ArrayList<>();
-        private int pieceStart;
-        private int pieceEnd = -1;   // last index of the current piece, -1 before the first piece starts
-        private int cur;
-        private int cand;            // candidate index being tried from cur
-        private WaterRoute.Search search;
-        private boolean done;
-        private List<int[]> result;
-
-        Shortcut(List<int[]> path, Function<int[], WaterRoute.ColumnProbe> probeForBox) {
-            this.path = path;
-            this.probeForBox = probeForBox;
-            if (path.size() <= 2) {
-                finish();
-            } else {
-                out.add(path.get(0));
-            }
-        }
-
-        /** Does at most maxLegs leg checks. True when done. */
-        boolean step(int maxLegs) {
-            int legs = 0;
-            while (!done) {
-                if (search == null) {
-                    startPiece();
-                }
-                if (cur >= pieceEnd) {
-                    if (pieceEnd >= path.size() - 1) {
-                        finish();
-                        break;
-                    }
-                    pieceStart = pieceEnd;
-                    search = null;
-                    continue;
-                }
-                if (cand <= cur + 1) {
-                    accept(cur + 1); // nothing better: keep the next log point
-                    continue;
-                }
-                if (legs >= maxLegs) {
-                    break;
-                }
-                legs++;
-                int[] a = path.get(cur);
-                int[] b = path.get(cand);
-                Boolean leg = search.legClear(a[0], a[1], b[0], b[1]);
-                if (!Boolean.TRUE.equals(leg)) { // blocked or not loaded: not free
-                    cand--;
-                    continue;
-                }
-                if (cand == pieceEnd) {
-                    accept(cand);
-                    continue;
-                }
-                if (legs >= maxLegs) {
-                    // The turn circle check below counts as a leg too: wait for the next call (the leg result is recomputed, cheap).
-                    break;
-                }
-                legs++;
-                if (Boolean.TRUE.equals(search.turnClear(b[0], b[1]))) {
-                    accept(cand);
-                } else {
-                    cand--;
-                }
-            }
-            return done;
-        }
-
-        List<int[]> result() {
-            return result;
-        }
-
-        private void accept(int index) {
-            out.add(path.get(index));
-            cur = index;
-            cand = Math.min(pieceEnd, cur + LOOK);
-        }
-
-        private void startPiece() {
-            pieceEnd = Math.min(pieceStart + PIECE - 1, path.size() - 1);
-            int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
-            for (int i = pieceStart; i <= pieceEnd; i++) {
-                int[] p = path.get(i);
-                minX = Math.min(minX, p[0]);
-                maxX = Math.max(maxX, p[0]);
-                minZ = Math.min(minZ, p[1]);
-                maxZ = Math.max(maxZ, p[1]);
-            }
-            minX -= BOX_MARGIN;
-            minZ -= BOX_MARGIN;
-            maxX += BOX_MARGIN;
-            maxZ += BOX_MARGIN;
-            int[] first = path.get(pieceStart);
-            int[] last = path.get(pieceEnd);
-            search = new WaterRoute.Search(probeForBox.apply(new int[] {minX, minZ, maxX, maxZ}), first[0], first[1], last[0], last[1],
-                    minX, minZ, maxX, maxZ);
-            cur = pieceStart;
-            cand = Math.min(pieceEnd, cur + LOOK);
-        }
-
-        private void finish() {
-            result = WaterLog.collapse(out.isEmpty() ? path : out);
-            done = true;
         }
     }
 }

@@ -102,6 +102,11 @@ final class DeployPlacement {
         return (x, y, z) -> emptied.contains(new Vector3i(x, y, z)) ? 0 : base.at(x, y, z);
     }
 
+    /** The same state with the given cells read as water (1), whatever they hold. Used to check a berth as it would be once dredged. */
+    static CellState withWater(CellState base, java.util.Set<Vector3i> water) {
+        return (x, y, z) -> water.contains(new Vector3i(x, y, z)) ? 1 : base.at(x, y, z);
+    }
+
     /** CellState reading the world (0.7 section reader). Out of height, solid blocks and non-water liquids count as 2. */
     static CellState worldState(com.hypixel.hytale.server.core.universe.world.World world) {
         com.hypixel.hytale.server.core.universe.world.accessor.SectionReader reader =
@@ -118,6 +123,23 @@ final class DeployPlacement {
                 return BalloonManager.blocksBalloon(reader, x, y, z) ? 2 : 0;
             }
             return SteamboatWater.isWaterCell(reader, x, y, z, liquid) ? 1 : 2;
+        };
+    }
+
+    /**
+     * Same reading as {@link #worldState} for an ice-breaker boat: floe ice and a broken empty cell under the waterline read as
+     * water, floe ice above it as empty, iceberg ice as blocked ({@link IceBreaker#placementState}). surfaceY is the world height
+     * of the waterline layer; ice above surfaceY + {@link IceBreaker#MAX_FLOE_HEIGHT} makes an iceberg.
+     */
+    static CellState iceState(com.hypixel.hytale.server.core.universe.world.World world, int surfaceY) {
+        com.hypixel.hytale.server.core.universe.world.accessor.SectionReader reader =
+                new com.hypixel.hytale.server.core.universe.world.accessor.SectionReader(world.getChunkStore());
+        IceBreaker.CellReader cells = (x, y, z) -> IceBreaker.kindAt(reader, x, y, z);
+        return (x, y, z) -> {
+            if (!reader.hasStorageInMemory(x, y, z) && !BalloonManager.outOfHeight(y)) {
+                return 2; // an unloaded cell refuses a placement, as worldState does
+            }
+            return IceBreaker.placementState(cells, x, y, z, y <= surfaceY, surfaceY);
         };
     }
 

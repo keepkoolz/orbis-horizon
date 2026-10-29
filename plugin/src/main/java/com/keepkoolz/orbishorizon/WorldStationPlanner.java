@@ -25,11 +25,11 @@ final class WorldStationPlanner {
 
     static final int MAX_SITES = 4;
     static final int PARTNER_FALLBACKS = 3;
-    static final int CELL = 2048;
+    static final int CELL = 1024;
     /** Minimum distance between two balloon stations, planned or built. */
-    static final int BALLOON_SPACING = 1500;
+    static final int BALLOON_SPACING = 900;
     /** Minimum distance between two main boat stations, and from a main boat station to any other, planned or built. */
-    static final int BOAT_SPACING = 1500;
+    static final int BOAT_SPACING = 700;
     static final int SHORE_STEP = 32;
     static final int SEA_AHEAD = 40;
     static final int ZONE_STEP = 128;
@@ -37,7 +37,7 @@ final class WorldStationPlanner {
     static final int SEA_NEAR = 256;
     static final int CROSS_STEP = 16;
     static final int CROSS_MIN = 200;
-    static final int CROSS_MAX = WaterRoute.MAX_LENGTH - 200;
+    static final int CROSS_MAX = 3800;
     static final int PARTNER_REUSE = 400;
     static final int PORTAL_HALF = 27;
     static final int RING_MIN = 40;
@@ -48,6 +48,14 @@ final class WorldStationPlanner {
     static final int LATERAL_MAX = 48;
     /** Minimum Chebyshev distance between a fallback and the main site or another fallback (twice the lateral repair reach). */
     static final int FALLBACK_GAP = 2 * LATERAL_MAX;
+    /** Side of a land cell, in blocks. */
+    static final int LAND_CELL = 1536;
+    /** Step of the candidate columns of a land cell. */
+    static final int LAND_STEP = 32;
+    /** Maximum number of land candidates evaluated in a cell. */
+    static final int LAND_TRIES = 300;
+    /** Minimum Chebyshev distance between a portal fallback and the main site or another fallback. */
+    static final int PORTAL_FALLBACK_GAP = 24;
     private static final int SHORE_WALK = 72;
     /**
      * Floor of the shuttle (Steamboat_Public.prefab.json, cells at prefab y 0), prefab frame before rotation. Rows are z -3..5,
@@ -284,15 +292,99 @@ final class WorldStationPlanner {
 
     /** Whether (x, z) is at least FALLBACK_GAP (Chebyshev) from the main site and from every fallback kept. */
     private static boolean farFromSites(List<Site> fallbacks, int mainX, int mainZ, int x, int z) {
-        if (Math.max(Math.abs(x - mainX), Math.abs(z - mainZ)) < FALLBACK_GAP) {
+        return farFromSites(fallbacks, mainX, mainZ, x, z, FALLBACK_GAP);
+    }
+
+    private static boolean farFromSites(List<Site> fallbacks, int mainX, int mainZ, int x, int z, int gap) {
+        if (Math.max(Math.abs(x - mainX), Math.abs(z - mainZ)) < gap) {
             return false;
         }
         for (Site s : fallbacks) {
-            if (Math.max(Math.abs(x - s.x()), Math.abs(z - s.z())) < FALLBACK_GAP) {
+            if (Math.max(Math.abs(x - s.x()), Math.abs(z - s.z())) < gap) {
                 return false;
             }
         }
         return true;
+    }
+
+    static int landCellOf(int blockCoord) {
+        return Math.floorDiv(blockCoord, LAND_CELL);
+    }
+
+    /**
+     * Plans the balloon station of a land cell: a random point is drawn in the cell and the columns of a LAND_STEP grid are tried
+     * from the closest to the farthest, at most LAND_TRIES of them. The first fitting column is the main site, the following
+     * ones are the fallbacks.
+     * @param existingAir positions {x, z} of the balloon stations already planned or built
+     * @return the station, or null when no column fits
+     */
+    static PlannedSite planLandCell(long seed, int cellX, int cellZ, TerrainProbe t, List<int[]> existingAir) {
+        SplittableRandom rnd = new SplittableRandom(seed ^ (cellX * 0x9E3779B97F4A7C15L) ^ (cellZ * 0xC2B2AE3D27D4EB4FL) ^ 0x1A4D);
+        int baseX = cellX * LAND_CELL, baseZ = cellZ * LAND_CELL;
+        int drawX = baseX + rnd.nextInt(LAND_CELL), drawZ = baseZ + rnd.nextInt(LAND_CELL);
+        List<long[]> candidates = new ArrayList<>();
+        for (int x = baseX; x < baseX + LAND_CELL; x += LAND_STEP) {
+            for (int z = baseZ; z < baseZ + LAND_CELL; z += LAND_STEP) {
+                long dx = x - drawX, dz = z - drawZ;
+                candidates.add(new long[] {dx * dx + dz * dz, x, z});
+            }
+        }
+        candidates.sort((a, b) -> {
+            int c = Long.compare(a[0], b[0]);
+            if (c != 0) {
+                return c;
+            }
+            c = Long.compare(a[1], b[1]);
+            return c != 0 ? c : Long.compare(a[2], b[2]);
+        });
+        Site main = null;
+        List<Site> fallbacks = new ArrayList<>();
+        int tries = 0;
+        for (long[] c : candidates) {
+            if (tries >= LAND_TRIES || fallbacks.size() >= MAX_SITES - 1) {
+                break;
+            }
+            int x = (int) c[1], z = (int) c[2];
+            if (near(existingAir, x, z, BALLOON_SPACING)
+                    || (main != null && !farFromSites(fallbacks, main.x(), main.z(), x, z))) {
+                continue;
+            }
+            // Only a column that reaches the terrain probe counts as a try.
+            tries++;
+            if (SeaRules.isWater(t, x, z)) {
+                continue;
+            }
+            Site site = landSite(t, x, z);
+            if (site == null) {
+                continue;
+            }
+            if (main == null) {
+                main = site;
+            } else {
+                fallbacks.add(site);
+            }
+        }
+        if (main == null) {
+            return null;
+        }
+        return new PlannedSite(Deployables.STATION_KIND, main.x(), main.z(), main.rotation(), false, List.copyOf(fallbacks));
+    }
+
+    /** The flattest rotation of the station place box at the column (first one on a tie), or null when none is flat enough. */
+    private static Site landSite(TerrainProbe t, int x, int z) {
+        int[] min = Deployables.STATION_PLACE_MIN, max = Deployables.STATION_PLACE_MAX;
+        Rotation best = null;
+        int bestSlope = 0;
+        for (Rotation r : ROTATIONS) {
+            Vector3i a = r.rotateYaw(new Vector3i(min[0], 0, min[2]), new Vector3i());
+            Vector3i b = r.rotateYaw(new Vector3i(max[0], 0, max[2]), new Vector3i());
+            int slope = footprintSlope(t, x + Math.min(a.x, b.x), x + Math.max(a.x, b.x), z + Math.min(a.z, b.z), z + Math.max(a.z, b.z));
+            if (slope >= 0 && slope <= MAX_SLOPE && (best == null || slope < bestSlope)) {
+                best = r;
+                bestSlope = slope;
+            }
+        }
+        return best == null ? null : new Site(x, z, best);
     }
 
     /**
@@ -344,9 +436,7 @@ final class WorldStationPlanner {
         }
         int[] min = Deployables.STATION_PLACE_MIN, max = Deployables.STATION_PLACE_MAX;
         long ring2Min = (long) RING_MIN * RING_MIN, ring2Max = (long) RING_MAX * RING_MAX;
-        int bestSlope = 0;
-        long bestDist = 0, bestBoard = 0;
-        PlannedSite best = null;
+        List<long[]> fits = new ArrayList<>();
         for (int dx = -RING_MAX; dx <= RING_MAX; dx += RING_STEP) {
             for (int dz = -RING_MAX; dz <= RING_MAX; dz += RING_STEP) {
                 long d2 = (long) dx * dx + (long) dz * dz;
@@ -357,7 +447,8 @@ final class WorldStationPlanner {
                 if (near(existingAir, x, z, BALLOON_SPACING)) {
                     continue;
                 }
-                for (Rotation r : ROTATIONS) {
+                for (int ri = 0; ri < ROTATIONS.length; ri++) {
+                    Rotation r = ROTATIONS[ri];
                     Vector3i a = r.rotateYaw(new Vector3i(min[0], 0, min[2]), new Vector3i());
                     Vector3i b = r.rotateYaw(new Vector3i(max[0], 0, max[2]), new Vector3i());
                     int x0 = x + Math.min(a.x, b.x), x1 = x + Math.max(a.x, b.x);
@@ -373,17 +464,38 @@ final class WorldStationPlanner {
                     float[] bp = Deployables.STATION_BOARDING_POINTS[0];
                     Vector3i p = r.rotateYaw(new Vector3i(Math.round(bp[0]), 0, Math.round(bp[2])), new Vector3i());
                     long bx = x + p.x - portalX, bz = z + p.z - portalZ;
-                    long board = bx * bx + bz * bz;
-                    if (best == null || slope < bestSlope || (slope == bestSlope && (d2 < bestDist || (d2 == bestDist && board < bestBoard)))) {
-                        best = new PlannedSite(Deployables.STATION_KIND, x, z, r, false);
-                        bestSlope = slope;
-                        bestDist = d2;
-                        bestBoard = board;
-                    }
+                    fits.add(new long[] {slope, d2, bx * bx + bz * bz, x, z, ri});
                 }
             }
         }
-        return best;
+        // Preference order: lowest slope, then closest to the portal, then closest boarding point.
+        fits.sort((a, b) -> {
+            for (int k = 0; k < 3; k++) {
+                int c = Long.compare(a[k], b[k]);
+                if (c != 0) {
+                    return c;
+                }
+            }
+            return 0;
+        });
+        PlannedSite best = null;
+        List<Site> fallbacks = new ArrayList<>();
+        for (long[] f : fits) {
+            int x = (int) f[3], z = (int) f[4];
+            Rotation r = ROTATIONS[(int) f[5]];
+            if (best == null) {
+                best = new PlannedSite(Deployables.STATION_KIND, x, z, r, false);
+            } else if (fallbacks.size() < MAX_SITES - 1 && farFromSites(fallbacks, best.x(), best.z(), x, z, PORTAL_FALLBACK_GAP)) {
+                fallbacks.add(new Site(x, z, r));
+            }
+            if (best != null && fallbacks.size() >= MAX_SITES - 1) {
+                break;
+            }
+        }
+        if (best == null) {
+            return null;
+        }
+        return new PlannedSite(Deployables.STATION_KIND, best.x(), best.z(), best.rotation(), false, List.copyOf(fallbacks));
     }
 
     /** Height spread over the box sampled every FOOTPRINT_STEP blocks, far edges included, or -1 when a column is water. */

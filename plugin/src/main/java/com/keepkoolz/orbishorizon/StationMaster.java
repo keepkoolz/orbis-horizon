@@ -152,7 +152,7 @@ final class StationMaster {
     /**
      * The master has the player model (role Appearance "Player"): he gets a player skin drawn from a generator seeded with his
      * station (world and origin), so each station has its own master and keeps him across restarts, with the station cap
-     * (MASTER_CAP). Only when he has no skin with the cap yet.
+     * (MASTER_CAP) and a shaven face (no facial hair, no stubble). Only when his skin lacks the cap or still has a beard.
      * The game draws such skins for its own NPCs (ModelSystems$ApplyRandomSkin, CosmeticsModule.generateRandomSkin). Never throws.
      */
     /**
@@ -165,7 +165,8 @@ final class StationMaster {
         try {
             com.hypixel.hytale.server.core.modules.entity.player.PlayerSkinComponent have =
                     store.getComponent(ref, com.hypixel.hytale.server.core.modules.entity.player.PlayerSkinComponent.getComponentType());
-            if (have != null && have.getPlayerSkin() != null && MASTER_CAP.equals(have.getPlayerSkin().headAccessory)) {
+            if (have != null && have.getPlayerSkin() != null && MASTER_CAP.equals(have.getPlayerSkin().headAccessory)
+                    && !bearded(have.getPlayerSkin())) {
                 return;
             }
             long seed = java.util.Objects.hash(s.world, s.origin.x, s.origin.y, s.origin.z);
@@ -173,6 +174,7 @@ final class StationMaster {
                     com.hypixel.hytale.server.core.cosmetics.CosmeticsModule.get().generateRandomSkin(new java.util.Random(seed));
             if (skin != null) {
                 skin.headAccessory = MASTER_CAP;
+                shave(skin);
                 com.hypixel.hytale.server.core.modules.entity.player.PlayerSkinComponent c =
                         new com.hypixel.hytale.server.core.modules.entity.player.PlayerSkinComponent(skin);
                 c.setNetworkOutdated(); // sent again to the clients that already see the master
@@ -181,6 +183,20 @@ final class StationMaster {
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Apparence du chef de gare de « %s » non posée", s.name);
             Telemetry.error("transit", e, null, null);
+        }
+    }
+
+    private static final String STUBBLE_FACE = "Face_Stubble";
+
+    static boolean bearded(com.hypixel.hytale.protocol.PlayerSkin skin) {
+        return skin.facialHair != null || (skin.face != null && skin.face.startsWith(STUBBLE_FACE));
+    }
+
+    /** Removes the facial hair and turns a stubble face into the neutral one, keeping its colour. */
+    static void shave(com.hypixel.hytale.protocol.PlayerSkin skin) {
+        skin.facialHair = null;
+        if (skin.face != null && skin.face.startsWith(STUBBLE_FACE)) {
+            skin.face = PilotLook.replaceId(skin.face, "Face_Neutral");
         }
     }
 

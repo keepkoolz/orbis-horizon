@@ -167,6 +167,598 @@ public class TransitTests {
         }
     }
 
+    /** Fake terrain for the sea chart: one cell is 16 blocks. # land, ~ sea, comma shallow sea (depth 1), 3 shallow sea (depth 3), l lake, r river. */
+    static class ChartGrid implements TerrainProbe {
+        private final String[] rows;
+
+        ChartGrid(String... rows) {
+            this.rows = rows;
+        }
+
+        private char cell(int x, int z) {
+            int r = Math.max(0, Math.min(rows.length - 1, Math.floorDiv(z, 16)));
+            String row = rows[r];
+            int c = Math.max(0, Math.min(row.length() - 1, Math.floorDiv(x, 16)));
+            return row.charAt(c);
+        }
+
+        @Override
+        public int height(int x, int z) {
+            return switch (cell(x, z)) {
+                case '#' -> 120;
+                case ',' -> 113;
+                case '3' -> 111;
+                default -> 100;
+            };
+        }
+
+        @Override
+        public String zone(int x, int z) {
+            char c = cell(x, z);
+            return c == '~' || c == ',' || c == '3' ? "Oceans" : "Zone1_Tier1";
+        }
+
+        @Override
+        public String biome(int x, int z) {
+            return switch (cell(x, z)) {
+                case '~', ',', '3' -> "Ocean";
+                case 'l' -> "Lake_Temperate";
+                case 'r' -> "River_Temperate";
+                default -> "";
+            };
+        }
+    }
+
+    private record RouteView(Set<Long> closedCells, List<SeaChartBook.Segment> learned) implements ChartRoute.View {
+        @Override
+        public boolean closed(int cx, int cz) {
+            return closedCells.contains(((long) cx << 32) | (cz & 0xFFFFFFFFL));
+        }
+
+        @Override
+        public List<SeaChartBook.Segment> segments() {
+            return learned;
+        }
+    }
+
+    private static RouteView routeView(List<SeaChartBook.Segment> learned, int[]... closed) {
+        Set<Long> set = new java.util.HashSet<>();
+        for (int[] c : closed) {
+            set.add(((long) c[0] << 32) | (c[1] & 0xFFFFFFFFL));
+        }
+        return new RouteView(set, learned);
+    }
+
+    private static SeaChart routeChart(ChartGrid g, int cols, int rows) {
+        SeaChart c = new SeaChart(1L);
+        for (int cz = 0; cz < rows; cz++) {
+            for (int cx = 0; cx < cols; cx++) {
+                c.fill(g, cx * 16 + 8, cz * 16 + 8, 40);
+            }
+        }
+        return c;
+    }
+
+    private static ChartRoute.Status runRoute(ChartRoute r) {
+        ChartRoute.Status s = ChartRoute.Status.RUNNING;
+        for (int i = 0; i < 1000 && s == ChartRoute.Status.RUNNING; i++) {
+            s = r.step(100);
+        }
+        return s;
+    }
+
+    /** Route between two cells, centres in blocks. */
+    private static ChartRoute route(SeaChart c, RouteView v, int fx, int fz, int tx, int tz) {
+        return new ChartRoute(c, v, fx * 16 + 8, fz * 16 + 8, tx * 16 + 8, tz * 16 + 8);
+    }
+
+    static void corridorAroundIsland() {
+        String[] rows = {"#########", "#~~~~~~~#", "#~~###~~#", "#~~###~~#", "#~~~~~~~#", "#########"};
+        SeaChart c = routeChart(new ChartGrid(rows), 9, 6);
+        ChartRoute r = route(c, routeView(List.of()), 1, 2, 7, 2);
+        eq(ChartRoute.Status.FOUND, runRoute(r));
+        for (int[] p : r.points()) {
+            check(c.ocean(SeaChart.cellOf(p[0]), SeaChart.cellOf(p[1])) != 0, "point sur la terre " + p[0] + "," + p[1]);
+        }
+    }
+
+    static void corridorPrefersDeep() {
+        // the shallow top passage is shorter, both passages touch land all along: only the depth factor decides
+        String[] rows = {"#########", "#~33333~#", "#~#####~#", "#~#####~#", "#~~~~~~~#", "#########"};
+        SeaChart c = routeChart(new ChartGrid(rows), 9, 6);
+        ChartRoute r = route(c, routeView(List.of()), 1, 2, 7, 2);
+        eq(ChartRoute.Status.FOUND, runRoute(r));
+        boolean deepRow = false;
+        for (int[] p : r.points()) {
+            int cz = SeaChart.cellOf(p[1]);
+            check(cz != 1, "le passage peu profond est pris");
+            deepRow |= cz == 4;
+        }
+        check(deepRow, "le passage profond est pris");
+    }
+
+    static void corridorAvoidsShore() {
+        String[] rows = {"###########", "#~~~~~~~~~#", "#~#######~#", "#~~~~~~~~~#", "#~~~~~~~~~#", "#~~~~~~~~~#", "###########"};
+        SeaChart c = routeChart(new ChartGrid(rows), 11, 7);
+        ChartRoute r = route(c, routeView(List.of()), 1, 2, 9, 2);
+        eq(ChartRoute.Status.FOUND, runRoute(r));
+        boolean offshore = false;
+        for (int[] p : r.points()) {
+            int cz = SeaChart.cellOf(p[1]);
+            check(cz != 1, "le passage collé à la terre est pris");
+            offshore |= cz == 4;
+        }
+        check(offshore, "le passage au large est pris");
+    }
+
+    private static final String[] TWO_SEAS = {"#######", "#~~#~~#", "#######"};
+
+    private static List<SeaChartBook.Segment> acrossLand() {
+        return List.of(new SeaChartBook.Segment(2 * 16 + 8, 24, 4 * 16 + 8, 24));
+    }
+
+    static void corridorLearnedThroughLand() {
+        SeaChart c = routeChart(new ChartGrid(TWO_SEAS), 7, 3);
+        eq(ChartRoute.Status.NONE, runRoute(route(c, routeView(List.of()), 1, 1, 5, 1)));
+        ChartRoute r = route(c, routeView(acrossLand()), 1, 1, 5, 1);
+        eq(ChartRoute.Status.FOUND, runRoute(r));
+        List<int[]> pts = r.points();
+        eq(24, pts.get(0)[0]);
+        eq(5 * 16 + 8, pts.get(pts.size() - 1)[0]);
+    }
+
+    static void corridorLearnedSegmentPointsSpaced() {
+        String[] rows = {"#".repeat(15), "#~~" + "#".repeat(10) + "~~#", "#".repeat(15)};
+        SeaChart c = routeChart(new ChartGrid(rows), 15, 3);
+        List<SeaChartBook.Segment> seg = List.of(new SeaChartBook.Segment(2 * 16 + 8, 24, 13 * 16 + 8, 24));
+        ChartRoute r = route(c, routeView(seg), 1, 1, 14, 1);
+        eq(ChartRoute.Status.FOUND, runRoute(r));
+        List<int[]> pts = r.points();
+        eq(24, pts.get(0)[0]);
+        eq(14 * 16 + 8, pts.get(pts.size() - 1)[0]);
+        for (int i = 1; i < pts.size(); i++) {
+            double d = Math.hypot(pts.get(i)[0] - pts.get(i - 1)[0], pts.get(i)[1] - pts.get(i - 1)[1]);
+            check(d <= 48.0 + 1e-9, "gap " + d + " at " + i);
+        }
+    }
+
+    static void corridorClosedCell() {
+        String[] rows = {"#######", "#~~~~~#", "#######"};
+        SeaChart c = routeChart(new ChartGrid(rows), 7, 3);
+        eq(ChartRoute.Status.FOUND, runRoute(route(c, routeView(List.of()), 1, 1, 5, 1)));
+        eq(ChartRoute.Status.NONE, runRoute(route(c, routeView(List.of(), new int[] {3, 1}), 1, 1, 5, 1)));
+    }
+
+    static void corridorClosedKillsSegment() {
+        SeaChart c = routeChart(new ChartGrid(TWO_SEAS), 7, 3);
+        eq(ChartRoute.Status.NONE, runRoute(route(c, routeView(acrossLand(), new int[] {3, 1}), 1, 1, 5, 1)));
+    }
+
+    static void corridorNoDiagonalCut() {
+        String[] rows = {"####", "#~##", "##~#", "####"};
+        SeaChart c = routeChart(new ChartGrid(rows), 4, 4);
+        eq(ChartRoute.Status.NONE, runRoute(route(c, routeView(List.of()), 1, 1, 2, 2)));
+    }
+
+    private static String straight(int cells) {
+        return "#" + "~".repeat(cells) + "#";
+    }
+
+    static void corridorPoints48() {
+        String[] rows = {straight(20).replace('~', '#'), straight(20), straight(20).replace('~', '#')};
+        SeaChart c = routeChart(new ChartGrid(rows), 22, 3);
+        ChartRoute r = route(c, routeView(List.of()), 1, 1, 20, 1);
+        eq(ChartRoute.Status.FOUND, runRoute(r));
+        List<int[]> pts = r.points();
+        eq(1 * 16 + 8, pts.get(0)[0]);
+        eq(20 * 16 + 8, pts.get(pts.size() - 1)[0]);
+        for (int i = 1; i < pts.size() - 1; i++) {
+            eq(48, pts.get(i)[0] - pts.get(i - 1)[0]);
+        }
+        eq(8, pts.size()); // 20 cells: points at 0, 3 .. 18 and the last cell
+    }
+
+    static void corridorBudget() {
+        String[] rows = {straight(20).replace('~', '#'), straight(20), straight(20).replace('~', '#')};
+        SeaChart c = routeChart(new ChartGrid(rows), 22, 3);
+        ChartRoute r = route(c, routeView(List.of()), 1, 1, 20, 1);
+        eq(ChartRoute.Status.RUNNING, r.step(10));
+        ChartRoute.Status s = ChartRoute.Status.RUNNING;
+        int calls = 0;
+        while (s == ChartRoute.Status.RUNNING && calls < 20) {
+            s = r.step(10);
+            calls++;
+        }
+        eq(ChartRoute.Status.FOUND, s);
+        check(calls >= 1, "plusieurs appels");
+    }
+
+    static void chartTwoSeas() {
+        SeaChart c = new SeaChart(1L);
+        ChartGrid g = new ChartGrid("~~#~~", "~~#~~");
+        int a = c.fill(g, 8, 8), b = c.fill(g, 4 * 16 + 8, 8);
+        check(a != 0 && b != 0 && a != b, "deux mers séparées");
+    }
+
+    static void chartStrait() {
+        SeaChart c = new SeaChart(1L);
+        ChartGrid g = new ChartGrid("~~#~~", "~~~~~", "~~#~~");
+        check(c.fill(g, 8, 8) == c.fill(g, 4 * 16 + 8, 8), "détroit d'une case");
+    }
+
+    static void chartLakeNotSea() {
+        SeaChart c = new SeaChart(1L);
+        ChartGrid g = new ChartGrid("~~ll");
+        int sea = c.fill(g, 8, 8), lake = c.fill(g, 3 * 16 + 8, 8);
+        check(sea != 0 && lake != 0 && sea != lake, "lac jamais fusionné avec la mer");
+        eq(SeaChart.Water.FRESH, c.water(3, 0));
+    }
+
+    static void chartRiverFresh() {
+        ChartGrid g = new ChartGrid("lrrl");
+        SeaChart c = new SeaChart(1L);
+        check(c.fill(g, 8, 8) == c.fill(g, 3 * 16 + 8, 8), "lacs reliés par une rivière");
+    }
+
+    static void chartRockAndShallow() {
+        SeaChart c = new SeaChart(1L);
+        ChartGrid g = new ChartGrid("~#~", "~,~");
+        c.fill(g, 8, 8);
+        eq(0, c.ocean(1, 0));
+        eq(0, c.ocean(1, 1)); // depth 1 is under MIN_DEPTH
+        check(c.ocean(0, 0) != c.ocean(2, 0), "ni le rocher ni le haut-fond ne relient");
+    }
+
+    static void chartMergeOrder() {
+        ChartGrid g = new ChartGrid("~#~#~", "~~~~~");
+        for (int[] order : new int[][] {{0, 2, 4}, {4, 2, 0}, {2, 0, 4}}) {
+            SeaChart c = new SeaChart(1L);
+            int last = 0;
+            for (int i : order) last = c.fill(g, i * 16 + 8, 8);
+            eq(c.ocean(0, 0), c.ocean(4, 0));
+            eq(c.ocean(0, 0), last);
+        }
+    }
+
+    static void chartFillSkipsLabelled() {
+        SeaChart c = new SeaChart(1L);
+        ChartGrid g = new ChartGrid("~~~~~~~~");
+        c.fill(g, 8, 8);
+        int reads = c.fillReads();
+        c.fill(g, 5 * 16 + 8, 8);
+        eq(reads, c.fillReads());
+    }
+
+    static void chartLakeAfterSea() {
+        SeaChart c = new SeaChart(1L);
+        ChartGrid g = new ChartGrid("~~lll", "~~lll");
+        c.fill(g, 8, 8);
+        int lake = c.fill(g, 4 * 16 + 8, 8);
+        check(lake != 0, "lac rempli après la mer");
+        for (int cz = 0; cz < 2; cz++) {
+            for (int cx = 2; cx < 5; cx++) {
+                eq(lake, c.ocean(cx, cz));
+            }
+        }
+    }
+
+    static void chartMergeShortRadius() {
+        SeaChart c = new SeaChart(1L);
+        ChartGrid g = new ChartGrid("~~~~~~~");
+        int a = c.fill(g, 8, 8, 3);
+        eq(0, c.ocean(6, 0));
+        int b = c.fill(g, 6 * 16 + 8, 8, 3);
+        check(a != 0, "premier remplissage");
+        eq(a, b);
+        eq(a, c.ocean(0, 0));
+        eq(a, c.ocean(6, 0));
+    }
+
+    static void chartFileRoundTrip() throws Exception {
+        ChartGrid g = new ChartGrid("~~#~~lll#~~", "~~#~~lll#~~", "~~#~~~~~#~~");
+        SeaChart c = new SeaChart(7L);
+        c.fill(g, 8, 8);
+        c.fill(g, 4 * 16 + 8, 8);
+        c.fill(g, 5 * 16 + 8, 8);
+        Path f = Files.createTempFile("chart", ".bin");
+        try {
+            SeaChartFile.write(f, c);
+            SeaChart r = SeaChartFile.read(f, 7L);
+            check(r != null, "carte relue");
+            for (int cz = -2; cz < 6; cz++) {
+                for (int cx = -2; cx < 12; cx++) {
+                    eq(c.ocean(cx, cz), r.ocean(cx, cz));
+                    eq(c.depth(cx, cz), r.depth(cx, cz));
+                    eq(c.water(cx, cz), r.water(cx, cz));
+                }
+            }
+            int before = 0;
+            for (int cz = -2; cz < 6; cz++) {
+                for (int cx = -2; cx < 12; cx++) {
+                    before = Math.max(before, c.ocean(cx, cz));
+                }
+            }
+            int fresh = r.fill(g, 9 * 16 + 8, 8);
+            check(fresh > before, "étiquette neuve après rechargement : " + fresh + " contre " + before);
+        } finally {
+            Files.deleteIfExists(f);
+        }
+    }
+
+    static void chartFileOtherSeed() throws Exception {
+        SeaChart c = new SeaChart(7L);
+        c.fill(new ChartGrid("~~~"), 8, 8);
+        Path f = Files.createTempFile("chart", ".bin");
+        try {
+            SeaChartFile.write(f, c);
+            check(SeaChartFile.read(f, 8L) == null, "autre graine");
+            check(SeaChartFile.read(f.resolveSibling("absent.bin"), 7L) == null, "fichier absent");
+        } finally {
+            Files.deleteIfExists(f);
+        }
+    }
+
+    static void chartFileCorrupt() throws Exception {
+        SeaChart c = new SeaChart(7L);
+        c.fill(new ChartGrid("~~~"), 8, 8);
+        Path f = Files.createTempFile("chart", ".bin");
+        try {
+            byte[] junk = new byte[10];
+            new java.util.Random(3).nextBytes(junk);
+            Files.write(f, junk);
+            check(SeaChartFile.read(f, 7L) == null, "octets au hasard");
+            SeaChartFile.write(f, c);
+            byte[] good = Files.readAllBytes(f);
+            Files.write(f, Arrays.copyOf(good, good.length / 2));
+            check(SeaChartFile.read(f, 7L) == null, "fichier tronqué");
+        } finally {
+            Files.deleteIfExists(f);
+        }
+    }
+
+    static void bookSegmentsEvery50() {
+        SeaChartBook b = new SeaChartBook();
+        SeaChartBook.Trip t = b.startTrip("w", "A", "B", 100);
+        for (int x = 0; x <= 160; x += 4) t.note(x, 0);
+        eq(3, t.pending());
+        eq(0, b.segments("w").size());
+        b.commit(t);
+        eq(3, b.segments("w").size());
+    }
+
+    static void bookMergeNearKnownPoint() {
+        SeaChartBook b = new SeaChartBook();
+        SeaChartBook.Trip t = b.startTrip("w", "A", "B", 100);
+        for (int x = 0; x <= 100; x += 2) t.note(x, 0);
+        b.commit(t);
+        SeaChartBook.Trip u = b.startTrip("w", "A", "B", 100);
+        for (int x = 0; x <= 100; x += 2) u.note(x, 10);
+        b.commit(u);
+        eq(2, b.segments("w").size());
+    }
+
+    static void bookForgetAndCap() {
+        SeaChartBook b = new SeaChartBook();
+        SeaChartBook.Trip t = b.startTrip("w", "A", "B", 2);
+        for (int x = 0; x <= 500; x += 5) t.note(x, 0);
+        eq(2, t.pending());
+        b.forget(t);
+        eq(0, t.pending());
+        b.commit(t);
+        eq(0, b.segments("w").size());
+        eq(30, SeaChartBook.maxSegments(250));
+    }
+
+    static void bookClosure() {
+        SeaChartBook b = new SeaChartBook();
+        SeaChartBook.Trip t = b.startTrip("w", "A", "B", 100);
+        for (int x = 0; x <= 100; x += 2) t.note(x, 0);
+        b.commit(t);
+        b.close("w", 1, 0, 1000L); // cell 1 holds x 16..31, only the segment 0 to 50 crosses it
+        check(b.closed("w", 1, 0, 1000L), "fermée");
+        check(!b.closed("w", 1, 0, 1000L + SeaChartBook.CLOSE_MS), "expirée");
+        eq(1, b.segments("w").size());
+        b.close("w", 9, 9, 0L);
+        b.crossed("w", 9, 9);
+        check(!b.closed("w", 9, 9, 0L), "effacée au passage");
+    }
+
+    static void bookIncomplete() {
+        SeaChartBook b = new SeaChartBook();
+        b.markIncomplete("w", "A", "B");
+        check(b.incomplete("w", "A", "B") && !b.incomplete("w", "B", "A"), "paire ordonnée");
+        b.clearIncomplete("w", "A", "B");
+        check(!b.incomplete("w", "A", "B"), "effacée");
+    }
+
+    static void bookFileRoundTripAndBad() throws Exception {
+        Path dir = Files.createTempDirectory("book");
+        Path f = dir.resolve("sea-chart.json");
+        try {
+            SeaChartBook a = new SeaChartBook();
+            a.save(); // no file yet: nothing happens
+            check(!Files.exists(f), "save sans load");
+            a.load(f);
+            SeaChartBook.Trip t = a.startTrip("w", "A", "B", 100);
+            for (int x = 0; x <= 100; x += 2) t.note(x, 0);
+            a.commit(t);
+            a.close("w", 40, 40, 5000L);
+            a.markIncomplete("w", "A", "B");
+            check(!Files.exists(f), "aucune écriture avant save");
+            a.save();
+            check(Files.isRegularFile(f), "fichier écrit");
+            SeaChartBook r = new SeaChartBook();
+            r.load(f);
+            eq(a.segments("w"), r.segments("w"));
+            eq(2, r.segments("w").size());
+            check(r.closed("w", 40, 40, 5000L), "fermeture relue");
+            check(r.incomplete("w", "A", "B") && !r.incomplete("w", "B", "A"), "paire relue");
+            Files.writeString(f, "pas du json");
+            SeaChartBook bad = new SeaChartBook();
+            bad.load(f);
+            eq(0, bad.segments("w").size());
+            check(!Files.exists(f), "fichier retiré");
+            check(Files.isRegularFile(dir.resolve("sea-chart.json.bad")), "renommé en .bad");
+        } finally {
+            try (var s = Files.list(dir)) {
+                for (Path p : s.toList()) Files.deleteIfExists(p);
+            }
+            Files.deleteIfExists(dir);
+        }
+    }
+
+    static void bookChangeListenerAndCap() {
+        SeaChartBook b = new SeaChartBook();
+        int[] calls = {0};
+        b.setChangeListener(() -> calls[0]++);
+        SeaChartBook.Trip t = b.startTrip("w", "A", "B", 100);
+        for (int x = 0; x <= 100; x += 2) t.note(x, 0);
+        b.commit(t);
+        eq(1, calls[0]);
+        b.commit(b.startTrip("w", "A", "B", 100));
+        eq(1, calls[0]); // nothing new
+        b.close("w", 40, 40, 0L);
+        eq(2, calls[0]);
+        b.crossed("w", 7, 7);
+        eq(2, calls[0]); // the cell was not closed
+        b.crossed("w", 40, 40);
+        eq(3, calls[0]);
+        b.markIncomplete("w", "A", "B");
+        b.markIncomplete("w", "A", "B");
+        eq(4, calls[0]);
+        b.clearIncomplete("w", "A", "B");
+        eq(5, calls[0]);
+        SeaChartBook.Trip u = b.startTrip("w", "A", "B", 100);
+        for (int x = 0; x <= 500; x += 5) u.note(x, 0);
+        u.setMaxSegments(3);
+        eq(3, u.pending());
+    }
+
+    static void seaChartsBookSavedByItsThread() throws Exception {
+        Path dir = Files.createTempDirectory("seabook");
+        Path f = dir.resolve("sea-chart.json");
+        try {
+            SeaCharts.start(dir);
+            SeaChartBook b = SeaCharts.book();
+            for (int i = 0; i < 5; i++) {
+                b.markIncomplete("seaw", "A", "B" + i);
+            }
+            long end = System.currentTimeMillis() + 5000;
+            while (!Files.isRegularFile(f) && System.currentTimeMillis() < end) {
+                Thread.sleep(20);
+            }
+            check(Files.isRegularFile(f), "écrit par le fil de la carte");
+            b.markIncomplete("seaw", "A", "late");
+            SeaCharts.stop();
+            SeaChartBook r = new SeaChartBook();
+            r.load(f);
+            check(r.incomplete("seaw", "A", "B4") && r.incomplete("seaw", "A", "late"), "écrit à l'arrêt");
+            SeaCharts.start(dir);
+            check(SeaCharts.book().incomplete("seaw", "A", "B0"), "relu au démarrage");
+            SeaCharts.stop();
+        } finally {
+            SeaCharts.book().reset();
+            try (var s = Files.list(dir)) {
+                for (Path p : s.toList()) Files.deleteIfExists(p);
+            }
+            Files.deleteIfExists(dir);
+        }
+    }
+
+    static void localNavFrozenNearBerth() {
+        check(BoatAutopilot.localNavFrozen(79), "79 figé");
+        check(BoatAutopilot.localNavFrozen(BoatAutopilot.ARRIVAL_DECIDE_RANGE), "80 figé");
+        check(!BoatAutopilot.localNavFrozen(81), "81 libre");
+    }
+
+    static void shuttleTripRecorded() {
+        SeaChartBook b = new SeaChartBook();
+        b.markIncomplete("w", "A", "B");
+        SeaChartBook.Trip t = b.startTrip("w", "A", "B", 100);
+        for (int x = 0; x <= 100; x += 2) t.note(x, 0);
+        eq(0, b.segments("w").size());
+        ShuttleNav.tripArrived(b, t);
+        eq(2, b.segments("w").size());
+        check(!b.incomplete("w", "A", "B"), "arrivée : paire complète");
+
+        SeaChartBook.Trip u = b.startTrip("w", "A", "C", 100);
+        for (int x = 0; x <= 100; x += 2) u.note(x, 300);
+        ShuttleNav.tripFailed(b, u);
+        eq(2, b.segments("w").size());
+        eq(0, u.pending());
+        check(b.incomplete("w", "A", "C"), "secours : paire incomplète");
+
+        SeaChartBook.Trip v = b.startTrip("w", "A", "D", 100);
+        for (int x = 0; x <= 100; x += 2) v.note(x, 600);
+        ShuttleNav.tripRemoved(b, v);
+        eq(2, b.segments("w").size());
+        eq(0, v.pending());
+        check(!b.incomplete("w", "A", "D"), "retrait : rien noté");
+
+        // The same decisions taken from the state of a shuttle, on the shared book.
+        SeaChartBook shared = SeaCharts.book();
+        ShuttleState st = new ShuttleState(null, null, List.of(), ShuttleState.Phase.SAIL, 0);
+        st.trip = shared.startTrip("tripw", "A", "B", 100);
+        for (int x = 0; x <= 100; x += 2) st.trip.note(x, 0);
+        ShuttleNav.arrived(st);
+        eq(2, shared.segments("tripw").size());
+        check(st.trip == null && st.nav == null, "navigation terminée");
+        st.trip = shared.startTrip("tripw", "A", "C", 100);
+        ShuttleNav.failed(st);
+        check(shared.incomplete("tripw", "A", "C") && st.trip == null, "échec noté");
+        st.trip = shared.startTrip("tripw", "A", "E", 100);
+        ShuttleNav.removed(st);
+        check(!shared.incomplete("tripw", "A", "E") && st.trip == null, "retrait sans note");
+        shared.clearIncomplete("tripw", "A", "C");
+    }
+
+    static void shuttleNavWaitIsBounded() {
+        // A load that never completes: the wait gives up at the stall time.
+        long t0 = 1000L;
+        check(ShuttleNav.waitDecision(false, false, 0, t0, t0) == ShuttleNav.Wait.LOAD, "premier chargement");
+        check(ShuttleNav.waitDecision(true, false, 1, t0, t0 + 1000) == ShuttleNav.Wait.WAIT, "chargement en cours");
+        check(ShuttleNav.waitDecision(true, false, 1, t0, t0 + BoatBerth.STALL_MS + 1) == ShuttleNav.Wait.GIVE_UP, "jamais terminé");
+        // Loads that finish but leave the columns unknown: gives up after MAX_LOAD_ATTEMPTS loads, whatever the time.
+        int attempts = 0;
+        int ticks = 0;
+        boolean gaveUp = false;
+        boolean pending = false;
+        while (ticks++ < 100 && !gaveUp) {
+            switch (ShuttleNav.waitDecision(pending, pending, attempts, t0, t0 + ticks)) {
+                case LOAD -> {
+                    attempts++;
+                    pending = true;
+                }
+                case DATA_LOADED -> pending = false;
+                case GIVE_UP -> gaveUp = true;
+                default -> {
+                }
+            }
+        }
+        check(gaveUp, "abandon");
+        eq(BoatBerth.MAX_LOAD_ATTEMPTS, attempts);
+        check(ShuttleNav.beforeDeparture(ShuttleState.Phase.SAIL, 5), "au poste en SAIL");
+        check(!ShuttleNav.beforeDeparture(ShuttleState.Phase.SAIL, 30), "parti");
+        check(!ShuttleNav.beforeDeparture(ShuttleState.Phase.HOLD, 5), "pas en SAIL");
+    }
+
+    static void shuttleNavHelpers() {
+        List<int[]> l = List.of(new int[] {0, 0}, new int[] {40, 0}, new int[] {80, 0});
+        List<int[]> c = ShuttleNav.completed(l, 1, new int[] {100, 0});
+        eq(3, c.size());
+        eq(40, c.get(0)[0]);
+        eq(100, c.get(2)[0]);
+        eq(2, ShuttleNav.completed(l, 1, new int[] {80, 0}).size()); // already ends at the berth
+        eq(1, ShuttleNav.completed(List.of(), 0, new int[] {5, 5}).size());
+        eq(3, l.size());
+        eq(80, ShuttleNav.corridorBlocks(l));
+        check(!ShuttleNav.loadWaitExpired(2, 1000L, 30_000L), "attente en cours");
+        check(ShuttleNav.loadWaitExpired(BoatBerth.MAX_LOAD_ATTEMPTS, 1000L, 2000L), "assez d'essais");
+        check(ShuttleNav.loadWaitExpired(1, 1000L, 1000L + BoatBerth.STALL_MS + 1), "trop long");
+        check(ShuttleNav.beforeDeparture(ShuttleNav.DEPARTURE_RANGE), "au poste");
+        check(!ShuttleNav.beforeDeparture(ShuttleNav.DEPARTURE_RANGE + 1), "parti");
+    }
+
     static void seaRulesSeaVsLake() {
         GridProbe g = new GridProbe("#~lrs");
         int[] x = {8, 24, 40, 56, 72};
@@ -178,6 +770,12 @@ public class TransitTests {
             check(SeaRules.isLand(g, x[i], 8) == !water[i], "isLand cell " + i);
         }
         eq(114, SeaRules.SEA_LEVEL);
+        // pier end column (111, 199): sea surface at 114 gives origin 115, a lower pool (air at 114, water at 113) gives 114
+        org.joml.Vector3i computed = new org.joml.Vector3i(100, SeaRules.SEA_LEVEL, 200);
+        DeployPlacement.CellState open = (cx, cy, cz) -> cy <= 114 && cy >= 100 ? 1 : (cy < 100 ? 2 : 0);
+        DeployPlacement.CellState pool = (cx, cy, cz) -> cy <= 113 && cy >= 100 ? 1 : (cy < 100 ? 2 : 0);
+        check(SeaRules.atSeaLevel(DeployPlacement.boatStationOrigin(open, computed, Rotation.Ninety)), "sea surface: accepted");
+        check(!SeaRules.atSeaLevel(DeployPlacement.boatStationOrigin(pool, computed, Rotation.Ninety)), "lower pool: refused");
     }
 
 
@@ -202,17 +800,18 @@ public class TransitTests {
         }
         eq(Rotation.None, WorldStationPlanner.facing(0, 1));
         eq(Rotation.OneEighty, WorldStationPlanner.facing(0, -1));
-        eq(0, WorldStationPlanner.cellOf(2047));
+        eq(0, WorldStationPlanner.cellOf(1023));
+        eq(1, WorldStationPlanner.cellOf(1024));
         eq(-1, WorldStationPlanner.cellOf(-1));
     }
 
     static void seaCellPicksShore() {
-        GridProbe g = strip('~', 64, '#', 64);
+        GridProbe g = strip('~', 32, '#', 32);
         List<WorldStationPlanner.PlannedSite> sites = plan(g, 0, List.of());
         check(!sites.isEmpty(), "a station is planned");
         WorldStationPlanner.PlannedSite s = sites.get(0);
         eq(Deployables.BOAT_STATION_KIND, s.kind());
-        eq(1024, s.x());
+        eq(512, s.x());
         check(!s.partner(), "not a partner");
         eq(WorldStationPlanner.facing(-1, 0), s.rotation());
         check(SeaRules.isLand(g, s.x(), s.z()), "on land");
@@ -255,15 +854,15 @@ public class TransitTests {
     }
 
     static void seaCellSkipsFarColumns() {
-        CountingProbe p = new CountingProbe(1900);
+        CountingProbe p = new CountingProbe(900);
         check(!WorldStationPlanner.seaSamples(p, 0, 0).isEmpty(), "sea sampled");
         List<WorldStationPlanner.PlannedSite> sites = plan(p, 0, List.of());
         check(!sites.isEmpty(), "a station is planned");
-        check(p.minHeightX >= 1900 - WorldStationPlanner.SEA_NEAR - WorldStationPlanner.ZONE_STEP,
+        check(p.minHeightX >= 900 - WorldStationPlanner.SEA_NEAR - WorldStationPlanner.ZONE_STEP,
             "no height asked far from the sea: " + p.minHeightX);
         WorldStationPlanner.PlannedSite s = sites.get(0);
         check(SeaRules.isLand(p, s.x(), s.z()), "on land");
-        check(s.x() > 1800 && s.x() < 1900, "on the coast: " + s.x());
+        check(s.x() > 800 && s.x() < 900, "on the coast: " + s.x());
     }
 
     private static boolean pierEndIsSea(TerrainProbe t, WorldStationPlanner.PlannedSite s) {
@@ -299,11 +898,11 @@ public class TransitTests {
 
     static void seaCellAnyShoreOffset() {
         Object[][] cases = {
-            {true, 1, 1009, 1, 0}, {true, -1, 1010, -1, 0}, {false, 1, 1009, 0, 1}, {false, -1, 1010, 0, -1}};
+            {true, 1, 509, 1, 0}, {true, -1, 510, -1, 0}, {false, 1, 509, 0, 1}, {false, -1, 510, 0, -1}};
         for (Object[] c : cases) {
             boolean alongX = (Boolean) c[0];
             int sign = (Integer) c[1];
-            TerrainProbe t = straightShore(alongX, 1010, sign);
+            TerrainProbe t = straightShore(alongX, 510, sign);
             List<WorldStationPlanner.PlannedSite> sites = plan(t, 0, List.of());
             check(!sites.isEmpty(), "station for shore " + alongX + " " + sign);
             WorldStationPlanner.PlannedSite s = sites.get(0);
@@ -314,7 +913,7 @@ public class TransitTests {
     }
 
     static void seaCellDeterministic() {
-        GridProbe g = strip('~', 64, '#', 64);
+        GridProbe g = strip('~', 32, '#', 32);
         eq(plan(g, 0, List.of()), plan(g, 0, List.of()));
     }
 
@@ -377,13 +976,13 @@ public class TransitTests {
 
     static void portalRespectsNetwork() {
         TerrainProbe t = heights((x, z) -> 120);
-        check(WorldStationPlanner.planPortal(0, 0, t, List.of(new int[] {1300, 0})) == null, "air station at 1300");
-        WorldStationPlanner.PlannedSite s = WorldStationPlanner.planPortal(0, 0, t, List.of(new int[] {1500, 0}));
-        check(s != null, "air station at 1500 from the portal");
-        long dx = s.x() - 1500L, dz = s.z();
+        check(WorldStationPlanner.planPortal(0, 0, t, List.of(new int[] {800, 0})) == null, "air station at 800");
+        WorldStationPlanner.PlannedSite s = WorldStationPlanner.planPortal(0, 0, t, List.of(new int[] {900, 0}));
+        check(s != null, "air station at 900 from the portal");
+        long dx = s.x() - 900L, dz = s.z();
         check(dx * dx + dz * dz >= (long) WorldStationPlanner.BALLOON_SPACING * WorldStationPlanner.BALLOON_SPACING,
                 "the site keeps its spacing, not only the portal");
-        check(WorldStationPlanner.planPortal(0, 0, t, List.of(new int[] {1500 + WorldStationPlanner.RING_MAX, 0})) != null,
+        check(WorldStationPlanner.planPortal(0, 0, t, List.of(new int[] {WorldStationPlanner.BALLOON_SPACING + WorldStationPlanner.RING_MAX, 0})) != null,
                 "air station beyond the ring");
     }
 
@@ -393,7 +992,7 @@ public class TransitTests {
         check(first != null, "first portal planned");
         List<int[]> air = new ArrayList<>();
         air.add(new int[] {first.x(), first.z()});
-        check(WorldStationPlanner.planPortal(900, 0, t, air) == null, "second portal at 900 refused");
+        check(WorldStationPlanner.planPortal(600, 0, t, air) == null, "second portal at 600 refused");
     }
 
     static void portalNoFlatSpot() {
@@ -402,25 +1001,25 @@ public class TransitTests {
     }
 
     static void seaCellRespectsNetwork() {
-        GridProbe g = strip('~', 64, '#', 64);
+        GridProbe g = strip('~', 32, '#', 32);
         WorldStationPlanner.PlannedSite s = plan(g, 0, List.of()).get(0);
         // a station in the middle of the cell's shore is within BOAT_SPACING of every candidate
-        eq(0, plan(g, 0, List.of(new int[] {s.x(), 1024})).size());
-        int[] near = {s.x() + 1000, s.z()};
+        eq(0, plan(g, 0, List.of(new int[] {s.x(), 512})).size());
+        int[] near = {s.x() + 500, s.z()};
         for (WorldStationPlanner.PlannedSite p : plan(g, 0, List.of(near))) {
             if (!p.partner()) {
                 long dx = p.x() - near[0], dz = p.z() - near[1];
                 check(dx * dx + dz * dz >= (long) WorldStationPlanner.BOAT_SPACING * WorldStationPlanner.BOAT_SPACING, "main site keeps its spacing");
             }
         }
-        check(!plan(g, 0, List.<int[]>of(new int[] {s.x() + 1600, s.z()})).isEmpty(), "far station does not block");
+        check(!plan(g, 0, List.<int[]>of(new int[] {s.x() + 800, s.z()})).isEmpty(), "far station does not block");
     }
 
     static void seaCellSkipsSpacedMain() {
-        TerrainProbe t = straightShore(true, 1010, 1);
+        TerrainProbe t = straightShore(true, 510, 1);
         WorldStationPlanner.PlannedSite s = plan(t, 0, List.of()).get(0);
         // a station just within BOAT_SPACING of the closest candidate, on the side away from the rest of the shore
-        int[] other = {s.x(), s.z() < WorldStationPlanner.CELL / 2 ? s.z() - 1490 : s.z() + 1490};
+        int[] other = {s.x(), s.z() < WorldStationPlanner.CELL / 2 ? s.z() - 690 : s.z() + 690};
         List<WorldStationPlanner.PlannedSite> sites = plan(t, 0, List.of(other));
         check(!sites.isEmpty(), "a farther candidate is planned");
         WorldStationPlanner.PlannedSite main = sites.get(0);
@@ -433,6 +1032,20 @@ public class TransitTests {
             long fx = f.x() - other[0], fz = f.z() - other[1];
             check(fx * fx + fz * fz >= (long) WorldStationPlanner.BOAT_SPACING * WorldStationPlanner.BOAT_SPACING, "fallback keeps its spacing");
         }
+    }
+
+    static void seaCellNeighboursKeepSpacing() {
+        // shore along x: every cell has a shore, main sites in neighbouring cells must be BOAT_SPACING apart
+        TerrainProbe t = straightShore(false, 510, 1);
+        List<WorldStationPlanner.PlannedSite> first = plan(t, 0, List.of());
+        check(!first.isEmpty(), "first cell planned");
+        WorldStationPlanner.PlannedSite a = first.get(0);
+        List<WorldStationPlanner.PlannedSite> second = plan(t, 1, List.of(new int[] {a.x(), a.z()}));
+        check(!second.isEmpty(), "neighbour cell planned");
+        WorldStationPlanner.PlannedSite b = second.get(0);
+        long dx = b.x() - a.x(), dz = b.z() - a.z();
+        check(dx * dx + dz * dz >= (long) WorldStationPlanner.BOAT_SPACING * WorldStationPlanner.BOAT_SPACING, "neighbour main piers keep 700 blocks");
+        eq(700, WorldStationPlanner.BOAT_SPACING);
     }
 
     private interface LandAt {
@@ -587,17 +1200,17 @@ public class TransitTests {
     }
 
     static void seaCellSkipsBlockedShore() {
-        // An offshore bar blocks the pier box everywhere in the cell except along z 1000..1300.
-        TerrainProbe t = coast((x, z) -> x < 1010 || (x >= 1018 && x <= 1020 && (z < 1000 || z > 1300)));
+        // An offshore bar blocks the pier box everywhere in the cell except along z 500..800.
+        TerrainProbe t = coast((x, z) -> x < 510 || (x >= 518 && x <= 520 && (z < 500 || z > 800)));
         List<WorldStationPlanner.PlannedSite> sites = plan(t, 0, List.of());
         check(!sites.isEmpty(), "a station is planned on the straight stretch");
         WorldStationPlanner.PlannedSite s = sites.get(0);
         check(WorldStationPlanner.boatSiteFits(t, s.x(), s.z(), s.rotation()), "the site fits");
-        check(s.z() >= 1000 && s.z() <= 1300, "the station is on the straight stretch");
+        check(s.z() >= 500 && s.z() <= 800, "the station is on the straight stretch");
     }
 
     static void partnerShiftsAlongShore() {
-        TerrainProbe base = coast((x, z) -> x < 1010 || x >= 1500);
+        TerrainProbe base = coast((x, z) -> x < 510 || x >= 1000);
         List<WorldStationPlanner.PlannedSite> before = plan(base, 0, List.of());
         eq(2, before.size());
         WorldStationPlanner.PlannedSite p0 = before.get(1);
@@ -624,7 +1237,7 @@ public class TransitTests {
     }
 
     static void seaCellRanksSites() {
-        TerrainProbe t = straightShore(true, 1010, 1);
+        TerrainProbe t = straightShore(true, 510, 1);
         List<WorldStationPlanner.PlannedSite> sites = plan(t, 0, List.of());
         check(!sites.isEmpty(), "a station is planned");
         WorldStationPlanner.PlannedSite main = sites.get(0);
@@ -653,7 +1266,7 @@ public class TransitTests {
     }
 
     static void crossingKeepsFallbacks() {
-        TerrainProbe base = coast((x, z) -> x < 1010 || x >= 1500);
+        TerrainProbe base = coast((x, z) -> x < 510 || x >= 1000);
         List<WorldStationPlanner.PlannedSite> before = plan(base, 0, List.of());
         eq(2, before.size());
         WorldStationPlanner.PlannedSite p0 = before.get(1);
@@ -689,30 +1302,30 @@ public class TransitTests {
         WorldStationPlanner.PlannedSite partner = sites.get(1);
         check(partner.partner(), "partner flag");
         eq(Deployables.BOAT_STATION_KIND, partner.kind());
-        eq(WorldStationPlanner.facing(1, 0), partner.rotation());
+        eq(WorldStationPlanner.facing(-1, 0), partner.rotation());
         check(SeaRules.isLand(g, partner.x(), partner.z()), "partner on land");
-        eq(431, partner.x());
+        eq(1024, partner.x());
         check(pierEndIsSea(g, partner), "partner pier end on sea");
     }
 
     static void crossingTooFar() {
         GridProbe g = strip('#', 167, '~', 281, '#', 64);
-        List<WorldStationPlanner.PlannedSite> sites = plan(g, 3, List.of());
+        List<WorldStationPlanner.PlannedSite> sites = plan(g, 7, List.of());
         eq(1, sites.size());
     }
 
     static void crossingStopsAtInlandWater() {
         GridProbe g = strip('#', 20, 'l', 10, '~', 34, '#', 64);
-        eq(1, plan(g, 0, List.of()).size());
+        eq(1, plan(g, 1, List.of()).size());
     }
 
     static void crossingReusesNearby() {
         GridProbe g = strip('#', 292, '~', 156, '#', 64);
-        List<WorldStationPlanner.PlannedSite> sites = plan(g, 3, List.of());
+        List<WorldStationPlanner.PlannedSite> sites = plan(g, 7, List.of());
         eq(2, sites.size());
         WorldStationPlanner.PlannedSite partner = sites.get(1);
         List<int[]> existing = List.<int[]>of(new int[] {partner.x() - 300, partner.z()});
-        eq(1, plan(g, 3, existing).size());
+        eq(1, plan(g, 7, existing).size());
     }
 
     static void namesDeterministic() {
@@ -817,6 +1430,7 @@ public class TransitTests {
         run("seaCellIgnoresLake", TransitTests::seaCellIgnoresLake);
         run("seaCellRespectsNetwork", TransitTests::seaCellRespectsNetwork);
         run("seaCellSkipsSpacedMain", TransitTests::seaCellSkipsSpacedMain);
+        run("seaCellNeighboursKeepSpacing", TransitTests::seaCellNeighboursKeepSpacing);
         run("portalPicksFlatSpot", TransitTests::portalPicksFlatSpot);
         run("portalAvoidsWater", TransitTests::portalAvoidsWater);
         run("portalRespectsNetwork", TransitTests::portalRespectsNetwork);
@@ -826,6 +1440,8 @@ public class TransitTests {
         run("repairCandidatesOrder", TransitTests::repairCandidatesOrder);
         run("repairFindsNeighbour", TransitTests::repairFindsNeighbour);
         run("repairSkipsUnready", TransitTests::repairSkipsUnready);
+        run("builtBlocksTable", TransitTests::builtBlocksTable);
+        run("builtBlocksScan", TransitTests::builtBlocksScan);
         run("boatSiteFitsShallowBerth", TransitTests::boatSiteFitsShallowBerth);
         run("boatSiteFitsPierEndLand", TransitTests::boatSiteFitsPierEndLand);
         run("boatSiteFitsFloorOnLand", TransitTests::boatSiteFitsFloorOnLand);
@@ -865,6 +1481,8 @@ public class TransitTests {
         run("refusalCarriesHullFlag", TransitTests::refusalCarriesHullFlag);
         run("boatFootprintCoversBerthedBoat", TransitTests::boatFootprintCoversBerthedBoat);
         run("emptiedCellsReadAsEmpty", TransitTests::emptiedCellsReadAsEmpty);
+        run("dredgedCellsReadAsWater", TransitTests::dredgedCellsReadAsWater);
+        run("dredgeSelection", TransitTests::dredgeSelection);
         run("roomRefusalKeysUnchanged", TransitTests::roomRefusalKeysUnchanged);
         run("errorThrottleWindow", TransitTests::errorThrottleWindow);
         run("telemetryWithoutBeacon", TransitTests::telemetryWithoutBeacon);
@@ -1059,6 +1677,7 @@ public class TransitTests {
         run("smokeLegacyAlias", TransitTests::smokeLegacyAlias);
         run("steamboatThickSmoke", TransitTests::steamboatThickSmoke);
         run("hullOnWater", TransitTests::hullOnWater);
+        run("iceHullFlags", TransitTests::iceHullFlags);
         run("shipKindsOrder", TransitTests::shipKindsOrder);
         run("wheelTable", TransitTests::wheelTable);
         run("wheelNames", TransitTests::wheelNames);
@@ -1083,10 +1702,13 @@ public class TransitTests {
         run("stationWoodRemap", TransitTests::stationWoodRemap);
         run("stationWoodAsh", TransitTests::stationWoodAsh);
         run("registryStoneRoundTrip", TransitTests::registryStoneRoundTrip);
-        run("shortcutOpenWater", TransitTests::shortcutOpenWater);
-        run("shortcutKeepsUnknown", TransitTests::shortcutKeepsUnknown);
-        run("shortcutAroundLand", TransitTests::shortcutAroundLand);
-        run("shortcutDogLeg", TransitTests::shortcutDogLeg);
+        run("waterLogCollapse", TransitTests::waterLogCollapse);
+        run("voyageCorridorFromLog", TransitTests::voyageCorridorFromLog);
+        run("voyageCorridorEndsAtGoal", TransitTests::voyageCorridorEndsAtGoal);
+        run("voyageCorridorReadsLogThenChart", TransitTests::voyageCorridorReadsLogThenChart);
+        run("voyageChartCorridor", TransitTests::voyageChartCorridor);
+        run("voyageTrackBackoff", TransitTests::voyageTrackBackoff);
+        run("voyageFinalInsideWindow", TransitTests::voyageFinalInsideWindow);
         run("waterRouteOpenLake", TransitTests::waterRouteOpenLake);
         run("waterRouteIsland", TransitTests::waterRouteIsland);
         run("waterRouteSCurve", TransitTests::waterRouteSCurve);
@@ -1102,6 +1724,22 @@ public class TransitTests {
         run("waterRouteAvoid", TransitTests::waterRouteAvoid);
         run("waterRouteFreeStart", TransitTests::waterRouteFreeStart);
         run("waterRouteTurnData", TransitTests::waterRouteTurnData);
+        run("localNavFollowsCorridor", TransitTests::localNavFollowsCorridor);
+        run("localNavGoalOnShore", TransitTests::localNavGoalOnShore);
+        run("localNavWidens", TransitTests::localNavWidens);
+        run("localNavClosesAndRetraces", TransitTests::localNavClosesAndRetraces);
+        run("localNavFailsWithoutProgress", TransitTests::localNavFailsWithoutProgress);
+        run("localNavFailsWithoutCorridor", TransitTests::localNavFailsWithoutCorridor);
+        run("localNavUnknownWaits", TransitTests::localNavUnknownWaits);
+        run("localNavNeverClosesOwnCell", TransitTests::localNavNeverClosesOwnCell);
+        run("localNavGaveUpClosesNothing", TransitTests::localNavGaveUpClosesNothing);
+        run("localNavNeedsSearchAfterNoPath", TransitTests::localNavNeedsSearchAfterNoPath);
+        run("shuttleWatchdogSleepsDuringWait", TransitTests::shuttleWatchdogSleepsDuringWait);
+        run("localNavCancelKeepsGiveUp", TransitTests::localNavCancelKeepsGiveUp);
+        run("clearanceShuttleChannel", TransitTests::clearanceShuttleChannel);
+        run("searchNoGoalTaper", TransitTests::searchNoGoalTaper);
+        run("searchMaxExpanded", TransitTests::searchMaxExpanded);
+        run("searchNearestClear", TransitTests::searchNearestClear);
         run("waterExitOpen", TransitTests::waterExitOpen);
         run("waterExitPond", TransitTests::waterExitPond);
         run("waterExitShore", TransitTests::waterExitShore);
@@ -1110,12 +1748,13 @@ public class TransitTests {
         run("waterExitUnknown", TransitTests::waterExitUnknown);
         run("boatLookAhead", TransitTests::boatLookAhead);
         run("boatDetour", TransitTests::boatDetour);
+        run("boatCaptureTurn", TransitTests::boatCaptureTurn);
+        run("boatBackOff", TransitTests::boatBackOff);
+        run("boatSideArrivalClear", TransitTests::boatSideArrivalClear);
         run("paddleSlideWheels", TransitTests::paddleSlideWheels);
-        run("boatRoutesFileRoundTrip", TransitTests::boatRoutesFileRoundTrip);
-        run("crossMaxLeavesRoomForRoute", TransitTests::crossMaxLeavesRoomForRoute);
+        run("crossMaxValue", TransitTests::crossMaxValue);
         run("newChunksWorldMismatch", TransitTests::newChunksWorldMismatch);
         run("generatedWorldMismatch", TransitTests::generatedWorldMismatch);
-        run("boatRoutesInvalidate", TransitTests::boatRoutesInvalidate);
         run("berthPivotRotation", TransitTests::berthPivotRotation);
         run("mooredPilot", TransitTests::mooredPilot);
         run("mooredPilotFlipped", TransitTests::mooredPilotFlipped);
@@ -1137,6 +1776,17 @@ public class TransitTests {
         run("knownStationsMalformed", TransitTests::knownStationsMalformed);
         run("skyLogCells", TransitTests::skyLogCells);
         run("skyLogStationDiscovery", TransitTests::skyLogStationDiscovery);
+        run("skyLogDiscoveryRadius", TransitTests::skyLogDiscoveryRadius);
+        run("stationMarkerDisplay", TransitTests::stationMarkerDisplay);
+        run("iceBreakable", TransitTests::iceBreakable);
+        run("iceColumn", TransitTests::iceColumn);
+        run("iceMarginRing", TransitTests::iceMarginRing);
+        run("iceMarginStable", TransitTests::iceMarginStable);
+        run("iceMarginCell", TransitTests::iceMarginCell);
+        run("iceHullCell", TransitTests::iceHullCell);
+        run("iceProbeMatchesHull", TransitTests::iceProbeMatchesHull);
+        run("icePlacementState", TransitTests::icePlacementState);
+        run("floeMaxHeight", TransitTests::floeMaxHeight);
         run("destinationKnownOthers", TransitTests::destinationKnownOthers);
         run("skyLogMarkerDistance", TransitTests::skyLogMarkerDistance);
         run("skyLogRoundTrip", TransitTests::skyLogRoundTrip);
@@ -1146,7 +1796,6 @@ public class TransitTests {
         run("waterLogStationTarget", TransitTests::waterLogStationTarget);
         run("boatBackoffAction", TransitTests::boatBackoffAction);
         run("boatRouteLeg", TransitTests::boatRouteLeg);
-        run("boatRoutesOldVersion", TransitTests::boatRoutesOldVersion);
         run("boatAutopilotHeading", TransitTests::boatAutopilotHeading);
         run("boatAutopilotReached", TransitTests::boatAutopilotReached);
         run("boatAutopilotSpeed", TransitTests::boatAutopilotSpeed);
@@ -1165,7 +1814,17 @@ public class TransitTests {
         run("generatedForgetAndUnmark", TransitTests::generatedForgetAndUnmark);
         run("regeneratedKeepsSessionEntries", TransitTests::regeneratedKeepsSessionEntries);
         run("generatedCellOnce", TransitTests::generatedCellOnce);
+        run("generatedCellSizeConversion", TransitTests::generatedCellSizeConversion);
+        run("generatedOrigin", TransitTests::generatedOrigin);
         run("cellsAroundPlayer", TransitTests::cellsAroundPlayer);
+        run("landCellPlansMainAndFallbacks", TransitTests::landCellPlansMainAndFallbacks);
+        run("landCellAllWater", TransitTests::landCellAllWater);
+        run("landCellRespectsExistingAir", TransitTests::landCellRespectsExistingAir);
+        run("landCellSkipsExcludedWithoutTries", TransitTests::landCellSkipsExcludedWithoutTries);
+        run("landCellDeterministic", TransitTests::landCellDeterministic);
+        run("portalFallbacksSpaced", TransitTests::portalFallbacksSpaced);
+        run("balloonNextSiteSpacing", TransitTests::balloonNextSiteSpacing);
+        run("generatedLandCells", TransitTests::generatedLandCells);
         run("planAheadOffWhenDisabled", TransitTests::planAheadOffWhenDisabled);
         run("planAheadDedupe", TransitTests::planAheadDedupe);
         run("generatedBadFile", TransitTests::generatedBadFile);
@@ -1178,14 +1837,59 @@ public class TransitTests {
         run("generatedRegistryOldFormat", TransitTests::generatedRegistryOldFormat);
         run("footprintChunksCover", TransitTests::footprintChunksCover);
         run("generatorAvailability", TransitTests::generatorAvailability);
+        run("chartAvailabilityIgnoresDeleteOnRemove", TransitTests::chartAvailabilityIgnoresDeleteOnRemove);
         run("nearestUnbuiltEntry", TransitTests::nearestUnbuiltEntry);
         run("decideRules", TransitTests::decideRules);
+        run("decideOldTerrain", TransitTests::decideOldTerrain);
+        run("reviveSelection", TransitTests::reviveSelection);
+        run("exhaustedReasonChoice", TransitTests::exhaustedReasonChoice);
+        run("generatedRegistryReason", TransitTests::generatedRegistryReason);
+        run("settingsOldTerrain", TransitTests::settingsOldTerrain);
         run("newChunksOldLoadAbandons", TransitTests::newChunksOldLoadAbandons);
         run("worldgenSettingDefault", TransitTests::worldgenSettingDefault);
         run("modRecipesMatchAssets", TransitTests::modRecipesMatchAssets);
         run("footprintContainsShapes", TransitTests::footprintContainsShapes);
         run("reloadedNewChunkRetriggers", TransitTests::reloadedNewChunkRetriggers);
         run("benchTabsFilter", TransitTests::benchTabsFilter);
+        run("chartTwoSeas", TransitTests::chartTwoSeas);
+        run("chartStrait", TransitTests::chartStrait);
+        run("chartLakeNotSea", TransitTests::chartLakeNotSea);
+        run("chartRiverFresh", TransitTests::chartRiverFresh);
+        run("chartRockAndShallow", TransitTests::chartRockAndShallow);
+        run("chartMergeOrder", TransitTests::chartMergeOrder);
+        run("chartFillSkipsLabelled", TransitTests::chartFillSkipsLabelled);
+        run("chartLakeAfterSea", TransitTests::chartLakeAfterSea);
+        run("chartMergeShortRadius", TransitTests::chartMergeShortRadius);
+        run("chartFileRoundTrip", TransitTests::chartFileRoundTrip);
+        run("chartFileOtherSeed", TransitTests::chartFileOtherSeed);
+        run("chartFileCorrupt", TransitTests::chartFileCorrupt);
+        run("bookSegmentsEvery50", TransitTests::bookSegmentsEvery50);
+        run("bookMergeNearKnownPoint", TransitTests::bookMergeNearKnownPoint);
+        run("bookForgetAndCap", TransitTests::bookForgetAndCap);
+        run("bookClosure", TransitTests::bookClosure);
+        run("bookIncomplete", TransitTests::bookIncomplete);
+        run("bookFileRoundTripAndBad", TransitTests::bookFileRoundTripAndBad);
+        run("bookChangeListenerAndCap", TransitTests::bookChangeListenerAndCap);
+        run("seaChartsBookSavedByItsThread", TransitTests::seaChartsBookSavedByItsThread);
+        run("localNavFrozenNearBerth", TransitTests::localNavFrozenNearBerth);
+        run("destinationsSameOceanSurface", TransitTests::destinationsSameOceanSurface);
+        run("queueHeadAction", TransitTests::queueHeadAction);
+        run("chartingWaitPerHeadEntry", TransitTests::chartingWaitPerHeadEntry);
+        run("approachSpawnOffshore", TransitTests::approachSpawnOffshore);
+        run("offshoreSpawnNeedsFullClearance", TransitTests::offshoreSpawnNeedsFullClearance);
+        run("shuttleTripRecorded", TransitTests::shuttleTripRecorded);
+        run("shuttleNavHelpers", TransitTests::shuttleNavHelpers);
+        run("shuttleNavWaitIsBounded", TransitTests::shuttleNavWaitIsBounded);
+        run("corridorAroundIsland", TransitTests::corridorAroundIsland);
+        run("corridorPrefersDeep", TransitTests::corridorPrefersDeep);
+        run("corridorAvoidsShore", TransitTests::corridorAvoidsShore);
+        run("corridorLearnedThroughLand", TransitTests::corridorLearnedThroughLand);
+        run("corridorLearnedSegmentPointsSpaced", TransitTests::corridorLearnedSegmentPointsSpaced);
+        run("corridorClosedCell", TransitTests::corridorClosedCell);
+        run("corridorClosedKillsSegment", TransitTests::corridorClosedKillsSegment);
+        run("corridorNoDiagonalCut", TransitTests::corridorNoDiagonalCut);
+        run("corridorPoints48", TransitTests::corridorPoints48);
+        run("corridorBudget", TransitTests::corridorBudget);
         System.out.println("TransitTests: " + passed + " OK");
     }
 
@@ -2836,6 +3540,54 @@ public class TransitTests {
         check(n == 12, "12 seats, got " + n);
     }
 
+    private static void builtBlocksTable() {
+        String[] built = {"Wood_Oak_Planks_Half", "Wood_Softwood_Planks", "Wood_Redwood_Beam", "Wood_Softwood_Stairs", "Wood_Redwood_Fence",
+                "Wood_Village_Wall_Full", "Wood_Torch_Wall", "Rock_Stone_Brick", "Rock_Basalt_Cobble", "Rock_Stone_Brick_Smooth_Half",
+                "Rock_Sandstone_Half", "Rock_Volcanic_Brick_Roof", "Furniture_Crude_Torch", "Furniture_Village_Chest_Small",
+                "Furniture_Tavern_Bench", "Furniture_Crude_Bed", "Furniture_Village_Window", "Furniture_Crude_Ladder", "Bench_WorkBench",
+                "Bench_Furnace", "Deco_Lantern", "Cloth_Block_Wool_Green", "Metal_Iron", "Metal_Copper_Roof", "Build_Grey_Cube", "Rail",
+                "Glass_Test_Blue", "Soil_Pathway_Half", "Soil_Clay_Brick_Half", "Soil_Dirt_Tilled", "Rock_Stone_Cobble_Half", "Cloth_Block_Wool_Blue", "Prototype_Window_Single", "*Furniture_Crude_Door"};
+        for (String id : built) {
+            check(BuiltBlocks.isBuilt(id), "built: " + id);
+        }
+        String[] natural = {"Wood_Oak_Trunk", "Wood_Oak_Trunk_Full", "Wood_Oak_Trunk_Stairs", "Wood_Birch_Branch_Long", "Wood_Oak_Roots",
+                "Plant_Leaves_Oak", "Plant_Grass_Tall", "Plant_Crop_Wheat", "Rock_Stone", "Rock_Basalt", "Rock_Stone_Mossy", "Rock_Sandstone_Red",
+                "Rock_Gem_Diamond", "Rock_Crystal_Blue_Large", "Rock_Stone_Stalactite_Large", "Rock_Ice", "Soil_Grass", "Soil_Dirt", "Soil_Sand",
+                "Soil_Gravel", "Soil_Clay", "Soil_Snow", "Ore_Iron_Stone", "Rubble_Stone", "Wood_Sticks", "Deco_Bone_Pile", "Deco_Nest",
+                "Fluid_Water", "Empty", "Soil_Pathway", "Soil_Clay_Red", "Soil_Clay_Yellow", "Soil_Clay_Grey", "Soil_Clay_Smooth_Black", "Soil_Clay_Brick",
+                "Rock_Stone_Cobble", "Rock_Stone_Cobble_Mossy", "Furniture_Ancient_Barrel", "Furniture_Ancient_Crate", "Deco_Fire", "Cloth_Block_Wool_Red", "*Rock_Stone", "*Plant_Grass_Tall"};
+        for (String id : natural) {
+            check(!BuiltBlocks.isBuilt(id), "natural: " + id);
+        }
+        check(!BuiltBlocks.isBuilt(null), "null is not built");
+        check(!BuiltBlocks.isBuilt(""), "empty is not built");
+        check(BuiltBlocks.isBuilt("*Wood_Softwood_Stairs"), "a leading * is ignored for a built block");
+    }
+
+    private static void builtBlocksScan() {
+        java.util.Map<String, String> cells = new java.util.HashMap<>();
+        cells.put("3,5,3", "Rock_Stone");
+        cells.put("-3,4,2", "*Furniture_Crude_Torch");
+        BuiltBlocks.CellReader reader = (x, y, z) -> cells.get(x + "," + y + "," + z);
+        int[] box = {0, 0, 0, 1, 10, 1};
+        BuiltBlocks.Found far = BuiltBlocks.firstBuilt(box, 1, reader);
+        check(far == null, "a construction beyond the margin is not seen");
+        BuiltBlocks.Found near = BuiltBlocks.firstBuilt(box, 4, reader);
+        check(near != null && near.block().equals("Furniture_Crude_Torch") && near.x() == -3 && near.y() == 4 && near.z() == 2,
+                "a construction inside the margin is found with its cell, got " + near);
+        cells.put("1,2,1", "Wood_Softwood_Planks");
+        BuiltBlocks.Found low = BuiltBlocks.firstBuilt(box, 4, reader);
+        check(low != null && low.y() == 2, "the lowest row is scanned first, got " + low);
+        // The cells of an area collected once answer any box inside it, same result as a scan of that box.
+        java.util.List<BuiltBlocks.Found> collected = BuiltBlocks.collect(new int[] {-5, 0, -5, 6, 10, 6}, reader);
+        check(collected.size() == 2, "two built cells collected, got " + collected.size());
+        BuiltBlocks.Found again = BuiltBlocks.firstIn(collected, box, 4);
+        check(again != null && again.equals(low), "firstIn agrees with firstBuilt, got " + again);
+        check(BuiltBlocks.firstIn(collected, new int[] {20, 0, 20, 21, 10, 21}, 4) == null, "a box away from the cells finds nothing");
+        check(BuiltBlocks.overlaps(new int[] {0, 0, 0, 5, 5, 5}, new int[] {5, 5, 5, 8, 8, 8}), "boxes sharing a cell overlap");
+        check(!BuiltBlocks.overlaps(new int[] {0, 0, 0, 5, 5, 5}, new int[] {6, 0, 0, 8, 5, 5}), "boxes one block apart do not overlap");
+    }
+
     private static void genClearRemovable() {
         check(GenClear.removable("Wood_Ash_Trunk"), "trunk");
         check(GenClear.removable("*Wood_Oak_Trunk_Full"), "trunk with a state prefix");
@@ -3027,6 +3779,26 @@ public class TransitTests {
         DeployPlacement.CellState sim = DeployPlacement.withEmptied(base, Set.of(new Vector3i(1, 2, 3)));
         eq(0, sim.at(1, 2, 3));
         eq(2, sim.at(1, 2, 4));
+    }
+
+    private static void dredgedCellsReadAsWater() {
+        DeployPlacement.CellState base = (x, y, z) -> 2;
+        Set<Vector3i> dug = Set.of(new Vector3i(1, 2, 3));
+        eq(1, DeployPlacement.withWater(base, dug).at(1, 2, 3));
+        eq(2, DeployPlacement.withWater(base, dug).at(1, 2, 4));
+        // Water wins over a cell read as emptied.
+        eq(1, DeployPlacement.withWater(DeployPlacement.withEmptied(base, dug), dug).at(1, 2, 3));
+    }
+
+    private static void dredgeSelection() {
+        Vector3i water = new Vector3i(0, 5, 0), rock = new Vector3i(1, 5, 0), air = new Vector3i(2, 5, 0), unloaded = new Vector3i(3, 5, 0);
+        DeployPlacement.CellState ground = (x, y, z) -> x == 0 ? 1 : x == 1 ? 2 : x == 2 ? 0 : 2;
+        Set<Vector3i> dug = BoatSiteGround.dredgeCells(java.util.List.of(water, rock, air, unloaded), p -> p.x != 3, ground);
+        eq(Set.of(rock, air), dug);
+        eq(0, BoatSiteGround.dredgeCells(java.util.List.of(water), p -> true, ground).size());
+        check(BoatSiteGround.dredgeConflicts(dug, Set.of(rock), Set.of()), "a filled cell conflicts");
+        check(BoatSiteGround.dredgeConflicts(dug, Set.of(), Set.of(air)), "a prefab cell conflicts");
+        check(!BoatSiteGround.dredgeConflicts(dug, Set.of(water), Set.of(unloaded)), "no shared cell, no conflict");
     }
 
     private static void refusalCarriesHullFlag() {
@@ -4007,6 +4779,21 @@ public class TransitTests {
         check(AirshipManager.blocked(waterBlocks, dry, 0.5, 0, 0.5, 0, 0) > 0, "water blocks a dry hull");
     }
 
+    private static void iceHullFlags() {
+        StructureShape s = StructureShape.ofCells(List.of(
+                new StructureShape.Cell(0, -4, 0, "Wood_Hardwood_Planks", 0),
+                new StructureShape.Cell(0, -3, 0, "Wood_Hardwood_Planks", 0),
+                new StructureShape.Cell(0, -2, 0, "Wood_Hardwood_Planks", 0)));
+        AirshipManager.Hull boat = AirshipManager.hullFor(s, new Vector3f(0, 1, 0), -3);
+        check(boat.icebreaker, "a waterborne hull is an ice-breaker");
+        check(boat.surfaceDy == -4.0, "surfaceDy is waterline minus pivot, got " + boat.surfaceDy);
+        check(boat.topDy == -3.0, "topDy is top cell minus pivot, got " + boat.topDy);
+        AirshipManager.Hull air = AirshipManager.hullFor(s, new Vector3f(0, 1, 0), null);
+        check(!air.icebreaker && air.surfaceDy == 0 && air.topDy == 0, "an airship hull is not an ice-breaker");
+        check(Deployables.STEAMBOAT_PUBLIC.airship.waterborne() && Deployables.STEAMBOAT.airship.waterborne(), "both steamboats break ice");
+        check(!Deployables.AIRSHIP.airship.waterborne(), "an airship does not");
+    }
+
     private static void wheelTable() {
         check(Arrays.equals(PaddleWheels.wheelsFor(false, false, 0), new PaddleWheels.Spin[]{PaddleWheels.Spin.STOP, PaddleWheels.Spin.STOP}), "arrêt");
         check(Arrays.equals(PaddleWheels.wheelsFor(true, false, 0), new PaddleWheels.Spin[]{PaddleWheels.Spin.FWD_FAST, PaddleWheels.Spin.FWD_FAST}), "avant");
@@ -4545,11 +5332,14 @@ public class TransitTests {
         check(s.get("deploy.tent") == 2L && s.get("glider.jump") == 1L, "counts");
         check(new ArrayList<>(s.keySet()).equals(List.of("deploy.tent", "glider.jump")), "NAMES order");
         check(c.snapshotAndReset().isEmpty(), "reset after snapshot");
-        check(UsageCounters.NAMES.size() == 31, "31 counters");
+        check(UsageCounters.NAMES.size() == 35, "35 counters");
         for (String n : List.of("first", "fallback", "repaired")) {
             check(UsageCounters.NAMES.contains("worldgen.boat.built." + n), "boat built counter " + n);
         }
         check(UsageCounters.NAMES.contains("worldgen.boat.exhausted"), "boat exhausted counter");
+        for (String n : List.of("built.first", "built.fallback", "exhausted")) {
+            check(UsageCounters.NAMES.contains("worldgen.air." + n), "air counter " + n);
+        }
         check(UsageCounters.NAMES.contains("transit.boatTrip"), "boat trip counter");
         check(UsageCounters.NAMES.contains("deploy.steamboat") && UsageCounters.NAMES.contains("takeoff.steamboat"), "steamboat counters");
         check(UsageCounters.NAMES.indexOf("deploy.steamboat") == UsageCounters.NAMES.indexOf("deploy.airship") + 1, "deploy order");
@@ -4908,6 +5698,243 @@ public class TransitTests {
         return best;
     }
 
+    // ---- LocalNav ----
+
+    private static final class FakeCorridor implements LocalNav.Corridor {
+        final List<int[]> closed = new ArrayList<>();
+        final List<int[]> retraced = new ArrayList<>();
+        List<int[]> next;
+
+        FakeCorridor(List<int[]> next) {
+            this.next = next;
+        }
+
+        @Override
+        public List<int[]> retrace(int fromX, int fromZ) {
+            retraced.add(new int[] {fromX, fromZ});
+            return next;
+        }
+
+        @Override
+        public void close(int x, int z) {
+            closed.add(new int[] {x, z});
+        }
+    }
+
+    private static char[][] navMap(char fill) {
+        char[][] m = new char[400][400];
+        for (char[] row : m) {
+            java.util.Arrays.fill(row, fill);
+        }
+        return m;
+    }
+
+    private static WaterRoute.ColumnProbe navProbe(char[][] m) {
+        return (x, z) -> {
+            if (x < 0 || z < 0 || x >= m.length || z >= m[0].length) {
+                return WaterRoute.Cell.BLOCKED;
+            }
+            char c = m[x][z];
+            return c == '.' ? WaterRoute.Cell.WATER : c == '?' ? WaterRoute.Cell.UNKNOWN : WaterRoute.Cell.BLOCKED;
+        };
+    }
+
+    private static LocalNav navFor(FakeCorridor c, List<int[]> points, int gx, int gz) {
+        LocalNav nav = new LocalNav(c, HullClearance.SHUTTLE, gx, gz);
+        nav.setCorridor(points);
+        return nav;
+    }
+
+    /** Ticks until the result is not RUNNING (or the tick limit is hit, which fails the check). */
+    private static LocalNav.Result navRun(LocalNav nav, double cx, double cz, WaterRoute.ColumnProbe probe, int limit) {
+        LocalNav.Result r = null;
+        for (int i = 0; i < limit; i++) {
+            r = nav.tick(cx, cz, probe, 500, null);
+            if (r.kind() != LocalNav.Kind.RUNNING) {
+                return r;
+            }
+        }
+        return r;
+    }
+
+    private static void localNavFollowsCorridor() {
+        char[][] m = navMap('.');
+        List<int[]> pts = List.of(new int[] {230, 200}, new int[] {278, 200}, new int[] {326, 200});
+        LocalNav nav = navFor(new FakeCorridor(null), pts, 326, 200);
+        LocalNav.Result r = navRun(nav, 200, 200, navProbe(m), 200);
+        eq(LocalNav.Kind.PATH, r.kind());
+        int[] last = r.path().get(r.path().size() - 1);
+        eq(230, last[0]);
+        eq(200, last[1]);
+        check(!nav.needsSearch(210, 200), "pas de nouvelle recherche près du départ");
+        check(nav.needsSearch(250, 200), "nouvelle recherche après une demi-fenêtre");
+    }
+
+    private static void localNavGoalOnShore() {
+        char[][] m = navMap('.');
+        waterRect(m, 228, 399, 0, 399, '#');
+        List<int[]> pts = List.of(new int[] {230, 200}, new int[] {278, 200});
+        LocalNav nav = navFor(new FakeCorridor(null), pts, 278, 200);
+        WaterRoute.ColumnProbe probe = navProbe(m);
+        int[] expected = new WaterRoute.Search(probe, 200, 200, 230, 200, 152, 152, 248, 248)
+                .clearance(HullClearance.SHUTTLE).taperGoal(false).nearestClear(230, 200, 16);
+        check(expected != null, "un nœud dégagé près de la rive");
+        LocalNav.Result r = navRun(nav, 200, 200, probe, 200);
+        eq(LocalNav.Kind.PATH, r.kind());
+        int[] last = r.path().get(r.path().size() - 1);
+        eq(expected[0], last[0]);
+        eq(expected[1], last[1]);
+    }
+
+    private static void localNavWidens() {
+        char[][] m = navMap('.');
+        waterRect(m, 215, 217, 140, 399, '#');
+        FakeCorridor c = new FakeCorridor(null);
+        LocalNav nav = navFor(c, List.of(new int[] {230, 200}, new int[] {278, 200}), 278, 200);
+        LocalNav.Result r = navRun(nav, 200, 200, navProbe(m), 400);
+        eq(LocalNav.Kind.PATH, r.kind());
+        eq(0, c.closed.size());
+        eq(0, c.retraced.size());
+    }
+
+    private static void localNavClosesAndRetraces() {
+        char[][] m = navMap('.');
+        waterRect(m, 215, 217, 0, 399, '#');
+        List<int[]> pts = List.of(new int[] {230, 200}, new int[] {278, 200});
+        FakeCorridor c = new FakeCorridor(pts);
+        LocalNav nav = navFor(c, pts, 278, 200);
+        WaterRoute.ColumnProbe probe = navProbe(m);
+        for (int i = 0; i < 400 && c.retraced.isEmpty(); i++) {
+            nav.tick(200, 200, probe, 500, null);
+        }
+        eq(1, c.closed.size());
+        check(c.closed.get(0)[0] >= 208 && c.closed.get(0)[0] <= 223, "case du mur : " + c.closed.get(0)[0]);
+        eq(1, c.retraced.size());
+        eq(200, c.retraced.get(0)[0]);
+    }
+
+    private static void localNavFailsWithoutProgress() {
+        char[][] m = navMap('.');
+        waterRect(m, 215, 217, 0, 399, '#');
+        List<int[]> pts = List.of(new int[] {230, 200}, new int[] {278, 200});
+        FakeCorridor c = new FakeCorridor(pts);
+        LocalNav nav = navFor(c, pts, 278, 200);
+        WaterRoute.ColumnProbe probe = navProbe(m);
+        LocalNav.Result r = null;
+        for (int i = 0; i < 4000 && (r == null || r.kind() != LocalNav.Kind.FAILED); i++) {
+            r = nav.tick(200, 200, probe, 500, null);
+        }
+        eq(LocalNav.Kind.FAILED, r.kind());
+        eq(LocalNav.MAX_RETRACES, c.retraced.size());
+        eq(LocalNav.Kind.FAILED, nav.tick(200, 200, probe, 500, null).kind());
+    }
+
+    private static void localNavFailsWithoutCorridor() {
+        char[][] m = navMap('.');
+        waterRect(m, 215, 217, 0, 399, '#');
+        FakeCorridor c = new FakeCorridor(null);
+        LocalNav nav = navFor(c, List.of(new int[] {230, 200}, new int[] {278, 200}), 278, 200);
+        LocalNav.Result r = navRun(nav, 200, 200, navProbe(m), 400);
+        eq(LocalNav.Kind.FAILED, r.kind());
+        eq(1, c.retraced.size());
+    }
+
+    private static void localNavNeverClosesOwnCell() {
+        char[][] m = navMap('.');
+        waterRect(m, 215, 217, 0, 399, '#');
+        List<int[]> pts = List.of(new int[] {230, 200}, new int[] {278, 200});
+        FakeCorridor c = new FakeCorridor(pts);
+        LocalNav nav = navFor(c, pts, 278, 200);
+        WaterRoute.ColumnProbe probe = navProbe(m);
+        for (int i = 0; i < 400 && c.retraced.isEmpty(); i++) {
+            nav.tick(210, 200, probe, 500, null);
+        }
+        eq(1, c.closed.size());
+        check(Math.floorDiv(c.closed.get(0)[0], 16) != Math.floorDiv(210, 16), "pas la case du bateau");
+    }
+
+    private static void localNavGaveUpClosesNothing() {
+        char[][] m = navMap('.');
+        waterRect(m, 215, 260, 0, 399, '?');
+        List<int[]> pts = List.of(new int[] {230, 200}, new int[] {278, 200});
+        FakeCorridor c = new FakeCorridor(pts);
+        LocalNav nav = navFor(c, pts, 278, 200);
+        WaterRoute.ColumnProbe probe = navProbe(m);
+        eq(LocalNav.Kind.WAIT_DATA, navRun(nav, 200, 200, probe, 200).kind());
+        nav.dataGaveUp();
+        for (int i = 0; i < 400 && c.retraced.isEmpty(); i++) {
+            nav.tick(200, 200, probe, 500, null);
+        }
+        eq(1, c.retraced.size());
+        eq(0, c.closed.size());
+    }
+
+    private static void shuttleWatchdogSleepsDuringWait() {
+        // wait, loaded box (held), search running while sailing, frozen: only the held ticks suspend the watchdog
+        LocalNav.Kind[] ticks = {LocalNav.Kind.WAIT_DATA, LocalNav.Kind.WAIT_DATA, LocalNav.Kind.RUNNING, LocalNav.Kind.RUNNING,
+                LocalNav.Kind.PATH};
+        boolean[] suspended = {true, true, false, false, false};
+        for (int i = 0; i < ticks.length; i++) {
+            eq(suspended[i], BoatAutopilot.watchdogSuspended(ShuttleNav.heldForData(ticks[i])));
+        }
+        check(!BoatAutopilot.watchdogSuspended(false), "chien de garde actif en route");
+    }
+
+    private static void localNavCancelKeepsGiveUp() {
+        char[][] m = navMap('.');
+        waterRect(m, 215, 260, 0, 399, '?');
+        List<int[]> pts = List.of(new int[] {230, 200}, new int[] {278, 200});
+        FakeCorridor c = new FakeCorridor(pts);
+        LocalNav nav = navFor(c, pts, 278, 200);
+        WaterRoute.ColumnProbe probe = navProbe(m);
+        eq(LocalNav.Kind.WAIT_DATA, navRun(nav, 200, 200, probe, 200).kind());
+        nav.dataGaveUp();
+        nav.cancel(); // a new search (blocked shuttle) must not wait again on the same box
+        for (int i = 0; i < 400 && c.retraced.isEmpty(); i++) {
+            check(nav.tick(200, 200, probe, 500, null).kind() != LocalNav.Kind.WAIT_DATA, "pas de nouvelle attente");
+        }
+        eq(1, c.retraced.size()); // the give-up lasted until the attempt ended
+    }
+
+    private static void localNavNeedsSearchAfterNoPath() {
+        char[][] m = navMap('.');
+        List<int[]> pts = List.of(new int[] {230, 200}, new int[] {278, 200});
+        FakeCorridor c = new FakeCorridor(pts);
+        LocalNav nav = navFor(c, pts, 278, 200);
+        eq(LocalNav.Kind.PATH, navRun(nav, 200, 200, navProbe(m), 200).kind());
+        check(!nav.needsSearch(200, 200), "chemin courant");
+        waterRect(m, 215, 217, 0, 399, '#');
+        WaterRoute.ColumnProbe probe = navProbe(m);
+        for (int i = 0; i < 400 && c.retraced.isEmpty(); i++) {
+            nav.tick(200, 200, probe, 500, null);
+        }
+        check(nav.needsSearch(200, 200), "plus de chemin après un échec");
+    }
+
+    private static void localNavUnknownWaits() {
+        char[][] m = navMap('.');
+        waterRect(m, 220, 245, 150, 250, '?');
+        FakeCorridor c = new FakeCorridor(null);
+        LocalNav nav = navFor(c, List.of(new int[] {230, 200}, new int[] {278, 200}), 278, 200);
+        LocalNav.Result r = navRun(nav, 200, 200, navProbe(m), 200);
+        eq(LocalNav.Kind.WAIT_DATA, r.kind());
+        check(r.box() != null && r.box().length == 4, "zone à charger");
+        check(r.box()[0] <= 152 && r.box()[2] >= 248, "la zone couvre la fenêtre");
+        eq(0, c.closed.size());
+        waterRect(m, 220, 245, 150, 250, '.');
+        nav.dataLoaded();
+        r = navRun(nav, 200, 200, navProbe(m), 200);
+        eq(LocalNav.Kind.PATH, r.kind());
+        eq(0, c.closed.size());
+        // An unknown strip across the way, with a clear goal: the search itself asks for data.
+        char[][] m2 = navMap('.');
+        waterRect(m2, 210, 212, 150, 250, '?');
+        LocalNav nav2 = navFor(c, List.of(new int[] {230, 200}, new int[] {278, 200}), 278, 200);
+        r = navRun(nav2, 200, 200, navProbe(m2), 200);
+        eq(LocalNav.Kind.WAIT_DATA, r.kind());
+        eq(0, c.closed.size());
+    }
+
     private static void waterRouteOpenLake() {
         char[][] m = waterMap('.');
         WaterRoute.Search s = waterSearch(m, 20, 60, 100, 60);
@@ -4961,6 +5988,54 @@ public class TransitTests {
         check(waterSearch(m, 20, 60, 100, 60).step(100000) == WaterRoute.Status.FOUND, "chenal de 20 : FOUND");
     }
 
+    private static void clearanceShuttleChannel() {
+        char[][] m = waterMap('#');
+        waterRect(m, 5, 40, 20, 99, '.');
+        waterRect(m, 80, 115, 20, 99, '.');
+        waterRect(m, 41, 79, 55, 64, '.');
+        check(waterSearch(m, 20, 60, 100, 60).clearance(HullClearance.SHUTTLE).step(100000) == WaterRoute.Status.FOUND,
+                "chenal de 10 : FOUND avec la navette");
+        check(waterSearch(m, 20, 60, 100, 60).clearance(HullClearance.SHIP).step(100000) == WaterRoute.Status.NO_ROUTE,
+                "chenal de 10 : NO_ROUTE avec le bateau");
+        check(waterSearch(m, 20, 60, 100, 60).step(100000) == WaterRoute.Status.NO_ROUTE, "défaut : bateau");
+    }
+
+    private static void searchNoGoalTaper() {
+        char[][] m = waterMap('#');
+        waterRect(m, 10, 110, 10, 110, '.');
+        // Goal 3 blocks from the east shore (x = 111 is land).
+        WaterRoute.Search tapered = waterSearch(m, 20, 60, 108, 60);
+        check(tapered.step(100000) == WaterRoute.Status.FOUND, "but près de la rive : trouvé avec le taper");
+        WaterRoute.Search s = waterSearch(m, 20, 60, 108, 60).taperGoal(false);
+        WaterRoute.Status st = s.step(100000);
+        if (st == WaterRoute.Status.FOUND) {
+            int[] last = s.waypoints().get(s.waypoints().size() - 1);
+            check(landDistance(m, last[0], last[1]) >= WaterRoute.CLEARANCE, "marge au but");
+        } else {
+            eq(WaterRoute.Status.NO_ROUTE, st);
+        }
+    }
+
+    private static void searchMaxExpanded() {
+        char[][] m = waterMap('.');
+        waterRect(m, 45, 75, 30, 90, '#');
+        eq(WaterRoute.Status.NO_ROUTE, waterSearch(m, 20, 60, 100, 60).maxExpanded(50).step(100000));
+        eq(WaterRoute.Status.FOUND, waterSearch(m, 20, 60, 100, 60).step(100000));
+    }
+
+    private static void searchNearestClear() {
+        char[][] m = waterMap('#');
+        waterRect(m, 10, 110, 10, 110, '.');
+        WaterRoute.Search s = waterSearch(m, 20, 60, 100, 60);
+        int[] c = s.nearestClear(11, 60, 30);
+        check(c != null, "colonne dégagée trouvée");
+        check(Math.hypot(c[0] - 11, c[1] - 60) <= 30, "dans le rayon");
+        check(landDistance(m, c[0], c[1]) >= WaterRoute.CLEARANCE || c[0] - 10 >= WaterRoute.CLEARANCE, "marge complète");
+        check(s.nearestClear(5, 5, 3) == null, "rien dans la terre");
+        char[][] u = waterMap('?');
+        check(waterSearch(u, 20, 60, 100, 60).nearestClear(60, 60, 20) == null, "inconnu non dégagé");
+    }
+
     private static void waterRouteSeparateLakes() {
         char[][] m = waterMap('#');
         waterRect(m, 5, 40, 20, 99, '.');
@@ -4979,49 +6054,8 @@ public class TransitTests {
         check(s.step(100000) == WaterRoute.Status.FOUND, "reprise après données");
     }
 
-    private static void boatRoutesFileRoundTrip() throws Exception {
-        Path dir = Files.createTempDirectory("boatroutes");
-        Path f = dir.resolve("boat-routes.json");
-        BoatRoutes.Book b = new BoatRoutes.Book();
-        b.load(f);
-        b.addStation("w", "A", List.of("A", "B", "C"));
-        b.resolve("w", "A", "B", BoatRoutes.RouteState.FOUND, List.of(new int[] {10, -20}, new int[] {30, 40}, new int[] {-5, 7}));
-        b.resolve("w", "A", "C", BoatRoutes.RouteState.NONE, List.of());
-        BoatRoutes.Book c = new BoatRoutes.Book();
-        c.load(f);
-        BoatRoutes.Route ab = c.get("w", "A", "B");
-        check(ab != null && ab.state() == BoatRoutes.RouteState.FOUND && ab.points().size() == 3, "route trouvée relue");
-        check(ab.points().get(2)[0] == -5 && ab.points().get(2)[1] == 7, "points relus");
-        BoatRoutes.Route ba = c.get("w", "B", "A");
-        check(ba != null && ba.state() == BoatRoutes.RouteState.FOUND && ba.points().get(0)[0] == -5, "route retour inversée");
-        BoatRoutes.Route ac = c.get("w", "A", "C");
-        check(ac != null && ac.state() == BoatRoutes.RouteState.NONE && ac.points().isEmpty(), "route absente relue");
-        Files.writeString(f, "not json");
-        BoatRoutes.Book d = new BoatRoutes.Book();
-        d.load(f);
-        check(d.get("w", "A", "B") == null && Files.exists(dir.resolve("boat-routes.json.bad")), "fichier illisible renommé");
-    }
-
-    private static void crossMaxLeavesRoomForRoute() {
-        check(WorldStationPlanner.CROSS_MAX < WaterRoute.MAX_LENGTH, "crossing limit under the route limit");
+    private static void crossMaxValue() {
         eq(3800, WorldStationPlanner.CROSS_MAX);
-    }
-
-    private static void boatRoutesInvalidate() {
-        BoatRoutes.Book b = new BoatRoutes.Book();
-        b.addStation("w", "A", List.of("A"));
-        check(b.nextComputing("w") == null, "une seule station : rien à calculer");
-        b.addStation("w", "B", List.of("A", "B"));
-        check(b.get("w", "A", "B").state() == BoatRoutes.RouteState.COMPUTING, "A vers B en calcul");
-        check(b.get("w", "B", "A").state() == BoatRoutes.RouteState.COMPUTING, "B vers A en calcul");
-        b.resolve("w", "A", "B", BoatRoutes.RouteState.FOUND, List.of(new int[] {1, 1}));
-        b.addStation("w", "C", List.of("A", "B", "C"));
-        check(b.get("w", "A", "B").state() == BoatRoutes.RouteState.FOUND, "paire sans C gardée");
-        check(b.get("w", "A", "C").state() == BoatRoutes.RouteState.COMPUTING, "paires de C en calcul");
-        b.removeStation("w", "C");
-        check(b.get("w", "A", "C") == null && b.get("w", "C", "B") == null, "paires de C oubliées");
-        check(b.get("w", "A", "B") != null && b.nextComputing("w") == null, "A et B gardées");
-        check(b.nextComputing("other") == null, "autre monde");
     }
 
     private static void mooredPilot() {
@@ -5029,15 +6063,15 @@ public class TransitTests {
             TransitNetwork.Station s = new TransitNetwork.Station("S", "w", new Vector3i(100, 64, 200), r, null, null,
                     new ArrayList<>(), Deployables.BOAT_STATION_KIND);
             // Helm: the pivot cell of the prefab, turned by the berth rotation around the berth origin (cell centre in x and z).
-            Vector3i o = BoatRoutes.berthOrigin(s);
+            Vector3i o = BoatBerth.berthOrigin(s);
             org.joml.Vector3f pv = AirshipManager.pivot(Deployables.STEAMBOAT_PUBLIC);
-            Vector3d rot = AirshipMath.rotateY(pv.x, pv.y, pv.z, BoatRoutes.berthRotation(s).getRadians(), new Vector3d());
+            Vector3d rot = AirshipMath.rotateY(pv.x, pv.y, pv.z, BoatBerth.berthRotation(s).getRadians(), new Vector3d());
             Vector3d p = MooredPilot.helmPoint(s, false);
             check(Math.abs(p.x - (o.x + Math.round(rot.x) + 0.5)) < 1e-6 && Math.abs(p.z - (o.z + Math.round(rot.z) + 0.5)) < 1e-6
                     && Math.abs(p.y - (o.y + Math.round(rot.y))) < 1e-6, "pivot du prefab tourné, rotation " + r + " : " + p);
             // Facing: forward (-sin yaw, -cos yaw) is the bow of the prefab (0, 0, -1) turned by the berth rotation, whatever the station's.
             double yaw = MooredPilot.facingYaw(s, false);
-            Vector3d bow = AirshipMath.rotateY(0, 0, -1, BoatRoutes.berthRotation(s).getRadians(), new Vector3d());
+            Vector3d bow = AirshipMath.rotateY(0, 0, -1, BoatBerth.berthRotation(s).getRadians(), new Vector3d());
             near(bow.x, -Math.sin(yaw));
             near(bow.z, -Math.cos(yaw));
             java.util.UUID id = MooredPilot.uuidFor("w", o);
@@ -5057,7 +6091,7 @@ public class TransitTests {
     private static void mooredPilotFlipped() {
         for (Rotation r : ALL_ROTATIONS) {
             TransitNetwork.Station s = stationAt(r);
-            Vector3i o = BoatRoutes.berthOrigin(s);
+            Vector3i o = BoatBerth.berthOrigin(s);
             Vector3d pn = MooredPilot.helmPoint(s, false);
             Vector3d pf = MooredPilot.helmPoint(s, true);
             // Half turn about the prefab origin: the two pivots are symmetric about the origin cell centre.
@@ -5066,23 +6100,23 @@ public class TransitTests {
             near(pn.y, pf.y);
             // The pivot cell of the prefab turned by the flipped rotation.
             org.joml.Vector3f pv = AirshipManager.pivot(Deployables.STEAMBOAT_PUBLIC);
-            Vector3d rot = AirshipMath.rotateY(pv.x, pv.y, pv.z, BoatRoutes.berthRotation(s, true).getRadians(), new Vector3d());
+            Vector3d rot = AirshipMath.rotateY(pv.x, pv.y, pv.z, BoatBerth.berthRotation(s, true).getRadians(), new Vector3d());
             near(o.x + Math.round(rot.x) + 0.5, pf.x);
             near(o.z + Math.round(rot.z) + 0.5, pf.z);
             // Facing: forward (-sin yaw, -cos yaw) is the prefab bow turned by the flipped berth rotation, opposite to the usual one.
             double yaw = MooredPilot.facingYaw(s, true);
-            Vector3d bow = AirshipMath.rotateY(0, 0, -1, BoatRoutes.berthRotation(s, true).getRadians(), new Vector3d());
+            Vector3d bow = AirshipMath.rotateY(0, 0, -1, BoatBerth.berthRotation(s, true).getRadians(), new Vector3d());
             near(bow.x, -Math.sin(yaw));
             near(bow.z, -Math.cos(yaw));
             near(Math.PI, Math.abs(AirshipMath.wrapPi(yaw - MooredPilot.facingYaw(s, false))));
-            near(BoatRoutes.berthTheta(s, true), yaw);
+            near(BoatBerth.berthTheta(s, true), yaw);
             // The rotation centre does not depend on the heading.
-            Vector3d c = BoatRoutes.berthCentre(s);
-            Vector3d cf = AirshipManager.get().centerWorld(Deployables.STEAMBOAT_PUBLIC, pf, BoatRoutes.berthTheta(s, true));
+            Vector3d c = BoatBerth.berthCentre(s);
+            Vector3d cf = AirshipManager.get().centerWorld(Deployables.STEAMBOAT_PUBLIC, pf, BoatBerth.berthTheta(s, true));
             near(c.x, cf.x);
             near(c.z, cf.z);
-            check(BoatRoutes.berthRotation(s, true) == BoatRoutes.berthRotation(s).add(Rotation.OneEighty), "flipped rotation " + r);
-            check(BoatRoutes.berthRotation(s, false) == BoatRoutes.berthRotation(s), "usual rotation " + r);
+            check(BoatBerth.berthRotation(s, true) == BoatBerth.berthRotation(s).add(Rotation.OneEighty), "flipped rotation " + r);
+            check(BoatBerth.berthRotation(s, false) == BoatBerth.berthRotation(s), "usual rotation " + r);
         }
     }
 
@@ -5103,10 +6137,10 @@ public class TransitTests {
                 taken.add(p.x + "," + p.y + "," + p.z);
             }
             for (boolean flipped : new boolean[] {false, true}) {
-                Rotation br = BoatRoutes.berthRotation(s, flipped);
+                Rotation br = BoatBerth.berthRotation(s, flipped);
                 boolean touches = false;
                 for (StructureShape.Cell c : boat.cells()) {
-                    Vector3i w = c.rotated(br).add(BoatRoutes.berthOrigin(s));
+                    Vector3i w = c.rotated(br).add(BoatBerth.berthOrigin(s));
                     check(!taken.contains(w.x + "," + w.y + "," + w.z), "hull cell on a station block " + w + ", flipped " + flipped + ", " + r);
                     if (c.y() == 1 && Math.abs(c.x()) == 2 && c.z() == 0 && w.equals(expected)) {
                         touches = true;
@@ -5126,8 +6160,8 @@ public class TransitTests {
         int ox = Deployables.BOAT_STATION_BERTH_ORIGIN[0];
         int usualMin = Integer.MAX_VALUE, usualMax = Integer.MIN_VALUE, turnedMin = Integer.MAX_VALUE, turnedMax = Integer.MIN_VALUE;
         for (StructureShape.Cell c : boat.cells()) {
-            int a = c.rotated(BoatRoutes.berthRotation(Rotation.None, false)).x + ox;
-            int b = c.rotated(BoatRoutes.berthRotation(Rotation.None, true)).x + ox;
+            int a = c.rotated(BoatBerth.berthRotation(Rotation.None, false)).x + ox;
+            int b = c.rotated(BoatBerth.berthRotation(Rotation.None, true)).x + ox;
             usualMin = Math.min(usualMin, a);
             usualMax = Math.max(usualMax, a);
             turnedMin = Math.min(turnedMin, b);
@@ -5148,53 +6182,126 @@ public class TransitTests {
     private static void berthHeadingChoice() {
         for (Rotation r : ALL_ROTATIONS) {
             TransitNetwork.Station s = stationAt(r);
-            double usual = BoatRoutes.berthTheta(s);
-            check(!BoatRoutes.preferFlipped(usual, usual), "same heading keeps the usual one, " + r);
-            check(BoatRoutes.preferFlipped(usual + Math.PI, usual), "opposite heading flips, " + r);
-            check(BoatRoutes.preferFlipped(usual - Math.PI, usual), "opposite heading (other side of the wrap) flips, " + r);
-            check(!BoatRoutes.preferFlipped(usual + Math.toRadians(80), usual), "80 degrees off keeps the usual one, " + r);
-            check(!BoatRoutes.preferFlipped(usual - Math.toRadians(80), usual), "-80 degrees off keeps the usual one, " + r);
-            check(BoatRoutes.preferFlipped(usual + Math.toRadians(100), usual), "100 degrees off flips, " + r);
-            check(BoatRoutes.preferFlipped(usual - Math.toRadians(100), usual), "-100 degrees off flips, " + r);
-            check(!BoatRoutes.preferFlipped(usual + Math.PI / 2, usual) && !BoatRoutes.preferFlipped(usual - Math.PI / 2, usual),
+            double usual = BoatBerth.berthTheta(s);
+            check(!BoatBerth.preferFlipped(usual, usual), "same heading keeps the usual one, " + r);
+            check(BoatBerth.preferFlipped(usual + Math.PI, usual), "opposite heading flips, " + r);
+            check(BoatBerth.preferFlipped(usual - Math.PI, usual), "opposite heading (other side of the wrap) flips, " + r);
+            check(!BoatBerth.preferFlipped(usual + Math.toRadians(80), usual), "80 degrees off keeps the usual one, " + r);
+            check(!BoatBerth.preferFlipped(usual - Math.toRadians(80), usual), "-80 degrees off keeps the usual one, " + r);
+            check(BoatBerth.preferFlipped(usual + Math.toRadians(100), usual), "100 degrees off flips, " + r);
+            check(BoatBerth.preferFlipped(usual - Math.toRadians(100), usual), "-100 degrees off flips, " + r);
+            check(!BoatBerth.preferFlipped(usual + Math.PI / 2, usual) && !BoatBerth.preferFlipped(usual - Math.PI / 2, usual),
                     "a quarter turn keeps the usual one, " + r);
             // A heading near the flipped berth heading flips.
-            check(BoatRoutes.preferFlipped(BoatRoutes.berthTheta(s, true) + 0.3, usual), "heading near the flipped one, " + r);
+            check(BoatBerth.preferFlipped(BoatBerth.berthTheta(s, true) + 0.3, usual), "heading near the flipped one, " + r);
         }
         // Wrap-around at +-pi for the usual heading pi (station Ninety): -0.9 pi is 0.1 pi away, 0.1 pi is 0.9 pi away.
-        check(!BoatRoutes.preferFlipped(-Math.PI * 0.9, Math.PI), "-0.9 pi is next to pi");
-        check(BoatRoutes.preferFlipped(Math.PI * 0.1, Math.PI), "0.1 pi is next to the opposite of pi");
-        check(!BoatRoutes.preferFlipped(Math.PI * 0.95, Math.PI), "0.95 pi is next to pi");
-        check(BoatRoutes.preferFlipped(-Math.PI * 0.05, Math.PI), "-0.05 pi is next to the opposite of pi");
+        check(!BoatBerth.preferFlipped(-Math.PI * 0.9, Math.PI), "-0.9 pi is next to pi");
+        check(BoatBerth.preferFlipped(Math.PI * 0.1, Math.PI), "0.1 pi is next to the opposite of pi");
+        check(!BoatBerth.preferFlipped(Math.PI * 0.95, Math.PI), "0.95 pi is next to pi");
+        check(BoatBerth.preferFlipped(-Math.PI * 0.05, Math.PI), "-0.05 pi is next to the opposite of pi");
+    }
+
+    private static void destinationsSameOceanSurface() {
+        eq(BoatQuay.Reach.YES, BoatQuay.reach(3, 3, 63, 63));
+        eq(BoatQuay.Reach.NO, BoatQuay.reach(3, 3, 63, 70));
+        eq(BoatQuay.Reach.NO, BoatQuay.reach(3, 4, 63, 63));
+        eq(BoatQuay.Reach.CHARTING, BoatQuay.reach(0, 3, 63, 63));
+        eq(BoatQuay.Reach.CHARTING, BoatQuay.reach(3, 0, 63, 63));
+        eq(BoatQuay.Reach.CHARTING, BoatQuay.reach(0, 0, 63, 70));
+    }
+
+    private static void offshoreSpawnNeedsFullClearance() {
+        int r = HullClearance.SHUTTLE.turn();
+        WaterRoute.ColumnProbe channel = (x, z) -> Math.abs(z) <= 1 ? WaterRoute.Cell.WATER : WaterRoute.Cell.BLOCKED;
+        WaterRoute.ColumnProbe open = (x, z) -> WaterRoute.Cell.WATER;
+        WaterRoute.ColumnProbe unloaded = (x, z) -> x > 5 ? WaterRoute.Cell.UNKNOWN : WaterRoute.Cell.WATER;
+        check(!WaterRoute.clearAround(channel, 0, 0, r), "3-block channel refused");
+        check(WaterRoute.clearAround(open, 0, 0, r), "open water accepted");
+        check(!WaterRoute.clearAround(unloaded, 0, 0, r), "unloaded column not clear");
+    }
+
+    private static void queueHeadAction() {
+        long w = BoatQuay.CHARTING_WAIT_MS;
+        eq(BoatQuay.QueueAction.WAIT, BoatQuay.headAction(BoatQuay.Reach.CHARTING, 1000L, 1000L + w - 1));
+        eq(BoatQuay.QueueAction.DROP, BoatQuay.headAction(BoatQuay.Reach.CHARTING, 1000L, 1000L + w + 1));
+        eq(BoatQuay.QueueAction.DROP, BoatQuay.headAction(BoatQuay.Reach.NO, 1000L, 1000L));
+        eq(BoatQuay.QueueAction.GO, BoatQuay.headAction(BoatQuay.Reach.YES, 1000L, 1000L));
+        BoatQuay.Quay q = new BoatQuay.Quay();
+        eq(1000L, q.chartingSince(1L, 1000L));
+        eq(1000L, q.chartingSince(1L, 9000L));
+        eq(9000L, q.chartingSince(2L, 9000L));
+        q.chartingDone();
+        eq(20000L, q.chartingSince(2L, 20000L));
+    }
+
+    /** After a timeout drop, the same destination queued again is a new head entry and waits the full charting delay. */
+    private static void chartingWaitPerHeadEntry() {
+        TransitNetwork net = TransitNetwork.get();
+        TransitNetwork.Station s = new TransitNetwork.Station("Quai", "w", new Vector3i(0, 62, 0), Rotation.None, null, null,
+                new ArrayList<>(), Deployables.BOAT_STATION_KIND);
+        long w = BoatQuay.CHARTING_WAIT_MS;
+        net.queueAdd(s, "Large");
+        net.queueAdd(s, "Ile");
+        long first = net.queueHeadId(s);
+        net.queueRemoveAll(s, "Ile");
+        eq(first, net.queueHeadId(s));
+        BoatQuay.Quay q = new BoatQuay.Quay();
+        long now = 1000L;
+        eq(BoatQuay.QueueAction.WAIT, BoatQuay.headAction(BoatQuay.Reach.CHARTING, q.chartingSince(net.queueHeadId(s), now), now));
+        now += w + 1;
+        eq(BoatQuay.QueueAction.DROP, BoatQuay.headAction(BoatQuay.Reach.CHARTING, q.chartingSince(net.queueHeadId(s), now), now));
+        net.queueRemoveFirst(s, "Large");
+        net.queueAdd(s, "Large");
+        long second = net.queueHeadId(s);
+        check(second != first, "new head entry for the same destination");
+        eq(BoatQuay.QueueAction.WAIT, BoatQuay.headAction(BoatQuay.Reach.CHARTING, q.chartingSince(second, now), now));
+        eq(BoatQuay.QueueAction.WAIT, BoatQuay.headAction(BoatQuay.Reach.CHARTING, q.chartingSince(second, now + w - 1), now + w - 1));
+        net.queuePoll(s);
+        check(net.queueHeadId(s) != second, "poll gives a new head identity");
+    }
+
+    private static void approachSpawnOffshore() {
+        for (Rotation r : new Rotation[] {Rotation.None, Rotation.Ninety}) {
+            TransitNetwork.Station s = new TransitNetwork.Station("S", "w", new Vector3i(100, 64, 200), r, null, null,
+                    new ArrayList<>(), Deployables.BOAT_STATION_KIND);
+            Vector3i pre = BoatBerth.preBerthCell(s);
+            Vector3i berth = BoatBerth.berthCentreCell(s);
+            int[] p = BoatQuay.approachSpawn(s);
+            // 40 blocks from the pre-berth point, on the same axis, on the side away from the berth (the pier).
+            check(Math.abs(Math.hypot(p[0] - pre.x, p[1] - pre.z) - 40.0) < 1e-9, "40 blocks from the pre-berth point, " + r);
+            Vector3i axis = r.rotateYaw(new Vector3i(0, 0, 1), new Vector3i());
+            eq(pre.x + 40 * axis.x, p[0]);
+            eq(pre.z + 40 * axis.z, p[1]);
+            check(Math.hypot(p[0] - berth.x, p[1] - berth.z) > Math.hypot(pre.x - berth.x, pre.z - berth.z), "seaward of the pre-berth point, " + r);
+        }
+        int[] north = BoatQuay.approachSpawn(Rotation.None, new Vector3i(100, 60, 200));
+        eq(100, north[0]);
+        eq(200 + BoatBerth.BERTH_STANDOFF + 40, north[1]);
     }
 
     private static void berthPivotRotation() {
         TransitNetwork.Station s = new TransitNetwork.Station("S", "w", new Vector3i(100, 64, 200), Rotation.Ninety, null, null,
                 new ArrayList<>(), Deployables.BOAT_STATION_KIND);
         // Berth origin {1, -1, 14} turned by Ninety (x, z) -> (z, -x) = (14, -1), plus the origin: (114, 63, 199).
-        eq(new Vector3i(114, 63, 199), BoatRoutes.berthOrigin(s));
-        eq(Rotation.OneEighty, BoatRoutes.berthRotation(s));
+        eq(new Vector3i(114, 63, 199), BoatBerth.berthOrigin(s));
+        eq(Rotation.OneEighty, BoatBerth.berthRotation(s));
         // Pivot {0, 1, -1} turned by OneEighty = (0, 1, 1): cell (114, 64, 200), centre (114.5, 64, 200.5).
-        Vector3d p = BoatRoutes.berthPivot(s);
+        Vector3d p = BoatBerth.berthPivot(s);
         check(p.x == 114.5 && p.y == 64 && p.z == 200.5, "pivot " + p);
-        check(Math.abs(BoatRoutes.berthTheta(s) - Math.PI) < 1e-6, "cap");
-        eq(63, BoatRoutes.surfaceY(s));
-        check(!BoatRoutes.tooFar(new Vector3i(0, 0, 0), new Vector3i(1000, 0, 1000)), "1414 blocs : cherché");
-        check(BoatRoutes.tooFar(new Vector3i(0, 0, 0), new Vector3i(3000, 0, 3000)), "4243 blocs : coupé");
+        check(Math.abs(BoatBerth.berthTheta(s) - Math.PI) < 1e-6, "cap");
+        eq(63, BoatBerth.surfaceY(s));
     }
 
     private static void waterRouteLongCrossing() {
         WaterRoute.ColumnProbe sea = (x, z) -> z >= 0 && z < 60 ? WaterRoute.Cell.WATER : WaterRoute.Cell.BLOCKED;
         WaterRoute.Search s = new WaterRoute.Search(sea, 20, 30, 3520, 30, 0, 0, 3540, 59);
         check(s.step(1_000_000) == WaterRoute.Status.FOUND, "traversée de 3500 blocs");
-        check(!BoatRoutes.tooFar(new Vector3i(0, 0, 0), new Vector3i(3500, 0, 0)), "3500 blocs : cherché");
-        check(BoatRoutes.tooFar(new Vector3i(0, 0, 0), new Vector3i(4500, 0, 0)), "4500 blocs : coupé");
     }
 
     private static void waterRouteTooLong() {
         char[][] m = waterMap('.');
-        check(waterSearch(m, 20, 60, 100, 60).withMaxLength(50).step(100000) == WaterRoute.Status.NO_ROUTE, "trop long");
-        check(waterSearch(m, 20, 60, 100, 60).step(100000) == WaterRoute.Status.FOUND, "longueur par défaut");
+        check(waterSearch(m, 20, 60, 100, 60).step(100000) == WaterRoute.Status.FOUND, "chemin trouvé");
     }
 
     private static void waterRouteBerthNearShore() {
@@ -5397,6 +6504,99 @@ public class TransitTests {
         }
     }
 
+    /** Pose test of the real public shuttle hull (rotation centre at the pose) against one blocked world column. */
+    private static BoatAutopilot.PoseTest shuttleHullTest(int colX, int colZ) throws Exception {
+        AirshipManager.Hull hull = AirshipManager.hullFor(prefabShape("Steamboat_Public.prefab.json"), new Vector3f(0, 1, -1), null);
+        AirshipManager.CellTest cell = (x, y, z, wet) -> x == colX && z == colZ;
+        // the pivot sits one block ahead of the rotation centre, toward the bow: centre + R(theta)(0, -1) = (cx - sin, cz - cos)
+        return (cx, cz, th) -> AirshipManager.blocked(cell, hull, cx - Math.sin(th), 0, cz - Math.cos(th), th, 0) > 0;
+    }
+
+    private static void boatCaptureTurn() throws Exception {
+        // Open sea: ice column (3044, -3049), node (3047, -3045), the next waypoint (3064, -3080).
+        BoatAutopilot.PoseTest t = shuttleHullTest(3044, -3049);
+        int[] node = {3047, -3045};
+        int[] next = {3064, -3080};
+        check(!BoatAutopilot.turnBlocked(t, 3047.5, -3044.5, Math.toRadians(-90), BoatAutopilot.targetHeading(3047.5, -3044.5, next)),
+                "the turn at the node is clear");
+        check(BoatAutopilot.turnBlocked(t, 3044.6, -3044.3, Math.toRadians(-83), BoatAutopilot.targetHeading(3044.6, -3044.3, next)),
+                "the same turn 2.9 blocks short of the node hits the column");
+        check(!BoatAutopilot.captureHere(t, 3044.6, -3044.3, Math.toRadians(-83), node, next), "no early capture where the turn is blocked");
+        check(BoatAutopilot.captureHere(t, 3047.5, -3044.5, Math.toRadians(-90), node, next), "captured at the node, the turn there is clear");
+        check(!BoatAutopilot.captureHere(t, 3043.0, -3044.5, Math.toRadians(-90), node, next), "out of the radius: not captured");
+        // Arrival: ice column (143, -2118), node (149, -2119), the next waypoint (136, -2090).
+        BoatAutopilot.PoseTest d = shuttleHullTest(143, -2118);
+        int[] dnode = {149, -2119};
+        int[] dnext = {136, -2090};
+        check(!BoatAutopilot.captureHere(d, 149.0, -2115.7, Math.toRadians(-12), dnode, dnext), "arrival: no early capture, the turn is blocked");
+        check(BoatAutopilot.captureHere(d, 149.5, -2118.5, 0, dnode, dnext), "arrival: captured at the node");
+        // A free sea captures within the radius, as before; a last waypoint has no turn to judge.
+        BoatAutopilot.PoseTest free = (x, z, th) -> false;
+        check(BoatAutopilot.captureHere(free, 13.4, 10.5, 0, new int[] {10, 10}, new int[] {10, 40}), "free sea: captured within the radius");
+        check(!BoatAutopilot.captureHere(free, 13.7, 10.5, 0, new int[] {10, 10}, new int[] {10, 40}), "free sea: not beyond the radius");
+        check(BoatAutopilot.captureHere(t, 3044.6, -3044.3, 0, node, null), "no next waypoint: captured within the radius");
+    }
+
+    private static void boatBackOff() throws Exception {
+        // Open sea wedge: centre (3044.6, -3044.3), heading -40.4 deg, the target heads toward (3064, -3080).
+        BoatAutopilot.PoseTest t = shuttleHullTest(3044, -3049);
+        double target = BoatAutopilot.targetHeading(3044.6, -3044.3, new int[] {3064, -3080});
+        eq(2.0, BoatAutopilot.backOff(t, 3044.6, -3044.3, Math.toRadians(-40.4), target));
+        // Arrival wedge: centre (149, -2115.7), heading 61.6 deg, the target heads toward the berth (136, -2090).
+        BoatAutopilot.PoseTest d = shuttleHullTest(143, -2118);
+        eq(1.0, BoatAutopilot.backOff(d, 149.0, -2115.7, Math.toRadians(61.6), BoatAutopilot.targetHeading(149.0, -2115.7, new int[] {136, -2090})));
+        check(BoatAutopilot.wedged(t, 3044.6, -3044.3, Math.toRadians(-40.4), target), "open sea wedge: turn and way ahead blocked");
+        check(BoatAutopilot.wedged(d, 149.0, -2115.7, Math.toRadians(61.6),
+                BoatAutopilot.targetHeading(149.0, -2115.7, new int[] {136, -2090})), "arrival wedge: turn and way ahead blocked");
+        check(!BoatAutopilot.wedged(t, 3047.5, -3044.5, Math.toRadians(-90), BoatAutopilot.targetHeading(3047.5, -3044.5, new int[] {3064, -3080})),
+                "at the node the turn is clear: not wedged");
+        // Bow free, turn blocked by a column abeam: still wedged (the controller never moves ahead while turning), and backing off helps.
+        BoatAutopilot.PoseTest abeam = (x, z, th) -> th > 0.3 && z < 2.5;
+        check(!abeam.blocked(0.5, -0.5, 0), "the bow is free");
+        check(BoatAutopilot.wedged(abeam, 0.5, 0.5, 0, 1.0), "bow free, turn blocked: wedged");
+        eq(2.0, BoatAutopilot.backOff(abeam, 0.5, 0.5, 0, 1.0));
+        // Persistence: a refused yaw step may still turn the hull around the unmoved pivot, so one refusal is not a wedge.
+        check(!BoatAutopilot.wedgedFor(1, 0), "one refused step: not wedged");
+        check(!BoatAutopilot.wedgedFor(3, 0), "three refused steps: not wedged yet");
+        check(BoatAutopilot.wedgedFor(4, 0), "four refused steps, heading unchanged: wedged");
+        check(BoatAutopilot.wedgedFor(4, Math.toRadians(0.2)), "four refused steps, heading moved 0.2 deg: wedged");
+        check(!BoatAutopilot.wedgedFor(4, Math.toRadians(3)), "four refused steps, heading moved 3 deg: not wedged");
+        // Per-trip cap and position guard of the back-off.
+        check(BoatAutopilot.backOffAllowed(0, 10, 10, false, 0, 0, 0, 50), "the first back-off of a trip is allowed");
+        check(!BoatAutopilot.backOffAllowed(BoatAutopilot.BACK_TRIP_MAX, 10, 10, false, 0, 0, 0, 50), "trip cap reached");
+        check(BoatAutopilot.backOffAllowed(BoatAutopilot.BACK_TRIP_MAX - 1, 10, 10, false, 0, 0, 0, 50), "one under the cap");
+        check(!BoatAutopilot.backOffAllowed(1, 14, 10, true, 10, 10, 60, 60), "near the last back-off point, no progress: refused");
+        check(!BoatAutopilot.backOffAllowed(1, 14, 10, true, 10, 10, 60, 58), "near the last back-off point, 2 blocks of progress: refused");
+        check(BoatAutopilot.backOffAllowed(1, 14, 10, true, 10, 10, 60, 50), "near the last back-off point, real progress: allowed");
+        check(BoatAutopilot.backOffAllowed(1, 30, 10, true, 10, 10, 60, 60), "far from the last back-off point: allowed");
+        // A step the move would refuse (a pocket of the hull sampling) is jumped over, never beyond what is left.
+        BoatAutopilot.PoseTest pocket = (x, z, th) -> z > 0.2 && z < 0.4;
+        near(0.6, BoatAutopilot.hop(pocket, 0, 0, 0, 1, 0, 0.3, 2.0));
+        near(0.3, BoatAutopilot.hop((x, z, th) -> false, 0, 0, 0, 1, 0, 0.3, 2.0));
+        near(0.1, BoatAutopilot.hop((x, z, th) -> false, 0, 0, 0, 1, 0, 0.3, 0.1));
+        near(0.3, BoatAutopilot.hop((x, z, th) -> true, 0, 0, 0, 1, 0, 0.3, 2.0));
+        // Nothing around is free: no back-off. A free sea does not need one: the smallest distance already clears the turn.
+        BoatAutopilot.PoseTest wall = (x, z, th) -> true;
+        eq(-1.0, BoatAutopilot.backOff(wall, 0.5, 0.5, 0, 1.0));
+        BoatAutopilot.PoseTest free = (x, z, th) -> false;
+        eq(1.0, BoatAutopilot.backOff(free, 0.5, 0.5, 0, 1.0));
+        // Heading 0: astern is +z. Only the third block astern clears the turn, so the answer is 3.
+        BoatAutopilot.PoseTest far = (x, z, th) -> th > 0.2 && z < 3.0;
+        eq(3.0, BoatAutopilot.backOff(far, 0.5, 0.5, 0, 1.0));
+        // The turn is blocked until 3.5 blocks astern, but the hull cannot go back that far (a wall at the stern): no back-off.
+        BoatAutopilot.PoseTest stern = (x, z, th) -> (th > 0.2 && z < 3.5) || (z > 2.2 && th == 0);
+        eq(-1.0, BoatAutopilot.backOff(stern, 0.5, 0.5, 0, 1.0));
+    }
+
+    private static void boatSideArrivalClear() {
+        // A sweep blocked only at mid-course: the end pose alone is free.
+        BoatAutopilot.PoseTest mid = (x, z, th) -> Math.abs(th - 0.5) < 0.1;
+        check(!mid.blocked(0, 0, 1.0), "the berth pose alone is free");
+        check(!BoatAutopilot.sideArrivalClear(mid, 0, 0, 0, 1.0), "sideways arrival refused: the turn sweep hits");
+        check(BoatAutopilot.sideArrivalClear(mid, 0, 0, 0, 0.3), "sideways arrival kept: the sweep is clear");
+        check(BoatAutopilot.sideArrivalClear((x, z, th) -> false, 0, 0, 0, 3.0), "free sea");
+    }
+
     private static void paddleSlideWheels() {
         PaddleWheels.Spin[] w = PaddleWheels.slideWheels();
         check(w[0] == PaddleWheels.Spin.FWD_SLOW && w[1] == PaddleWheels.Spin.FWD_SLOW, "glissade : deux roues lentes en avant");
@@ -5423,12 +6623,12 @@ public class TransitTests {
 
     /** Pre-berth point, route trimming and turning-circle clearance of the sideways berthing manoeuvre. */
     private static void boatBerthManoeuvre() {
-        int s = BoatRoutes.BERTH_STANDOFF;
+        int s = BoatBerth.BERTH_STANDOFF;
         org.joml.Vector3i berth = new org.joml.Vector3i(100, 60, 200);
         // the pre-berth point lies along the station's +z axis, rotated with the station
-        org.joml.Vector3i p0 = BoatRoutes.preBerthCell(com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None, berth, s);
+        org.joml.Vector3i p0 = BoatBerth.preBerthCell(com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None, berth, s);
         check(p0.x == 100 && p0.z == 200 + s && p0.y == 60, "rotation None: +z");
-        org.joml.Vector3i p90 = BoatRoutes.preBerthCell(com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.Ninety, berth, s);
+        org.joml.Vector3i p90 = BoatBerth.preBerthCell(com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.Ninety, berth, s);
         check(Math.abs(p90.x - 100) == s && p90.z == 200 && Integer.signum(p90.x - 100) == Integer.signum(
                 com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.Ninety.rotateYaw(new org.joml.Vector3i(0, 0, 1),
                         new org.joml.Vector3i()).x), "rotation Ninety: along x, signed");
@@ -5445,26 +6645,33 @@ public class TransitTests {
         org.joml.Vector3i pre = new org.joml.Vector3i(100, 60, 200 + s);
         java.util.List<int[]> route = java.util.List.of(new int[] {100, 300}, new int[] {100, 230}, new int[] {100, 200 + s - 2},
                 new int[] {100, 200 + s - 4}, new int[] {100, 200});
-        java.util.List<int[]> in = BoatRoutes.arriveRoute(route, berth, pre, s);
+        java.util.List<int[]> in = BoatBerth.arriveRoute(route, berth, pre, s);
         check(in.size() == 3, "arrive: 2 far waypoints + pre-berth, got " + in.size());
         check(in.get(2)[0] == 100 && in.get(2)[1] == 200 + s, "arrive: ends at the pre-berth point");
-        java.util.List<int[]> in2 = BoatRoutes.arriveRoute(java.util.List.of(new int[] {100, 300}, new int[] {100, 200 + s}, new int[] {100, 200}),
+        java.util.List<int[]> in2 = BoatBerth.arriveRoute(java.util.List.of(new int[] {100, 300}, new int[] {100, 200 + s}, new int[] {100, 200}),
                 berth, pre, s);
         check(in2.size() == 2, "arrive: no duplicate pre-berth point");
         // departure route: starts at the pre-berth point, nearer waypoints dropped
-        java.util.List<int[]> out = BoatRoutes.departRoute(java.util.List.of(new int[] {100, 200}, new int[] {100, 200 + s - 2}, new int[] {100, 230},
+        java.util.List<int[]> out = BoatBerth.departRoute(java.util.List.of(new int[] {100, 200}, new int[] {100, 200 + s - 2}, new int[] {100, 230},
                 new int[] {100, 300}), berth, pre, s);
         check(out.size() == 3 && out.get(0)[1] == 200 + s && out.get(1)[1] == 230, "depart: pre-berth first, then the far waypoints");
-        java.util.List<int[]> out2 = BoatRoutes.departRoute(java.util.List.of(new int[] {100, 200 + s}, new int[] {100, 300}), berth, pre, s);
+        java.util.List<int[]> out2 = BoatBerth.departRoute(java.util.List.of(new int[] {100, 200 + s}, new int[] {100, 300}), berth, pre, s);
         check(out2.size() == 2, "depart: no duplicate pre-berth point");
         // abandoning the sideways arrival resumes at the first dropped waypoint
-        check(BoatRoutes.firstDropped(route, in) == 2, "resume at the first dropped waypoint (got " + BoatRoutes.firstDropped(route, in) + ")");
-        check(BoatRoutes.firstDropped(route, java.util.List.of(new int[] {1, 1})) == 0, "resume index never negative");
+        check(BoatBerth.firstDropped(route, in, 0) == 2, "resume at the first dropped waypoint (got " + BoatBerth.firstDropped(route, in, 0) + ")");
+        check(BoatBerth.firstDropped(route, java.util.List.of(new int[] {1, 1}), 0) == 0, "resume index never negative");
+        // détours inserted after the trim are counted once: full of 5, trimmed of 6 with 2 détours resumes at 3
+        java.util.List<int[]> trimmed6 = java.util.List.of(new int[] {1, 1}, new int[] {2, 2}, new int[] {3, 3}, new int[] {4, 4}, new int[] {5, 5},
+                new int[] {6, 6});
+        java.util.List<int[]> full5 = java.util.List.of(new int[] {1, 1}, new int[] {2, 2}, new int[] {3, 3}, new int[] {4, 4}, new int[] {7, 7});
+        eq(3, BoatBerth.firstDropped(full5, trimmed6, 2));
+        eq(3, BoatBerth.firstDropped(full5, java.util.List.of(new int[] {1, 1}, new int[] {2, 2}, new int[] {3, 3}, new int[] {9, 9}), 0));
+        eq(0, BoatBerth.firstDropped(full5, java.util.List.of(new int[] {1, 1}), 3));
         // a voyage list keeps both ends: departure slide-out then arrival at the destination pre-berth point
         org.joml.Vector3i dest = new org.joml.Vector3i(100, 60, 900);
         org.joml.Vector3i destPre = new org.joml.Vector3i(100, 60, 900 + s);
         java.util.List<int[]> voyage = java.util.List.of(new int[] {100, 200}, new int[] {100, 300}, new int[] {100, 880}, new int[] {100, 900});
-        java.util.List<int[]> both = BoatRoutes.arriveRoute(BoatRoutes.departRoute(voyage, berth, pre, s), dest, destPre, s);
+        java.util.List<int[]> both = BoatBerth.arriveRoute(BoatBerth.departRoute(voyage, berth, pre, s), dest, destPre, s);
         check(both.get(0)[1] == 200 + s, "voyage: starts at the departure pre-berth point");
         check(both.get(both.size() - 1)[1] == 900 + s, "voyage: ends at the arrival pre-berth point");
         check(both.size() == 4, "voyage: pre, 300, 880, arrival pre (" + both.size() + ")");
@@ -5472,7 +6679,7 @@ public class TransitTests {
         int lateral = Deployables.BOAT_STATION_BERTH_ORIGIN[2] - Deployables.BOAT_STATION_PIER_END[2];
         for (com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation r : com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.values()) {
             org.joml.Vector3i want = r.rotateYaw(new org.joml.Vector3i(0, 0, lateral), new org.joml.Vector3i());
-            org.joml.Vector3i got = BoatRoutes.preBerthCell(r, new org.joml.Vector3i(), s);
+            org.joml.Vector3i got = BoatBerth.preBerthCell(r, new org.joml.Vector3i(), s);
             check(Integer.signum(got.x) == Integer.signum(want.x) && Integer.signum(got.z) == Integer.signum(want.z), "seaward sign " + r);
         }
         // slide: half the sailing speed, never under the minimum
@@ -5516,24 +6723,24 @@ public class TransitTests {
         // Station Ninety at (100, 64, 200): berth origin {1, -1, 14} -> (114, 63, 199), boat rotation OneEighty, theta = pi.
         // Pivot (0, 1, -1) turned -> (0, 1, 1): cell (114, 64, 200), pivot (114.5, 64, 200.5). Centre = prefab (0, z 0) at the pivot
         // height: cell (114, 64, 199), centre (114.5, 64, 199.5).
-        org.joml.Vector3d p = BoatRoutes.berthPivot(s);
+        org.joml.Vector3d p = BoatBerth.berthPivot(s);
         check(Math.abs(p.x - 114.5) < 1e-6 && Math.abs(p.z - 200.5) < 1e-6, "pivot " + p);
-        org.joml.Vector3d c = BoatRoutes.berthCentre(s);
+        org.joml.Vector3d c = BoatBerth.berthCentre(s);
         check(Math.abs(c.x - 114.5) < 1e-6 && Math.abs(c.y - 64) < 1e-6 && Math.abs(c.z - 199.5) < 1e-6, "centre " + c);
-        eq(new Vector3i(114, 64, 199), BoatRoutes.berthCentreCell(s));
+        eq(new Vector3i(114, 64, 199), BoatBerth.berthCentreCell(s));
         // Turning keeps the centre fixed: the pivot is found back from the centre at the berth heading.
-        org.joml.Vector3d back = AirshipManager.get().pivotFromCenter(Deployables.STEAMBOAT_PUBLIC, c, BoatRoutes.berthTheta(s));
+        org.joml.Vector3d back = AirshipManager.get().pivotFromCenter(Deployables.STEAMBOAT_PUBLIC, c, BoatBerth.berthTheta(s));
         check(back.distance(p) < 1e-6, "pivot from centre " + back);
         // Station None: berth origin {1, -1, 14} -> (101, 63, 214), boat rotation Ninety ((x, z) -> (z, -x)), theta = pi / 2.
         // Pivot (0, 1, -1) -> (-1, 1, 0): cell (100, 64, 214), pivot (100.5, 64, 214.5). Centre = origin column: (101.5, 64, 214.5).
         TransitNetwork.Station n = new TransitNetwork.Station("N", "w", new Vector3i(100, 64, 200), Rotation.None, null, null,
                 new ArrayList<>(), Deployables.BOAT_STATION_KIND);
-        eq(Rotation.Ninety, BoatRoutes.berthRotation(n));
-        org.joml.Vector3d pn = BoatRoutes.berthPivot(n);
+        eq(Rotation.Ninety, BoatBerth.berthRotation(n));
+        org.joml.Vector3d pn = BoatBerth.berthPivot(n);
         check(Math.abs(pn.x - 100.5) < 1e-6 && Math.abs(pn.z - 214.5) < 1e-6, "Ninety berth pivot " + pn);
-        org.joml.Vector3d cn = BoatRoutes.berthCentre(n);
+        org.joml.Vector3d cn = BoatBerth.berthCentre(n);
         check(Math.abs(cn.x - 101.5) < 1e-6 && Math.abs(cn.y - 64) < 1e-6 && Math.abs(cn.z - 214.5) < 1e-6, "Ninety berth centre " + cn);
-        check(AirshipManager.get().pivotFromCenter(Deployables.STEAMBOAT_PUBLIC, cn, BoatRoutes.berthTheta(n)).distance(pn) < 1e-6,
+        check(AirshipManager.get().pivotFromCenter(Deployables.STEAMBOAT_PUBLIC, cn, BoatBerth.berthTheta(n)).distance(pn) < 1e-6,
                 "Ninety pivot from centre");
     }
 
@@ -5710,6 +6917,228 @@ public class TransitTests {
         check(k.copy().hasReached(new SkyLog.Reached(10, 64, 20)), "copy keeps the stations");
     }
 
+    private static void skyLogDiscoveryRadius() {
+        check(SkyLog.stationInReach(0, 0, 39, 0, StationDiscovery.DISCOVERY_RADIUS), "39 blocks is in the discovery reach");
+        check(SkyLog.stationInReach(0, 0, 40, 0, StationDiscovery.DISCOVERY_RADIUS), "exactly 40 blocks is in the discovery reach");
+        check(!SkyLog.stationInReach(0, 0, 41, 0, StationDiscovery.DISCOVERY_RADIUS), "41 blocks is out of the discovery reach");
+        check(!SkyLog.stationInReach(0, 0, 41, 0), "41 blocks stays out of the vehicle reach");
+        check(SkyLog.stationInReach(0, 0, 40, 0, SkyLog.STATION_REACH), "vehicle reach keeps 40 blocks");
+        eq(40.0, StationDiscovery.DISCOVERY_RADIUS);
+    }
+
+    private static void iceBreakable() {
+        check(IceBreaker.isBreakableIce("Rock_Ice"), "sea ice breaks");
+        check(IceBreaker.isBreakableIce("Rock_Ice_Permafrost"), "permafrost ice breaks");
+        check(!IceBreaker.isBreakableIce("Rock_Ice_Icicles"), "icicles do not");
+        check(!IceBreaker.isBreakableIce("Soil_Snow"), "snow does not");
+        check(!IceBreaker.isBreakableIce("Rock_Stone"), "stone does not");
+        check(!IceBreaker.isBreakableIce(null), "no block does not");
+    }
+
+    /** Column over y 113..121 (surfaceY 114, topY 120), kinds given from y 113; the default is the open sea. */
+    private static WaterRoute.Cell iceCol(java.util.Map<Integer, IceBreaker.Kind> over) {
+        return IceBreaker.column(y -> {
+            IceBreaker.Kind k = over.get(y);
+            if (k != null) {
+                return k;
+            }
+            return y <= 114 ? IceBreaker.Kind.WATER : IceBreaker.Kind.AIR;
+        }, 113, 114, 120);
+    }
+
+    private static void iceColumn() {
+        IceBreaker.Kind ice = IceBreaker.Kind.ICE;
+        eq(WaterRoute.Cell.WATER, iceCol(java.util.Map.of()));
+        eq(WaterRoute.Cell.WATER, iceCol(java.util.Map.of(114, ice, 115, ice, 116, ice)));
+        java.util.Map<Integer, IceBreaker.Kind> berg = new java.util.HashMap<>();
+        for (int y = 114; y <= 117; y++) {
+            berg.put(y, ice);
+        }
+        eq(WaterRoute.Cell.BLOCKED, iceCol(berg));
+        eq(WaterRoute.Cell.BLOCKED, iceCol(java.util.Map.of(115, IceBreaker.Kind.SOLID)));
+        eq(WaterRoute.Cell.BLOCKED, iceCol(java.util.Map.of(116, IceBreaker.Kind.WATER)));
+        eq(WaterRoute.Cell.BLOCKED, iceCol(java.util.Map.of(114, IceBreaker.Kind.AIR)));
+        eq(WaterRoute.Cell.UNKNOWN, iceCol(java.util.Map.of(117, IceBreaker.Kind.UNLOADED)));
+        eq(WaterRoute.Cell.WATER, iceCol(java.util.Map.of(121, IceBreaker.Kind.UNLOADED, 114, ice)));
+        // a floe rises at most MAX_FLOE_HEIGHT above the surface, even when the hull is taller
+        eq(WaterRoute.Cell.BLOCKED, iceCol(java.util.Map.of(117, IceBreaker.Kind.UNLOADED, 118, IceBreaker.Kind.SOLID)));
+        // ice only above the hull top makes no ice inside the slice: the hull passes under it
+        eq(WaterRoute.Cell.WATER, iceCol(java.util.Map.of(121, ice)));
+        eq(WaterRoute.Cell.WATER, iceCol(java.util.Map.of(121, ice, 117, IceBreaker.Kind.AIR)));
+    }
+
+    /**
+     * The column probe and the hull test read a column the same way: whenever the hull test blocks a cell of the hull range of some
+     * column, the probe calls the column blocked. Random columns over surfaceY - 2 .. topY + 3, for the hulls of both steamboats
+     * (bottom, surface and top relative to the water level: shuttle 0 / 0 / 5, player's boat -2 / 0 / 11), wet cells being those at or
+     * under the surface.
+     */
+    private static void iceProbeMatchesHull() {
+        IceBreaker.Kind[] pool = {IceBreaker.Kind.WATER, IceBreaker.Kind.ICE, IceBreaker.Kind.AIR, IceBreaker.Kind.SOLID};
+        int[][] hulls = {{0, 0, 5}, {-2, 0, 11}};
+        java.util.Random rnd = new java.util.Random(20261029L);
+        int blockedColumns = 0;
+        for (int[] hull : hulls) {
+            for (int n = 0; n < 20000; n++) {
+                int surface = 60 + rnd.nextInt(60);
+                int bottom = surface + hull[0];
+                int top = surface + hull[2];
+                int lo = surface - 2;
+                IceBreaker.Kind[] col = new IceBreaker.Kind[top + 3 - lo + 1];
+                for (int i = 0; i < col.length; i++) {
+                    int y = lo + i;
+                    // mostly open sea and air, with ice and a few other cells, so that every mix comes up
+                    int roll = rnd.nextInt(10);
+                    col[i] = roll < 6 ? (y <= surface ? IceBreaker.Kind.WATER : IceBreaker.Kind.AIR)
+                            : roll < 9 ? IceBreaker.Kind.ICE : pool[rnd.nextInt(pool.length)];
+                }
+                // beyond the generated range: open sea under it, air above it (the hull test reads a few cells under a wet empty cell)
+                IceBreaker.CellReader reader = (x, y, z) -> y < lo ? IceBreaker.Kind.WATER : y - lo < col.length ? col[y - lo] : IceBreaker.Kind.AIR;
+                for (int y = bottom; y <= top; y++) {
+                    if (IceBreaker.hullCellBlocks(reader, 0, y, 0, y <= surface, surface)) {
+                        blockedColumns++;
+                        WaterRoute.Cell probe = IceBreaker.column(y2 -> col[y2 - lo], bottom, surface, top);
+                        check(probe == WaterRoute.Cell.BLOCKED, "the hull blocks at y " + (y - surface) + " over the water but the probe reads "
+                                + probe + ": " + java.util.Arrays.toString(col));
+                        break;
+                    }
+                }
+            }
+        }
+        check(blockedColumns > 1000, "the generated columns block the hull often enough, got " + blockedColumns);
+    }
+
+    /** Fake world column at x = 0, z = 0: kinds by height, the default is open sea under y 114 and air above. */
+    private static IceBreaker.CellReader iceWorld(java.util.Map<Integer, IceBreaker.Kind> over) {
+        return (x, y, z) -> {
+            IceBreaker.Kind k = over.get(y);
+            if (k != null) {
+                return k;
+            }
+            return y <= 114 ? IceBreaker.Kind.WATER : IceBreaker.Kind.AIR;
+        };
+    }
+
+    private static boolean iceBlocks(java.util.Map<Integer, IceBreaker.Kind> over, int y, boolean wet) {
+        return IceBreaker.hullCellBlocks(iceWorld(over), 0, y, 0, wet, 114);
+    }
+
+    private static void iceHullCell() {
+        IceBreaker.Kind ice = IceBreaker.Kind.ICE;
+        IceBreaker.Kind air = IceBreaker.Kind.AIR;
+        IceBreaker.Kind stone = IceBreaker.Kind.SOLID;
+        java.util.Map<Integer, IceBreaker.Kind> none = java.util.Map.of();
+        check(!iceBlocks(java.util.Map.of(113, ice), 113, true), "floe ice under the waterline gives way");
+        check(!iceBlocks(java.util.Map.of(116, ice), 116, false), "floe ice above the waterline gives way");
+        check(iceBlocks(java.util.Map.of(116, ice, 117, ice), 116, false), "iceberg ice blocks");
+        check(iceBlocks(java.util.Map.of(113, ice, 117, ice), 113, true), "iceberg ice under the waterline blocks");
+        check(!iceBlocks(java.util.Map.of(114, air), 114, true), "broken cell with water under it floats");
+        check(!iceBlocks(java.util.Map.of(114, air, 113, ice), 114, true), "broken cell over ice floats");
+        check(iceBlocks(java.util.Map.of(114, air, 113, stone), 114, true), "wet empty cell over stone blocks");
+        check(iceBlocks(java.util.Map.of(114, air, 113, air, 112, air, 111, air, 110, air), 114, true),
+                "wet empty cell with no water within the scan blocks");
+        check(!iceBlocks(java.util.Map.of(114, air, 113, air, 112, air), 114, true), "two stacked empty cells over water float");
+        check(!iceBlocks(java.util.Map.of(114, air, 113, air, 112, air, 111, air), 114, true), "three stacked empty cells over water float");
+        check(iceBlocks(java.util.Map.of(116, stone), 116, false), "dry stone blocks");
+        check(!iceBlocks(java.util.Map.of(), 116, false), "dry air is free");
+        check(iceBlocks(none, 114, false), "water above the waterline blocks");
+        check(!iceBlocks(none, 114, true), "water under the waterline is free");
+        check(!iceBlocks(java.util.Map.of(114, IceBreaker.Kind.UNLOADED), 114, true), "unloaded never blocks");
+    }
+
+    /** Footprint: a band of 5 columns (z 0..4) along x, 200 long. */
+    private static final IceBreaker.ColumnTest ICE_BAND = (x, z) -> x >= 0 && x < 200 && z >= 0 && z <= 4;
+
+    private static void iceMarginRing() {
+        int in2 = 0;
+        int out2 = 0;
+        for (int x = 20; x < 180; x++) {
+            check(IceBreaker.inIceMargin(ICE_BAND, x, -1), "distance 1 below is in the margin");
+            check(IceBreaker.inIceMargin(ICE_BAND, x, 5), "distance 1 above is in the margin");
+            check(!IceBreaker.inIceMargin(ICE_BAND, x, -3), "distance 3 is out");
+            check(!IceBreaker.inIceMargin(ICE_BAND, x, 7), "distance 3 above is out");
+            check(!IceBreaker.inIceMargin(ICE_BAND, x, -9), "far is out");
+            check(!IceBreaker.inIceMargin(ICE_BAND, x, 2), "inside the footprint is not margin");
+            if (IceBreaker.inIceMargin(ICE_BAND, x, -2)) {
+                in2++;
+            } else {
+                out2++;
+            }
+        }
+        check(in2 > 20 && out2 > 20, "distance 2 is irregular: in " + in2 + ", out " + out2);
+    }
+
+    private static void iceMarginStable() {
+        for (int x = -30; x < 30; x++) {
+            for (int z = -5; z < 10; z++) {
+                boolean first = IceBreaker.inIceMargin(ICE_BAND, x, z);
+                for (int i = 0; i < 3; i++) {
+                    eq(first, IceBreaker.inIceMargin(ICE_BAND, x, z));
+                }
+            }
+        }
+    }
+
+    private static void iceMarginCell() {
+        IceBreaker.Kind ice = IceBreaker.Kind.ICE;
+        IceBreaker.Kind stone = IceBreaker.Kind.SOLID;
+        check(IceBreaker.marginCellBreaks(iceWorld(java.util.Map.of(113, ice)), 0, 113, 0, 114), "floe ice over water breaks");
+        check(!IceBreaker.marginCellBreaks(
+                (x, y, z) -> y == 113 ? ice : y > 113 ? IceBreaker.Kind.AIR : stone, 0, 113, 0, 114), "ice on stone stays");
+        check(!IceBreaker.marginCellBreaks(iceWorld(java.util.Map.of(113, ice, 117, ice)), 0, 113, 0, 114), "iceberg column stays");
+        check(!IceBreaker.marginCellBreaks(iceWorld(java.util.Map.of(113, ice, 117, ice)), 0, 117, 0, 114), "ice at surface + 3 never breaks");
+        check(IceBreaker.marginCellBreaks(iceWorld(java.util.Map.of(116, ice, 115, ice)), 0, 116, 0, 114), "ice at surface + 2 breaks");
+        check(!IceBreaker.marginCellBreaks(iceWorld(java.util.Map.of()), 0, 113, 0, 114), "water is not ice");
+        check(IceBreaker.marginCellBreaks(iceWorld(java.util.Map.of(113, ice, 112, ice)), 0, 113, 0, 114), "stacked ice over water breaks");
+    }
+
+    private static void floeMaxHeight() {
+        IceBreaker.Kind ice = IceBreaker.Kind.ICE;
+        eq(2, IceBreaker.MAX_FLOE_HEIGHT);
+        java.util.Map<Integer, IceBreaker.Kind> floe = new java.util.HashMap<>();
+        java.util.Map<Integer, IceBreaker.Kind> berg = new java.util.HashMap<>();
+        for (int y = 112; y <= 116; y++) {
+            floe.put(y, ice);
+            berg.put(y, ice);
+        }
+        berg.put(117, ice);
+        // ice up to surfaceY + 2: the hull cell does not block, the column reads as water then empty
+        check(!iceBlocks(floe, 116, false), "floe top cell does not block");
+        check(!iceBlocks(floe, 114, true), "floe cell at the surface does not block");
+        eq(WaterRoute.Cell.WATER, iceCol(floe));
+        eq(0, IceBreaker.placementState(iceWorld(floe), 0, 116, 0, false, 114));
+        eq(1, IceBreaker.placementState(iceWorld(floe), 0, 114, 0, true, 114));
+        // ice reaching surfaceY + 3: an iceberg
+        check(iceBlocks(berg, 116, false), "iceberg cell blocks");
+        check(iceBlocks(berg, 113, true), "iceberg cell under the surface blocks");
+        eq(WaterRoute.Cell.BLOCKED, iceCol(berg));
+        eq(2, IceBreaker.placementState(iceWorld(berg), 0, 116, 0, false, 114));
+        check(!IceBreaker.marginCellBreaks(iceWorld(berg), 0, 113, 0, 114), "iceberg margin cell stays");
+        check(!IceBreaker.marginCellBreaks(iceWorld(berg), 0, 117, 0, 114), "ice at surface + 3 never breaks");
+        // loose ice above the cap is not a floe cell
+        check(iceBlocks(java.util.Map.of(118, ice), 118, false), "ice above the floe cap blocks the hull");
+    }
+
+    private static void icePlacementState() {
+        IceBreaker.Kind ice = IceBreaker.Kind.ICE;
+        IceBreaker.Kind air = IceBreaker.Kind.AIR;
+        eq(1, IceBreaker.placementState(iceWorld(java.util.Map.of(113, ice)), 0, 113, 0, true, 114));
+        eq(0, IceBreaker.placementState(iceWorld(java.util.Map.of(116, ice)), 0, 116, 0, false, 114));
+        eq(2, IceBreaker.placementState(iceWorld(java.util.Map.of(116, ice, 117, ice)), 0, 116, 0, false, 114));
+        eq(1, IceBreaker.placementState(iceWorld(java.util.Map.of(114, air)), 0, 114, 0, true, 114));
+        eq(2, IceBreaker.placementState(iceWorld(java.util.Map.of(114, IceBreaker.Kind.SOLID)), 0, 114, 0, true, 114));
+        eq(0, IceBreaker.placementState(iceWorld(java.util.Map.of(114, air, 113, IceBreaker.Kind.SOLID)), 0, 114, 0, true, 114));
+        eq(1, IceBreaker.placementState(iceWorld(java.util.Map.of()), 0, 114, 0, true, 114));
+    }
+
+    private static void stationMarkerDisplay() {
+        eq(StationMarkerProvider.Display.NEARBY, StationMarkerProvider.display(false, false, true));
+        eq(StationMarkerProvider.Display.NEARBY, StationMarkerProvider.display(false, false, false));
+        eq(StationMarkerProvider.Display.KNOWN_SHAREABLE, StationMarkerProvider.display(true, false, true));
+        eq(StationMarkerProvider.Display.KNOWN, StationMarkerProvider.display(true, true, true));
+        eq(StationMarkerProvider.Display.KNOWN, StationMarkerProvider.display(true, false, false));
+    }
+
     private static void skyLogMarkerDistance() {
         SkyLog k = new SkyLog();
         check(!k.markerVisited(0, 0), "empty log: nothing visited");
@@ -5866,29 +7295,6 @@ public class TransitTests {
         eq(0, rev.get(2)[0]);
     }
 
-    private static void boatRoutesOldVersion() throws Exception {
-        Path dir = Files.createTempDirectory("boatroutesv1");
-        Path f = dir.resolve("boat-routes.json");
-        Files.writeString(f, "{\"version\": 1, \"routes\": [{\"world\": \"w\", \"from\": \"A\", \"to\": \"B\", "
-                + "\"state\": \"FOUND\", \"points\": [[1, 2], [3, 4]]}]}");
-        BoatRoutes.Book b = new BoatRoutes.Book();
-        b.load(f);
-        check(b.get("w", "A", "B") == null, "version 1 discarded");
-        b.ensure("w", "A", "B");
-        check(b.get("w", "A", "B").state() == BoatRoutes.RouteState.COMPUTING, "pair computed again");
-        Files.writeString(f, "{\"routes\": []}");
-        BoatRoutes.Book c = new BoatRoutes.Book();
-        c.load(f);
-        check(c.get("w", "A", "B") == null && !Files.exists(dir.resolve("boat-routes.json.bad")), "missing version discarded, not .bad");
-        c.resolve("w", "A", "B", BoatRoutes.RouteState.NONE, List.of());
-        check(Files.readString(f).contains("\"version\": " + BoatRoutes.VERSION), "written as the current version");
-        Files.writeString(f, "{\"version\": 2, \"routes\": [{\"world\": \"w\", \"from\": \"A\", \"to\": \"B\", "
-                + "\"state\": \"FOUND\", \"points\": [[1, 2], [3, 4]]}]}");
-        BoatRoutes.Book d = new BoatRoutes.Book();
-        d.load(f);
-        check(d.get("w", "A", "B") == null, "routes of version 2 (old clearance) are recomputed");
-    }
-
     private static void boatAutopilotHeadingChange() {
         near(Math.toRadians(4), BoatAutopilot.headingChange(Math.toRadians(178), Math.toRadians(-178))); // across +-pi
         near(Math.toRadians(4), BoatAutopilot.headingChange(Math.toRadians(-178), Math.toRadians(178)));
@@ -5896,41 +7302,81 @@ public class TransitTests {
         near(0.0, BoatAutopilot.headingChange(0.3, 0.3 + 2 * Math.PI)); // a full turn is no change
     }
 
-    private static void shortcutOpenWater() {
-        List<int[]> path = new java.util.ArrayList<>();
-        for (int x = 1; x <= 81; x += 2) path.add(new int[]{x, 1 + (x % 4 == 1 ? 0 : 2)}); // zigzag on open water
-        ShipVoyage.Shortcut s = new ShipVoyage.Shortcut(path, box -> (x, z) -> WaterRoute.Cell.WATER);
-        while (!s.step(10)) { }
-        eq(2, s.result().size());
-    }
-
-    private static void shortcutKeepsUnknown() {
-        List<int[]> path = List.of(new int[]{1, 1}, new int[]{41, 1}, new int[]{41, 41});
-        ShipVoyage.Shortcut s = new ShipVoyage.Shortcut(path, box -> (x, z) -> x > 20 && z > 20 ? WaterRoute.Cell.UNKNOWN : WaterRoute.Cell.WATER);
-        while (!s.step(10)) { }
-        eq(3, s.result().size()); // no straight line through unknown columns: the corner stays
-    }
-
-    private static void shortcutAroundLand() {
-        List<int[]> path = List.of(new int[]{1, 1}, new int[]{1, 61}, new int[]{61, 61}, new int[]{61, 1}); // a U round an island
-        ShipVoyage.Shortcut s = new ShipVoyage.Shortcut(path,
-                box -> (x, z) -> x > 15 && x < 45 && z < 45 ? WaterRoute.Cell.BLOCKED : WaterRoute.Cell.WATER);
-        while (!s.step(10)) { }
-        eq(4, s.result().size()); // the island is never crossed
-    }
-
-    private static void shortcutDogLeg() {
-        // A dog-leg round an island: the turning point must survive the final collapse (deltas share signs, not a straight line).
+    private static void waterLogCollapse() {
         List<int[]> path = List.of(new int[]{1, 1}, new int[]{11, 61}, new int[]{71, 71});
-        ShipVoyage.Shortcut s = new ShipVoyage.Shortcut(path,
-                box -> (x, z) -> x > 20 && x < 60 && z > 10 && z < 55 ? WaterRoute.Cell.BLOCKED : WaterRoute.Cell.WATER);
-        while (!s.step(10)) { }
-        eq(3, s.result().size());
-        check(java.util.Arrays.equals(new int[]{11, 61}, s.result().get(1)), "the turning point is kept");
         eq(3, WaterLog.collapse(path).size());
         List<int[]> run = List.of(new int[]{1, 1}, new int[]{3, 3}, new int[]{5, 5}, new int[]{7, 5});
         eq(3, WaterLog.collapse(run).size()); // a straight run is merged, the turn kept
         eq(3, WaterLog.collapse(List.of(new int[]{1, 1}, new int[]{5, 1}, new int[]{3, 1})).size()); // going back is a turn
+    }
+
+    private static void voyageCorridorFromLog() {
+        List<int[]> path = new java.util.ArrayList<>();
+        for (int i = 0; i < 100; i++) path.add(new int[]{2 * i, 0}); // 100 log cells of 2 blocks
+        List<int[]> c = ShipVoyage.corridorFromLog(path);
+        eq(6, c.size()); // cells 0, 24, 48, 72, 96 and the last one (99)
+        for (int i = 1; i < 5; i++) eq(48, c.get(i)[0] - c.get(i - 1)[0]); // a point every 48 blocks
+        check(java.util.Arrays.equals(new int[]{0, 0}, c.get(0)), "first point kept");
+        check(java.util.Arrays.equals(new int[]{198, 0}, c.get(c.size() - 1)), "last point kept");
+        eq(0, ShipVoyage.corridorFromLog(List.of()).size());
+        eq(1, ShipVoyage.corridorFromLog(List.of(new int[]{5, 5})).size());
+        List<int[]> exact = new java.util.ArrayList<>();
+        for (int i = 0; i <= 24; i++) exact.add(new int[]{2 * i, 0});
+        eq(2, ShipVoyage.corridorFromLog(exact).size()); // the last cell is already a multiple: not doubled
+    }
+
+    private static void voyageCorridorEndsAtGoal() {
+        List<int[]> chart = List.of(new int[]{8, 8}, new int[]{56, 8});
+        List<int[]> a = ShipVoyage.endingAt(chart, 60, 11);
+        eq(3, a.size());
+        check(java.util.Arrays.equals(new int[]{60, 11}, a.get(2)), "the goal column ends the corridor");
+        eq(2, ShipVoyage.endingAt(chart, 56, 8).size()); // already there
+        eq(chart.size(), 2); // the input is not changed
+    }
+
+    private static void voyageCorridorReadsLogThenChart() {
+        WaterLog w = new WaterLog();
+        w.record(1, 1);
+        w.record(201, 1); // the cells between are added along the line
+        List<int[]> c = ShipVoyage.corridorNow("no-such-world", w, java.util.Set.of(), 1, 1, 201, 1);
+        check(c != null && c.size() >= 2, "a log path gives the corridor");
+        check(java.util.Arrays.equals(new int[]{201, 1}, c.get(c.size() - 1)), "it ends on the goal column");
+        check(ShipVoyage.corridorNow("no-such-world", new WaterLog(), java.util.Set.of(), 1, 1, 201, 1) == null,
+                "no log path and no chart: no corridor");
+        check(ShipVoyage.corridorNow("no-such-world", null, java.util.Set.of(), 1, 1, 201, 1) == null, "no log at all: no corridor");
+    }
+
+    private static void voyageChartCorridor() {
+        ChartGrid g = new ChartGrid("~~~~~~~~~", "~~~~~~~~~", "~~~~~~~~~");
+        SeaChart chart = routeChart(g, 9, 3);
+        RouteView view = routeView(List.of());
+        int gx = 8 * 16 + 8, gz = 24;
+        List<int[]> c = ShipVoyage.corridorNow(chart, view, new WaterLog(), java.util.Set.of(), 8, 24, gx, gz);
+        check(c != null && c.size() >= 2, "no log path: a chart corridor");
+        check(java.util.Arrays.equals(new int[]{gx, gz}, c.get(c.size() - 1)), "it ends on the goal cell centre");
+        check(ShipVoyage.corridorNow((SeaChart) null, view, null, java.util.Set.of(), 8, 24, gx, gz) == null, "no chart: none");
+    }
+
+    private static void voyageTrackBackoff() {
+        List<int[]> track = new java.util.ArrayList<>();
+        int[] home = {0, 0};
+        for (int i = 0; i < 10; i++) {
+            check(ShipVoyage.noteTrack(track, i * 48.0, 0), "a point every 48 blocks");
+            check(!ShipVoyage.noteTrack(track, i * 48.0 + 47, 0), "not before 48 blocks"); // not added
+        }
+        eq(10, track.size());
+        List<int[]> back = ShipVoyage.backoffPoints(track, track.size(), home);
+        eq(10, back.size()); // the departure point is the first track point: not repeated
+        for (int i = 0; i < 10; i++) eq((9 - i) * 48, back.get(i)[0]); // reverse order
+        check(java.util.Arrays.equals(home, back.get(back.size() - 1)), "ends at the departure column");
+    }
+
+    private static void voyageFinalInsideWindow() {
+        int reach = ShuttleNav.VOYAGE_FINAL_REACH;
+        eq(LocalNav.WINDOW / 2 - HullClearance.SHIP.leg() - WaterRoute.GRID, reach);
+        check(ShuttleNav.voyageFinal(reach, -reach), "the window corner is final");
+        check(!ShuttleNav.voyageFinal(reach + 1, 0), "one block farther on x is not");
+        check(!ShuttleNav.voyageFinal(0, -reach - 1), "one block farther on z is not");
     }
 
     private static void boatDestinations() {
@@ -6218,15 +7664,15 @@ public class TransitTests {
         WorldStationPlanner.Site s2 = new WorldStationPlanner.Site(-5000, 0, Rotation.Ninety);
         GeneratedStations.Entry e = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 0, 0,
                 Rotation.None, false, List.of(s1, s2)));
-        check(GenerationListener.moveToNextSite(g, e, List.of(new int[] {6000, 0})), "site 2 is far enough");
+        check(GenerationListener.moveToNextSite(g, e, List.of(new int[] {5400, 0})), "site 2 is far enough");
         eq(2, e.active);
         eq(-5000, e.x);
         GeneratedStations.Entry f = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 0, 0,
                 Rotation.None, false, List.of(s1, s2)));
-        check(!GenerationListener.moveToNextSite(g, f, List.of(new int[] {6000, 0}, new int[] {-4000, 0})), "both fallbacks too close");
+        check(!GenerationListener.moveToNextSite(g, f, List.of(new int[] {5400, 0}, new int[] {-4600, 0})), "both fallbacks too close");
         GeneratedStations.Entry p = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 0, 0,
                 Rotation.None, true, List.of(s1, s2)));
-        check(GenerationListener.moveToNextSite(g, p, List.of(new int[] {6000, 0})), "a partner only keeps its reuse distance");
+        check(GenerationListener.moveToNextSite(g, p, List.of(new int[] {5400, 0})), "a partner only keeps its reuse distance");
         eq(1, p.active);
     }
 
@@ -6332,8 +7778,10 @@ public class TransitTests {
         eq(2, boat.active);
         GeneratedStations.Entry air = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 0, 0, Rotation.None, false,
                 List.of(s1)));
-        check(!GenerationListener.moveOffOldTerrain(g, air, "w"), "a balloon station never moves");
-        eq(0, air.active);
+        check(GenerationListener.moveOffOldTerrain(g, air, "w"), "a balloon station moves to its next site");
+        eq(1, air.active);
+        check(!GenerationListener.moveOffOldTerrain(g, air, "w"), "balloon sites used up");
+        eq(1, air.active);
     }
 
     static void generatedRegistryOldFormat() throws Exception {
@@ -6408,6 +7856,105 @@ public class TransitTests {
         check(g.markPortal("other", 0, 0), "other world is new");
     }
 
+    private static void writeCellsFile(Path dir, String head, int x, int z) throws Exception {
+        Files.writeString(dir.resolve("generated-stations.json"), "{" + head + "\"entries\": [], \"portals\": [], \"cells\": "
+                + "[{\"world\": \"w\", \"x\": " + x + ", \"z\": " + z + "}]}");
+    }
+
+    static void generatedCellSizeConversion() throws Exception {
+        eq(1024, WorldStationPlanner.CELL);
+        eq(4, GeneratedStations.convertCell(3, -4, 2048, 1024).size());
+        List<String> got = new ArrayList<>();
+        for (int[] c : GeneratedStations.convertCell(3, -4, 2048, 1024)) got.add(c[0] + ":" + c[1]);
+        eq(List.of("6:-8", "7:-8", "6:-7", "7:-7"), got);
+        eq(16, GeneratedStations.convertCell(0, 0, 4096, 1024).size());
+        eq(1, GeneratedStations.convertCell(5, 6, 1024, 1024).size());
+        eq(1, GeneratedStations.convertCell(5, 6, 1500, 1024).size());
+        eq(5, GeneratedStations.convertCell(5, 6, 1500, 1024).get(0)[0]);
+        GeneratedStations g = GeneratedStations.get();
+        // version 1, no cellSize: 2048 block cells
+        Path dir = Files.createTempDirectory("generated-cells-v1");
+        writeCellsFile(dir, "\"version\": 1, ", 3, -4);
+        g.load(dir);
+        for (int[] c : new int[][] {{6, -8}, {7, -8}, {6, -7}, {7, -7}}) check(!g.markCell("w", c[0], c[1]), "converted cell " + c[0] + ":" + c[1]);
+        check(g.markCell("w", 3, -4), "old index is another area now");
+        check(g.markCell("w", 8, -8), "neighbouring area is free");
+        // the conversion is written back as version 2 with the new size, and is not applied twice
+        g.load(dir);
+        String json = Files.readString(dir.resolve("generated-stations.json"));
+        check(json.contains("\"cellSize\": 1024") && json.contains("\"version\": 2"), "rewritten as version 2");
+        check(!g.markCell("w", 7, -7) && !g.markCell("w", 3, -4) && !g.markCell("w", 8, -8), "second load keeps the cells");
+        check(g.markCell("w", 14, -14), "no second conversion");
+        // version 2 with the current size: cells kept as they are
+        Path dir2 = Files.createTempDirectory("generated-cells-v2");
+        writeCellsFile(dir2, "\"version\": 2, \"cellSize\": 1024, ", 3, -4);
+        g.load(dir2);
+        check(!g.markCell("w", 3, -4), "current size kept");
+        check(g.markCell("w", 6, -8), "no conversion");
+        // another divisible size
+        Path dir3 = Files.createTempDirectory("generated-cells-4096");
+        writeCellsFile(dir3, "\"version\": 2, \"cellSize\": 4096, ", 1, 0);
+        g.load(dir3);
+        check(!g.markCell("w", 7, 3), "4096 cell covers 4 by 4 cells");
+        check(g.markCell("w", 8, 0), "outside the 4096 cell");
+        // size that does not divide: cells kept
+        Path dir4 = Files.createTempDirectory("generated-cells-odd");
+        writeCellsFile(dir4, "\"version\": 2, \"cellSize\": 1500, ", 2, 2);
+        g.load(dir4);
+        check(!g.markCell("w", 2, 2), "unknown size kept as is");
+        check(g.markCell("w", 4, 4), "not converted");
+        // a huge multiple: cells kept, nothing allocated
+        eq(1, GeneratedStations.convertCell(1, 1, 65 * 1024, 1024).size());
+        eq(1, GeneratedStations.convertCell(1, 1, 1 << 30, 1024).size());
+        eq(4096, GeneratedStations.convertCell(1, 1, 64 * 1024, 1024).size());
+        Path dir5 = Files.createTempDirectory("generated-cells-huge");
+        writeCellsFile(dir5, "\"version\": 2, \"cellSize\": 2000000000, ", 1, 1);
+        g.load(dir5);
+        check(!g.markCell("w", 1, 1), "huge size kept as is");
+        check(g.markCell("w", 2, 2), "huge size not converted");
+    }
+
+    static void generatedOrigin() throws Exception {
+        Path dir = Files.createTempDirectory("generated-origin");
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 0, 0, Rotation.None, false), GeneratedStations.Origin.LAND);
+        g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 2000, 0, Rotation.None, false), GeneratedStations.Origin.PORTAL);
+        GeneratedStations.Entry builtLand = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 4000, 0, Rotation.None,
+                false), GeneratedStations.Origin.LAND);
+        g.setState(builtLand, GeneratedStations.State.BUILT);
+        g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 6000, 0, Rotation.None, false), GeneratedStations.Origin.LAND);
+        g.load(dir);
+        List<GeneratedStations.Entry> es = g.entries("w");
+        eq(GeneratedStations.Origin.LAND, es.get(0).origin);
+        eq(GeneratedStations.Origin.PORTAL, es.get(1).origin);
+        eq(GeneratedStations.Origin.LAND, es.get(2).origin);
+        // portal selection: PLANNED land entries left out, the others kept
+        eq(3, g.positions("w", Deployables.STATION_KIND, false).size());
+        List<int[]> forPortal = g.positions("w", Deployables.STATION_KIND, true);
+        eq(2, forPortal.size());
+        eq(2000, forPortal.get(0)[0]);
+        eq(4000, forPortal.get(1)[0]);
+        // an absent origin reads as portal
+        Path dir2 = Files.createTempDirectory("generated-origin-absent");
+        Files.writeString(dir2.resolve("generated-stations.json"), "{\"version\": 2, \"cellSize\": 1024, \"entries\": [{\"world\": \"w\", "
+                + "\"kind\": \"" + Deployables.STATION_KIND + "\", \"x\": 5, \"z\": 6, \"rotation\": \"None\", \"partner\": false, "
+                + "\"state\": \"PLANNED\"}], \"portals\": [], \"cells\": []}");
+        g.load(dir2);
+        eq(GeneratedStations.Origin.PORTAL, g.entries("w").get(0).origin);
+        eq(1, g.positions("w", Deployables.STATION_KIND, true).size());
+        // land entries to displace for a portal at (500, 0)
+        g.load(dir);
+        g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 700, 0, Rotation.None, false), GeneratedStations.Origin.LAND);
+        GeneratedStations.Entry requested = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 0, 100, Rotation.None,
+                false), GeneratedStations.Origin.LAND);
+        List<GeneratedStations.Entry> near = GenerationListener.landEntriesNear(g.entries("w"), Set.of(requested), 500, 0);
+        eq(2, near.size());
+        eq(0, near.get(0).x);
+        eq(700, near.get(1).x);
+        check(near.get(0) != requested, "requested entry is left alone");
+    }
+
     static void generatedCellOnce() throws Exception {
         GeneratedStations g = GeneratedStations.get();
         g.load(Files.createTempDirectory("generated-cell"));
@@ -6417,8 +7964,160 @@ public class TransitTests {
         check(g.markCell("other", 1, 2), "other world");
     }
 
+    static void landCellPlansMainAndFallbacks() {
+        TerrainProbe t = heights((x, z) -> 120);
+        WorldStationPlanner.PlannedSite s = WorldStationPlanner.planLandCell(42L, 2, -1, t, List.of());
+        check(s != null, "a land station is planned");
+        eq(Deployables.STATION_KIND, s.kind());
+        eq(WorldStationPlanner.MAX_SITES - 1, s.fallbacks().size());
+        int c = WorldStationPlanner.LAND_CELL;
+        check(s.x() >= 2 * c && s.x() < 3 * c && s.z() >= -c && s.z() < 0, "main site inside the cell");
+        List<WorldStationPlanner.Site> all = new ArrayList<>();
+        all.add(new WorldStationPlanner.Site(s.x(), s.z(), s.rotation()));
+        all.addAll(s.fallbacks());
+        for (int i = 0; i < all.size(); i++) {
+            for (int j = i + 1; j < all.size(); j++) {
+                check(Math.max(Math.abs(all.get(i).x() - all.get(j).x()), Math.abs(all.get(i).z() - all.get(j).z()))
+                        >= WorldStationPlanner.FALLBACK_GAP, "sites " + i + " and " + j + " spaced by FALLBACK_GAP");
+            }
+        }
+    }
+
+    static void landCellAllWater() {
+        check(WorldStationPlanner.planLandCell(42L, 0, 0, new GridProbe("~"), List.of()) == null, "all water gives no site");
+    }
+
+    static void landCellRespectsExistingAir() {
+        TerrainProbe t = heights((x, z) -> 120);
+        int c = WorldStationPlanner.LAND_CELL;
+        // stations at the four quarter points leave no column of the cell at BALLOON_SPACING from all of them
+        List<int[]> around = List.of(new int[] {c / 4, c / 4}, new int[] {3 * c / 4, c / 4}, new int[] {c / 4, 3 * c / 4},
+                new int[] {3 * c / 4, 3 * c / 4});
+        check(WorldStationPlanner.planLandCell(42L, 0, 0, t, around) == null, "stations near the whole cell give no site");
+        long min2 = (long) WorldStationPlanner.BALLOON_SPACING * WorldStationPlanner.BALLOON_SPACING;
+        int planned = 0;
+        for (long seed = 1; seed <= 10; seed++) {
+            WorldStationPlanner.PlannedSite s = WorldStationPlanner.planLandCell(seed, 0, 0, t, List.of(new int[] {c / 2, c / 2}));
+            if (s == null) {
+                continue;
+            }
+            planned++;
+            List<WorldStationPlanner.Site> all = new ArrayList<>(s.fallbacks());
+            all.add(new WorldStationPlanner.Site(s.x(), s.z(), s.rotation()));
+            for (WorldStationPlanner.Site f : all) {
+                long fx = f.x() - c / 2, fz = f.z() - c / 2;
+                check(fx * fx + fz * fz >= min2, "every site keeps its spacing from the existing station");
+            }
+        }
+        check(planned > 0, "a site is found when the draw is away from the existing station");
+    }
+
+    static void landCellSkipsExcludedWithoutTries() {
+        TerrainProbe t = heights((x, z) -> 120);
+        int c = WorldStationPlanner.LAND_CELL;
+        // the station sits on the drawn point of every seed tried: the columns around it are skipped without using the tries
+        for (long seed = 1; seed <= 10; seed++) {
+            java.util.SplittableRandom rnd = new java.util.SplittableRandom(seed ^ (0 * 0x9E3779B97F4A7C15L) ^ (0 * 0xC2B2AE3D27D4EB4FL) ^ 0x1A4D);
+            int drawX = rnd.nextInt(c), drawZ = rnd.nextInt(c);
+            WorldStationPlanner.PlannedSite s = WorldStationPlanner.planLandCell(seed, 0, 0, t, List.of(new int[] {drawX, drawZ}));
+            long dx = drawX - (s == null ? 0 : s.x()), dz = drawZ - (s == null ? 0 : s.z());
+            if (s != null) {
+                check(dx * dx + dz * dz >= (long) WorldStationPlanner.BALLOON_SPACING * WorldStationPlanner.BALLOON_SPACING, "main site keeps its spacing");
+            }
+            // a draw in the middle leaves clear land (corners are at 1086 from the centre): a site must be found when the corner is clear
+            if (Math.abs(drawX - c / 2) < 100 && Math.abs(drawZ - c / 2) < 100) {
+                check(s != null, "far side of the cell is used");
+            }
+        }
+        // a station near the centre: the clear corners hold land, so a site is found whatever the draw
+        for (long seed = 1; seed <= 10; seed++) {
+            check(WorldStationPlanner.planLandCell(seed, 0, 0, t, List.of(new int[] {c / 2, c / 2})) != null, "site found for seed " + seed);
+        }
+    }
+
+    static void landCellDeterministic() {
+        TerrainProbe t = heights((x, z) -> 120 + (Math.floorDiv(x, 64) + Math.floorDiv(z, 64)) % 3);
+        WorldStationPlanner.PlannedSite a = WorldStationPlanner.planLandCell(7L, -3, 4, t, List.of());
+        WorldStationPlanner.PlannedSite b = WorldStationPlanner.planLandCell(7L, -3, 4, t, List.of());
+        check(a != null, "planned");
+        eq(a, b);
+    }
+
+    static void portalFallbacksSpaced() {
+        TerrainProbe t = heights((x, z) -> 120);
+        WorldStationPlanner.PlannedSite s = WorldStationPlanner.planPortal(0, 0, t, List.of());
+        check(s != null, "a station is planned");
+        eq(WorldStationPlanner.MAX_SITES - 1, s.fallbacks().size());
+        List<WorldStationPlanner.Site> all = new ArrayList<>();
+        all.add(new WorldStationPlanner.Site(s.x(), s.z(), s.rotation()));
+        all.addAll(s.fallbacks());
+        for (int i = 0; i < all.size(); i++) {
+            for (int j = i + 1; j < all.size(); j++) {
+                check(Math.max(Math.abs(all.get(i).x() - all.get(j).x()), Math.abs(all.get(i).z() - all.get(j).z()))
+                        >= WorldStationPlanner.PORTAL_FALLBACK_GAP, "portal sites " + i + " and " + j + " spaced");
+            }
+        }
+    }
+
+    static void balloonNextSiteSpacing() throws Exception {
+        GeneratedStations g = GeneratedStations.get();
+        g.load(Files.createTempDirectory("balloon-next-site"));
+        WorldStationPlanner.Site s1 = new WorldStationPlanner.Site(5000, 0, Rotation.None);
+        WorldStationPlanner.Site s2 = new WorldStationPlanner.Site(-5000, 0, Rotation.Ninety);
+        GeneratedStations.Entry e = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 0, 0, Rotation.None, false,
+                List.of(s1, s2)));
+        // 5800 is 800 from s1, closer than BALLOON_SPACING, while 5000 + 1000 is exactly clear
+        check(GenerationListener.moveToNextSite(g, e, List.of(new int[] {5800, 0})) && e.active == 2, "site 1 is within the balloon spacing");
+        GeneratedStations.Entry f = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 0, 0, Rotation.None, false,
+                List.of(s1, s2)));
+        check(GenerationListener.moveToNextSite(g, f, List.of(new int[] {5900, 0})) && f.active == 1, "900 away is clear");
+        GeneratedStations.Entry h = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 0, 0, Rotation.None, false,
+                List.of(s1, s2)));
+        check(!GenerationListener.moveToNextSite(g, h, List.of(new int[] {5800, 0}, new int[] {-5800, 0})), "both within the spacing");
+        // otherSites: other balloon entries only, not boats
+        GeneratedStations.Entry other = g.add("w", new WorldStationPlanner.PlannedSite(Deployables.STATION_KIND, 77, 88, Rotation.None, false));
+        g.add("w", new WorldStationPlanner.PlannedSite(Deployables.BOAT_STATION_KIND, 99, 99, Rotation.None, false));
+        List<int[]> sites = GenerationListener.otherSites("w", other);
+        check(sites.stream().noneMatch(p -> p[0] == 99), "boat entries are not balloon neighbours");
+        check(sites.stream().noneMatch(p -> p[0] == 77), "the entry itself is excluded");
+        check(sites.size() >= 3, "other balloon entries are listed");
+    }
+
+    static void generatedLandCells() throws Exception {
+        Path dir = Files.createTempDirectory("generated-land-cells");
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        check(g.markLandCell("w", 1, 2), "first land cell");
+        check(!g.markLandCell("w", 1, 2), "same land cell");
+        check(g.markCell("w", 1, 2), "sea cells are separate");
+        check(g.landCellMarked("w", 1, 2) && !g.landCellMarked("w", 2, 1), "marked lookup");
+        g.load(dir);
+        check(g.landCellMarked("w", 1, 2), "land cell survives a reload");
+        check(!g.landCellMarked("other", 1, 2), "other world");
+        check(g.unmarkLandCell("w", 1, 2) && !g.landCellMarked("w", 1, 2), "unmarked");
+        check(!g.unmarkLandCell("w", 1, 2), "nothing to unmark");
+        // a file without landCells reads as empty
+        Path old = Files.createTempDirectory("generated-no-land");
+        writeCellsFile(old, "\"version\": 2, \"cellSize\": 1024, ", 3, 3);
+        g.load(old);
+        check(!g.landCellMarked("w", 3, 3), "no land cells in an older file");
+        check(g.markLandCell("w", 3, 3), "land cell free");
+        // the world identity change drops them
+        g.adoptWorld("w", java.util.UUID.randomUUID());
+        g.adoptWorld("w", java.util.UUID.randomUUID());
+        check(!g.landCellMarked("w", 3, 3), "dropped with the world");
+        Set<String> queued = new java.util.HashSet<>();
+        check(GenerationListener.claimAheadLand(queued, g, "w", 5, 5), "first land claim");
+        check(!GenerationListener.claimAheadLand(queued, g, "w", 5, 5), "already queued");
+        check(GenerationListener.claimAhead(queued, g, "w", 5, 5), "sea key is separate");
+        Set<String> replanned = new java.util.HashSet<>();
+        g.markLandCell("w", 6, 6);
+        check(GenerationListener.unmarkLandOnce(replanned, g, "w", 6, 6), "land un-marked once");
+        check(!GenerationListener.unmarkLandOnce(replanned, g, "w", 6, 6), "not twice");
+    }
+
     static void cellsAroundPlayer() {
-        List<int[]> cells = GenerationListener.cellsAround(-1, 4095);
+        List<int[]> cells = GenerationListener.cellsAround(-1, 2047);
         eq(9, cells.size());
         eq(-1, cells.get(0)[0]);
         eq(1, cells.get(0)[1]);
@@ -6495,6 +8194,11 @@ public class TransitTests {
         eq(GeneratorProbe.Availability.OFF, GeneratorProbe.availability(false, new Object()));
     }
 
+    private static void chartAvailabilityIgnoresDeleteOnRemove() {
+        eq(GeneratorProbe.Availability.WAIT, GeneratorProbe.chartAvailability(null));
+        eq(GeneratorProbe.Availability.OFF, GeneratorProbe.chartAvailability("x"));
+    }
+
     static void footprintChunksCover() {
         GeneratedStations.Entry rotated = new GeneratedStations.Entry("w", Deployables.STATION_KIND, 0, 0, Rotation.Ninety, false,
                 GeneratedStations.State.PLANNED);
@@ -6515,10 +8219,130 @@ public class TransitTests {
         java.util.function.Predicate<long[]> all = c -> true;
         java.util.function.Predicate<long[]> none = c -> false;
         java.util.function.Predicate<long[]> firstOnly = c -> c[0] == 0;
-        eq(GenerationListener.Decision.BUILD, GenerationListener.decide(chunks, all, none));
-        eq(GenerationListener.Decision.ABANDON, GenerationListener.decide(chunks, firstOnly, c -> c[0] == 1));
-        eq(GenerationListener.Decision.WAIT, GenerationListener.decide(chunks, firstOnly, none));
-        eq(GenerationListener.Decision.ABANDON, GenerationListener.decide(chunks, all, c -> c[0] == 0));
+        eq(GenerationListener.Decision.BUILD, GenerationListener.decide(chunks, all, none, false));
+        eq(GenerationListener.Decision.ABANDON, GenerationListener.decide(chunks, firstOnly, c -> c[0] == 1, false));
+        eq(GenerationListener.Decision.WAIT, GenerationListener.decide(chunks, firstOnly, none, false));
+        eq(GenerationListener.Decision.ABANDON, GenerationListener.decide(chunks, all, c -> c[0] == 0, false));
+    }
+
+    static void decideOldTerrain() {
+        List<long[]> chunks = List.of(new long[]{0, 0}, new long[]{1, 0});
+        java.util.function.Predicate<long[]> all = c -> true;
+        java.util.function.Predicate<long[]> none = c -> false;
+        java.util.function.Predicate<long[]> firstOnly = c -> c[0] == 0;
+        // setting on: a loaded old chunk never abandons
+        eq(GenerationListener.Decision.BUILD, GenerationListener.decide(chunks, firstOnly, c -> c[0] == 1, true));
+        eq(GenerationListener.Decision.BUILD, GenerationListener.decide(chunks, none, all, true));
+        eq(GenerationListener.Decision.BUILD, GenerationListener.decide(chunks, all, none, true));
+        // an old chunk that is not loaded waits
+        eq(GenerationListener.Decision.WAIT, GenerationListener.decide(chunks, firstOnly, none, true));
+        eq(GenerationListener.Decision.WAIT, GenerationListener.decide(chunks, none, c -> c[0] == 0, true));
+        // the same chunks with the setting off
+        eq(GenerationListener.Decision.ABANDON, GenerationListener.decide(chunks, firstOnly, c -> c[0] == 1, false));
+    }
+
+    private static GeneratedStations.Entry abandonedEntry(GeneratedStations g, String kind, boolean partner, GeneratedStations.Reason reason,
+                                                          WorldStationPlanner.Site... sites) {
+        GeneratedStations.Entry e = g.add("w", new WorldStationPlanner.PlannedSite(kind, sites[0].x(), sites[0].z(), sites[0].rotation(), partner,
+                List.of(sites).subList(1, sites.length)));
+        g.abandon(e, reason);
+        return e;
+    }
+
+    static void reviveSelection() throws Exception {
+        GeneratedStations g = GeneratedStations.get();
+        g.load(Files.createTempDirectory("revive-selection"));
+        String air = Deployables.STATION_KIND;
+        WorldStationPlanner.Site near = new WorldStationPlanner.Site(100, 0, Rotation.None);
+        WorldStationPlanner.Site far = new WorldStationPlanner.Site(6000, 0, Rotation.Ninety);
+        WorldStationPlanner.Site far2 = new WorldStationPlanner.Site(9000, 0, Rotation.None);
+        GeneratedStations.Entry built = g.add("w", new WorldStationPlanner.PlannedSite(air, 0, 0, Rotation.None, false));
+        g.setState(built, GeneratedStations.State.BUILT);
+        GeneratedStations.Entry old = abandonedEntry(g, air, false, GeneratedStations.Reason.OLD_TERRAIN, near, far, far2);
+        GeneratedStations.Entry unknown = abandonedEntry(g, air, false, GeneratedStations.Reason.UNKNOWN, far2);
+        GeneratedStations.Entry other = abandonedEntry(g, air, false, GeneratedStations.Reason.OTHER, far);
+        GeneratedStations.Entry removed = g.add("w", new WorldStationPlanner.PlannedSite(air, 20000, 0, Rotation.None, false));
+        g.setState(removed, GeneratedStations.State.REMOVED);
+        GeneratedStations.Entry stuck = abandonedEntry(g, air, false, GeneratedStations.Reason.OLD_TERRAIN, near);
+        // a network station sits next to the third site
+        List<int[]> network = List.of(new int[]{9000, 100});
+        List<GeneratedStations.Entry> revived = GenerationListener.reviveEntries(g, g.entries("w"), kind -> kind.equals(air) ? network : List.of());
+        // the first site is 100 blocks from the built station, the second is the first that fits
+        eq(List.of(old), revived);
+        eq(GeneratedStations.State.PLANNED, old.state);
+        eq(1, old.active);
+        eq(6000, old.x);
+        eq(Rotation.Ninety, old.rotation);
+        eq(GeneratedStations.Reason.UNKNOWN, old.reason);
+        // unknown: its only site is next to the network station
+        eq(GeneratedStations.State.ABANDONED, unknown.state);
+        eq(GeneratedStations.State.ABANDONED, other.state);
+        eq(GeneratedStations.State.REMOVED, removed.state);
+        eq(GeneratedStations.State.ABANDONED, stuck.state);
+        // without the network station the unknown entry is revived, and spacing counts the entry revived before it
+        List<GeneratedStations.Entry> second = GenerationListener.reviveEntries(g, g.entries("w"), kind -> List.of());
+        eq(List.of(unknown), second);
+        eq(GeneratedStations.State.PLANNED, unknown.state);
+        eq(9000, unknown.x);
+        // a PLANNED entry close to a site keeps a later entry off it
+        GeneratedStations.Entry late = abandonedEntry(g, air, false, GeneratedStations.Reason.OLD_TERRAIN,
+                new WorldStationPlanner.Site(6100, 0, Rotation.None), new WorldStationPlanner.Site(-9000, 0, Rotation.None));
+        eq(List.of(late), GenerationListener.reviveEntries(g, g.entries("w"), kind -> List.of()));
+        eq(1, late.active);
+        eq(-9000, late.x);
+    }
+
+    static void exhaustedReasonChoice() {
+        eq(GeneratedStations.Reason.OLD_TERRAIN, GeneratedStations.exhaustedReason(true));
+        eq(GeneratedStations.Reason.OTHER, GeneratedStations.exhaustedReason(false));
+    }
+
+    static void generatedRegistryReason() throws Exception {
+        Path dir = Files.createTempDirectory("generated-reason");
+        GeneratedStations g = GeneratedStations.get();
+        g.load(dir);
+        String air = Deployables.STATION_KIND;
+        GeneratedStations.Entry a = abandonedEntry(g, air, false, GeneratedStations.Reason.OLD_TERRAIN, new WorldStationPlanner.Site(0, 0, Rotation.None));
+        GeneratedStations.Entry b = abandonedEntry(g, air, false, GeneratedStations.Reason.OTHER, new WorldStationPlanner.Site(5000, 0, Rotation.None));
+        GeneratedStations.Entry c = g.add("w", new WorldStationPlanner.PlannedSite(air, 10000, 0, Rotation.None, false));
+        g.load(dir);
+        List<GeneratedStations.Entry> es = g.entries("w");
+        eq(GeneratedStations.Reason.OLD_TERRAIN, es.get(0).reason);
+        eq(GeneratedStations.Reason.OTHER, es.get(1).reason);
+        eq(GeneratedStations.Reason.UNKNOWN, es.get(2).reason);
+        eq(GeneratedStations.State.ABANDONED, es.get(0).state);
+        // a file without the field, or with an unknown value, reads as unknown
+        String json = Files.readString(dir.resolve("generated-stations.json"));
+        check(json.contains("\"reason\""), "reason written");
+        Files.writeString(dir.resolve("generated-stations.json"), json.replace("OLD_TERRAIN", "SOMETHING"));
+        g.load(dir);
+        eq(GeneratedStations.Reason.UNKNOWN, g.entries("w").get(0).reason);
+        g.revive(g.entries("w").get(0), 0);
+        eq(GeneratedStations.State.PLANNED, g.entries("w").get(0).state);
+        g.load(dir);
+        eq(GeneratedStations.State.PLANNED, g.entries("w").get(0).state);
+        eq(GeneratedStations.Reason.OTHER, g.entries("w").get(1).reason);
+    }
+
+    static void settingsOldTerrain() throws Exception {
+        Path dir = Files.createTempDirectory("transit-settings-old-terrain");
+        try {
+            TransitSettings.load(dir);
+            eq(false, TransitSettings.worldgenOldTerrain());
+            TransitSettings.setWorldgenOldTerrain(true);
+            eq(true, TransitSettings.worldgenOldTerrain());
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.worldgenOldTerrain());
+            TransitSettings.setWorldgenOldTerrain(false);
+            TransitSettings.load(dir);
+            eq(false, TransitSettings.worldgenOldTerrain());
+            Files.writeString(dir.resolve("transit-settings.json"), "{\"packBackView\": true}");
+            TransitSettings.load(dir);
+            eq(false, TransitSettings.worldgenOldTerrain());
+        } finally {
+            TransitSettings.load(Files.createTempDirectory("transit-settings-old-terrain-reset"));
+            deleteAll(dir);
+        }
     }
 
     static void newChunksOldLoadAbandons() {
@@ -6530,7 +8354,7 @@ public class TransitTests {
         // chunk (0, 0) is loaded and was never marked new: old terrain.
         java.util.function.Predicate<long[]> loaded = c -> c[0] == 0 && c[1] == 0;
         GenerationListener.Decision d = GenerationListener.decide(chunks, c -> news.isNew((int) c[0], (int) c[1]),
-                c -> loaded.test(c) && !news.isNew((int) c[0], (int) c[1]));
+                c -> loaded.test(c) && !news.isNew((int) c[0], (int) c[1]), false);
         eq(GenerationListener.Decision.ABANDON, d);
     }
 

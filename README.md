@@ -34,7 +34,7 @@ You can hire a pilot at any station. Your pilot only knows the way to places the
 
 A paddle steamer you set down on a lake, a river or the sea, with a workshop on board like the airship. Fuel the tank, stand at the helm and cast off. It sails on the surface, backs up slowly, and its two paddle wheels turn and splash as it goes, to the rumble of its steam engine. Smoke rises from its chimneys while it is moored, and thickens when it sails. The airship, too, smokes lightly from its rear burners while parked with fuel.
 
-Hire a pilot and the steamboat learns the way. Ask them to note the places you like as you sail, and later to take you back to one of them, or to a boat station you have already reached. The boat only goes where it has already been.
+Hire a pilot and the steamboat learns the way. Ask them to note the places you like as you sail, and later to take you back to one of them, or to a boat station you have already reached. The boat only goes where it has already been. In frozen seas it breaks its way through the ice floes, but it cannot cross an iceberg.
 
 ### Balloon stations
 
@@ -42,11 +42,11 @@ A station is a stone walkway with a landing pad at its end and a little hut for 
 
 ### Boat stations
 
-A boat station is a wooden pier on a shore with its own station master. Pick another boat station and a small shuttle boat comes alongside the pier. Step aboard during the countdown and it sails you there along the water.
+A boat station is a wooden pier on a shore with its own station master. Pick another boat station and a small shuttle boat comes alongside the pier. Step aboard during the countdown and it sails you there along the water. In frozen seas the shuttle breaks its way through the ice.
 
 ### Stations in the wild
 
-You will not always find an empty world. As you explore new land, balloon stations appear near the portals of the Forgotten Temple and ports rise along the sea coasts, with a partner port waiting across the water. They have their own names and belong to nobody: discover one, talk to its station master and travel.
+You will not always find an empty world. As you explore new land, balloon stations appear across the land, with more of them near the portals of the Forgotten Temple, and ports rise along the sea coasts, with a partner port waiting across the water. They have their own names and belong to nobody: discover one, talk to its station master and travel.
 
 Each trip, by balloon or by boat, costs a ticket paid in life essences by the traveller who picks the destination. If the trip never happens, the ticket is refunded.
 

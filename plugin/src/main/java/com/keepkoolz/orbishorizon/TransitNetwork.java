@@ -22,11 +22,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 
 /** Registry of transit stations, persisted in stations.json in the plugin data folder. */
 final class TransitNetwork {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
+    /** Source of queue head identities, unique across stations. Declared before INSTANCE so it exists before any Station. */
+    private static final AtomicLong HEAD_IDS = new AtomicLong();
     private static final TransitNetwork INSTANCE = new TransitNetwork();
 
     enum NameCheck { OK, TOO_SHORT, TOO_LONG, TAKEN }
@@ -44,6 +47,10 @@ final class TransitNetwork {
         final Map<String, TransitFare.Payment> payments = new HashMap<>();
         /** Deployables.STATION_KIND (balloon station) or Deployables.BOAT_STATION_KIND. */
         final String kind;
+        /** Ocean number of the berth in the sea chart of the world, 0 while unknown or when the berth is not on water. Volatile: set by the chart thread's result on the world thread. */
+        volatile int oceanId;
+        /** Identity of the entry at the head of the queue: a new value each time the head entry leaves. In memory only. Guarded by the network lock. */
+        long headId = HEAD_IDS.incrementAndGet();
 
         Station(String name, String world, Vector3i origin, Rotation rotation, UUID masterUuid, UUID owner, List<String> queue, String kind) {
             this.name = name;
@@ -224,6 +231,7 @@ final class TransitNetwork {
     synchronized String queuePoll(Station s) {
         if (s.queue.isEmpty()) return null;
         String head = s.queue.remove(0);
+        s.headId = HEAD_IDS.incrementAndGet();
         if (!queueHas(s, head)) s.payments.remove(payKey(head));
         save();
         return head;
@@ -239,6 +247,7 @@ final class TransitNetwork {
         for (int i = 0; i < s.queue.size(); i++) {
             if (s.queue.get(i).equalsIgnoreCase(destination)) {
                 s.queue.remove(i);
+                if (i == 0) s.headId = HEAD_IDS.incrementAndGet();
                 TransitFare.Payment p = s.payments.remove(payKey(destination));
                 save();
                 return p;
@@ -250,7 +259,9 @@ final class TransitNetwork {
     /** Removes every occurrence of this destination and returns the payments taken off (empty if none). */
     synchronized List<TransitFare.Payment> queueRemoveAll(Station s, String destination) {
         List<TransitFare.Payment> out = new ArrayList<>();
+        boolean headLeaves = !s.queue.isEmpty() && s.queue.get(0).equalsIgnoreCase(destination);
         if (s.queue.removeIf(n -> n.equalsIgnoreCase(destination))) {
+            if (headLeaves) s.headId = HEAD_IDS.incrementAndGet();
             TransitFare.Payment p = s.payments.remove(payKey(destination));
             if (p != null) out.add(p);
             save();
@@ -269,6 +280,11 @@ final class TransitNetwork {
     /** Head of the queue, null if empty. */
     synchronized String queueHead(Station s) {
         return s.queue.isEmpty() ? null : s.queue.get(0);
+    }
+
+    /** Identity of the current head entry: unchanged while it stays at the head, new once it has left (even if the same destination is queued again). */
+    synchronized long queueHeadId(Station s) {
+        return s.headId;
     }
 
     synchronized void save() {

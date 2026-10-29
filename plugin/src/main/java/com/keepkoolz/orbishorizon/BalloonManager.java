@@ -114,7 +114,7 @@ public final class BalloonManager {
     /** Minimum share of prefab blocks that must be in place to recognise a balloon. */
     private static final double MATCH_RATIO = 0.9;
     /** Factor applied to the player's flight speeds while piloting. */
-    private static final float FLY_SPEED_FACTOR = 0.5f;
+    private static final float FLY_SPEED_FACTOR = 0.6f;
     /**
      * Flight model without flame: same model, asset without "Particles". The server sends a
      * ModelUpdate when the ModelComponent is replaced (EntityTrackerSystems$EntityModel, like
@@ -147,10 +147,10 @@ public final class BalloonManager {
     /**
      * automatic descent (dry burner in flight, or hovering). The server lowers the entity on
      * every tick by flight.descentSpeed blocks per second, the pilot's vertical flight speed read back from their
-     * settings (MovementSettings.verticalFlySpeed, after the division by FLY_SPEED_FACTOR), instead of teleporting
+     * settings (MovementSettings.verticalFlySpeed, after the factor FLY_SPEED_FACTOR), instead of teleporting
      * the pilot every quarter of a second (jerky). The step of one tick is capped at MAX_DESCENT_DT seconds so
      * that a late tick does not skip a cell. With no player to read from, fallback: the game's default vertical
-     * speed (10.32 blocks per second, Server/Entity/MovementConfig/Default.json) divided by FLY_SPEED_FACTOR.
+     * speed (10.32 blocks per second, Server/Entity/MovementConfig/Default.json) times FLY_SPEED_FACTOR.
      */
     private static final double MAX_DESCENT_DT = 0.25;
     private static final double FALLBACK_DESCENT_SPEED = 10.32 * FLY_SPEED_FACTOR;
@@ -3783,7 +3783,7 @@ public final class BalloonManager {
                 // camera anchor, mannequins and hidden body (PassengerSeatView), the camera is attached to the anchor.
                 PassengerSeatView.sync(store, p, new PassengerSeatView.Ctx(flight.balloonUuid, flight.balloonRef, flight.observerRef,
                         flight.dual, flight.pilotUuid, attachOffset(flight.kind, p.seatLocal), seatWorld, flight.seatViews,
-                        balloonView(flight)), now);
+                        balloonView(flight), Float.NaN), now);
                 PassengerCamera.safetyTeleport(store, p, seatWorld);
                 continue;
             }
@@ -4791,7 +4791,7 @@ public final class BalloonManager {
         LOGGER.at(Level.INFO).log("Descente automatique de %s : %.2f blocs par seconde, pilote assis", p.name, flight.descentSpeed);
     }
 
-    /** Vertical flight speed of the pilot (after the division by 2), falling back to the default speed. */
+    /** Vertical flight speed of the pilot (after FLY_SPEED_FACTOR), falling back to the default speed. */
     private static double pilotDescentSpeed(Store<EntityStore> store, Ref<EntityStore> pilotRef) {
         MovementManager mm = store.getComponent(pilotRef, MovementManager.getComponentType());
         if (mm != null && mm.getSettings().verticalFlySpeed > 0f) {
@@ -4800,7 +4800,7 @@ public final class BalloonManager {
         return FALLBACK_DESCENT_SPEED;
     }
 
-    /** Flight without a pilot: default vertical flight speed of a world player, divided by 2 as at take-off. */
+    /** Flight without a pilot: default vertical flight speed of a world player, times FLY_SPEED_FACTOR as at take-off. */
     /**
      * Transit balloons: boosted flame and flamethrower sound while climbing (same as a piloted balloon that climbs), normal flame
      * otherwise. Does nothing if the state does not change.
@@ -4816,7 +4816,7 @@ public final class BalloonManager {
 
     /**
      * Horizontal speed of the balloons: horizontalFlySpeed of a player's default movement settings times FLY_SPEED_FACTOR, the same
-     * derivation as defaultDescentSpeed (10.32 / 2 by default).
+     * derivation as defaultDescentSpeed (10.32 * 0.6 by default).
      */
     static double defaultHorizontalSpeed(World world, Store<EntityStore> store) {
         try {

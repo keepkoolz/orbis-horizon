@@ -34,6 +34,7 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
     private static final String UI = "server.orbis_horizon.ui.config.";
 
     static final String WORLDGEN = "worldgen";
+    static final String WORLDGEN_OLD_TERRAIN = "worldgenOldTerrain";
     static final String MARKER_SHARING = "markerSharing";
     static final String PACK_BACK = "packBack";
     static final String PROTECT = "protect";
@@ -86,9 +87,17 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
                 toggleRow(cmd, events, index, id, Message.translation(recipeKey(id)), id, RecipeToggles.enabled(id));
             }
         }
-        if (settingVisible(WORLDGEN, lang)) {
+        boolean worldgenRow = settingVisible(WORLDGEN, lang);
+        boolean oldTerrainRow = settingVisible(WORLDGEN_OLD_TERRAIN, lang);
+        if (worldgenRow || oldTerrainRow) {
             section(cmd, index, "section.world");
-            toggleRow(cmd, events, index, WORLDGEN, Message.translation(UI + WORLDGEN), null, TransitSettings.worldgenEnabled());
+            if (worldgenRow) {
+                toggleRow(cmd, events, index, WORLDGEN, Message.translation(UI + WORLDGEN), null, TransitSettings.worldgenEnabled());
+            }
+            if (oldTerrainRow) {
+                toggleRow(cmd, events, index, WORLDGEN_OLD_TERRAIN, Message.translation(UI + WORLDGEN_OLD_TERRAIN), null,
+                        TransitSettings.worldgenOldTerrain());
+            }
         }
         if (settingVisible(MARKER_SHARING, lang)) {
             section(cmd, index, "section.map");
@@ -172,6 +181,7 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
     private static void applyToggle(String key, boolean on) {
         switch (key) {
             case WORLDGEN -> TransitSettings.setWorldgenEnabled(on);
+            case WORLDGEN_OLD_TERRAIN -> TransitSettings.setWorldgenOldTerrain(on);
             case MARKER_SHARING -> TransitSettings.setMarkerSharing(on);
             case PACK_BACK -> PackBackView.set(on);
             default -> RecipeToggles.set(key, on); // ignores an id that is not a mod item

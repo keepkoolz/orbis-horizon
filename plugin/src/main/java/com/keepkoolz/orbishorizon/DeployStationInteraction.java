@@ -215,7 +215,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
         try {
             TransitNetwork.Station probe = new TransitNetwork.Station("", world.getName(), new Vector3i(origin), rotation, null, null,
                     new ArrayList<>(), kind.id);
-            if (BoatRoutes.hasOpenWaterExit(world, probe)) {
+            if (BoatBerth.hasOpenWaterExit(world, probe)) {
                 return true;
             }
             LOGGER.at(Level.INFO).log("Station maritime refusée en (%d, %d, %d) : pas de sortie vers le large", origin.x, origin.y, origin.z);
@@ -450,6 +450,12 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
 
     /** Same test with the cells of emptied read as empty solid-free cells, to check a site as it would be once they are cleared. */
     static Refusal boatRoomRefusal(World world, StructureShape station, Vector3i origin, Rotation rotation, Set<Vector3i> emptied) {
+        return boatRoomRefusal(world, station, origin, rotation, emptied, Set.of());
+    }
+
+    /** Same test with the cells of dredged read as water too: generated stations dig their berth, players never do. */
+    static Refusal boatRoomRefusal(World world, StructureShape station, Vector3i origin, Rotation rotation, Set<Vector3i> emptied,
+                                   Set<Vector3i> dredged) {
         SectionReader reader = new SectionReader(world.getChunkStore());
         for (StructureShape.Cell c : station.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
@@ -483,8 +489,9 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
         Vector3i berth = rotation.rotateYaw(new Vector3i(Deployables.BOAT_STATION_BERTH_ORIGIN[0], Deployables.BOAT_STATION_BERTH_ORIGIN[1],
                 Deployables.BOAT_STATION_BERTH_ORIGIN[2]), new Vector3i()).add(origin);
         DeployPlacement.CellState state = DeployPlacement.worldState(world);
+        DeployPlacement.CellState read = emptied.isEmpty() ? state : DeployPlacement.withEmptied(state, emptied);
         DeployPlacement.Fault fault = DeployPlacement.steamboatFault(boat, berth, rotation.add(Deployables.BOAT_STATION_BERTH_ROTATION),
-                emptied.isEmpty() ? state : DeployPlacement.withEmptied(state, emptied), 0);
+                dredged.isEmpty() ? read : DeployPlacement.withWater(read, dredged), 0);
         if (fault != null) {
             Vector3i at = fault.at();
             BlockType bt = SectionBlocks.typeAt(reader, at.x, at.y, at.z);
@@ -540,7 +547,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
                 KnownStations.learn(world.getName(), owner, toSpawn); // whoever places a station knows it
             }
             world.execute(() -> StationMaster.spawn(world.getEntityStore().getStore(), world, toSpawn));
-            BoatRoutes.stationAdded(world, toSpawn); // boat stations only: their routes to the others start computing
+            SeaCharts.stationAdded(world, toSpawn); // boat stations only: the water around the berth is charted
         }
         try {
             if (player != null) {
