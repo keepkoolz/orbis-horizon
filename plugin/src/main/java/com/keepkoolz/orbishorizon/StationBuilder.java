@@ -79,11 +79,11 @@ final class StationBuilder {
             StructureShape shuttle = boat ? Deployables.STEAMBOAT_PUBLIC.shape() : null;
             Path path = PrefabStore.get().findAssetPrefabPath(kind.prefabPath);
             if (path == null) {
-                abandon(e, "prefab introuvable");
+                abandon(e, "prefab not found");
                 return;
             }
             if (!(world.getChunkStore().getGenerator() instanceof ChunkGenerator generator)) {
-                abandon(e, "générateur de monde inconnu");
+                abandon(e, "unknown world generator");
                 return;
             }
             int seed = (int) world.getWorldConfig().getSeed();
@@ -98,7 +98,7 @@ final class StationBuilder {
             ChunkStoreBox cb = new ChunkStoreBox(scan ? widen(box, BUILT_MARGIN) : box);
             if (!cb.loaded(world)) {
                 if (!mayLoad) {
-                    nextSiteOrAbandon(world, e, site, "sections non chargées");
+                    nextSiteOrAbandon(world, e, site, "sections not loaded");
                     return;
                 }
                 cb.load(world).copy().orTimeout(LOAD_TIMEOUT_S, TimeUnit.SECONDS).whenComplete((v, t) -> {
@@ -106,19 +106,19 @@ final class StationBuilder {
                         if (t != null) {
                             Throwable cause = t instanceof CompletionException && t.getCause() != null ? t.getCause() : t;
                             if (cause instanceof TimeoutException) {
-                                LOGGER.at(Level.WARNING).log("%s : chargement des sections non terminé après %d s en (%d, %d)", GenerationListener.logName(e.kind),
+                                LOGGER.at(Level.WARNING).log("%s: section loading not finished after %d s at (%d, %d)", GenerationListener.logName(e.kind),
                                         LOAD_TIMEOUT_S, site.x(), site.z());
                             } else {
-                                LOGGER.at(Level.WARNING).withCause(cause).log("%s : chargement des sections impossible en (%d, %d)", GenerationListener.logName(e.kind),
+                                LOGGER.at(Level.WARNING).withCause(cause).log("%s: cannot load the sections at (%d, %d)", GenerationListener.logName(e.kind),
                                         site.x(), site.z());
                             }
                             Telemetry.error("worldgen", cause, e.kind, "load");
                         }
                         world.execute(() -> resumeAfterLoad(world, e, site));
                     } catch (RuntimeException ex) {
-                        LOGGER.at(Level.WARNING).withCause(ex).log("%s : reprise impossible en (%d, %d)", GenerationListener.logName(e.kind), site.x(), site.z());
+                        LOGGER.at(Level.WARNING).withCause(ex).log("%s: cannot resume at (%d, %d)", GenerationListener.logName(e.kind), site.x(), site.z());
                         Telemetry.error("worldgen", ex, e.kind, "build");
-                        abandon(e, "reprise impossible");
+                        abandon(e, "cannot resume");
                     }
                 });
                 return;
@@ -127,7 +127,7 @@ final class StationBuilder {
             if (scan) {
                 BuiltBlocks.Found built = builtNear(world, builtScan, box);
                 if (built != null) {
-                    LOGGER.at(Level.INFO).log("%s : site %d/%d refusé en (%d, %d) : construction %s en (%d, %d, %d)", GenerationListener.logName(e.kind),
+                    LOGGER.at(Level.INFO).log("%s: site %d/%d refused at (%d, %d): construction %s at (%d, %d, %d)", GenerationListener.logName(e.kind),
                             e.active + 1, e.sites.size(), site.x(), site.z(), built.block(), built.x(), built.y(), built.z());
                     nextSite(world, e);
                     return;
@@ -161,7 +161,7 @@ final class StationBuilder {
             } else {
                 int ground = groundY(world, site.x(), site.z(), generator.getHeight(seed, site.x(), site.z()));
                 if (ground == Integer.MIN_VALUE) {
-                    nextSiteOrAbandon(world, e, site, "aucun sol sous la station");
+                    nextSiteOrAbandon(world, e, site, "no ground under the station");
                     return;
                 }
                 origin = new Vector3i(site.x(), ground + 1, site.z());
@@ -169,18 +169,18 @@ final class StationBuilder {
                 TransitNetwork.Station nearAir = DeployStationInteraction.tooClose(TransitNetwork.get().stations(world.getName()), kind.id,
                         origin, TransitConstants.MIN_STATION_DISTANCE);
                 if (nearAir != null) {
-                    nextSiteOrAbandon(world, e, site, "trop près de « " + nearAir.name + " »");
+                    nextSiteOrAbandon(world, e, site, "too close to \"" + nearAir.name + "\"");
                     return;
                 }
                 DeployStationInteraction.Refusal refusal = DeployStationInteraction.balloonRoomRefusal(world, station, balloon, origin,
                         site.rotation(), true);
                 if (refusal != null) {
-                    nextSiteOrAbandon(world, e, site, refusal.key() != null ? refusal.key() : "refus sans clé");
+                    nextSiteOrAbandon(world, e, site, refusal.key() != null ? refusal.key() : "refusal without key");
                     return;
                 }
                 int cleared = GenClear.clearBox(world, Deployables.STATION.placeMin, Deployables.STATION.placeMax, origin, site.rotation());
                 cleared += GenClear.clear(world, balloon, DeployStationInteraction.dockOrigin(origin, site.rotation()), site.rotation());
-                LOGGER.at(Level.INFO).log("Station aérienne générée : %d case(s) de végétation vidées en (%d, %d, %d)", cleared, origin.x, origin.y, origin.z);
+                LOGGER.at(Level.INFO).log("Generated air station: %d cell(s) of vegetation cleared at (%d, %d, %d)", cleared, origin.x, origin.y, origin.z);
             }
 
             DeployStationInteraction.Look look = DeployStationInteraction.readLook(world, kind, origin);
@@ -194,9 +194,9 @@ final class StationBuilder {
                 // The check on the real blocks, after the paste: the station master must stand on solid ground with two free cells.
                 Vector3i fault = BoatSiteGround.masterFault(origin, at.rotation(), groundState(world));
                 if (fault != null) {
-                    LOGGER.at(Level.WARNING).log("%s : chef de station sans sol en (%d, %d, %d), site %d/%d refusé", GenerationListener.logName(e.kind), fault.x, fault.y,
+                    LOGGER.at(Level.WARNING).log("%s: station master without ground at (%d, %d, %d), site %d/%d refused", GenerationListener.logName(e.kind), fault.x, fault.y,
                             fault.z, e.active + 1, e.sites.size());
-                    Telemetry.error("worldgen", new IllegalStateException("chef de station sans sol en (" + fault.x + ", " + fault.y + ", "
+                    Telemetry.error("worldgen", new IllegalStateException("station master without ground at (" + fault.x + ", " + fault.y + ", "
                             + fault.z + ")"), e.kind, "master");
                     // The pasted structure is registered and locked: release it so that no locked ruin stays behind.
                     BalloonRegistry.remove(world, origin, at.rotation(), StationSpec.of(kind.id).structure().id);
@@ -218,12 +218,12 @@ final class StationBuilder {
             } else {
                 Telemetry.count("worldgen.air.built." + (e.active > 0 ? "fallback" : "first"));
             }
-            LOGGER.at(Level.INFO).log("%s « %s » construite en (%d, %d, %d)", GenerationListener.logName(e.kind), name, origin.x, origin.y, origin.z);
+            LOGGER.at(Level.INFO).log("%s '%s' built at (%d, %d, %d)", GenerationListener.logName(e.kind), name, origin.x, origin.y, origin.z);
         } catch (IOException | RuntimeException | LinkageError ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("%s : construction impossible en (%d, %d)", GenerationListener.logName(e.kind),
+            LOGGER.at(Level.WARNING).withCause(ex).log("%s: cannot build at (%d, %d)", GenerationListener.logName(e.kind),
                     planned == null ? e.x : planned.x(), planned == null ? e.z : planned.z());
             Telemetry.error("worldgen", ex, e.kind, "build");
-            abandon(e, "erreur de construction");
+            abandon(e, "build error");
         }
     }
 
@@ -234,16 +234,16 @@ final class StationBuilder {
     private static void resumeAfterLoad(World world, GeneratedStations.Entry e, WorldStationPlanner.Site requested) {
         try {
             if (e.state == GeneratedStations.State.PLANNED && !requested.equals(GeneratedStations.get().activeSite(e))) {
-                LOGGER.at(Level.INFO).log("%s : site changé pendant le chargement en (%d, %d), nouvelle décision", GenerationListener.logName(e.kind),
+                LOGGER.at(Level.INFO).log("%s: site changed during loading at (%d, %d), deciding again", GenerationListener.logName(e.kind),
                         requested.x(), requested.z());
                 GenerationListener.decideAgain(world, e);
                 return;
             }
             build(world, e, false);
         } catch (RuntimeException | LinkageError ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("%s : reprise impossible en (%d, %d)", GenerationListener.logName(e.kind), requested.x(), requested.z());
+            LOGGER.at(Level.WARNING).withCause(ex).log("%s: cannot resume at (%d, %d)", GenerationListener.logName(e.kind), requested.x(), requested.z());
             Telemetry.error("worldgen", ex, e.kind, "build");
-            abandon(e, "reprise impossible");
+            abandon(e, "cannot resume");
         }
     }
 
@@ -277,13 +277,13 @@ final class StationBuilder {
             DeployPlacement.CellState state = DeployPlacement.worldState(world);
             Vector3i blocker = DeployPlacement.boatStationOriginBlocker(state, computed, site.rotation());
             Vector3i cell = blocker != null ? blocker : computed;
-            return new BoatAttempt(site, null, blockNameAt(world, cell), cell, "hors de l'eau");
+            return new BoatAttempt(site, null, blockNameAt(world, cell), cell, "out of the water");
         }
         if (!SeaRules.atSeaLevel(origin)) {
             Vector3i end = site.rotation().rotateYaw(new Vector3i(Deployables.BOAT_STATION_PIER_END[0], Deployables.BOAT_STATION_PIER_END[1],
                     Deployables.BOAT_STATION_PIER_END[2]), new Vector3i());
             Vector3i cell = new Vector3i(site.x() + end.x, SeaRules.SEA_LEVEL, site.z() + end.z);
-            return new BoatAttempt(site, null, blockNameAt(world, cell), cell, "eau à y " + (origin.y - 1) + ", pas au niveau de la mer");
+            return new BoatAttempt(site, null, blockNameAt(world, cell), cell, "water at y " + (origin.y - 1) + ", not at sea level");
         }
         DeployPlacement.CellState ground = groundState(world);
         SectionReader reader = new SectionReader(world.getChunkStore());
@@ -308,27 +308,27 @@ final class StationBuilder {
             water = berthWater(reader, dredged, origin, site.rotation());
             if (water == null) {
                 Vector3i cell = dredged.iterator().next();
-                return new BoatAttempt(site, null, blockNameAt(world, cell), cell, "hors de l'eau");
+                return new BoatAttempt(site, null, blockNameAt(world, cell), cell, "out of the water");
             }
         }
         DeployStationInteraction.Refusal refusal = DeployStationInteraction.boatRoomRefusal(world, station, origin, site.rotation(), clear,
                 dredged);
         if (refusal != null) {
             Vector3i cell = refusal.at() != null ? refusal.at() : origin;
-            String face = refusal.hull() == null ? "emprise de la station" : refusal.hull() ? "coque" : "hors de l'eau";
-            String block = refusal.block() != null ? refusal.block() : refusal.key() != null ? refusal.key() : "forme du bateau illisible";
+            String face = refusal.hull() == null ? "station footprint" : refusal.hull() ? "hull" : "out of the water";
+            String block = refusal.block() != null ? refusal.block() : refusal.key() != null ? refusal.key() : "boat shape unreadable";
             return new BoatAttempt(site, null, block, cell, face);
         }
         TransitNetwork.Station near = DeployStationInteraction.tooClose(TransitNetwork.get().stations(world.getName()), kind.id, origin,
                 TransitConstants.MIN_STATION_DISTANCE);
         if (near != null) {
-            return new BoatAttempt(site, null, "station « " + near.name + " »", near.origin, "trop près");
+            return new BoatAttempt(site, null, "station \"" + near.name + "\"", near.origin, "too close");
         }
         Set<Vector3i> solid = new java.util.HashSet<>(fill.keySet());
         solid.addAll(prefabCells);
         Vector3i fault = BoatSiteGround.masterFault(origin, site.rotation(), BoatSiteGround.simulated(ground, clear, solid));
         if (fault != null) {
-            return new BoatAttempt(site, null, blockNameAt(world, fault), fault, "chef de station");
+            return new BoatAttempt(site, null, blockNameAt(world, fault), fault, "station master");
         }
         return new BoatAttempt(site, origin, null, null, null, clear, fill, dredged, water);
     }
@@ -445,7 +445,7 @@ final class StationBuilder {
             filled += SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, f.getValue(), SET_NO_PARTICLES) ? 1 : 0;
         }
         long elapsedMs = (System.nanoTime() - started) / 1_000_000;
-        LOGGER.at(Level.INFO).log("Station maritime générée : %d case(s) dégagées, %d comblées et %d creusées en %d ms en (%d, %d, %d)", cleared, filled, dredged, elapsedMs,
+        LOGGER.at(Level.INFO).log("Generated sea station: %d cell(s) cleared, %d filled and %d dug in %d ms at (%d, %d, %d)", cleared, filled, dredged, elapsedMs,
                 origin.x, origin.y, origin.z);
     }
 
@@ -635,7 +635,7 @@ final class StationBuilder {
             return fitting[0] != null;
         });
         if (fitting[0] != null) {
-            LOGGER.at(Level.INFO).log("%s : ponton (%d, %d) refusé, réparé en (%d, %d) après %d essai(s)", GenerationListener.logName(e.kind), site.x(), site.z(),
+            LOGGER.at(Level.INFO).log("%s: pier (%d, %d) refused, repaired at (%d, %d) after %d try(ies)", GenerationListener.logName(e.kind), site.x(), site.z(),
                     result.site().x(), result.site().z(), result.tries());
         }
         return new BoatRepair(fitting[0], result.tries());
@@ -643,7 +643,7 @@ final class StationBuilder {
 
     /** No way to build on the active boat site: logs the refusal and goes to the next site or abandons the entry. */
     private static void refuseBoat(World world, GeneratedStations.Entry e, WorldStationPlanner.Site site, int tries, BoatAttempt refused) {
-        LOGGER.at(Level.INFO).log("%s : site %d/%d refusé en (%d, %d) après %d essais : %s en (%d, %d, %d), %s", GenerationListener.logName(e.kind),
+        LOGGER.at(Level.INFO).log("%s: site %d/%d refused at (%d, %d) after %d tries: %s at (%d, %d, %d), %s", GenerationListener.logName(e.kind),
                 e.active + 1, e.sites.size(), site.x(), site.z(), tries, refused.block(), refused.at().x, refused.at().y,
                 refused.at().z, refused.face());
         nextSite(world, e);
@@ -651,7 +651,7 @@ final class StationBuilder {
 
     /** The active site is refused or cannot be read: logs the reason, then goes to the next site or abandons the entry. */
     private static void nextSiteOrAbandon(World world, GeneratedStations.Entry e, WorldStationPlanner.Site site, String reason) {
-        LOGGER.at(Level.INFO).log("%s : site %d/%d écarté en (%d, %d) : %s", GenerationListener.logName(e.kind), e.active + 1, e.sites.size(), site.x(), site.z(),
+        LOGGER.at(Level.INFO).log("%s: site %d/%d discarded at (%d, %d): %s", GenerationListener.logName(e.kind), e.active + 1, e.sites.size(), site.x(), site.z(),
                 reason);
         nextSite(world, e);
     }
@@ -663,7 +663,7 @@ final class StationBuilder {
             GenerationListener.decideAgain(world, e);
         } else {
             Telemetry.count(boat ? "worldgen.boat.exhausted" : "worldgen.air.exhausted");
-            abandon(e, boat ? "aucun site de ponton ne convient" : "aucun site de station ne convient",
+            abandon(e, boat ? "no pier site fits" : "no station site fits",
                     GeneratedStations.exhaustedReason(e.oldTerrainSeen));
         }
     }
@@ -774,11 +774,11 @@ final class StationBuilder {
     private static void abandon(GeneratedStations.Entry e, String reason, GeneratedStations.Reason why) {
         try {
             WorldStationPlanner.Site site = GeneratedStations.get().activeSite(e);
-            LOGGER.at(Level.INFO).log("%s abandonnée en (%d, %d) : %s", GenerationListener.logName(e.kind), site.x(), site.z(), reason);
+            LOGGER.at(Level.INFO).log("%s abandoned at (%d, %d): %s", GenerationListener.logName(e.kind), site.x(), site.z(), reason);
             GeneratedStations.get().abandon(e, why);
             Telemetry.count("worldgen.station.abandoned");
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("%s : abandon non enregistré", GenerationListener.logName(e.kind));
+            LOGGER.at(Level.WARNING).withCause(ex).log("%s: abandon not recorded", GenerationListener.logName(e.kind));
             Telemetry.error("worldgen", ex, e.kind, "build");
         }
     }

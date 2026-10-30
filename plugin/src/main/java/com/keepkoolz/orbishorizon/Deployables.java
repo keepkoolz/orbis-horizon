@@ -178,7 +178,7 @@ final class Deployables {
                     new String[]{"Airship_Burner_Flame_Weak_Left", "Airship_Burner_Flame_Strong_Right"},
                     new String[]{"Airship_Burner_Flame_Strong_Left", "Airship_Burner_Flame_Weak_Right"},
                     "Airship_Exhaust_Smoke", "Airship_Burner_Flame",
-                    true, true, true, true, null, 1f, false, null, null, "dirigeable", false,
+                    true, true, true, true, null, 1f, false, null, null, "airship", false,
                     new CrewSpec(new int[]{0, 8, -10}, new int[]{-2, 8, 4}, new int[]{0, 8, 2}, new int[]{0, 8, 9}, new int[]{0, 9, 8},
                             AirshipCrew::walkLegs, 1)));
 
@@ -195,7 +195,7 @@ final class Deployables {
             new AirshipSpec("Steamboat", "Steamboat_Idle", "Steamboat_Off", "Steamboat_Crate", STEAMBOAT_PIVOT,
                     "Steamboat", "Steamboat", new String[]{"Airship_Exhaust_Smoke"}, new String[]{"Airship_Exhaust_Smoke"},
                     "Airship_Exhaust_Smoke", "Steamboat_Chimney_Smoke_Thick",
-                    true, false, false, false, -2, 0.5f, true, "Steamboat", null, "bateau", false,
+                    true, false, false, false, -2, 0.5f, true, "Steamboat", null, "steamboat", false,
                     new CrewSpec(STEAMBOAT_PIVOT, new int[]{0, 4, 8}, null, new int[]{0, 1, 8}, new int[]{0, 2, 7}, AirshipCrew::straightLegs, 1)));
 
     static final String STEAMBOAT_PUBLIC_KIND = "steamboat_public";
@@ -216,7 +216,7 @@ final class Deployables {
             new AirshipSpec("Steamboat_Public", "Steamboat_Public_Idle", "Steamboat_Public_Off", null, STEAMBOAT_PUBLIC_PIVOT,
                     "Steamboat_Public", "Steamboat_Public", new String[]{"Airship_Exhaust_Smoke"}, new String[]{"Airship_Exhaust_Smoke"},
                     "Airship_Exhaust_Smoke", "Steamboat_Chimney_Smoke_Thick",
-                    false, false, false, false, 0, 0.5f, true, null, "Propeller", "navette", true, null));
+                    false, false, false, false, 0, 0.5f, true, null, "Propeller", "shuttle", true, null));
 
     static final String PUBLIC_KIND = "balloon_public";
 
@@ -489,7 +489,7 @@ final class Deployables {
         final String propellerAnimPrefix;
         /** True when the flight model has the animated "Helm" node (the helm block turns with the ship, see ShipHelm). All ships. */
         final boolean helmAnimated = true;
-        /** Word used for this ship in server log lines (lower case: "dirigeable", "bateau"). */
+        /** Word used for this ship in server log lines (lower case: "airship", "steamboat"). */
         final String logLabel;
         /** True for a ship that burns no fuel (the public shuttle): the engine and the tank are not used. */
         final boolean fuelless;
@@ -686,7 +686,7 @@ final class Deployables {
             } catch (IOException e) {
                 if (!warned) {
                     warned = true;
-                    LOGGER.at(Level.WARNING).withCause(e).log("Prefab illisible : verrouillage de « %s » inactif", id);
+                    LOGGER.at(Level.WARNING).withCause(e).log("Unreadable prefab: locking of '%s' inactive", id);
                 }
                 return null;
             }

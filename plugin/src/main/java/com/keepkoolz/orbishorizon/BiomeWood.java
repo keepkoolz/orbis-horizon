@@ -141,13 +141,13 @@ final class BiomeWood {
      * Any other generator, no tree, or any failure gives DEFAULT: this never throws.
      */
     static Wood woodAt(World world, int x, int z, boolean log) {
-        String species = speciesAt(world, x, z, log, "Station maritime");
+        String species = speciesAt(world, x, z, log, "Sea station");
         return species == null ? DEFAULT : woodOf(species);
     }
 
     /** Wood for the balloon station: null when no tree species is found (the prefab wood is kept), Ash included otherwise. */
     static Wood stationWoodAt(World world, int x, int z, boolean log) {
-        String species = speciesAt(world, x, z, log, "Station de montgolfière");
+        String species = speciesAt(world, x, z, log, "Balloon station");
         return species == null ? null : woodOf(species);
     }
 
@@ -178,11 +178,11 @@ final class BiomeWood {
             if (log) {
                 var l = com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.INFO);
                 if (firstBiome == null) {
-                    l.log("%s : aucun biome lu, bois d'origine", station);
+                    l.log("%s: no biome read, original wood", station);
                 } else if (species == null) {
-                    l.log("%s : aucun arbre, bois d'origine, biome %s", station, firstBiome);
+                    l.log("%s: no tree, original wood, biome %s", station, firstBiome);
                 } else {
-                    l.log("%s : bois %s, biome %s", station, species, firstBiome);
+                    l.log("%s: wood %s, biome %s", station, species, firstBiome);
                 }
             }
             return species;

@@ -125,13 +125,13 @@ final class AirshipCrew {
         try {
             NPCPlugin plugin = NPCPlugin.get();
             if (plugin == null || plugin.getIndex(ROLE) < 0) {
-                LOGGER.at(Level.WARNING).log("Pilote : rôle %s introuvable", ROLE);
+                LOGGER.at(Level.WARNING).log("Pilot: role %s not found", ROLE);
                 return null;
             }
             Pair<Ref<EntityStore>, com.hypixel.hytale.server.core.universe.world.npc.INonPlayerCharacter> p =
                     plugin.spawnNPC(store, ROLE, null, postPoint(e, crew.post()), yawRotation(bowYaw(e)));
             if (p == null || p.first() == null || !p.first().isValid()) {
-                LOGGER.at(Level.WARNING).log("Pilote : création impossible en (%d, %d, %d)", e.x(), e.y(), e.z());
+                LOGGER.at(Level.WARNING).log("Pilot: creation failed at (%d, %d, %d)", e.x(), e.y(), e.z());
                 return null;
             }
             Ref<EntityStore> ref = p.first();
@@ -140,13 +140,13 @@ final class AirshipCrew {
             if (id == null) {
                 return null;
             }
-            LOGGER.at(Level.INFO).log("Pilote : créé en (%d, %d, %d) (%s, poste %s)", e.x(), e.y(), e.z(), id.getUuid(), crew.post().key);
+            LOGGER.at(Level.INFO).log("Pilot: created at (%d, %d, %d) (%s, post %s)", e.x(), e.y(), e.z(), id.getUuid(), crew.post().key);
             if (crew.post() == CrewRecord.Post.STOOL) {
                 seat(store, ref, e, id.getUuid());
             }
             return id.getUuid();
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : non créé en (%d, %d, %d)", e.x(), e.y(), e.z());
+            LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: not created at (%d, %d, %d)", e.x(), e.y(), e.z());
             Telemetry.error("airship.crew", ex, null, null);
             return null;
         }
@@ -243,7 +243,7 @@ final class AirshipCrew {
                     return;
                 }
             }
-            String[] names = {"genre + tenue", "tirée + tenue", "genre seul", "tirée seule"};
+            String[] names = {"gender + outfit", "drawn + outfit", "gender only", "drawn only"};
             PlayerSkin[] cands = new PlayerSkin[4];
             cands[0] = new PlayerSkin(gendered);
             String bad = applyOutfit(cands[0], OUTFIT);
@@ -256,19 +256,19 @@ final class AirshipCrew {
                     continue;
                 }
                 if (i == 0 && !bad.isEmpty()) {
-                    LOGGER.at(Level.WARNING).log("Pilote : emplacements de tenue inconnus ignorés : %s", bad);
+                    LOGGER.at(Level.WARNING).log("Pilot: unknown outfit slots ignored: %s", bad);
                 }
                 PlayerSkinComponent c = new PlayerSkinComponent(cands[i]);
                 c.setNetworkOutdated(); // sent again to the clients that already see the pilot
                 store.putComponent(ref, PlayerSkinComponent.getComponentType(), c);
                 SKIN_DONE.add(key);
-                LOGGER.at(Level.INFO).log("Pilote : apparence posée (%s)", names[i]);
+                LOGGER.at(Level.INFO).log("Pilot: appearance applied (%s)", names[i]);
                 return;
             }
             SKIN_DONE.add(key); // nothing usable: do not retry every pass
-            LOGGER.at(Level.WARNING).log("Pilote : aucune apparence acceptée, rien n'est posé");
+            LOGGER.at(Level.WARNING).log("Pilot: no appearance accepted, nothing applied");
         } catch (Exception ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : apparence non posée");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: appearance not applied");
             Telemetry.error("airship.crew", ex, null, null);
         }
     }
@@ -278,7 +278,7 @@ final class AirshipCrew {
             cosmetics.validateSkin(skin);
             return true;
         } catch (Exception refused) {
-            LOGGER.at(Level.WARNING).log("Pilote : apparence refusée (%s)", refused.getMessage());
+            LOGGER.at(Level.WARNING).log("Pilot: appearance refused (%s)", refused.getMessage());
             return false;
         }
     }
@@ -395,7 +395,7 @@ final class AirshipCrew {
             }
             return m;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote : mannequin de vol impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot: flight mannequin failed");
             Telemetry.error("airship.crew", e, null, null);
             return null;
         }
@@ -415,7 +415,7 @@ final class AirshipCrew {
                 return null;
             }
             if (!ref.isValid()) { // stored away at once (section not ticking): no ghost kept
-                LOGGER.at(Level.WARNING).log("Pilote : mannequin à quai rangé aussitôt par le monde (section inactive)");
+                LOGGER.at(Level.WARNING).log("Pilot: pier mannequin stored straight away by the world (inactive section)");
                 return null;
             }
             Mannequin m = new Mannequin();
@@ -425,7 +425,7 @@ final class AirshipCrew {
             m.animId = animId;
             return m;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote : mannequin à quai impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot: pier mannequin failed");
             Telemetry.error("airship.crew", e, null, null);
             return null;
         }
@@ -448,7 +448,7 @@ final class AirshipCrew {
                 m.twin = null;
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote : mannequin de vol non regroupé");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot: flight mannequin not regrouped");
             Telemetry.error("airship.crew", e, null, null);
         }
     }
@@ -471,7 +471,7 @@ final class AirshipCrew {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote : pose assise du mannequin impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot: seated pose of the mannequin failed");
             Telemetry.error("airship.crew", e, null, null);
         }
     }
@@ -496,7 +496,7 @@ final class AirshipCrew {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote : lacet du mannequin non réglé");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot: mannequin yaw not set");
             Telemetry.error("airship.crew", e, null, null);
         }
     }
@@ -516,7 +516,7 @@ final class AirshipCrew {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote : mannequin de vol non supprimé");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot: flight mannequin not removed");
             Telemetry.error("airship.crew", e, null, null);
         }
         m.ref = null;
@@ -534,11 +534,11 @@ final class AirshipCrew {
                 if (ref != null && ref.isValid()) {
                     ViewFilter.clear(ref);
                     store.removeEntity(ref, RemoveReason.REMOVE);
-                    LOGGER.at(Level.INFO).log("Pilote : mannequin de vol resté dans le monde supprimé (%s)", shipUuid);
+                    LOGGER.at(Level.INFO).log("Pilot: flight mannequin left in the world removed (%s)", shipUuid);
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote : mannequin de vol resté dans le monde non supprimé");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot: flight mannequin left in the world not removed");
             Telemetry.error("airship.crew", e, null, null);
         }
     }
@@ -653,7 +653,7 @@ final class AirshipCrew {
                 }
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : non supprimé en (%d, %d, %d)", e.x(), e.y(), e.z());
+            LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: not removed at (%d, %d, %d)", e.x(), e.y(), e.z());
             Telemetry.error("airship.crew", ex, null, null);
         }
         PENDING.removeIf(p -> p.sameAirship(e));
@@ -678,7 +678,7 @@ final class AirshipCrew {
             }
         }
         if (removed > 0) {
-            LOGGER.at(Level.INFO).log("Pilote : %d doublon(s) retiré(s) en (%d, %d, %d)", removed, e.x(), e.y(), e.z());
+            LOGGER.at(Level.INFO).log("Pilot: %d duplicate(s) removed at (%d, %d, %d)", removed, e.x(), e.y(), e.z());
         }
     }
 
@@ -746,11 +746,11 @@ final class AirshipCrew {
                         PENDING.add(new Pending(world, e));
                     });
                 } catch (RuntimeException ex) {
-                    LOGGER.at(Level.WARNING).withCause(ex).log("Monde %s arrêté : pilote non retrouvé", world.getName());
+                    LOGGER.at(Level.WARNING).withCause(ex).log("World %s stopped: pilot not found", world.getName());
                 }
             });
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.INFO).log("Monde %s pas encore prêt : pilote repris au démarrage du monde (%s)", world.getName(), ex.getClass().getSimpleName());
+            LOGGER.at(Level.INFO).log("World %s not ready yet: pilot resumed at world start (%s)", world.getName(), ex.getClass().getSimpleName());
         }
     }
 
@@ -811,7 +811,7 @@ final class AirshipCrew {
                         BalloonRegistry.Entry updated = BalloonRegistry.setCrew(world, origin, e.rotation(), e.kind(), e.crew().withUuid(id.getUuid()));
                         wire(store, orphan, updated != null ? updated : e, e.crew());
                         standUp(store, orphan, id.getUuid());
-                        LOGGER.at(Level.INFO).log("Pilote repris sur place en (%d, %d, %d) (%s)", e.x(), e.y(), e.z(), id.getUuid());
+                        LOGGER.at(Level.INFO).log("Pilot resumed in place at (%d, %d, %d) (%s)", e.x(), e.y(), e.z(), id.getUuid());
                         removeDuplicates(store, e, orphan);
                         continue;
                     }
@@ -825,10 +825,10 @@ final class AirshipCrew {
                     Pending retry = new Pending(world, e);
                     retry.readyMs = now - ENTITY_GRACE_MS + SPAWN_RETRY_MS;
                     PENDING.add(retry);
-                    LOGGER.at(Level.WARNING).log("Pilote non créé en (%d, %d, %d), nouvel essai dans %d s", e.x(), e.y(), e.z(), SPAWN_RETRY_MS / 1000);
+                    LOGGER.at(Level.WARNING).log("Pilot not created at (%d, %d, %d), retrying in %d s", e.x(), e.y(), e.z(), SPAWN_RETRY_MS / 1000);
                 }
             } catch (RuntimeException ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("Pilote non remis en état en (%d, %d, %d)", e.x(), e.y(), e.z());
+                LOGGER.at(Level.WARNING).withCause(ex).log("Pilot not restored at (%d, %d, %d)", e.x(), e.y(), e.z());
                 Telemetry.error("airship.crew", ex, null, null);
             }
         }
@@ -868,7 +868,7 @@ final class AirshipCrew {
                 }
                 removeDuplicates(store, e, ref);
             } catch (RuntimeException ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("Câblage du pilote non vérifié en (%d, %d, %d)", e.x(), e.y(), e.z());
+                LOGGER.at(Level.WARNING).withCause(ex).log("Pilot wiring not checked at (%d, %d, %d)", e.x(), e.y(), e.z());
                 Telemetry.error("airship.crew", ex, null, null);
             }
         }
@@ -985,7 +985,7 @@ final class AirshipCrew {
                 msc.getMovementStates().mounting = false;
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : relevé en erreur");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: survey failed");
             Telemetry.error("airship.crew", ex, null, null);
         }
     }
@@ -1018,7 +1018,7 @@ final class AirshipCrew {
             boolean mounted = store.getComponent(ref, MountedComponent.getComponentType()) != null;
             Vector3d leash = npc.getLeashPoint();
             double progress = walk.lastLogPos == null ? 0 : p.distance(walk.lastLogPos);
-            String line = String.format("marche %s position (%.1f, %.1f, %.1f), reste %.1f bloc(s) vers (%.1f, %.1f, %.1f), monté %s, sitting %s, mounting %s, laisse %s, progrès %.2f bloc(s)",
+            String line = String.format("walk %s position (%.1f, %.1f, %.1f), %.1f block(s) left toward (%.1f, %.1f, %.1f), mounted %s, sitting %s, mounting %s, leash %s, progress %.2f block(s)",
                     walk.target.key, p.x, p.y, p.z, target == null ? -1.0 : p.distance(target),
                     target == null ? 0.0 : target.x, target == null ? 0.0 : target.y, target == null ? 0.0 : target.z,
                     mounted, sitting, mounting,
@@ -1026,16 +1026,16 @@ final class AirshipCrew {
             if (stuck) {
                 walk.stuckWarned = true;
                 walk.stuckWarnMs = now;
-                LOGGER.at(Level.WARNING).log("Pilote : bloqué depuis 5 s, %s", line);
+                LOGGER.at(Level.WARNING).log("Pilot: stuck for 5 s, %s", line);
             }
             if (oncePerSecond) {
-                LOGGER.at(Level.INFO).log("Pilote : %s", line);
+                LOGGER.at(Level.INFO).log("Pilot: %s", line);
                 walk.lastLogMs = now;
                 walk.lastLogPos = new Vector3d(p);
             }
             return stuckLong;
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : journal de marche en erreur");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: walk log failed");
             Telemetry.error("airship.crew", ex, null, null);
             return false;
         }
@@ -1063,7 +1063,7 @@ final class AirshipCrew {
         try {
             AnimationUtils.playAnimation(ref, AnimationSlot.Movement, "Sit", true, store);
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : pose assise non jouée");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: seated pose not played");
             Telemetry.error("airship.crew", ex, null, null);
         }
     }
@@ -1080,7 +1080,7 @@ final class AirshipCrew {
             st[2] = now;
             AnimationUtils.playAnimation(ref, AnimationSlot.Movement, "Sit", true, store);
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : pose assise non rejouée");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: seated pose not replayed");
             Telemetry.error("airship.crew", ex, null, null);
         }
     }
@@ -1091,7 +1091,7 @@ final class AirshipCrew {
             try {
                 AnimationUtils.stopAnimation(ref, AnimationSlot.Movement, true, store);
             } catch (RuntimeException ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : pose assise non arrêtée");
+                LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: seated pose not stopped");
                 Telemetry.error("airship.crew", ex, null, null);
             }
         }
@@ -1132,9 +1132,9 @@ final class AirshipCrew {
             }
             store.putComponent(ref, Frozen.getComponentType(), Frozen.get());
             startSit(ref, store, npc);
-            LOGGER.at(Level.INFO).log("Pilote : assis sur le tabouret en (%.1f, %.1f, %.1f)", stool.x, stool.y, stool.z);
+            LOGGER.at(Level.INFO).log("Pilot: seated on the stool at (%.1f, %.1f, %.1f)", stool.x, stool.y, stool.z);
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : pose sur le tabouret en erreur");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: seating on the stool failed");
             Telemetry.error("airship.crew", ex, null, null);
         }
     }
@@ -1154,7 +1154,7 @@ final class AirshipCrew {
     private static boolean setDoor(World world, BalloonRegistry.Entry e, boolean open) {
         BlockType bt = doorBlock(world, e);
         if (bt == null || bt.getId() == null || !bt.getId().contains("Furniture_Crude_Door")) {
-            LOGGER.at(Level.WARNING).log("Pilote : porte introuvable à la case attendue (bloc %s)", bt == null ? "null" : bt.getId());
+            LOGGER.at(Level.WARNING).log("Pilot: door not found at the expected cell (block %s)", bt == null ? "null" : bt.getId());
             return false;
         }
         if (bt.getId().contains("OpenDoor") == open) {
@@ -1167,7 +1167,7 @@ final class AirshipCrew {
         Vector3d c = postPoint(e, door);
         boolean ok = SectionBlocks.setStateAt(world.getChunkStore(), (int) Math.floor(c.x), (int) Math.floor(c.y), (int) Math.floor(c.z),
                 bt, open ? "OpenDoorOut" : "CloseDoorOut");
-        LOGGER.at(Level.INFO).log("Pilote : porte %s (écriture %s)", open ? "ouverte" : "refermée", ok);
+        LOGGER.at(Level.INFO).log("Pilot: door %s (write %s)", open ? "opened" : "closed", ok);
         return ok;
     }
 
@@ -1254,7 +1254,7 @@ final class AirshipCrew {
         standUp(store, ref, crew.uuid());
         TransformComponent tr = store.getComponent(ref, TransformComponent.getComponentType());
         if (tr == null) {
-            LOGGER.at(Level.WARNING).log("Pilote : position introuvable, ordre ignoré en (%d, %d, %d)", e.x(), e.y(), e.z());
+            LOGGER.at(Level.WARNING).log("Pilot: position not found, order ignored at (%d, %d, %d)", e.x(), e.y(), e.z());
             return false;
         }
         Vector3d from = new Vector3d(tr.getPosition());
@@ -1270,7 +1270,7 @@ final class AirshipCrew {
         setLeash(store, ref, w.legs.isEmpty() ? dest : w.legs.get(0));
         w.leashDirty = true; // applied again on the next step, once the removal of a MountedComponent has landed
         WALKS.put(key(e), w);
-        LOGGER.at(Level.INFO).log("Pilote : marche vers %s en (%d, %d, %d), %d étape(s) intermédiaire(s)", target.key, e.x(), e.y(), e.z(), w.legs.size());
+        LOGGER.at(Level.INFO).log("Pilot: walking to %s at (%d, %d, %d), %d intermediate leg(s)", target.key, e.x(), e.y(), e.z(), w.legs.size());
         return true;
     }
 
@@ -1291,9 +1291,9 @@ final class AirshipCrew {
             if (post == CrewRecord.Post.STOOL) {
                 seat(store, ref, e, id);
             }
-            LOGGER.at(Level.WARNING).log("Pilote : %s, téléporté à son poste %s en (%.1f, %.1f, %.1f)", why, post.key, pp.x, pp.y, pp.z);
+            LOGGER.at(Level.WARNING).log("Pilot: %s, teleported to post %s at (%.1f, %.1f, %.1f)", why, post.key, pp.x, pp.y, pp.z);
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : téléportation au poste en erreur");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: teleport to post failed");
             Telemetry.error("airship.crew", ex, null, null);
         }
     }
@@ -1322,12 +1322,12 @@ final class AirshipCrew {
             return ResetResult.NOT_OWNER;
         }
         Ref<EntityStore> ref = refOf(world, best);
-        LOGGER.at(Level.INFO).log("Pilote : remise à son poste demandée en (%d, %d, %d), pilote %s", best.x(), best.y(), best.z(), ref == null ? "absent" : "présent");
+        LOGGER.at(Level.INFO).log("Pilot: return to post requested at (%d, %d, %d), pilot %s", best.x(), best.y(), best.z(), ref == null ? "absent" : "present");
         if (ref == null) {
             ensure(world, best);
             return ResetResult.DONE;
         }
-        teleportToPost(store, world, best, ref, best.crew().post(), "remise à son poste");
+        teleportToPost(store, world, best, ref, best.crew().post(), "returned to post");
         return ResetResult.DONE;
     }
 
@@ -1348,7 +1348,7 @@ final class AirshipCrew {
             try {
                 pilotStep(store, world, e, now);
             } catch (RuntimeException ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : marche en erreur en (%d, %d, %d)", e.x(), e.y(), e.z());
+                LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: walk failed at (%d, %d, %d)", e.x(), e.y(), e.z());
                 Telemetry.error("airship.crew", ex, null, null);
             }
         }
@@ -1395,7 +1395,7 @@ final class AirshipCrew {
         // The only teleport: back to the post when the pilot is outside the airship (fell, got stuck).
         Vector3d[] box = box(e);
         if (!seated && (p.x < box[0].x || p.x > box[1].x || p.y < box[0].y || p.y > box[1].y || p.z < box[0].z || p.z > box[1].z)) {
-            LOGGER.at(Level.WARNING).log("Pilote : hors du dirigeable en (%.1f, %.1f, %.1f), remis à son poste %s", p.x, p.y, p.z, post.key);
+            LOGGER.at(Level.WARNING).log("Pilot: outside the airship at (%.1f, %.1f, %.1f), returned to post %s", p.x, p.y, p.z, post.key);
             WALKS.remove(k);
             Teleport tp = new Teleport(new Vector3d(postPoint), new Rotation3f(tr.getRotation())).withoutVelocityReset();
             store.putComponent(ref, Teleport.getComponentType(), tp);
@@ -1431,7 +1431,7 @@ final class AirshipCrew {
             return;
         }
         if (!seated && p.distance(postPoint) > REST_DRIFT) {
-            LOGGER.at(Level.INFO).log("Pilote : écarté de son poste de %.1f bloc(s), retour au poste %s", p.distance(postPoint), post.key);
+            LOGGER.at(Level.INFO).log("Pilot: moved %.1f block(s) from the post, returning to post %s", p.distance(postPoint), post.key);
             orderWalk(store, world, e, post);
         }
     }
@@ -1449,12 +1449,12 @@ final class AirshipCrew {
         }
         boolean stuckLong = walkDiagnostics(store, ref, npc, walk, p, now);
         if (stuckLong) {
-            teleportToPost(store, world, e, ref, walk.target, "bloqué");
+            teleportToPost(store, world, e, ref, walk.target, "stuck");
             return;
         }
         if (now - walk.startMs > WALK_TIMEOUT_MS) {
-            LOGGER.at(Level.WARNING).log("Pilote : toujours pas arrivé au poste %s après 45 s", walk.target.key);
-            teleportToPost(store, world, e, ref, walk.target, "délai dépassé");
+            LOGGER.at(Level.WARNING).log("Pilot: still not at post %s after 45 s", walk.target.key);
+            teleportToPost(store, world, e, ref, walk.target, "timeout");
             return;
         }
         if (walk.waiting) {
@@ -1488,7 +1488,7 @@ final class AirshipCrew {
             return;
         }
         WALKS.remove(k);
-        LOGGER.at(Level.INFO).log("Pilote : arrivé au poste %s en %.0f s", walk.target.key, (now - walk.startMs) / 1000.0);
+        LOGGER.at(Level.INFO).log("Pilot: arrived at post %s in %.0f s", walk.target.key, (now - walk.startMs) / 1000.0);
         if (walk.target == CrewRecord.Post.STOOL) {
             seat(store, ref, e, e.crew().uuid());
         }

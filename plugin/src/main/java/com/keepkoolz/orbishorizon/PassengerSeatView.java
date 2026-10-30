@@ -128,7 +128,7 @@ final class PassengerSeatView {
                 PassengerCamera.attachExternal(store, c.view(), p, target);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Vue du siège du passager %s en échec", p.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Seat view of passenger %s failed", p.name);
         }
     }
 
@@ -197,7 +197,7 @@ final class PassengerSeatView {
             s.noMannequin = true;
             if (!p.noMannequinLogged) {
                 p.noMannequinLogged = true;
-                LOGGER.at(Level.INFO).log("Passager %s : pas de modèle ou d'apparence, pas de mannequin", p.name);
+                LOGGER.at(Level.INFO).log("Passenger %s: no model or appearance, no mannequin", p.name);
             }
             return s;
         }
@@ -270,7 +270,7 @@ final class PassengerSeatView {
             }
             return ref;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Entité de vue de siège impossible (%s)", model == null ? "ancre" : "mannequin");
+            LOGGER.at(Level.WARNING).withCause(e).log("Seat view entity failed (%s)", model == null ? "anchor" : "mannequin");
             return null;
         }
     }
@@ -291,7 +291,7 @@ final class PassengerSeatView {
                 try {
                     AnimationUtils.playAnimation(m, pose.slot(), pose.animId(), true, store);
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Pose assise du mannequin de %s impossible", p.name);
+                    LOGGER.at(Level.WARNING).withCause(e).log("Seated pose of the mannequin of %s failed", p.name);
                 }
             }
         }
@@ -307,7 +307,7 @@ final class PassengerSeatView {
         try {
             ViewFilter.clear(p.ref);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Règle du corps du passager %s non retirée", p.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Body rule of passenger %s not removed", p.name);
         }
         dispose(store, s, false);
     }
@@ -333,7 +333,7 @@ final class PassengerSeatView {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Vue du siège non supprimée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Seat view not removed");
         }
     }
 
@@ -365,10 +365,10 @@ final class PassengerSeatView {
                     if (ref != null && ref.isValid()) {
                         ViewFilter.clear(ref);
                         store.removeEntity(ref, RemoveReason.REMOVE);
-                        LOGGER.at(Level.INFO).log("Entité de vue de siège restée dans le monde supprimée (%s)", id);
+                        LOGGER.at(Level.INFO).log("Seat view entity left in the world removed (%s)", id);
                     }
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Entité de vue de siège restée dans le monde non supprimée");
+                    LOGGER.at(Level.WARNING).withCause(e).log("Seat view entity left in the world not removed");
                 }
             }
         }

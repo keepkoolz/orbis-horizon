@@ -176,7 +176,7 @@ final class KnownStations {
             }
             fromBson(BsonDocument.parse(Files.readString(file, StandardCharsets.UTF_8)));
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("known-stations.json illisible, stations connues oubliées");
+            LOGGER.at(Level.WARNING).withCause(e).log("known-stations.json unreadable, known stations forgotten");
             personal.clear();
             shared.clear();
             try {
@@ -184,7 +184,7 @@ final class KnownStations {
                     Files.move(file, file.resolveSibling(file.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
                 }
             } catch (IOException | RuntimeException e2) {
-                LOGGER.at(Level.WARNING).withCause(e2).log("Impossible de renommer known-stations.json en .bad");
+                LOGGER.at(Level.WARNING).withCause(e2).log("Cannot rename known-stations.json to .bad");
             }
         }
     }
@@ -209,7 +209,7 @@ final class KnownStations {
                 Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Écriture de known-stations.json impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Cannot write known-stations.json");
         }
     }
 

@@ -81,14 +81,14 @@ final class TransitFare {
             }
             List<ItemStack> cost = List.of(new ItemStack(pay.itemId(), pay.quantity()));
             if (!inv.canRemoveItemStacks(cost)) {
-                LOGGER.at(Level.WARNING).log("Billet : retrait du prix impossible malgré les comptes");
+                LOGGER.at(Level.WARNING).log("Ticket: cannot withdraw the price despite the counts");
                 player.sendMessage(Texts.t("transit.fare.failed"));
                 return null;
             }
             inv.removeItemStacks(cost);
             return pay;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Billet : prélèvement en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Ticket: charge failed");
             Telemetry.error("transit", e, null, null);
             try {
                 player.sendMessage(Texts.t("transit.fare.failed"));
@@ -101,11 +101,13 @@ final class TransitFare {
 
     /**
      * Charges the chooser for a destination about to be queued on the station and adds it (same results as
-     * StationQueue.addTo). Nothing is taken unless the destination would really be ADDED. World thread.
+     * StationQueue.addTo). Nothing is taken unless the destination would really be ADDED. With the fare switched off
+     * (TransitSettings.fareEnabled), the destination is queued without payment. World thread.
      */
     static StationQueue.EnqueueResult addPaid(TransitNetwork.Station s, String targetName, PlayerRef chooser,
                                               Store<EntityStore> store, Ref<EntityStore> ref) {
         TransitNetwork net = TransitNetwork.get();
+        if (!TransitSettings.fareEnabled()) return net.queueEnqueue(s, targetName, null);
         StationQueue.EnqueueResult sim;
         synchronized (net) {
             sim = StationQueue.addTo(new ArrayList<>(s.queue), s.name, targetName);
@@ -122,7 +124,7 @@ final class TransitFare {
                 chooser.sendMessage(Texts.t("transit.fare.paid")
                         .param("price", Message.raw(pay.quantity() + " ").insert(itemName(pay.itemId()))));
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Billet : message de paiement non envoyé");
+                LOGGER.at(Level.WARNING).withCause(e).log("Ticket: payment message not sent");
             }
         }
         return r;
@@ -142,7 +144,7 @@ final class TransitFare {
                 refund(e.getValue(), names.getOrDefault(e.getKey(), e.getKey()));
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Billet : remboursements de la station retirée en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Ticket: refunds of the removed station failed");
         }
     }
 
@@ -186,12 +188,12 @@ final class TransitFare {
                 try {
                     giveBack(target, p, "transit.fare.refunded", "transit.fare.refundedDropped", name);
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Billet : remboursement en échec, noté pour plus tard");
+                    LOGGER.at(Level.WARNING).withCause(e).log("Ticket: refund failed, noted for later");
                     refundOffline(p);
                 }
             });
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Billet : remboursement en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Ticket: refund failed");
             refundOffline(p);
         }
     }
@@ -207,7 +209,7 @@ final class TransitFare {
     /** Gives the item, drops what does not fit, tells the player. World thread of the player. */
     private static void giveBack(PlayerRef player, Payment p, String keyOk, String keyDropped, Message destination) {
         Ref<EntityStore> ref = player.getReference();
-        if (ref == null || !ref.isValid()) throw new IllegalStateException("joueur invalide");
+        if (ref == null || !ref.isValid()) throw new IllegalStateException("invalid player");
         Store<EntityStore> store = ref.getStore();
         ItemStack stack = new ItemStack(p.itemId(), p.quantity());
         ItemStack rest = stack;
@@ -217,7 +219,7 @@ final class TransitFare {
             rest = t != null ? t.getRemainder() : stack;
             gave = true;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Billet : objet non rendu, lâché au sol");
+            LOGGER.at(Level.WARNING).withCause(e).log("Ticket: item not returned, dropped on the ground");
         }
         Message msg;
         if (rest != null && !rest.isEmpty()) {
@@ -228,7 +230,7 @@ final class TransitFare {
             } catch (RuntimeException e) {
                 if (!gave) throw e; // nothing was given: the caller notes the refund in the file
                 // Part of the stack is already given: never fall back to the file (it would refund twice).
-                LOGGER.at(Level.WARNING).withCause(e).log("Billet : reste du remboursement non lâché au sol");
+                LOGGER.at(Level.WARNING).withCause(e).log("Ticket: rest of the refund not dropped on the ground");
                 Telemetry.error("transit", e, null, null);
             }
             msg = Texts.t(keyDropped);
@@ -239,7 +241,7 @@ final class TransitFare {
         try {
             player.sendMessage(destination != null ? msg.param("name", destination) : msg);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Billet : message de remboursement non envoyé");
+            LOGGER.at(Level.WARNING).withCause(e).log("Ticket: refund message not sent");
         }
     }
 
@@ -256,16 +258,16 @@ final class TransitFare {
                         PENDING.add(new Payment(UUID.fromString(d.getString("player").getValue()),
                                 d.getString("item").getValue(), d.getInt32("qty").getValue()));
                     } catch (RuntimeException e) {
-                        LOGGER.at(Level.WARNING).withCause(e).log("Remboursement illisible dans refunds.json, ignoré");
+                        LOGGER.at(Level.WARNING).withCause(e).log("Unreadable refund in refunds.json, ignored");
                     }
                 }
             } catch (IOException | RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("refunds.json illisible, renommé en .bad");
+                LOGGER.at(Level.WARNING).withCause(e).log("refunds.json unreadable, renamed to .bad");
                 PENDING.clear();
                 try {
                     Files.move(file, file.resolveSibling(file.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
                 } catch (IOException e2) {
-                    LOGGER.at(Level.WARNING).withCause(e2).log("Impossible de renommer refunds.json en .bad");
+                    LOGGER.at(Level.WARNING).withCause(e2).log("Cannot rename refunds.json to .bad");
                 }
             }
         }
@@ -327,13 +329,13 @@ final class TransitFare {
                     try {
                         giveBack(player, p, "transit.fare.refundedLater", "transit.fare.refundedDropped", null);
                     } catch (RuntimeException e) {
-                        LOGGER.at(Level.WARNING).withCause(e).log("Billet : remboursement différé en échec, noté pour plus tard");
+                        LOGGER.at(Level.WARNING).withCause(e).log("Ticket: deferred refund failed, noted for later");
                         refundOffline(p);
                     }
                 }
             });
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Billet : remboursements à l'arrivée en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Ticket: refunds on arrival failed");
         }
     }
 
@@ -362,7 +364,7 @@ final class TransitFare {
                 Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Écriture de refunds.json impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Cannot write refunds.json");
         }
     }
 }

@@ -169,7 +169,7 @@ final class GliderJump {
                 }
             } catch (RuntimeException ex) {
                 PENDING.remove(uuid, pending);
-                LOGGER.at(Level.WARNING).withCause(ex).log("Saut en glider : décompte en échec");
+                LOGGER.at(Level.WARNING).withCause(ex).log("Glider jump: countdown failed");
             }
         }
     }
@@ -207,7 +207,7 @@ final class GliderJump {
         try {
             EventTitleUtil.hideEventTitleFromPlayer(pr, fade);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Saut en glider : titre non masqué");
+            LOGGER.at(Level.WARNING).withCause(e).log("Glider jump: title not hidden");
         }
     }
 
@@ -259,8 +259,8 @@ final class GliderJump {
                 pr.sendMessage(Texts.t("glider.cancelled"));
             }
         }
-        LOGGER.at(Level.INFO).log("Saut en glider : %s, %s", pr == null ? uuid.toString() : pr.getUsername(),
-                result == Result.DONE ? "éjecté" : result == Result.TOO_LOW ? "refusé (trop près du sol)" : "éjection impossible");
+        LOGGER.at(Level.INFO).log("Glider jump: %s, %s", pr == null ? uuid.toString() : pr.getUsername(),
+                result == Result.DONE ? "ejected" : result == Result.TOO_LOW ? "refused (too close to the ground)" : "ejection failed");
     }
 
     private static void poll(Store<EntityStore> store, Ref<EntityStore> ref, UUID uuid) {
@@ -279,7 +279,7 @@ final class GliderJump {
             }
             onSlotChange(store, ref, uuid, slot, hotbar.getInventory().getItemStack((short) slot));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Saut en glider : lecture de l'emplacement en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Glider jump: slot read failed");
         }
     }
 
@@ -296,7 +296,7 @@ final class GliderJump {
         }
         PlayerRef pr = store.getComponent(ref, PlayerRef.getComponentType());
         PENDING.put(uuid, new Pending(ref, store.getExternalData().getWorld(), slot, System.currentTimeMillis()));
-        LOGGER.at(Level.INFO).log("Saut en glider : %s a pris un glider en main (emplacement %d)",
+        LOGGER.at(Level.INFO).log("Glider jump: %s took a glider in hand (slot %d)",
                 pr == null ? uuid.toString() : pr.getUsername(), slot + 1);
     }
 }

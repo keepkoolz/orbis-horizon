@@ -135,7 +135,7 @@ final class AirshipDesk {
             } catch (RuntimeException ex) {
                 PENDING.remove(me.getKey());
                 com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(ex)
-                        .log("Carte du bureau : ordre abandonné");
+                        .log("Desk map: order abandoned");
             }
         }
     }

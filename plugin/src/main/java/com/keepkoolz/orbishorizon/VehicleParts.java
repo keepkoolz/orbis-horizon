@@ -126,7 +126,7 @@ final class VehicleParts {
             }
         }
         if (g.failed > 0) {
-            LOGGER.at(Level.WARNING).log("Parties de modèle : %d sur %d non créées pour %s, le vol continue sans elles", g.failed,
+            LOGGER.at(Level.WARNING).log("Model parts: %d of %d not created for %s, the flight continues without them", g.failed,
                     observer != null ? 2 * ids.size() : ids.size(), baseId);
         }
         return g;
@@ -151,7 +151,7 @@ final class VehicleParts {
                     new MountedComponent(host, new Vector3f(), MountController.Minecart));
             return part;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Partie de modèle %s impossible", modelId);
+            LOGGER.at(Level.WARNING).withCause(e).log("Model part %s failed", modelId);
             return null;
         }
     }
@@ -241,7 +241,7 @@ final class VehicleParts {
                     store.removeEntity(p, RemoveReason.REMOVE);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Partie de modèle non supprimée");
+                LOGGER.at(Level.WARNING).withCause(e).log("Model part not removed");
             }
         }
         refs.clear();
@@ -259,10 +259,10 @@ final class VehicleParts {
                     if (ref != null && ref.isValid()) {
                         ViewFilter.clear(ref);
                         store.removeEntity(ref, RemoveReason.REMOVE);
-                        LOGGER.at(Level.INFO).log("Partie de modèle %d%s restée dans le monde supprimée", k, obs ? " (observation)" : "");
+                        LOGGER.at(Level.INFO).log("Model part %d%s left in the world removed", k, obs ? " (observer)" : "");
                     }
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Partie de modèle %d restée dans le monde non supprimée", k);
+                    LOGGER.at(Level.WARNING).withCause(e).log("Model part %d left in the world not removed", k);
                 }
             }
         }
@@ -277,10 +277,10 @@ final class VehicleParts {
                 if (r != null) {
                     out.add(r);
                 } else {
-                    LOGGER.at(Level.WARNING).log("Partie de modèle %s non créée", id);
+                    LOGGER.at(Level.WARNING).log("Model part %s not created", id);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Partie de modèle %s impossible", id);
+                LOGGER.at(Level.WARNING).withCause(e).log("Model part %s failed", id);
             }
         }
         return out;

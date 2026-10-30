@@ -171,14 +171,14 @@ final class CampRespawn {
                 POINTS.put(key(p.player(), p.world()), p);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("camp-respawn.json illisible, points de campement oubliés");
+            LOGGER.at(Level.WARNING).withCause(e).log("camp-respawn.json unreadable, camp points forgotten");
             POINTS.clear();
             try {
                 if (file != null && Files.isRegularFile(file)) {
                     Files.move(file, file.resolveSibling(file.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
                 }
             } catch (IOException | RuntimeException e2) {
-                LOGGER.at(Level.WARNING).withCause(e2).log("Impossible de renommer camp-respawn.json en .bad");
+                LOGGER.at(Level.WARNING).withCause(e2).log("Cannot rename camp-respawn.json to .bad");
             }
         }
     }
@@ -199,7 +199,7 @@ final class CampRespawn {
                 Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Écriture de camp-respawn.json impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Cannot write camp-respawn.json");
         }
     }
 
@@ -239,7 +239,7 @@ final class CampRespawn {
                 return text;
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Nom du point de réapparition non traduit");
+            LOGGER.at(Level.WARNING).withCause(e).log("Respawn point name not translated");
         }
         return switch (key) {
             case "bivouac" -> "Bivouac";
@@ -270,7 +270,7 @@ final class CampRespawn {
                 Vector3i spot = freeSpotNear(bedPos, 2, p -> standable(r, p));
                 if (spot == null) {
                     // Safest: record nothing (a point inside the bed would trap the player); the previous points stay as they are.
-                    LOGGER.at(Level.WARNING).log("Campement : aucune case libre près du lit en %d, %d, %d, point de réapparition non enregistré",
+                    LOGGER.at(Level.WARNING).log("Camp: no free cell near the bed at %d, %d, %d, respawn point not saved",
                             bedPos.x, bedPos.y, bedPos.z);
                     return;
                 }
@@ -302,7 +302,7 @@ final class CampRespawn {
             kept.add(new PlayerRespawnPointData(new Vector3i(bedPos), pos, point.name(), yaw));
             data.setRespawnPoints(kept.toArray(new PlayerRespawnPointData[0]));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Campement : point de réapparition non enregistré");
+            LOGGER.at(Level.WARNING).withCause(e).log("Camp: respawn point not saved");
         }
     }
 
@@ -336,7 +336,7 @@ final class CampRespawn {
                 }
             });
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Campement : points de réapparition non remis");
+            LOGGER.at(Level.WARNING).withCause(e).log("Camp: respawn points not restored");
         }
     }
 
@@ -369,12 +369,12 @@ final class CampRespawn {
                 }
                 next.add(new PlayerRespawnPointData(new Vector3i(p.block()), new Vector3d(p.pos()), p.name(), p.yaw()));
                 data.setRespawnPoints(next.toArray(new PlayerRespawnPointData[0]));
-                LOGGER.at(Level.INFO).log("Campement : point de réapparition remis pour %s en %d, %d, %d", pr.getUsername(),
+                LOGGER.at(Level.INFO).log("Camp: respawn point restored for %s at %d, %d, %d", pr.getUsername(),
                         p.block().x, p.block().y, p.block().z);
                 return;
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Campement : point de réapparition non remis");
+            LOGGER.at(Level.WARNING).withCause(e).log("Camp: respawn point not restored");
         }
     }
 
@@ -422,7 +422,7 @@ final class CampRespawn {
                     WATCH.put(ref, new Watch(world, System.currentTimeMillis()));
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Campement : réapparition non surveillée");
+                LOGGER.at(Level.WARNING).withCause(e).log("Camp: respawn not monitored");
             }
         }
     }
@@ -485,7 +485,7 @@ final class CampRespawn {
                 }
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Campement : réapparition non vérifiée");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Camp: respawn not checked");
         }
     }
 
@@ -565,7 +565,7 @@ final class CampRespawn {
                 guardPlayer(world, pr);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Campement : surveillance des points de réapparition en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Camp: respawn point monitoring failed");
         }
     }
 
@@ -605,7 +605,7 @@ final class CampRespawn {
                     if (rb != null && rb.getOwnerUUID() == null && (camp == null || !camp.block().equals(q.getBlockPosition()))) {
                         rb.setOwnerUUID(pr.getUuid()); // the game cleared it when it removed the point
                     }
-                    LOGGER.at(Level.INFO).log("Campement : point de réapparition remis pour %s en %d, %d, %d", pr.getUsername(),
+                    LOGGER.at(Level.INFO).log("Camp: respawn point restored for %s at %d, %d, %d", pr.getUsername(),
                             q.getBlockPosition().x, q.getBlockPosition().y, q.getBlockPosition().z);
                 }
                 cur = next.toArray(new PlayerRespawnPointData[0]);
@@ -613,7 +613,7 @@ final class CampRespawn {
             }
             SNAPSHOT.put(k, copyOf(cur));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Campement : points de réapparition non vérifiés");
+            LOGGER.at(Level.WARNING).withCause(e).log("Camp: respawn points not checked");
         }
     }
 
@@ -675,7 +675,7 @@ final class CampRespawn {
             Vector3i center = new Vector3i((int) Math.floor(camp.pos().x), (int) Math.floor(camp.pos().y), (int) Math.floor(camp.pos().z));
             Vector3i spot = freeSpotNear(center, 8, p -> standable(r, p));
             if (spot == null) {
-                LOGGER.at(Level.INFO).log("Campement : point obstrué, aucune case libre à 8 blocs, choix du jeu gardé");
+                LOGGER.at(Level.INFO).log("Camp: blocked point, no free cell within 8 blocks, game choice kept");
                 return;
             }
             com.hypixel.hytale.math.vector.Rotation3f look = new com.hypixel.hytale.math.vector.Rotation3f();
@@ -683,9 +683,9 @@ final class CampRespawn {
             store.putComponent(ref, com.hypixel.hytale.server.core.modules.entity.teleport.Teleport.getComponentType(),
                     com.hypixel.hytale.server.core.modules.entity.teleport.Teleport.createForPlayer(
                             new Vector3d(spot.x + 0.5, spot.y + 0.1, spot.z + 0.5), look));
-            LOGGER.at(Level.INFO).log("Campement : point obstrué, joueur placé en %d, %d, %d", spot.x, spot.y, spot.z);
+            LOGGER.at(Level.INFO).log("Camp: blocked point, player placed at %d, %d, %d", spot.x, spot.y, spot.z);
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Campement : point obstrué non traité");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Camp: blocked point not handled");
         }
     }
 }

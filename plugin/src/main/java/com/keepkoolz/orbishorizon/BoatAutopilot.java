@@ -351,12 +351,12 @@ final class BoatAutopilot {
         try {
             UUID id = station != null ? station.masterUuid : null;
             Object[] look = null;
-            String why = "chef de gare sans identifiant";
+            String why = "station master without id";
             if (id != null) {
                 Ref<EntityStore> ref = world.getEntityStore().getRefFromUUID(id);
                 look = AirshipCrew.lookOf(store, ref);
-                why = ref == null || !ref.isValid() ? "chef de gare absent du monde (section inactive ou non chargée)"
-                        : "chef de gare sans modèle ou sans apparence";
+                why = ref == null || !ref.isValid() ? "station master missing from the world (section inactive or not loaded)"
+                        : "station master without model or appearance";
             }
             if (look != null) {
                 LOOKS.put(station, look);
@@ -364,12 +364,12 @@ final class BoatAutopilot {
             }
             Object[] kept = station != null ? LOOKS.get(station) : null;
             if (log) {
-                LOGGER.at(Level.INFO).log("Navette : apparence du pilote lue sur le chef de %s impossible (%s), %s",
-                        station != null ? station.name : "?", why, kept != null ? "apparence mémorisée utilisée" : "aucune apparence mémorisée");
+                LOGGER.at(Level.INFO).log("Shuttle: cannot read pilot appearance from the station master of %s (%s), %s",
+                        station != null ? station.name : "?", why, kept != null ? "stored appearance used" : "no stored appearance");
             }
             return kept;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette : apparence du chef de gare illisible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle: unreadable station master appearance");
             return null;
         }
     }
@@ -404,7 +404,7 @@ final class BoatAutopilot {
             if ((st.from != null || st.to != null) && now >= st.lookRetryMs && (f.crewMan == null || f.crewMan.ref == null || !f.crewMan.ref.isValid())) {
                 st.lookRetryMs = now + LOOK_RETRY_MS; // the shuttle has no (valid) pilot mannequin: try again
                 if (f.crewMan != null) {
-                    LOGGER.at(Level.WARNING).log("Navette %s : mannequin du pilote invalide (entité perdue), recréation", f.id);
+                    LOGGER.at(Level.WARNING).log("Shuttle %s: pilot mannequin invalid (entity lost), recreating", f.id);
                     AirshipCrew.removeMannequin(store, f.crewMan);
                     f.crewMan = null;
                 }
@@ -439,7 +439,7 @@ final class BoatAutopilot {
                 }
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette : erreur dans le tick de %s", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle: error in tick of %s", f.id);
             Telemetry.error("transit", e, Telemetry.kindId(f.kind), st.phase.name());
         }
     }
@@ -448,7 +448,7 @@ final class BoatAutopilot {
                              ShuttleState st, double dt, long now) {
         List<int[]> wps = st.waypoints;
         if (wps.isEmpty()) {
-            LOGGER.at(Level.WARNING).log("Navette %s : aucun point de passage", f.id);
+            LOGGER.at(Level.WARNING).log("Shuttle %s: no waypoint", f.id);
             rescue(store, f, st);
             return;
         }
@@ -603,7 +603,7 @@ final class BoatAutopilot {
             }
             double k = backOff(test, c.x, c.z, f.theta, target);
             if (k < 0) {
-                LOGGER.at(Level.INFO).log("Navette %s : coque coincée en (%.1f, %.1f), aucun recul possible", f.id, c.x, c.z);
+                LOGGER.at(Level.INFO).log("Shuttle %s: hull stuck at (%.1f, %.1f), no way to back up", f.id, c.x, c.z);
                 return;
             }
             st.backX = c.x + Math.sin(f.theta) * k;
@@ -619,9 +619,9 @@ final class BoatAutopilot {
             st.slide = ShuttleState.Slide.BACK;
             f.yawRate = 0;
             f.yawAcc = 0;
-            LOGGER.at(Level.INFO).log("Navette %s : coque coincée en (%.1f, %.1f), recul de %.0f bloc(s) avant de tourner", f.id, c.x, c.z, k);
+            LOGGER.at(Level.INFO).log("Shuttle %s: hull stuck at (%.1f, %.1f), backing up %.0f block(s) before turning", f.id, c.x, c.z, k);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette %s : recul d'une coque coincée en échec", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle %s: backing up a stuck hull failed", f.id);
             Telemetry.error("transit", e, Telemetry.kindId(f.kind), st.phase.name());
         }
     }
@@ -672,7 +672,7 @@ final class BoatAutopilot {
                     st.shifts++;
                     st.shiftTry = 0;
                     st.turning = true;
-                    LOGGER.at(Level.INFO).log("Navette %s : obstacle à %.0f blocs, déport de %.0f blocs vers (%d, %d)", f.id, hit[0],
+                    LOGGER.at(Level.INFO).log("Shuttle %s: obstacle at %.0f blocks, detour of %.0f blocks towards (%d, %d)", f.id, hit[0],
                             LATERALS[n / 2], col[0], col[1]);
                     return true;
                 }
@@ -686,7 +686,7 @@ final class BoatAutopilot {
             }
             return false;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette %s : anticipation d'obstacle en échec", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle %s: obstacle anticipation failed", f.id);
             return false;
         }
     }
@@ -708,7 +708,7 @@ final class BoatAutopilot {
         st.avoidHold = true;
         st.shiftTry = 0;
         st.shifts = 0;
-        LOGGER.at(Level.INFO).log("Navette %s : aucun déport libre, nouvelle route anticipée (%s)", f.id, AirshipManager.describeCell(world, cell));
+        LOGGER.at(Level.INFO).log("Shuttle %s: no free detour, new route planned ahead (%s)", f.id, AirshipManager.describeCell(world, cell));
         reroute(world, f, st, false);
         return true;
     }
@@ -748,7 +748,7 @@ final class BoatAutopilot {
                     st.slide = ShuttleState.Slide.OUT;
                     wps = out;
                 } else {
-                    LOGGER.at(Level.INFO).log("Navette %s : point de pré-amarrage de %s non dégagé, départ sans glissade", f.id, dep.name);
+                    LOGGER.at(Level.INFO).log("Shuttle %s: pre-berth point of %s not clear, departure without sliding", f.id, dep.name);
                 }
             }
         }
@@ -777,7 +777,7 @@ final class BoatAutopilot {
         int[] end = wps.get(wps.size() - 1);
         if (end[0] != berth.x || end[1] != berth.z) {
             st.arrivalFor = wps;
-            LOGGER.at(Level.INFO).log("Navette %s : la route de %s ne finit pas au centre d'amarrage, arrivée sans manœuvre par le travers",
+            LOGGER.at(Level.INFO).log("Shuttle %s: route to %s does not end at the docking centre, arrival without sideways manoeuvre",
                     f.id, arr.name);
             return;
         }
@@ -801,7 +801,7 @@ final class BoatAutopilot {
         st.arrivalFor = wps;
         double dBerth = Math.hypot(c.x - (berth.x + 0.5), c.z - (berth.z + 0.5));
         if (dBerth < BoatBerth.BERTH_STANDOFF) {
-            LOGGER.at(Level.INFO).log("Navette %s : déjà à moins de %d blocs du pont de %s, arrivée sans manœuvre par le travers", f.id,
+            LOGGER.at(Level.INFO).log("Shuttle %s: already within %d blocks of the berth of %s, arrival without sideways manoeuvre", f.id,
                     BoatBerth.BERTH_STANDOFF, arr.name);
         } else {
             List<int[]> out = BoatBerth.arriveRoute(wps, berth, pre, BoatBerth.BERTH_STANDOFF);
@@ -829,7 +829,7 @@ final class BoatAutopilot {
                 st.detoursSinceTrim = 0;
             } else {
                 st.berthFlip = null; // not trimmed: the heading is chosen at the berth
-                LOGGER.at(Level.INFO).log("Navette %s : point de pré-amarrage de %s non dégagé, arrivée sans manœuvre par le travers", f.id,
+                LOGGER.at(Level.INFO).log("Shuttle %s: pre-berth point of %s not clear, arrival without sideways manoeuvre", f.id,
                         arr.name);
             }
         }
@@ -848,7 +848,7 @@ final class BoatAutopilot {
         boolean flip = BoatBerth.preferFlipped(theta, BoatBerth.berthTheta(arr)) && berthFits(world, arr, true);
         st.berthFlip = flip;
         if (flip) {
-            LOGGER.at(Level.INFO).log("Navette vers %s : amarrage dans le sens d'arrivée (cap opposé au cap habituel)", arr.name);
+            LOGGER.at(Level.INFO).log("Shuttle to %s: docking in the arrival direction (heading opposite to the usual heading)", arr.name);
         }
         return flip;
     }
@@ -859,12 +859,12 @@ final class BoatAutopilot {
             DeployPlacement.Fault fault = DeployPlacement.steamboatFault(Deployables.STEAMBOAT_PUBLIC.shape(), BoatBerth.berthOrigin(s),
                     BoatBerth.berthRotation(s, flipped), DeployPlacement.worldState(world), 0);
             if (fault != null) {
-                LOGGER.at(Level.INFO).log("Station maritime %s : amarrage dans l'autre sens impossible (%s en %s)", s.name, fault.key(),
+                LOGGER.at(Level.INFO).log("Sea station %s: docking the other way not possible (%s at %s)", s.name, fault.key(),
                         fault.at());
             }
             return fault == null;
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station maritime %s : contrôle de l'amarrage dans l'autre sens en échec", s.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Sea station %s: check of docking the other way failed", s.name);
             Telemetry.error("transit", e, Telemetry.kindId(Deployables.STEAMBOAT_PUBLIC), null);
             return false;
         }
@@ -888,7 +888,7 @@ final class BoatAutopilot {
         st.detoursSinceTrim = 0;
         st.turning = true;
         markProgress(f, st, now);
-        LOGGER.at(Level.INFO).log("Navette %s : dernier tronçon vers le pré-amarrage bloqué, arrivée sans manœuvre par le travers", f.id);
+        LOGGER.at(Level.INFO).log("Shuttle %s: last leg to the pre-berth blocked, arrival without sideways manoeuvre", f.id);
         return true;
     }
 
@@ -960,7 +960,7 @@ final class BoatAutopilot {
             if (st.backRefused >= BACK_REFUSALS) {
                 st.slide = ShuttleState.Slide.NONE;
                 st.turning = true;
-                LOGGER.at(Level.INFO).log("Navette %s : recul refusé par la coque, abandonné", f.id);
+                LOGGER.at(Level.INFO).log("Shuttle %s: backing up refused by the hull, abandoned", f.id);
             }
         }
     }
@@ -990,13 +990,13 @@ final class BoatAutopilot {
             ShuttleNav.arrived(st); // the trip is kept, the pair is no longer incomplete
         }
         st.setPhase(ShuttleState.Phase.DOCKED, now);
-        LOGGER.at(Level.INFO).log("Navette : arrivée%s", st.to != null ? " à " + st.to.name : "");
+        LOGGER.at(Level.INFO).log("Shuttle: arrival%s", st.to != null ? " at " + st.to.name : "");
         ShuttleState.Listener l = st.listener;
         if (l != null) {
             try {
                 l.onArrived(f);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Navette : traitement de l'arrivée en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Shuttle: arrival handling failed");
                 Telemetry.error("transit", e, Telemetry.kindId(f.kind), st.phase.name());
             }
         }
@@ -1047,7 +1047,7 @@ final class BoatAutopilot {
             return;
         }
         if (stuck >= RESCUE_AFTER_MS) {
-            LOGGER.at(Level.INFO).log("Navette %s : aucun progrès depuis %d s", f.id, stuck / 1000);
+            LOGGER.at(Level.INFO).log("Shuttle %s: no progress for %d s", f.id, stuck / 1000);
             rescue(store, f, st);
             return;
         }
@@ -1065,7 +1065,7 @@ final class BoatAutopilot {
             return;
         }
         if (st.router == null && st.to == null) {
-            LOGGER.at(Level.INFO).log("Navette %s : nouvelle route impossible, ni station ni routeur", f.id);
+            LOGGER.at(Level.INFO).log("Shuttle %s: no new route possible, neither station nor router", f.id);
             return;
         }
         ShuttleState.Router r = st.router;
@@ -1124,16 +1124,16 @@ final class BoatAutopilot {
                 l.onRouteEnd(f);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette : fin de route en échec, retrait du vol");
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle: end of route failed, flight removed");
             Telemetry.error("transit", e, Telemetry.kindId(f.kind), st.phase.name());
         }
         AirshipManager am = AirshipManager.get();
         if (am.isActive(f)) {
             if (endAction(f.shuttle == st) == EndAction.END_SHUTTLE) {
-                am.endShuttle(store, f, "fin de route");
+                am.endShuttle(store, f, "end of route");
             } else if (!f.landing && !am.landImmediately(f)) {
                 // A landing the listener started is left to its retries; the voyage step keeps trying otherwise.
-                LOGGER.at(Level.INFO).log("Voyage %s : fin de route, pose sur place impossible pour l'instant", f.id);
+                LOGGER.at(Level.INFO).log("Voyage %s: end of route, placement on the spot not possible for now", f.id);
             }
         }
     }
@@ -1181,21 +1181,21 @@ final class BoatAutopilot {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette : secours en échec, retrait du vol");
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle: rescue failed, flight removed");
             Telemetry.error("transit", e, Telemetry.kindId(f.kind), st.phase.name());
         }
         AirshipManager am = AirshipManager.get();
         if (am.isActive(f)) {
             // No listener, or it did not end the flight: the flight never stays registered after a rescue.
             if (endAction(f.shuttle == st) == EndAction.END_SHUTTLE) {
-                LOGGER.at(Level.INFO).log("Navette %s : secours, vol retiré", f.id);
-                am.endShuttle(store, f, "secours");
+                LOGGER.at(Level.INFO).log("Shuttle %s: rescue, flight removed", f.id);
+                am.endShuttle(store, f, "rescue");
             } else if (f.voyage != null && f.voyage.backoff != null) {
                 // A voyage backing off: the listener sent it to its next back-off point (or it keeps trying where it is), no landing here.
-                LOGGER.at(Level.INFO).log("Voyage %s : secours pendant le repli, pas de pose sur place", f.id);
+                LOGGER.at(Level.INFO).log("Voyage %s: rescue during the fallback, no placement on the spot", f.id);
             } else if (!f.landing && !am.landImmediately(f)) {
                 // A landing the listener started (AirshipAutopilot.stop) is left to its retries; the voyage step keeps trying otherwise.
-                LOGGER.at(Level.INFO).log("Voyage %s : secours, pose sur place impossible pour l'instant", f.id);
+                LOGGER.at(Level.INFO).log("Voyage %s: rescue, placement on the spot not possible for now", f.id);
             }
         }
     }

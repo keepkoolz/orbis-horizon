@@ -227,7 +227,7 @@ final class TransitAutopilot {
                 }
             }
             default -> {
-                LOGGER.at(Level.WARNING).log("Phase %s non gérée, la montgolfière disparaît", t.phase);
+                LOGGER.at(Level.WARNING).log("Phase %s not handled, the balloon disappears", t.phase);
                 finish(store, world, f, t);
                 return;
             }
@@ -491,7 +491,7 @@ final class TransitAutopilot {
             EventTitleUtil.showEventTitleToPlayer(pr, Message.raw(dest.name), Message.raw("Orbis Horizon"),
                     com.hypixel.hytale.protocol.packets.interface_.EventTitleStyle.Major);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Titre d'arrivée non affiché");
+            LOGGER.at(Level.WARNING).withCause(e).log("Arrival title not shown");
             Telemetry.error("transit", e, null, null);
         }
     }
@@ -501,7 +501,7 @@ final class TransitAutopilot {
      * points (or put on the ground below their seat if there is none), and the flight ends. Nothing is placed in blocks.
      */
     private static void rescue(Store<EntityStore> store, World world, BalloonFlight f, TransitFlight t, TransitNetwork.Station dest) {
-        LOGGER.at(Level.WARNING).log("Montgolfière de transport sans progrès en %s : secours", f.entityPos);
+        LOGGER.at(Level.WARNING).log("Transport balloon making no progress at %s: rescue", f.entityPos);
         List<PlayerRef> people = new ArrayList<>();
         for (BalloonFlight.Passenger p : f.passengers) {
             PlayerRef pr = p.ref.isValid() ? store.getComponent(p.ref, PlayerRef.getComponentType()) : null;

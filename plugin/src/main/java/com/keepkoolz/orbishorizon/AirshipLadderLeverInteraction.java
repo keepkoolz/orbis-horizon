@@ -59,7 +59,7 @@ public class AirshipLadderLeverInteraction extends SimpleInstantInteraction {
                 }
             } catch (RuntimeException e) {
                 com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(e)
-                        .log("Levier d'échelle du dirigeable : échec");
+                        .log("Airship ladder lever: failed");
             }
         });
     }

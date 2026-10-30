@@ -61,7 +61,7 @@ public final class BurnerMigrationSystem extends RefSystem<ChunkStore> {
             f.setAccessible(true);
             return f;
         } catch (ReflectiveOperationException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Champ %s de ProcessingBenchBlock inaccessible", name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Field %s of ProcessingBenchBlock inaccessible", name);
             return null;
         }
     }
@@ -82,7 +82,7 @@ public final class BurnerMigrationSystem extends RefSystem<ChunkStore> {
         try {
             migrate(ref, buffer);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Brûleur : déplacement de l'ancien combustible impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Burner: moving the old fuel failed");
         }
     }
 
@@ -138,7 +138,7 @@ public final class BurnerMigrationSystem extends RefSystem<ChunkStore> {
         try {
             INPUT_FIELD.set(bench, merged);
         } catch (ReflectiveOperationException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Brûleur : conteneur d'entrée non remplaçable, l'ancien combustible reste dans l'ancien conteneur");
+            LOGGER.at(Level.WARNING).withCause(e).log("Burner: input container not replaceable, the old fuel stays in the old container");
             return;
         }
         // The moved stacks are removed from the old container (no duplicates). What found no room
@@ -147,7 +147,7 @@ public final class BurnerMigrationSystem extends RefSystem<ChunkStore> {
         for (ItemStack rest : left) {
             fuel.addItemStack(rest, false, false, false);
         }
-        LOGGER.at(Level.INFO).log("Ancien brûleur : %d objet(s) de combustible déplacé(s) vers les entrées (%d restés dans l'ancien conteneur)",
+        LOGGER.at(Level.INFO).log("Old burner: %d fuel item(s) moved to the inputs (%d left in the old container)",
                 moved, left.size());
     }
 

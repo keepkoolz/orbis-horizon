@@ -120,7 +120,7 @@ final class PreviewCommand extends AbstractCommandCollection {
                             + " x " + (int) sz + " for 30 s"));
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Aperçu non envoyé");
+                LOGGER.at(Level.WARNING).withCause(e).log("Preview not sent");
                 ctx.sendMessage(com.hypixel.hytale.server.core.Message.raw("Preview failed: " + e));
             }
         }
@@ -171,7 +171,7 @@ final class PreviewCommand extends AbstractCommandCollection {
             }
             String msg = "Wheel at " + x + ", " + y + ", " + z + " rotation " + facing + ": set " + ok + ", " + cells
                     + " wheel cell(s) found (70 expected)";
-            LOGGER.at(Level.INFO).log("Roue d'essai : %s", msg);
+            LOGGER.at(Level.INFO).log("Test wheel: %s", msg);
             ctx.sendMessage(com.hypixel.hytale.server.core.Message.raw(msg));
         }
     }

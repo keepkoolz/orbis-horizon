@@ -68,7 +68,7 @@ final class PilotMannequin {
             PlayerSkinComponent skin = store.getComponent(pilotRef, PlayerSkinComponent.getComponentType());
             TransformComponent ot = store.getComponent(observer, TransformComponent.getComponentType());
             if (mc == null || mc.getModel() == null || skin == null || ot == null) {
-                LOGGER.at(Level.INFO).log("Pilote %s : pas de modèle ou d'apparence, pas de mannequin de pilote", pilotUuid);
+                LOGGER.at(Level.INFO).log("Pilot %s: no model or appearance, no pilot mannequin", pilotUuid);
                 return null;
             }
             Model model = mc.getModel();
@@ -86,7 +86,7 @@ final class PilotMannequin {
             s.lastAnimMs = now;
             return s;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Mannequin du pilote impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot mannequin failed");
             return null;
         }
     }
@@ -123,7 +123,7 @@ final class PilotMannequin {
             if (!PassengerSeatView.valid(s.mannequin)) {
                 s.failed = true;
                 ViewFilter.clear(s.body);
-                LOGGER.at(Level.WARNING).log("Mannequin du pilote %s disparu : corps du pilote de nouveau visible", s.pilotUuid);
+                LOGGER.at(Level.WARNING).log("Pilot mannequin %s disappeared: pilot body visible again", s.pilotUuid);
                 return;
             }
             float yaw = Float.isNaN(yawIn) ? headYaw(store, pilotRef) : yawIn;
@@ -146,7 +146,7 @@ final class PilotMannequin {
                 AnimationUtils.playAnimation(s.mannequin, AnimationSlot.Movement, "Idle", true, store);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Mannequin du pilote : mise à jour en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot mannequin: update failed");
         }
     }
 
@@ -169,7 +169,7 @@ final class PilotMannequin {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Mannequin du pilote non supprimé");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot mannequin not removed");
         }
     }
 
@@ -183,10 +183,10 @@ final class PilotMannequin {
             if (ref != null && ref.isValid()) {
                 ViewFilter.clear(ref);
                 store.removeEntity(ref, RemoveReason.REMOVE);
-                LOGGER.at(Level.INFO).log("Mannequin de pilote resté dans le monde supprimé (%s)", vehicleUuid);
+                LOGGER.at(Level.INFO).log("Pilot mannequin left in the world removed (%s)", vehicleUuid);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Mannequin de pilote resté dans le monde non supprimé");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot mannequin left in the world not removed");
         }
     }
 

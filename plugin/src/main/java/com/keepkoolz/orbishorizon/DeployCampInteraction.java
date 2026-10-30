@@ -103,7 +103,7 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
         // The camp type comes from the prefab (sleeping bag, small or large tent): it gives the shape and the registry kind.
         Deployables.Kind kind = prefabPath != null ? Deployables.forPrefab(prefabPath) : null;
         if (kind == null || !kind.isTent()) {
-            LOGGER.at(Level.WARNING).log("Camping_DeployCamp: PrefabPath inattendu : %s", prefabPath);
+            LOGGER.at(Level.WARNING).log("Camping_DeployCamp: unexpected PrefabPath: %s", prefabPath);
             fail(context);
             return;
         }
@@ -117,7 +117,7 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
         try {
             shape = kind.shape();
         } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Camping_DeployCamp: forme de la tente illisible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Camping_DeployCamp: unreadable tent shape");
             Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
             fail(context);
             return;
@@ -127,7 +127,7 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
         ItemContainer heldContainer = context.getHeldItemContainer();
         CampTiers.Tier tier = held != null ? CampTiers.ofPack(held.getItemId()) : null;
         if (held == null || heldContainer == null || tier == null || !tier.kindId().equals(kind.id)) {
-            LOGGER.at(Level.WARNING).log("Camping_DeployCamp: objet tenu inattendu (%s)", held != null ? held.getItemId() : "aucun");
+            LOGGER.at(Level.WARNING).log("Camping_DeployCamp: unexpected held item (%s)", held != null ? held.getItemId() : "none");
             fail(context);
             return;
         }
@@ -152,14 +152,14 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
         // No deployment under water.
         Vector3i wet = BalloonManager.underLiquid(world, shape, origin, rotation);
         if (wet != null) {
-            LOGGER.at(Level.INFO).log("Campement refusé en (%d, %d, %d) : liquide en (%d, %d, %d)", origin.x, origin.y, origin.z, wet.x, wet.y, wet.z);
+            LOGGER.at(Level.INFO).log("Camp refused at (%d, %d, %d): liquid at (%d, %d, %d)", origin.x, origin.y, origin.z, wet.x, wet.y, wet.z);
             playerRef.sendMessage(Texts.t("deploy.underwater"));
             fail(context);
             return;
         }
         String zoneStation = StationZone.blockingStation(world, kind.id, shape, origin, rotation);
         if (zoneStation != null) {
-            LOGGER.at(Level.INFO).log("Campement refusé en (%d, %d, %d) : zone de la station %s", origin.x, origin.y, origin.z, zoneStation);
+            LOGGER.at(Level.INFO).log("Camp refused at (%d, %d, %d): station zone %s", origin.x, origin.y, origin.z, zoneStation);
             playerRef.sendMessage(Texts.t("deploy.stationZone").param("station", zoneStation));
             fail(context);
             return;
@@ -170,7 +170,7 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
             Vector3i p = c.rotated(rotation).add(origin);
             if (BalloonManager.outOfHeight(p.y)) {
                 // a cell outside the world's height range would be lost.
-                LOGGER.at(Level.INFO).log("Campement refusé en (%d, %d, %d) : la case (%d, %d, %d) dépasse la limite de hauteur",
+                LOGGER.at(Level.INFO).log("Camp refused at (%d, %d, %d): cell (%d, %d, %d) exceeds the height limit",
                         origin.x, origin.y, origin.z, p.x, p.y, p.z);
                 playerRef.sendMessage(Texts.t("deploy.heightLimit"));
                 fail(context);
@@ -179,8 +179,8 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
             boolean unloaded = !reader.hasStorageInMemory(p.x, p.y, p.z);
             BlockType bt = unloaded ? null : SectionBlocks.typeAt(reader, p.x, p.y, p.z);
             if (unloaded || (bt != null && bt.getMaterial() == BlockMaterial.Solid)) {
-                LOGGER.at(Level.INFO).log("Campement refusé en (%d, %d, %d) : %s bloquée en (%d, %d, %d)",
-                        origin.x, origin.y, origin.z, unloaded ? "chunk non chargé" : bt.getId(), p.x, p.y, p.z);
+                LOGGER.at(Level.INFO).log("Camp refused at (%d, %d, %d): %s blocked at (%d, %d, %d)",
+                        origin.x, origin.y, origin.z, unloaded ? "chunk not loaded" : bt.getId(), p.x, p.y, p.z);
                 playerRef.sendMessage(Texts.t("tent.noRoom"));
                 fail(context);
                 return;
@@ -190,7 +190,7 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
         // The pack is consumed from the held slot first: if that fails nothing is placed (no extra pack can be obtained).
         boolean swapped = heldContainer.removeItemStackFromSlot((short) context.getHeldItemSlot(), 1).succeeded();
         if (!swapped) {
-            LOGGER.at(Level.WARNING).log("Camping_DeployCamp: le sac n'a pas pu être retiré de la main, rien n'est posé");
+            LOGGER.at(Level.WARNING).log("Camping_DeployCamp: bag could not be removed from the hand, nothing placed");
             fail(context);
             return;
         }
@@ -216,9 +216,9 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
                         world.execute(() -> {
                             try {
                                 contents.restore(world, world.getEntityStore().getStore(), at, rotation);
-                                LOGGER.at(Level.INFO).log("Campement : %d objet(s) remis depuis le sac", count);
+                                LOGGER.at(Level.INFO).log("Camp: %d item(s) put back from the bag", count);
                             } catch (RuntimeException e) {
-                                LOGGER.at(Level.WARNING).withCause(e).log("Campement : contenu du sac non remis");
+                                LOGGER.at(Level.WARNING).withCause(e).log("Camp: bag contents not put back");
                                 Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
                             }
                         });
@@ -226,10 +226,10 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Campement : contenu du sac illisible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Camp: unreadable bag contents");
             Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
         }
-        LOGGER.at(Level.INFO).log("Campement « %s » posé en (%d, %d, %d) rotation %s par %s", kind.id, origin.x, origin.y, origin.z, rotation, playerRef.getUsername());
+        LOGGER.at(Level.INFO).log("Camp \"%s\" placed at (%d, %d, %d) rotation %s by %s", kind.id, origin.x, origin.y, origin.z, rotation, playerRef.getUsername());
     }
 
     private static void fail(InteractionContext context) {

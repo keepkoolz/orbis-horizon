@@ -152,7 +152,7 @@ final class GeneratedStations {
             landCells.addAll(lc);
             worlds.putAll(w);
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("generated-stations.json illisible, registre vide");
+            LOGGER.at(Level.WARNING).withCause(e).log("generated-stations.json unreadable, registry empty");
             Telemetry.error("worldgen", e, null, "load");
             entries.clear();
             portals.clear();
@@ -162,7 +162,7 @@ final class GeneratedStations {
             try {
                 Files.move(file, file.resolveSibling(file.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e2) {
-                LOGGER.at(Level.WARNING).withCause(e2).log("Impossible de renommer generated-stations.json en .bad");
+                LOGGER.at(Level.WARNING).withCause(e2).log("Cannot rename generated-stations.json to .bad");
             }
         }
     }
@@ -210,8 +210,8 @@ final class GeneratedStations {
     private static List<Point> convertCells(List<Point> stored, int oldSize, int newSize) {
         if (oldSize == newSize) return stored;
         if (oldSize <= 0 || oldSize % newSize != 0 || oldSize / newSize > MAX_CELL_FACTOR) {
-            LOGGER.at(Level.WARNING).log("generated-stations.json : taille de cellule " + oldSize
-                    + " non convertible en " + newSize + ", cellules gardées telles quelles");
+            LOGGER.at(Level.WARNING).log("generated-stations.json: cell size " + oldSize
+                    + " cannot be converted to " + newSize + ", cells kept as they are");
             return stored;
         }
         List<Point> out = new ArrayList<>();
@@ -258,7 +258,7 @@ final class GeneratedStations {
             cells.removeIf(p -> p.world.equals(world));
             landCells.removeIf(p -> p.world.equals(world));
             dropped = true;
-            LOGGER.at(Level.INFO).log("Stations générées : le monde %s a changé d'identité, %d élément(s) du registre abandonné(s)", world,
+            LOGGER.at(Level.INFO).log("Generated stations: world %s changed identity, %d registry item(s) dropped", world,
                     before - (entries.size() + portals.size() + cells.size() + landCells.size()));
         }
         worlds.put(world, uuid);
@@ -509,7 +509,7 @@ final class GeneratedStations {
                 Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Écriture de generated-stations.json impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Cannot write generated-stations.json");
             Telemetry.error("worldgen", e, null, "save");
         }
     }

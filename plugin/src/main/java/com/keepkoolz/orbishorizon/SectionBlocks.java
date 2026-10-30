@@ -112,7 +112,7 @@ final class SectionBlocks {
         } catch (RuntimeException e) {
             if (!componentFailureLogged) {
                 componentFailureLogged = true;
-                LOGGER.at(java.util.logging.Level.WARNING).withCause(e).log("Lecture d'un composant de bloc impossible");
+                LOGGER.at(java.util.logging.Level.WARNING).withCause(e).log("Cannot read a block component");
             }
             return null;
         }

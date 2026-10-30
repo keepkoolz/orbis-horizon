@@ -60,7 +60,7 @@ public class AirshipDeskInteraction extends SimpleInstantInteraction {
                 }
             } catch (RuntimeException ex) {
                 com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(ex)
-                        .log("Carte du bureau : fenêtre non ouverte");
+                        .log("Desk map: window not opened");
             }
         });
     }

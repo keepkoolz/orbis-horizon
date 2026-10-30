@@ -131,7 +131,7 @@ final class SeaChartBook {
             try {
                 l.run();
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Mémoire de la carte : rappel de changement en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Chart memory: change callback failed");
             }
         }
     }
@@ -280,7 +280,7 @@ final class SeaChartBook {
         try {
             BsonDocument doc = BsonDocument.parse(Files.readString(path, StandardCharsets.UTF_8));
             if (!doc.containsKey("version") || doc.getInt32("version").getValue() != VERSION) {
-                throw new IllegalStateException("version inconnue");
+                throw new IllegalStateException("unknown version");
             }
             for (var v : doc.getArray("worlds")) {
                 BsonDocument w = v.asDocument();
@@ -301,12 +301,12 @@ final class SeaChartBook {
                 }
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("sea-chart.json illisible, mémoire de la carte vide");
+            LOGGER.at(Level.WARNING).withCause(e).log("sea-chart.json unreadable, chart memory empty");
             worlds.clear();
             try {
                 Files.move(path, path.resolveSibling(path.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e2) {
-                LOGGER.at(Level.WARNING).withCause(e2).log("Impossible de renommer sea-chart.json en .bad");
+                LOGGER.at(Level.WARNING).withCause(e2).log("Cannot rename sea-chart.json to .bad");
             }
         }
     }
@@ -337,7 +337,7 @@ final class SeaChartBook {
                 write(f, json);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Écriture de sea-chart.json impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Cannot write sea-chart.json");
         }
     }
 

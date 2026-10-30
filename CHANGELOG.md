@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.12.4
+
+### Added
+
+- Operators can make public transit tickets free with the Paid ticket line of the configuration window. Station masters then ask for nothing, and tickets already paid stay refundable.
+- Operators can choose how much the mod writes to the server console, from everything down to nothing, with the Console logs line of the configuration window.
+
+### Changed
+
+- The fuel left in a hot air balloon, an airship or a steamboat shows in a small window at the bottom of the screen, above the stamina bar, instead of messages in the chat. It gives the time left and the number of fuel items, and says when the tank runs dry.
+- The mod writes its server log in English.
+
 ## v1.12.3
 
 ### Added

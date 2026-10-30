@@ -111,9 +111,9 @@ final class CaptainMap {
                     return;
                 }
             }
-            LOGGER.at(Level.WARNING).log("Voyage : aucun emplacement libre pour la carte du capitaine");
+            LOGGER.at(Level.WARNING).log("Voyage: no free slot for the captain's map");
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : carte du capitaine non donnée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: captain's map not given");
         }
     }
 
@@ -130,7 +130,7 @@ final class CaptainMap {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : carte du capitaine non retirée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: captain's map not removed");
         }
     }
 
@@ -147,7 +147,7 @@ final class CaptainMap {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : carte du capitaine non retirée à l'arrivée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: captain's map not removed on arrival");
         }
     }
 
@@ -180,11 +180,11 @@ final class CaptainMap {
                 try {
                     tickVoyage(store, f);
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Voyage : carte du capitaine en échec");
+                    LOGGER.at(Level.WARNING).withCause(e).log("Voyage: captain's map failed");
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : carte du capitaine en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: captain's map failed");
         }
     }
 
@@ -210,7 +210,7 @@ final class CaptainMap {
         try {
             sweepBox(store, pos);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : balayage des cartes au sol en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: sweep of maps on the ground failed");
         }
     }
 
@@ -221,7 +221,7 @@ final class CaptainMap {
             ItemComponent item = store.getComponent(e, ItemComponent.getComponentType());
             if (item != null && isMap(item.getItemStack())) {
                 store.removeEntity(e, RemoveReason.REMOVE);
-                LOGGER.at(Level.INFO).log("Voyage : carte du capitaine lâchée au sol, supprimée");
+                LOGGER.at(Level.INFO).log("Voyage: captain's map dropped on the ground, deleted");
             }
         }
     }
@@ -320,7 +320,7 @@ final class CaptainMap {
                 hideTitle(pr, GliderJump.JUMP_HIDE_FADE_S);
             }
             if (STOPPED.putIfAbsent(captain, Boolean.TRUE) == null) {
-                LOGGER.at(Level.INFO).log("Voyage : arrêt demandé par la carte du capitaine");
+                LOGGER.at(Level.INFO).log("Voyage: stop requested by the captain's map");
                 f.stop().run();
             }
         }
@@ -335,7 +335,7 @@ final class CaptainMap {
         try {
             EventTitleUtil.hideEventTitleFromPlayer(pr, fade);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : titre non masqué");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: title not hidden");
         }
     }
 }

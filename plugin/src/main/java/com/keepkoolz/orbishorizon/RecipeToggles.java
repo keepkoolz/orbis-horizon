@@ -64,7 +64,7 @@ final class RecipeToggles {
                         }
                         send(pr);
                     } catch (RuntimeException e) {
-                        LOGGER.at(Level.WARNING).withCause(e).log("Recettes du mod non synchronisées pour %s", pr.getUsername());
+                        LOGGER.at(Level.WARNING).withCause(e).log("Mod recipes not synced for %s", pr.getUsername());
                         Telemetry.error("recipes", e, null, null);
                     }
                 }
@@ -116,7 +116,7 @@ final class RecipeToggles {
                 pr.getPacketHandler().writeNoCache(new UpdateRecipes(UpdateType.Remove, null, remove.toArray(new String[0])));
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Liste des recettes non envoyée à %s", pr.getUsername());
+            LOGGER.at(Level.WARNING).withCause(e).log("Recipe list not sent to %s", pr.getUsername());
             Telemetry.error("recipes", e, null, null);
         }
     }
@@ -151,7 +151,7 @@ final class RecipeToggles {
                     pr.sendMessage(Texts.t("config.recipeDisabled"));
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Recette désactivée : contrôle en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Disabled recipe: check failed");
                 Telemetry.error("recipes", e, null, null);
             }
         }

@@ -195,9 +195,6 @@ final class AirshipFlight {
     volatile boolean dry;
     /** The ship moved horizontally in the last travel sample, so fuel was burned (diagnostic). */
     volatile boolean burning;
-    /** Fuel warnings already sent (30 s and 10 s of travel left). */
-    boolean warned30;
-    boolean warned10;
     final AirshipFlight.Input input = new Input();
 
     /** Model currently shown (travelling, idle or off). */

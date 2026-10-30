@@ -109,13 +109,13 @@ final class AirshipAutopilot {
             }
             v.stopped = true;
             v.arrived = false; // a stop after a refused arrival is announced as a stop only
-            LOGGER.at(Level.INFO).log("Voyage : arrêt (%s)", key);
+            LOGGER.at(Level.INFO).log("Voyage: stop (%s)", key);
             AirshipPassengers.tell(f.world.getEntityStore().getStore(), f, key);
             v.phase = VoyageState.Phase.STOPPING;
             v.progressMs = 0;
             AirshipManager.get().startLanding(f, false);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : arrêt impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: stop failed");
             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
@@ -164,14 +164,14 @@ final class AirshipAutopilot {
                 return true;
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : garde du rappel en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: recall guard failed");
             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
         v.ashore = true;
         v.phase = VoyageState.Phase.ASHORE;
         v.progressMs = 0;
         v.ashoreGroundWaitMs = 0;
-        LOGGER.at(Level.INFO).log("Voyage : capitaine à terre, le dirigeable descend");
+        LOGGER.at(Level.INFO).log("Voyage: captain ashore, the airship descends");
         return true;
     }
 
@@ -191,7 +191,7 @@ final class AirshipAutopilot {
                 v.ashoreGroundWaitMs = now;
             }
             if (now - v.ashoreGroundWaitMs >= CHUNK_WAIT_MS) {
-                LOGGER.at(Level.INFO).log("Voyage : sol inconnu sous l'échelle, pose sur place");
+                LOGGER.at(Level.INFO).log("Voyage: unknown ground under the ladder, landing in place");
                 finishAshore(am, f, v);
                 return;
             }
@@ -208,7 +208,7 @@ final class AirshipAutopilot {
         double before = f.pos.y;
         am.move(world, f, hull, new Vector3d(f.pos.x, f.pos.y - dy, f.pos.z), f.theta, now);
         if (f.pos.y > before - 1e-9) {
-            LOGGER.at(Level.INFO).log("Voyage : descente arrêtée par un obstacle, pose ici");
+            LOGGER.at(Level.INFO).log("Voyage: descent stopped by an obstacle, landing here");
             finishAshore(am, f, v);
         }
     }
@@ -272,7 +272,7 @@ final class AirshipAutopilot {
             am.updateThrust(store, f, now);
             watchdog(am, f, v, now);
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : erreur dans le tick du dirigeable %s", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: error in the tick of airship %s", f.id);
             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
@@ -298,7 +298,7 @@ final class AirshipAutopilot {
             return;
         }
         if (v.retries >= VoyageState.MAX_RETRIES) {
-            LOGGER.at(Level.INFO).log("Voyage : %d atterrissages refusés, pose sur place", v.retries);
+            LOGGER.at(Level.INFO).log("Voyage: %d landings refused, landing in place", v.retries);
             if (!v.forcedTried) {
                 v.forcedTried = true; // a single forced landing per voyage
                 if (AirshipManager.get().landImmediately(f)) {
@@ -461,7 +461,7 @@ final class AirshipAutopilot {
         v.phase = VoyageState.Phase.ARRIVE;
         v.arrived = true;
         v.progressMs = 0;
-        LOGGER.at(Level.INFO).log("Voyage : arrivé au-dessus de %s, début de l'atterrissage", v.destName);
+        LOGGER.at(Level.INFO).log("Voyage: arrived above %s, starting the landing", v.destName);
         am.startLanding(f, false);
     }
 
@@ -519,7 +519,7 @@ final class AirshipAutopilot {
         if (moved > PROGRESS_MOVE || Math.abs(f.theta - v.progressTheta) > Math.toRadians(1)) {
             markProgress(f, v, now);
         } else if (!v.stopped && !v.ashore && now - v.progressMs >= NO_PROGRESS_MS) {
-            LOGGER.at(Level.INFO).log("Voyage : aucun progrès depuis %d s", NO_PROGRESS_MS / 1000);
+            LOGGER.at(Level.INFO).log("Voyage: no progress for %d s", NO_PROGRESS_MS / 1000);
             markProgress(f, v, now);
             stop(f, "crew.voyage.blocked");
         }

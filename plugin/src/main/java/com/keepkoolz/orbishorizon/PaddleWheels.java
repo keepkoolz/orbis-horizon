@@ -210,7 +210,7 @@ final class PaddleWheels {
             int idx = SoundEvent.getAssetMap().getIndex(SPLASH_ID);
             if (idx <= 0 && !splashWarned) {
                 splashWarned = true;
-                LOGGER.at(Level.WARNING).log("Roues à aubes : son " + SPLASH_ID + " introuvable, pas d'éclaboussure");
+                LOGGER.at(Level.WARNING).log("Paddle wheels: sound " + SPLASH_ID + " not found, no splash");
             }
             splashIndex = idx;
         }
@@ -290,7 +290,7 @@ final class PaddleWheels {
         } catch (RuntimeException e) {
             if (nowMs - st.lastLogMs >= LOG_EVERY_MS) {
                 st.lastLogMs = nowMs;
-                LOGGER.at(Level.WARNING).withCause(e).log("Roues à aubes : mise à jour en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Paddle wheels: update failed");
                 Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
         }
@@ -317,7 +317,7 @@ final class PaddleWheels {
         } catch (RuntimeException e) {
             if (nowMs - st.lastLogMs >= LOG_EVERY_MS) {
                 st.lastLogMs = nowMs;
-                LOGGER.at(Level.WARNING).withCause(e).log("Roues à aubes : rejeu après changement de modèle en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Paddle wheels: replay after model change failed");
             }
         }
     }

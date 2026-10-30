@@ -98,7 +98,7 @@ final class BurnerFuel {
             f.setAccessible(true);
             return f;
         } catch (ReflectiveOperationException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Champ %s de ProcessingBenchBlock inaccessible", name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Field %s of ProcessingBenchBlock inaccessible", name);
             return null;
         }
     }
@@ -114,6 +114,21 @@ final class BurnerFuel {
     static boolean hasFuel(ProcessingBenchBlock bench) {
         ItemContainer f = bench.getInputContainer();
         return (f != null && !f.isEmpty()) || bench.getFuelTime() > 0;
+    }
+
+    /** Number of fuel items in the input of a bench in place. */
+    static int fuelItems(ProcessingBenchBlock bench) {
+        ItemContainer f = bench.getInputContainer();
+        int n = 0;
+        if (f != null) {
+            for (short s = 0; s < f.getCapacity(); s++) {
+                ItemStack st = f.getItemStack(s);
+                if (st != null && !st.isEmpty()) {
+                    n += st.getQuantity();
+                }
+            }
+        }
+        return n;
     }
 
     /** Seconds of burning left for a bench in place: current burn plus fuel items. */
@@ -476,7 +491,7 @@ final class BurnerFuel {
                 f.setInt(bench, v);
             }
         } catch (ReflectiveOperationException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Écriture de %s impossible", f.getName());
+            LOGGER.at(Level.WARNING).withCause(e).log("Writing %s failed", f.getName());
         }
     }
 
@@ -486,7 +501,7 @@ final class BurnerFuel {
                 f.setFloat(bench, v);
             }
         } catch (ReflectiveOperationException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Écriture de %s impossible", f.getName());
+            LOGGER.at(Level.WARNING).withCause(e).log("Writing %s failed", f.getName());
         }
     }
 }

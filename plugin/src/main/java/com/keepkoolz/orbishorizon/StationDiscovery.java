@@ -75,7 +75,7 @@ final class StationDiscovery {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Découverte des stations : balayage impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Station discovery: scan failed");
             Telemetry.error("station.discovery", e, null, "scan");
         }
     }

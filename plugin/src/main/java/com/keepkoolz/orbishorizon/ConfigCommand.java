@@ -31,7 +31,7 @@ final class ConfigCommand extends AbstractPlayerCommand {
             }
             p.getPageManager().openCustomPage(ref, store, new ConfigPage(player));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Page de configuration impossible à ouvrir pour %s", player.getUsername());
+            LOGGER.at(Level.WARNING).withCause(e).log("Cannot open the configuration page for %s", player.getUsername());
             Telemetry.error("config", e, null, null);
         }
     }

@@ -420,11 +420,11 @@ final class BoatQuay {
         TransitNetwork net = TransitNetwork.get();
         TransitNetwork.Station target = net.byName(world.getName(), destination);
         if (!Deployables.BOAT_STATION_KIND.equals(s.kind) || (target != null && !target.kind.equals(s.kind))) {
-            LOGGER.at(Level.INFO).log("File maritime de %s ignorée : stations de types différents", s.name);
+            LOGGER.at(Level.INFO).log("Sea station queue of %s ignored: stations of different types", s.name);
             return StationQueue.EnqueueResult.UNKNOWN;
         }
         if (target == null) {
-            LOGGER.at(Level.INFO).log("File maritime de %s : destination inconnue « %s »", s.name, destination);
+            LOGGER.at(Level.INFO).log("Sea station queue of %s: unknown destination \"%s\"", s.name, destination);
             if (chooser != null) chooser.sendMessage(Texts.t("transit.network.removed").param("name", TransitNetwork.normalize(destination)));
             return StationQueue.EnqueueResult.UNKNOWN;
         }
@@ -475,7 +475,7 @@ final class BoatQuay {
                     case APPROACH -> {
                         AirshipFlight f = q.flight;
                         if (!q.busy && (f == null || !AirshipManager.get().isActive(f))) {
-                            LOGGER.at(Level.WARNING).log("Station maritime %s : navette d'approche perdue, quai libéré", s.name);
+                            LOGGER.at(Level.WARNING).log("Sea station %s: approach shuttle lost, quay freed", s.name);
                             q.approachFailed(now, RETRY_MS);
                         }
                     }
@@ -498,7 +498,7 @@ final class BoatQuay {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Quais maritimes de %s : tick en échec", world.getName());
+            LOGGER.at(Level.WARNING).withCause(e).log("Sea quays of %s: tick failed", world.getName());
             Telemetry.error("transit", e, Telemetry.kindId(Deployables.STEAMBOAT_PUBLIC), null);
         }
     }
@@ -506,7 +506,7 @@ final class BoatQuay {
     private static void tickFree(Store<EntityStore> store, World world, TransitNetwork.Station s, Quay q, long now) {
         String head = TransitNetwork.get().queueHead(s);
         if (head != null && q.shouldGiveUp()) {
-            LOGGER.at(Level.WARNING).log("Station maritime %s : %d approches en échec, départ vers %s abandonné", s.name, q.approachFailures, head);
+            LOGGER.at(Level.WARNING).log("Sea station %s: %d approaches failed, departure to %s abandoned", s.name, q.approachFailures, head);
             q.approachFailures = 0;
             TransitFare.refund(TransitNetwork.get().queueRemoveFirst(s, head), head);
             broadcast(world, s, Texts.t("transit.boatQueue.giveUp").param("name", head));
@@ -522,7 +522,7 @@ final class BoatQuay {
             return; // the ocean numbers are not known yet: the head stays queued
         }
         if (action == QueueAction.DROP) {
-            LOGGER.at(Level.INFO).log("Station maritime %s : destination %s retirée ou hors d'atteinte, départ retiré de la file", s.name, head);
+            LOGGER.at(Level.INFO).log("Sea station %s: destination %s removed or out of reach, departure removed from the queue", s.name, head);
             TransitFare.refund(TransitNetwork.get().queueRemoveFirst(s, head), head);
             broadcast(world, s, Texts.t("transit.boatQueue.noRoute").param("name", head));
             return;
@@ -558,7 +558,7 @@ final class BoatQuay {
                 st.listener = LISTENER;
                 AirshipFlight f = am.launchShuttle(store, world, pivot, theta, st, List.of(), BoatAutopilot.masterLook(store, world, s));
                 if (f == null) {
-                    LOGGER.at(Level.WARNING).log("Station maritime %s : navette d'approche impossible", s.name);
+                    LOGGER.at(Level.WARNING).log("Sea station %s: approach shuttle not possible", s.name);
                     q.approachFailed(t, RETRY_MS);
                     return;
                 }
@@ -566,9 +566,9 @@ final class BoatQuay {
                 BoatAutopilot.startApproach(world, f, s);
                 q.flight = f;
                 q.approach();
-                LOGGER.at(Level.INFO).log("Station maritime %s : navette d'approche pour %s", s.name, head);
+                LOGGER.at(Level.INFO).log("Sea station %s: approach shuttle for %s", s.name, head);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Station maritime %s : navette d'approche en échec", s.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Sea station %s: approach shuttle failed", s.name);
                 Telemetry.error("transit", e, Telemetry.kindId(Deployables.STEAMBOAT_PUBLIC), null);
                 q.approachFailed(System.currentTimeMillis(), RETRY_MS);
             } finally {
@@ -583,7 +583,7 @@ final class BoatQuay {
         }
         Rotation moored = mooredRotation(world, s);
         if (moored == null) {
-            LOGGER.at(Level.INFO).log("Station maritime %s : navette à quai disparue, quai libéré", s.name);
+            LOGGER.at(Level.INFO).log("Sea station %s: docked shuttle gone, quay freed", s.name);
             MooredPilot.remove(world, BoatBerth.berthOrigin(s));
             q.cleared(now);
             return;
@@ -614,7 +614,7 @@ final class BoatQuay {
                 }
                 depart(store, world, s, q);
             } catch (IOException | RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Station maritime %s : départ en échec", s.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Sea station %s: departure failed", s.name);
                 Telemetry.error("transit", e, Telemetry.kindId(Deployables.STEAMBOAT_PUBLIC), null);
                 departFailed(world, s, q);
             } finally {
@@ -652,7 +652,7 @@ final class BoatQuay {
             StructureShape shape = Deployables.STEAMBOAT_PUBLIC.shape();
             setDown(store, AirshipPassengers.aboard(store, world, shape, origin, rotation, null), dropPoints(s), null);
             int removed = AirshipManager.get().unmoorShuttle(world, origin, rotation);
-            LOGGER.at(Level.INFO).log("Station maritime %s : navette retirée sans destination (%d blocs)", s.name, removed);
+            LOGGER.at(Level.INFO).log("Sea station %s: shuttle removed without destination (%d blocks)", s.name, removed);
             q.cleared(now);
             return;
         }
@@ -699,7 +699,7 @@ final class BoatQuay {
             // The riders were released by launchShuttle: the shuttle comes back in blocks and they are set down on the pier.
             am.pasteShuttle(store, world, origin, rotation);
             setDown(store, ridersOf(aboard, riders), dropPoints(s), null);
-            LOGGER.at(Level.WARNING).log("Station maritime %s : départ impossible", s.name);
+            LOGGER.at(Level.WARNING).log("Sea station %s: departure not possible", s.name);
             departFailed(world, s, q);
             return;
         }
@@ -720,7 +720,7 @@ final class BoatQuay {
         if (!f.riders.isEmpty()) {
             Telemetry.count("transit.boatTrip");
         }
-        LOGGER.at(Level.INFO).log("Station maritime %s : départ vers %s, %d passager(s), %d bloc(s) retirés", s.name, dest.name,
+        LOGGER.at(Level.INFO).log("Sea station %s: departure to %s, %d passenger(s), %d block(s) removed", s.name, dest.name,
                 f.riders.size(), removed);
     }
 
@@ -763,10 +763,10 @@ final class BoatQuay {
                 AirshipManager.get().unmoorShuttle(world, origin, rotation);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station maritime %s : navette non retirée après des départs en échec", s.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Sea station %s: shuttle not removed after failed departures", s.name);
             Telemetry.error("transit", e, Telemetry.kindId(Deployables.STEAMBOAT_PUBLIC), null);
         }
-        LOGGER.at(Level.WARNING).log("Station maritime %s : %d départs en échec, navette retirée et destination abandonnée", s.name, n);
+        LOGGER.at(Level.WARNING).log("Sea station %s: %d departures failed, shuttle removed and destination abandoned", s.name, n);
         q.cleared(now);
     }
 
@@ -820,7 +820,7 @@ final class BoatQuay {
                     dq.register(f.id);
                     st.setPhase(ShuttleState.Phase.HOLD, now); // waits out at sea, held still by BoatAutopilot
                     t.lastWaitMsgMs = 0;
-                    LOGGER.at(Level.INFO).log("Navette vers %s : ponton occupé, attente au large", t.dest.name);
+                    LOGGER.at(Level.INFO).log("Shuttle to %s: pier busy, waiting offshore", t.dest.name);
                 }
             }
             case HOLD -> {
@@ -842,7 +842,7 @@ final class BoatQuay {
                 List<int[]> back = leg(reversed(st.waypoints), LEAVE_DISTANCE);
                 if (back.size() < 2) {
                     forget(t, now);
-                    am.endShuttle(store, f, "départ du ponton");
+                    am.endShuttle(store, f, "departure from the pier");
                     return;
                 }
                 st.waypoints = back;
@@ -886,7 +886,7 @@ final class BoatQuay {
             long now = System.currentTimeMillis();
             Trip t = TRIPS.get(f.id);
             if (t == null) {
-                am.endShuttle(store, f, "navette sans trajet");
+                am.endShuttle(store, f, "shuttle without trip");
                 return;
             }
             if (t.role == Role.APPROACH) {
@@ -900,9 +900,9 @@ final class BoatQuay {
                     String head = TransitNetwork.get().queueHead(s);
                     broadcast(f.world, s, Texts.t("transit.boat.docked").param("name", head != null ? head : s.name)
                             .param("seconds", TransitConstants.COUNTDOWN_SECONDS));
-                    LOGGER.at(Level.INFO).log("Station maritime %s : navette à quai", s.name);
+                    LOGGER.at(Level.INFO).log("Sea station %s: docked shuttle", s.name);
                 } else {
-                    LOGGER.at(Level.WARNING).log("Station maritime %s : navette non posée au ponton", s.name);
+                    LOGGER.at(Level.WARNING).log("Sea station %s: shuttle not placed at the pier", s.name);
                     q.approachFailed(now, APPROACH_RETRY_MS);
                     broadcast(f.world, s, Texts.t("transit.boat.approachFailed"));
                 }
@@ -915,7 +915,7 @@ final class BoatQuay {
             }
             t.dropAtMs = now;
             f.shuttle.setPhase(ShuttleState.Phase.DROP, now);
-            LOGGER.at(Level.INFO).log("Navette arrivée à %s : %d passager(s) déposé(s)", t.dest.name, people.size());
+            LOGGER.at(Level.INFO).log("Shuttle arrived at %s: %d passenger(s) dropped off", t.dest.name, people.size());
         }
 
         @Override
@@ -945,12 +945,12 @@ final class BoatQuay {
                     pr.sendMessage(target != null ? Texts.t("transit.boat.rescue").param("name", target.name)
                             : Texts.t("transit.boat.rescueSurface"));
                 }
-                LOGGER.at(Level.WARNING).log("Navette vers %s : secours, %d passager(s) déposé(s) à %s", t.dest.name, people.size(),
+                LOGGER.at(Level.WARNING).log("Shuttle to %s: rescue, %d passenger(s) dropped off at %s", t.dest.name, people.size(),
                         target != null ? target.name : "la surface");
             } else if (t != null) {
                 broadcast(f.world, t.station, Texts.t("transit.boat.approachFailed"));
             }
-            am.endShuttle(store, f, "secours");
+            am.endShuttle(store, f, "rescue");
             if (t != null) {
                 forget(t, now);
             }
@@ -972,9 +972,9 @@ final class BoatQuay {
             }
             TransitFare.refund(t.payment, t.dest.name);
             t.payment = null;
-            LOGGER.at(Level.WARNING).log("Navette de %s vers %s : aucun couloir, %d passager(s) reposé(s) sur le ponton de départ",
+            LOGGER.at(Level.WARNING).log("Shuttle from %s to %s: no corridor, %d passenger(s) put back on the departure pier",
                     t.station.name, t.dest.name, people.size());
-            am.endShuttle(store, f, "départ sans couloir");
+            am.endShuttle(store, f, "departure without corridor");
             forget(t, System.currentTimeMillis());
         }
 
@@ -992,7 +992,7 @@ final class BoatQuay {
         public void onRouteEnd(AirshipFlight f) {
             Store<EntityStore> store = f.world.getEntityStore().getStore();
             long now = System.currentTimeMillis();
-            AirshipManager.get().endShuttle(store, f, "départ du ponton");
+            AirshipManager.get().endShuttle(store, f, "departure from the pier");
             Trip t = TRIPS.get(f.id);
             if (t != null) {
                 forget(t, now);
@@ -1019,14 +1019,14 @@ final class BoatQuay {
             try {
                 if (t.role == Role.APPROACH && t.station == removed) {
                     TRIPS.remove(t.f.id);
-                    am.endShuttle(store, t.f, "station retirée");
+                    am.endShuttle(store, t.f, "station removed");
                 } else if (t.role == Role.VOYAGE && t.dest == removed && am.isActive(t.f)) {
                     redirect(world, store, t);
                 } else if (t.role == Role.VOYAGE && t.station == removed && am.isActive(t.f)) {
                     rewriteStranded(world, t); // crash safety must not point to the removed pier
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Navette non traitée après le retrait de %s", removed.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Shuttle not handled after removal of %s", removed.name);
                 Telemetry.error("transit", e, Telemetry.kindId(Deployables.STEAMBOAT_PUBLIC), null);
             }
         }
@@ -1061,10 +1061,10 @@ final class BoatQuay {
             Vector3d centre = BoatBerth.berthCentre(removed);
             if (!areaLoaded(world, removed, centre)) {
                 if (!firstTry) {
-                    LOGGER.at(Level.WARNING).log("Navette à quai de %s : sections du ponton toujours absentes, retrait abandonné", removed.name);
+                    LOGGER.at(Level.WARNING).log("Docked shuttle of %s: pier sections still missing, removal abandoned", removed.name);
                     return;
                 }
-                LOGGER.at(Level.INFO).log("Navette à quai de %s : chargement des sections du ponton avant le retrait", removed.name);
+                LOGGER.at(Level.INFO).log("Docked shuttle of %s: loading pier sections before removal", removed.name);
                 int[] b = areaBox(removed, centre);
                 SectionBlocks.loadSections(world.getChunkStore(), b[0], b[1], b[2], b[3], b[4], b[5])
                         .whenComplete((v, e) -> world.execute(() -> removeMoored(world, removed, false)));
@@ -1084,7 +1084,7 @@ final class BoatQuay {
                 }
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette à quai de %s non retirée", removed.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Docked shuttle of %s not removed", removed.name);
             Telemetry.error("transit", e, Telemetry.kindId(Deployables.STEAMBOAT_PUBLIC), null);
         }
     }
@@ -1100,7 +1100,7 @@ final class BoatQuay {
         AirshipManager am = AirshipManager.get();
         if (st == null || st.phase == ShuttleState.Phase.DROP || st.phase == ShuttleState.Phase.LEAVE) {
             TRIPS.remove(f.id);
-            am.endShuttle(store, f, "station retirée");
+            am.endShuttle(store, f, "station removed");
             return;
         }
         List<TransitNetwork.Station> targets = redirectTargets(
@@ -1153,7 +1153,7 @@ final class BoatQuay {
             try {
                 dropRider(f, r);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager %s de la navette non renvoyé au ponton", r.p.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Shuttle passenger %s not sent back to the pier", r.p.name);
                 Telemetry.error("transit", e, Telemetry.kindId(Deployables.STEAMBOAT_PUBLIC), null);
             }
         }
@@ -1169,14 +1169,14 @@ final class BoatQuay {
                     Rotation moored = q.state == QuayState.FREE ? mooredRotation(world, s) : null;
                     if (moored != null) {
                         q.flipped = moored == BoatBerth.berthRotation(s, true);
-                        LOGGER.at(Level.INFO).log("Station maritime %s : navette à quai retrouvée, compte à rebours de %d s", s.name,
+                        LOGGER.at(Level.INFO).log("Sea station %s: docked shuttle found again, countdown of %d s", s.name,
                                 TransitConstants.COUNTDOWN_SECONDS);
                         q.docked(System.currentTimeMillis());
                     }
                 }
             });
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Reprise des quais maritimes de %s impossible", world.getName());
+            LOGGER.at(Level.WARNING).withCause(e).log("Cannot resume sea quays of %s", world.getName());
         }
     }
 
@@ -1226,7 +1226,7 @@ final class BoatQuay {
                     o.player().sendMessage(message);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Joueur laissé au ponton non déplacé");
+                LOGGER.at(Level.WARNING).withCause(e).log("Player left on the pier not moved");
                 Telemetry.error("transit", e, null, null);
             }
         }

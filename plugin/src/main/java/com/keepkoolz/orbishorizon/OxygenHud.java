@@ -185,7 +185,7 @@ final class OxygenHud {
         long now = System.currentTimeMillis();
         if (now - lastWarn >= WARN_MS) {
             lastWarn = now;
-            LOGGER.at(Level.WARNING).withCause(e).log("Barre d'oxygène du mod : tick en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Mod oxygen bar: tick failed");
         }
     }
 }

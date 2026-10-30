@@ -201,7 +201,7 @@ final class ShipLadder {
                 }
             } catch (RuntimeException e) {
                 PENDING.remove(me.getKey());
-                LOGGER.at(Level.WARNING).withCause(e).log("Échelle du dirigeable : départ en attente abandonné");
+                LOGGER.at(Level.WARNING).withCause(e).log("Airship ladder: pending departure abandoned");
             }
         }
     }
@@ -296,11 +296,11 @@ final class ShipLadder {
                 if (run.phase == Phase.RAISING) {
                     run.startRungs = new ArrayList<>(run.rungs);
                 }
-                LOGGER.at(Level.WARNING).log("Échelle du dirigeable : %d échelon(s) hors registre retrouvé(s), phase gardée : %s%s", added,
-                        run.phase, run.phase == Phase.RAISING ? " (remontée lancée)" : "");
+                LOGGER.at(Level.WARNING).log("Airship ladder: %d rung(s) outside the registry found, phase kept: %s%s", added,
+                        run.phase, run.phase == Phase.RAISING ? " (raising started)" : "");
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Échelle du dirigeable : recherche d'échelons hors registre en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Airship ladder: search for rungs outside the registry failed");
         }
     }
 
@@ -522,7 +522,7 @@ final class ShipLadder {
             }
             return left;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Échelle du dirigeable : retrait immédiat en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Airship ladder: immediate removal failed");
             return true;
         }
     }
@@ -571,7 +571,7 @@ final class ShipLadder {
                 SectionBlocks.loadSections(world.getChunkStore(), minX, minY, minZ, maxX, maxY, maxZ);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Échelle du dirigeable : chargement des sections impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Airship ladder: cannot load sections");
         }
     }
 
@@ -615,7 +615,7 @@ final class ShipLadder {
                 run.nextMs = now + STEP_MS;
                 step(store, world, run);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Échelle du dirigeable : pas en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Airship ladder: step failed");
             }
         }
     }
@@ -702,7 +702,7 @@ final class ShipLadder {
                 persist(world, new Vector3i(e.x(), e.y(), e.z()), e.rotation(), true);
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Échelle du dirigeable : reprise du monde en échec");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Airship ladder: world resume failed");
         }
     }
 

@@ -88,7 +88,7 @@ final class CageAnimals {
             try {
                 step(world, entry, to);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Animaux de la cage : déplacement impossible");
+                LOGGER.at(Level.WARNING).withCause(e).log("Cage animals: move failed");
                 Telemetry.error("cage", e, null, null);
             }
         }
@@ -102,7 +102,7 @@ final class CageAnimals {
                 }
                 return r;
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Animaux de la cage : capture impossible");
+                LOGGER.at(Level.WARNING).withCause(e).log("Cage animals: capture failed");
                 Telemetry.error("cage", e, null, null);
                 return null;
             }
@@ -113,7 +113,7 @@ final class CageAnimals {
             try {
                 release(world, entry);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Animaux de la cage : libération impossible");
+                LOGGER.at(Level.WARNING).withCause(e).log("Cage animals: release failed");
                 Telemetry.error("cage", e, null, null);
             }
         }
@@ -269,7 +269,7 @@ final class CageAnimals {
             freeze(store, ref);
             kept.add(animal);
             captured++;
-            LOGGER.at(Level.INFO).log("Cage en %s : animal capturé (%s, %s)", origin, animal.role(), shortId(animal.uuid()));
+            LOGGER.at(Level.INFO).log("Cage at %s: animal captured (%s, %s)", origin, animal.role(), shortId(animal.uuid()));
         }
         if (captured > 0) {
             BalloonRegistry.setAnimals(world, origin, e.rotation(), e.kind(), kept);
@@ -295,7 +295,7 @@ final class CageAnimals {
             }
         }
         BalloonRegistry.setAnimals(world, new Vector3i(e.x(), e.y(), e.z()), e.rotation(), e.kind(), List.of());
-        LOGGER.at(Level.INFO).log("Cage en (%d, %d, %d) : %d animal(aux) libéré(s)", e.x(), e.y(), e.z(), e.animals().size());
+        LOGGER.at(Level.INFO).log("Cage at (%d, %d, %d): %d animal(s) released", e.x(), e.y(), e.z(), e.animals().size());
     }
 
     // ------------------------------------------------------------------ cage movement (blocks)
@@ -381,22 +381,22 @@ final class CageAnimals {
         try {
             NPCPlugin plugin = NPCPlugin.get();
             if (a.role() == null || plugin == null || plugin.getIndex(a.role()) < 0) {
-                LOGGER.at(Level.WARNING).log("Animal de la cage perdu (rôle « %s » inconnu), oublié", a.role());
+                LOGGER.at(Level.WARNING).log("Cage animal lost (unknown role '%s'), forgotten", a.role());
                 return null;
             }
             Pair<Ref<EntityStore>, com.hypixel.hytale.server.core.universe.world.npc.INonPlayerCharacter> p =
                     plugin.spawnNPC(store, a.role(), null, pos, new Rotation3f());
             if (p == null || p.first() == null || !p.first().isValid()) {
-                LOGGER.at(Level.WARNING).log("Animal de la cage perdu (%s) : recréation impossible, oublié", a.role());
+                LOGGER.at(Level.WARNING).log("Cage animal lost (%s): recreation failed, forgotten", a.role());
                 return null;
             }
             Ref<EntityStore> ref = p.first();
             freeze(store, ref);
             UUIDComponent id = store.getComponent(ref, UUIDComponent.getComponentType());
-            LOGGER.at(Level.INFO).log("Animal de la cage recréé (%s, ancien %s)", a.role(), shortId(a.uuid()));
+            LOGGER.at(Level.INFO).log("Cage animal recreated (%s, old %s)", a.role(), shortId(a.uuid()));
             return id == null ? a : a.withUuid(id.getUuid());
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Animal de la cage (%s) non recréé", a.role());
+            LOGGER.at(Level.WARNING).withCause(e).log("Cage animal (%s) not recreated", a.role());
             Telemetry.error("cage", e, null, null);
             return null;
         }
@@ -462,13 +462,13 @@ final class CageAnimals {
                     try {
                         world.execute(() -> PENDING.add(new Pending(world, new Vector3i(e.x(), e.y(), e.z()), e.rotation(), e.kind())));
                     } catch (RuntimeException ex) {
-                        LOGGER.at(Level.WARNING).withCause(ex).log("Monde %s arrêté : animaux de la cage en (%d, %d, %d) non retrouvés", world.getName(), e.x(), e.y(), e.z());
+                        LOGGER.at(Level.WARNING).withCause(ex).log("World %s stopped: cage animals at (%d, %d, %d) not found", world.getName(), e.x(), e.y(), e.z());
                     }
                 });
 
             } catch (RuntimeException ex) {
                 // At plugin start the chunk store of a world that has not finished starting is not ready: StartWorldEvent calls again.
-                LOGGER.at(Level.INFO).log("Monde %s pas encore prêt : animaux de la cage en (%d, %d, %d) repris au démarrage du monde (%s)",
+                LOGGER.at(Level.INFO).log("World %s not ready yet: cage animals at (%d, %d, %d) restored at world start (%s)",
                         world.getName(), e.x(), e.y(), e.z(), ex.getClass().getSimpleName());
             }
         }
@@ -510,7 +510,7 @@ final class CageAnimals {
                 try {
                     place(world, p.origin(), p.rotation(), p.kind(), e.animals(), e.descent());
                 } catch (RuntimeException ex) {
-                    LOGGER.at(Level.WARNING).withCause(ex).log("Animaux de la cage en %s non remis en place", p.origin());
+                    LOGGER.at(Level.WARNING).withCause(ex).log("Cage animals at %s not put back", p.origin());
                     Telemetry.error("cage", ex, null, null);
                 }
             }

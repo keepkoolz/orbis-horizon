@@ -57,7 +57,7 @@ final class SeaChartFile {
                 return SeaChart.readFrom(in, seed);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Carte de l'océan illisible (" + file.getFileName() + "), elle sera recalculée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Sea chart unreadable (" + file.getFileName() + "), it will be recomputed");
             return null;
         }
     }

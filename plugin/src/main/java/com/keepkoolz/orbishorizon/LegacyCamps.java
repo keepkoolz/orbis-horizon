@@ -101,11 +101,11 @@ final class LegacyCamps {
                         pack = pack.withMetadata(TentContents.METADATA_KEY, meta.get(TentContents.METADATA_KEY));
                     }
                     c.setItemStackForSlot(i, pack);
-                    LOGGER.at(Level.INFO).log("Caisse de tente convertie en sac : %s -> %s", st.getItemId(), to);
+                    LOGGER.at(Level.INFO).log("Tent crate converted to bag: %s -> %s", st.getItemId(), to);
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Conversion des caisses de tente en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Tent crate conversion failed");
         }
     }
 
@@ -147,14 +147,14 @@ final class LegacyCamps {
             }
             RETRY_AT.put(k, System.currentTimeMillis() + RETRY_MS);
             if (first) {
-                LOGGER.at(Level.INFO).log("Tente déjà posée en (%d, %d, %d) : case du sac prise en (%d, %d, %d)", entry.x(), entry.y(), entry.z(), cell.x, cell.y, cell.z);
+                LOGGER.at(Level.INFO).log("Tent already placed at (%d, %d, %d): bag cell taken at (%d, %d, %d)", entry.x(), entry.y(), entry.z(), cell.x, cell.y, cell.z);
             }
             return false;
         }
         BLOCKED.remove(key(entry));
         RETRY_AT.remove(key(entry));
         if (SectionBlocks.setAt(cs, cell.x, cell.y, cell.z, tier.placedBlockId(), 4)) {
-            LOGGER.at(Level.INFO).log("Tente déjà posée en (%d, %d, %d) : sac posé en (%d, %d, %d)", entry.x(), entry.y(), entry.z(), cell.x, cell.y, cell.z);
+            LOGGER.at(Level.INFO).log("Tent already placed at (%d, %d, %d): bag placed at (%d, %d, %d)", entry.x(), entry.y(), entry.z(), cell.x, cell.y, cell.z);
             return true;
         }
         return false;
@@ -193,7 +193,7 @@ final class LegacyCamps {
                         }
                     } catch (RuntimeException ex) {
                         DONE.add(k);
-                        LOGGER.at(Level.WARNING).withCause(ex).log("Sac d'une tente déjà posée : pose en échec");
+                        LOGGER.at(Level.WARNING).withCause(ex).log("Bag of an already placed tent: placement failed");
                     }
                 }
             }
@@ -224,7 +224,7 @@ final class LegacyCamps {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Camps déjà posés : tick en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Already placed camps: tick failed");
         }
     }
 

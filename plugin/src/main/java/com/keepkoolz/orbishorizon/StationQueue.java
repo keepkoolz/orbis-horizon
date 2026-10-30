@@ -116,11 +116,11 @@ final class StationQueue {
         TransitNetwork net = TransitNetwork.get();
         TransitNetwork.Station target = net.byName(world.getName(), destination);
         if (!Deployables.STATION_KIND.equals(s.kind) || (target != null && !target.kind.equals(s.kind))) {
-            LOGGER.at(Level.INFO).log("File de %s ignorée : stations de types différents ou station maritime", s.name);
+            LOGGER.at(Level.INFO).log("Queue of %s ignored: stations of different types or sea station", s.name);
             return EnqueueResult.UNKNOWN;
         }
         if (target == null) {
-            LOGGER.at(Level.INFO).log("File de %s : destination inconnue « %s »", s.name, destination);
+            LOGGER.at(Level.INFO).log("Queue of %s: unknown destination '%s'", s.name, destination);
             if (chooser != null) chooser.sendMessage(Texts.t("transit.network.removed").param("name", TransitNetwork.normalize(destination)));
             return EnqueueResult.UNKNOWN;
         }
@@ -180,7 +180,7 @@ final class StationQueue {
                 case FREE -> tickFree(store, world, s, q, now);
                 case APPROACH -> {
                     if (q.flight != null && !BalloonManager.get().active(q.flight)) {
-                        LOGGER.at(Level.WARNING).log("Station %s : montgolfière d'approche perdue, quai libéré", s.name);
+                        LOGGER.at(Level.WARNING).log("Station %s: approaching balloon lost, dock freed", s.name);
                         q.flight = null;
                         q.retryAtMs = now + 5000;
                         q.state = QuayState.FREE;
@@ -214,11 +214,11 @@ final class StationQueue {
                 }
                 Message error = BalloonManager.get().launchTransitApproach(store, world, s);
                 if (error != null) {
-                    LOGGER.at(Level.WARNING).log("Station %s : montgolfière d'approche impossible (%s)", s.name, error.getMessageId());
+                    LOGGER.at(Level.WARNING).log("Station %s: cannot send the approaching balloon (%s)", s.name, error.getMessageId());
                     q.retryAtMs = System.currentTimeMillis() + 5000;
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Station %s : montgolfière d'approche en échec", s.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Station %s: approaching balloon failed", s.name);
                 Telemetry.error("transit", e, null, null);
                 q.retryAtMs = System.currentTimeMillis() + 5000;
             } finally {
@@ -232,7 +232,7 @@ final class StationQueue {
             return;
         }
         if (BalloonRegistry.get(world, dockOrigin(s), s.rotation, Deployables.BALLOON_PUBLIC.id) == null) {
-            LOGGER.at(Level.INFO).log("Station %s : montgolfière à quai disparue, quai libéré", s.name);
+            LOGGER.at(Level.INFO).log("Station %s: docked balloon gone, dock freed", s.name);
             q.state = QuayState.FREE;
             return;
         }
@@ -262,13 +262,13 @@ final class StationQueue {
                 String destination = TransitNetwork.get().queueHead(s);
                 Message error = BalloonManager.get().launchTransitDeparture(store, world, s, destination);
                 if (error != null) {
-                    LOGGER.at(Level.WARNING).log("Station %s : départ impossible (%s), nouvel essai", s.name, error.getMessageId());
+                    LOGGER.at(Level.WARNING).log("Station %s: cannot depart (%s), trying again", s.name, error.getMessageId());
                     q.deadlineMs = System.currentTimeMillis() + 5000;
                 } else if (destination != null) {
                     TransitNetwork.get().queueRemoveFirst(s, destination);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Station %s : départ en échec", s.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Station %s: departure failed", s.name);
                 Telemetry.error("transit", e, null, null);
                 q.deadlineMs = System.currentTimeMillis() + 5000;
             } finally {
@@ -489,13 +489,13 @@ final class StationQueue {
                 BalloonManager.removeBlocks(world, shape, dock, removed.rotation);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Montgolfière à quai de %s non retirée", removed.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Docked balloon of %s not removed", removed.name);
             Telemetry.error("transit", e, null, null);
         }
         try {
             AirshipManager.get().onStationRemoved(world, removed); // a recalled airship lands in place, pilot back at the helm
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Dirigeable rappelé non posé après le retrait de %s", removed.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Recalled airship not placed after the removal of %s", removed.name);
             Telemetry.error("airship.recall", e, null, null);
         }
         // Flights in the air heading to the removed station (the network no longer contains it when this is called).
@@ -523,7 +523,7 @@ final class StationQueue {
         try {
             world.execute(() -> recoverOnThread(world));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Reprise des quais de %s impossible", world.getName());
+            LOGGER.at(Level.WARNING).withCause(e).log("Cannot resume the docks of %s", world.getName());
         }
     }
 
@@ -531,7 +531,7 @@ final class StationQueue {
         for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName(), Deployables.STATION_KIND)) {
             if (quay(s).state == QuayState.FREE
                     && BalloonRegistry.get(world, dockOrigin(s), s.rotation, Deployables.BALLOON_PUBLIC.id) != null) {
-                LOGGER.at(Level.INFO).log("Station %s : montgolfière à quai retrouvée, compte à rebours de %d s", s.name,
+                LOGGER.at(Level.INFO).log("Station %s: docked balloon found again, countdown of %d s", s.name,
                         TransitConstants.COUNTDOWN_SECONDS);
                 startCountdown(world, s, quay(s));
             }

@@ -158,7 +158,7 @@ final class OwnedMarkerProvider implements WorldMapManager.MarkerProvider {
     private static void logOnce(RuntimeException ex) {
         if (!errorLogged) {
             errorLogged = true;
-            LOGGER.at(Level.WARNING).withCause(ex).log("Marqueur de carte d'un véhicule ou d'une tente ignoré");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Map marker of a vehicle or tent ignored");
         }
     }
 }

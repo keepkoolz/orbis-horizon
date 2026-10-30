@@ -26,7 +26,7 @@ import java.util.logging.Level;
 
 /**
  * Configuration window of the mod (/orbishorizon config, ops only): a search box and a scrolling list with one section per
- * topic (recipes, world, map, camping, passengers). Every change is applied and saved at once, then the list is redrawn. The search
+ * topic (recipes, world, map, transit, camping, passengers). Every change is applied and saved at once, then the list is redrawn. The search
  * box is not rebuilt, so typing is not interrupted. Each event checks that the player is still an op.
  */
 final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
@@ -38,6 +38,8 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
     static final String MARKER_SHARING = "markerSharing";
     static final String PACK_BACK = "packBack";
     static final String PROTECT = "protect";
+    static final String FARE = "fare";
+    static final String CONSOLE_LOG_LEVEL = "consoleLogLevel";
 
     static final class Data {
         static final BuilderCodec<Data> CODEC = BuilderCodec.builder(Data.class, Data::new)
@@ -103,13 +105,21 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
             section(cmd, index, "section.map");
             toggleRow(cmd, events, index, MARKER_SHARING, Message.translation(UI + MARKER_SHARING), null, TransitSettings.markerSharing());
         }
+        if (settingVisible(FARE, lang)) {
+            section(cmd, index, "section.transit");
+            toggleRow(cmd, events, index, FARE, Message.translation(UI + FARE), null, TransitSettings.fareEnabled());
+        }
         if (settingVisible(PACK_BACK, lang)) {
             section(cmd, index, "section.camping");
             toggleRow(cmd, events, index, PACK_BACK, Message.translation(UI + PACK_BACK), null, TransitSettings.packBackView());
         }
         if (settingVisible(PROTECT, lang)) {
             section(cmd, index, "section.passengers");
-            choiceRow(cmd, events, index);
+            choiceRow(cmd, events, index, PROTECT, PassengerProtection.Mode.values(), PassengerProtection.mode());
+        }
+        if (settingVisible(CONSOLE_LOG_LEVEL, lang)) {
+            section(cmd, index, "section.server");
+            choiceRow(cmd, events, index, CONSOLE_LOG_LEVEL, ConsoleLogs.Threshold.values(), TransitSettings.consoleLogLevel());
         }
     }
 
@@ -136,26 +146,27 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
                 new EventData().append("Action", "Toggle").append("Key", key).append("@Checked", sel + " #Input.Value"), false);
     }
 
-    private void choiceRow(UICommandBuilder cmd, UIEventBuilder events, int[] index) {
+    /** A dropdown row. Entry labels are the keys {@code <key>.<constant name in lower case>}, values the constant names. */
+    private void choiceRow(UICommandBuilder cmd, UIEventBuilder events, int[] index, String key, Enum<?>[] choices, Enum<?> current) {
         cmd.append("#List", "Pages/Config_ChoiceRow.ui");
         String sel = "#List[" + index[0]++ + "]";
-        cmd.set(sel + " #Label.Text", Message.translation(UI + PROTECT));
+        cmd.set(sel + " #Label.Text", Message.translation(UI + key));
         List<DropdownEntryInfo> entries = new ArrayList<>();
-        for (PassengerProtection.Mode m : PassengerProtection.Mode.values()) {
+        for (Enum<?> c : choices) {
             entries.add(new DropdownEntryInfo(
-                    LocalizableString.fromMessageId(UI + PROTECT + "." + m.name().toLowerCase(java.util.Locale.ROOT)), m.name()));
+                    LocalizableString.fromMessageId(UI + key + "." + c.name().toLowerCase(java.util.Locale.ROOT)), c.name()));
         }
         cmd.set(sel + " #Input.Entries", entries);
-        cmd.set(sel + " #Input.Value", PassengerProtection.mode().name());
+        cmd.set(sel + " #Input.Value", current.name());
         events.addEventBinding(CustomUIEventBindingType.ValueChanged, sel + " #Input",
-                new EventData().append("Action", "Choice").append("Key", PROTECT).append("@Choice", sel + " #Input.Value"), false);
+                new EventData().append("Action", "Choice").append("Key", key).append("@Choice", sel + " #Input.Value"), false);
     }
 
     @Override
     public void handleDataEvent(Ref<EntityStore> ref, Store<EntityStore> store, Data data) {
         try {
             if (!StructureRemoval.isOp(playerRef.getUuid())) {
-                LOGGER.at(Level.INFO).log("Configuration ignorée : %s n'est plus opérateur", playerRef.getUsername());
+                LOGGER.at(Level.INFO).log("Configuration ignored: %s is no longer an operator", playerRef.getUsername());
                 close();
                 return;
             }
@@ -163,8 +174,8 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
                 query = data.searchQuery;
             } else if ("Toggle".equals(data.action) && data.key != null && data.checked != null) {
                 applyToggle(data.key, data.checked);
-            } else if ("Choice".equals(data.action) && PROTECT.equals(data.key) && data.choice != null) {
-                applyProtection(data.choice);
+            } else if ("Choice".equals(data.action) && data.key != null && data.choice != null) {
+                applyChoice(data.key, data.choice);
             } else {
                 return;
             }
@@ -173,7 +184,7 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
             fillList(cmd, events);
             sendUpdate(cmd, events, false);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Page de configuration : événement non traité");
+            LOGGER.at(Level.WARNING).withCause(e).log("Configuration page: event not handled");
             Telemetry.error("config", e, null, null);
         }
     }
@@ -183,16 +194,21 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
             case WORLDGEN -> TransitSettings.setWorldgenEnabled(on);
             case WORLDGEN_OLD_TERRAIN -> TransitSettings.setWorldgenOldTerrain(on);
             case MARKER_SHARING -> TransitSettings.setMarkerSharing(on);
+            case FARE -> TransitSettings.setFareEnabled(on);
             case PACK_BACK -> PackBackView.set(on);
             default -> RecipeToggles.set(key, on); // ignores an id that is not a mod item
         }
     }
 
-    private static void applyProtection(String name) {
+    private static void applyChoice(String key, String name) {
         try {
-            PassengerProtection.setMode(PassengerProtection.Mode.valueOf(name));
+            switch (key) {
+                case PROTECT -> PassengerProtection.setMode(PassengerProtection.Mode.valueOf(name));
+                case CONSOLE_LOG_LEVEL -> TransitSettings.setConsoleLogLevel(ConsoleLogs.Threshold.valueOf(name));
+                default -> LOGGER.at(Level.INFO).log("Choice ignored: unknown setting '%s'", key);
+            }
         } catch (IllegalArgumentException e) {
-            LOGGER.at(Level.INFO).log("Protection ignorée : valeur inconnue « %s »", name);
+            LOGGER.at(Level.INFO).log("Choice ignored: unknown value '%s' for %s", name, key);
         }
     }
 
@@ -204,7 +220,7 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
                 return item.getTranslationProperties().getName();
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Nom de l'objet %s non lu", itemId);
+            LOGGER.at(Level.WARNING).withCause(e).log("Item name %s not read", itemId);
         }
         return "server.items." + itemId + ".name";
     }

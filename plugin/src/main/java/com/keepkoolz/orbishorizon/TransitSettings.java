@@ -25,6 +25,8 @@ final class TransitSettings {
     private static volatile boolean worldgenEnabled = true;
     private static volatile boolean markerSharing = true;
     private static volatile boolean worldgenOldTerrain = false;
+    private static volatile boolean fareEnabled = true;
+    private static volatile ConsoleLogs.Threshold consoleLogLevel = ConsoleLogs.Threshold.INFO;
     private static volatile Path file;
 
     private TransitSettings() {
@@ -63,6 +65,16 @@ final class TransitSettings {
         return markerSharing;
     }
 
+    /** Whether a public transit ticket costs essences. Off: destinations are queued for free. Default: on. */
+    static boolean fareEnabled() {
+        return fareEnabled;
+    }
+
+    /** Minimal level of the mod's logs shown in the server console. Default: INFO. */
+    static ConsoleLogs.Threshold consoleLogLevel() {
+        return consoleLogLevel;
+    }
+
     /** Reads the file. Missing: defaults. Unreadable: defaults, and the file is kept as .bad (same rule as stations.json). */
     static synchronized void load(Path dataDir) {
         file = dataDir.resolve("transit-settings.json");
@@ -71,6 +83,8 @@ final class TransitSettings {
         worldgenEnabled = true;
         markerSharing = true;
         worldgenOldTerrain = false;
+        fareEnabled = true;
+        consoleLogLevel = ConsoleLogs.Threshold.INFO;
         if (!Files.isRegularFile(file)) return;
         try {
             BsonDocument doc = BsonDocument.parse(Files.readString(file, StandardCharsets.UTF_8));
@@ -87,13 +101,16 @@ final class TransitSettings {
             worldgenEnabled = !doc.containsKey("worldgenEnabled") || doc.getBoolean("worldgenEnabled").getValue();
             worldgenOldTerrain = doc.containsKey("worldgenOldTerrain") && doc.getBoolean("worldgenOldTerrain").getValue();
             markerSharing = !doc.containsKey("markerSharing") || doc.getBoolean("markerSharing").getValue();
+            fareEnabled = !doc.containsKey("fareEnabled") || doc.getBoolean("fareEnabled").getValue();
+            consoleLogLevel = doc.containsKey("consoleLogLevel") && doc.get("consoleLogLevel").isString()
+                    ? ConsoleLogs.Threshold.parse(doc.getString("consoleLogLevel").getValue()) : ConsoleLogs.Threshold.INFO;
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("transit-settings.json illisible, réglages par défaut");
+            LOGGER.at(Level.WARNING).withCause(e).log("transit-settings.json unreadable, default settings");
             disabledRecipes = new HashSet<>(StationSpec.CRATE_IDS);
             try {
                 Files.move(file, file.resolveSibling(file.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e2) {
-                LOGGER.at(Level.WARNING).withCause(e2).log("Impossible de renommer transit-settings.json en .bad");
+                LOGGER.at(Level.WARNING).withCause(e2).log("Cannot rename transit-settings.json to .bad");
             }
         }
     }
@@ -134,6 +151,20 @@ final class TransitSettings {
         save();
     }
 
+    static synchronized void setFareEnabled(boolean on) {
+        fareEnabled = on;
+        save();
+    }
+
+    /** Sets the level, saves it and applies it to the loggers of the mod (see ConsoleLogs). */
+    static void setConsoleLogLevel(ConsoleLogs.Threshold level) {
+        synchronized (TransitSettings.class) {
+            consoleLogLevel = level;
+            save();
+        }
+        ConsoleLogs.apply(level);
+    }
+
     private static void save() {
         Path f = file;
         if (f == null) return;
@@ -148,6 +179,8 @@ final class TransitSettings {
             doc.put("worldgenEnabled", new BsonBoolean(worldgenEnabled));
             doc.put("markerSharing", new BsonBoolean(markerSharing));
             doc.put("worldgenOldTerrain", new BsonBoolean(worldgenOldTerrain));
+            doc.put("fareEnabled", new BsonBoolean(fareEnabled));
+            doc.put("consoleLogLevel", new BsonString(consoleLogLevel.name()));
             Files.createDirectories(f.getParent());
             Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
             Files.writeString(tmp, doc.toJson(), StandardCharsets.UTF_8);
@@ -157,7 +190,7 @@ final class TransitSettings {
                 Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Écriture de transit-settings.json impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Cannot write transit-settings.json");
         }
     }
 }

@@ -138,7 +138,7 @@ final class CampUpgrade {
                 return t != null && t.previous() != null ? t : null;
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Amélioration de sac : recette illisible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Bag upgrade: unreadable recipe");
         }
         return null;
     }
@@ -194,7 +194,7 @@ final class CampUpgrade {
             TentContents to = from.convert(Deployables.get(target.kindId()).shape());
             return to.toBson(target.kindId());
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Amélioration de sac : contenu non converti, le sac sera vide");
+            LOGGER.at(Level.WARNING).withCause(e).log("Bag upgrade: contents not converted, the bag will be empty");
             return null;
         }
     }
@@ -283,7 +283,7 @@ final class CampUpgrade {
                 CTX.put(pr.getUuid(), new Ctx(store, ref));
                 IDLE.remove(pr.getUuid());
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Amélioration de sac : Pre en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Bag upgrade: Pre failed");
             }
         }
     }
@@ -336,12 +336,12 @@ final class CampUpgrade {
         for (ItemContainer c : all) {
             ItemStackTransaction t = c.addItemStack(pack);
             if (t == null || t.getRemainder() == null || t.getRemainder().isEmpty()) {
-                LOGGER.at(Level.INFO).log("Amélioration de sac : contenu rendu dans un sac neuf à l'arrivée du joueur %s", player);
+                LOGGER.at(Level.INFO).log("Bag upgrade: contents returned in a new bag when player %s arrived", player);
                 return true;
             }
             pack = t.getRemainder();
         }
-        LOGGER.at(Level.INFO).log("Amélioration de sac : inventaire plein à l'arrivée du joueur %s, contenu gardé pour la suite", player);
+        LOGGER.at(Level.INFO).log("Bag upgrade: inventory full when player %s arrived, contents kept for later", player);
         return false;
     }
 
@@ -356,7 +356,7 @@ final class CampUpgrade {
             ItemStackTransaction t = Player.giveItem(pack, ref, store);
             rest = t != null ? t.getRemainder() : pack;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Amélioration de sac : sac rendu non donné, lâché au sol");
+            LOGGER.at(Level.WARNING).withCause(e).log("Bag upgrade: returned bag not given, dropped on the ground");
         }
         if (rest != null && !rest.isEmpty()) {
             TransformComponent tc = store.getComponent(ref, TransformComponent.getComponentType());
@@ -364,10 +364,10 @@ final class CampUpgrade {
                 Vector3d at = tc.getPosition();
                 BalloonManager.dropItems(store, List.of(rest), new Vector3i((int) Math.floor(at.x), (int) Math.floor(at.y), (int) Math.floor(at.z)));
             } else {
-                LOGGER.at(Level.WARNING).log("Amélioration de sac : contenu perdu, position du joueur inconnue");
+                LOGGER.at(Level.WARNING).log("Bag upgrade: contents lost, player position unknown");
             }
         }
-        LOGGER.at(Level.INFO).log("Amélioration de sac : craft annulé, contenu rendu au joueur");
+        LOGGER.at(Level.INFO).log("Bag upgrade: craft cancelled, contents returned to the player");
     }
 
     /** CraftRecipeEvent.Post: a cancelled craft forgets the note, otherwise the contents are put on the new pack now or in the next ticks. */
@@ -417,7 +417,7 @@ final class CampUpgrade {
                             .add(new Wait(world, store, ref, 0, note));
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Amélioration de sac : Post en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Bag upgrade: Post failed");
             }
         }
     }
@@ -445,7 +445,7 @@ final class CampUpgrade {
                         continue;
                     } else {
                         if (w.ticks() + 1 >= MAX_TICKS) {
-                            LOGGER.at(Level.WARNING).log("Amélioration de sac : sac %s introuvable après %d ticks, contenu gardé pour l'arrivée du joueur",
+                            LOGGER.at(Level.WARNING).log("Bag upgrade: bag %s not found after %d ticks, contents kept for the player's arrival",
                                     w.note().target().packItemId(), MAX_TICKS);
                         }
                         int at = e.getValue().indexOf(w);
@@ -459,7 +459,7 @@ final class CampUpgrade {
                 }
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Amélioration de sac : tick en échec");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Bag upgrade: tick failed");
         }
     }
 
@@ -483,7 +483,7 @@ final class CampUpgrade {
                 }
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Amélioration de sac : attentes reprises à l'arrivée en échec");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Bag upgrade: resuming pending arrivals failed");
         }
     }
 
@@ -530,7 +530,7 @@ final class CampUpgrade {
                 }
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Amélioration de sac : rapprochement des notes en échec");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Bag upgrade: matching notes failed");
         }
     }
 
@@ -557,7 +557,7 @@ final class CampUpgrade {
             if (waits != null) {
                 for (Wait w : waits) {
                     if (apply(containers(holder), w.note().target(), w.note().contents())) {
-                        LOGGER.at(Level.INFO).log("Amélioration de sac : contenu posé à l'arrivée du joueur %s", player);
+                        LOGGER.at(Level.INFO).log("Bag upgrade: contents placed when player %s arrived", player);
                     } else {
                         // The new pack is not in the inventory yet: tick re-creates the wait once the player is in the world.
                         WAIT_CARRIED.computeIfAbsent(player, k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(w.note());
@@ -565,7 +565,7 @@ final class CampUpgrade {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Amélioration de sac : reprise à l'arrivée en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Bag upgrade: resume on arrival failed");
         }
     }
 }

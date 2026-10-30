@@ -1529,11 +1529,14 @@ public class TransitTests {
         run("grassLayerCells", TransitTests::grassLayerCells);
         run("settingsRoundTrip", TransitTests::settingsRoundTrip);
         run("markerSharingSetting", TransitTests::markerSharingSetting);
+        run("fareSetting", TransitTests::fareSetting);
         run("ownedMarkerSharingSwitch", TransitTests::ownedMarkerSharingSwitch);
         run("knownStationsSharingSwitch", TransitTests::knownStationsSharingSwitch);
         run("settingsDisabledRecipes", TransitTests::settingsDisabledRecipes);
         run("recipeTogglesWithoutUniverse", TransitTests::recipeTogglesWithoutUniverse);
         run("configSearch", TransitTests::configSearch);
+        run("consoleLogsNames", TransitTests::consoleLogsNames);
+        run("consoleLogLevelSetting", TransitTests::consoleLogLevelSetting);
         run("packBackShownTier", TransitTests::packBackShownTier);
         run("reservationIsExclusive", TransitTests::reservationIsExclusive);
         run("queueRules", TransitTests::queueRules);
@@ -1585,6 +1588,7 @@ public class TransitTests {
         run("recipesOnExplorerBench", TransitTests::recipesOnExplorerBench);
         run("creativeVisibility", TransitTests::creativeVisibility);
         run("oxygenHud", TransitTests::oxygenHud);
+        run("fuelHud", TransitTests::fuelHud);
         run("boatStationPrefab", TransitTests::boatStationPrefab);
         run("helmetHaircut", TransitTests::helmetHaircut);
         run("externalView", TransitTests::externalView);
@@ -2881,6 +2885,26 @@ public class TransitTests {
         }
     }
 
+    static void fareSetting() throws Exception {
+        Path dir = Files.createTempDirectory("transit-settings-fare");
+        try {
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.fareEnabled());
+            TransitSettings.setFareEnabled(false);
+            TransitSettings.load(dir);
+            eq(false, TransitSettings.fareEnabled());
+            eq(true, TransitSettings.markerSharing());
+            Files.writeString(dir.resolve("transit-settings.json"), "{\"packBackView\": false}");
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.fareEnabled());
+            Files.writeString(dir.resolve("transit-settings.json"), "{garbage");
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.fareEnabled());
+        } finally {
+            TransitSettings.load(Files.createTempDirectory("transit-settings-fare-reset"));
+        }
+    }
+
     static void ownedMarkerSharingSwitch() {
         java.util.UUID a = java.util.UUID.randomUUID(), b = java.util.UUID.randomUUID();
         Ownership mine = Ownership.of(a, "A");
@@ -2965,6 +2989,49 @@ public class TransitTests {
         eq(true, ConfigSearch.matches("Grande tente", null));
         eq(false, ConfigSearch.matches("Grande tente", "dirigeable"));
         eq("eleve", ConfigSearch.normalize(" Élève "));
+    }
+
+    static void consoleLogsNames() {
+        var names = ConsoleLogs.namesFromEntries(java.util.List.of(
+                "com/keepkoolz/orbishorizon/Foo.class",
+                "com/keepkoolz/orbishorizon/Foo$Bar.class",
+                "com/keepkoolz/orbishorizon/Foo$$Lambda.class",
+                "com/keepkoolz/orbishorizon/sub/Baz.class",
+                "com/keepkoolz/orbishorizon/package-info.class",
+                "com/keepkoolz/orbishorizon/data.json",
+                "com/other/Qux.class",
+                "plugin.json"));
+        eq(java.util.Set.of("Foo", "Foo$Bar", "Baz"), names);
+    }
+
+    static void consoleLogLevelSetting() throws Exception {
+        eq(java.util.logging.Level.ALL, ConsoleLogs.Threshold.ALL.level);
+        eq(java.util.logging.Level.INFO, ConsoleLogs.Threshold.INFO.level);
+        eq(java.util.logging.Level.WARNING, ConsoleLogs.Threshold.WARNING.level);
+        eq(java.util.logging.Level.SEVERE, ConsoleLogs.Threshold.SEVERE.level);
+        eq(java.util.logging.Level.OFF, ConsoleLogs.Threshold.NONE.level);
+        eq(ConsoleLogs.Threshold.INFO, ConsoleLogs.Threshold.parse(null));
+        eq(ConsoleLogs.Threshold.INFO, ConsoleLogs.Threshold.parse("LOUD"));
+        eq(ConsoleLogs.Threshold.NONE, ConsoleLogs.Threshold.parse("NONE"));
+        Path dir = Files.createTempDirectory("transit-settings-console");
+        try {
+            TransitSettings.load(dir);
+            eq(ConsoleLogs.Threshold.INFO, TransitSettings.consoleLogLevel());
+            TransitSettings.setConsoleLogLevel(ConsoleLogs.Threshold.SEVERE);
+            TransitSettings.load(dir);
+            eq(ConsoleLogs.Threshold.SEVERE, TransitSettings.consoleLogLevel());
+            check(Files.readString(dir.resolve("transit-settings.json")).contains("\"consoleLogLevel\": \"SEVERE\""), "level written by name");
+            Files.writeString(dir.resolve("transit-settings.json"), "{\"consoleLogLevel\": \"LOUD\"}");
+            TransitSettings.load(dir);
+            eq(ConsoleLogs.Threshold.INFO, TransitSettings.consoleLogLevel());
+            Files.writeString(dir.resolve("transit-settings.json"), "{\"packBackView\": false}");
+            TransitSettings.load(dir);
+            eq(ConsoleLogs.Threshold.INFO, TransitSettings.consoleLogLevel());
+        } finally {
+            ConsoleLogs.apply(ConsoleLogs.Threshold.INFO);
+            TransitSettings.load(Files.createTempDirectory("transit-settings-console-reset"));
+            deleteAll(dir);
+        }
     }
 
     static void settingsDisabledRecipes() throws Exception {
@@ -4105,6 +4172,50 @@ public class TransitTests {
             check(i < 0 || !line.substring(i).split("[\\s;]")[0].contains("_"), "no % key with underscore: " + line);
         }
         check(Files.exists(Path.of("Common/UI/Custom/Hud/OrbisHorizon_OxygenFill.png")), "fill texture");
+    }
+
+    private static void fuelHud() throws Exception {
+        check(FuelHud.level(120, false) == FuelHud.FuelLevel.NORMAL, "normal above 30 s");
+        check(FuelHud.level(30.5, false) == FuelHud.FuelLevel.NORMAL, "normal just above 30 s");
+        check(FuelHud.level(30, false) == FuelHud.FuelLevel.LOW, "low at 30 s");
+        check(FuelHud.level(10.5, false) == FuelHud.FuelLevel.LOW, "low just above 10 s");
+        check(FuelHud.level(10, false) == FuelHud.FuelLevel.CRITICAL, "critical at 10 s");
+        check(FuelHud.level(0.2, false) == FuelHud.FuelLevel.CRITICAL, "critical near 0");
+        check(FuelHud.level(500, true) == FuelHud.FuelLevel.DRY, "dry whatever the seconds");
+        check(FuelHud.wholeSeconds(14.2) == 15 && FuelHud.wholeSeconds(15) == 15 && FuelHud.wholeSeconds(-1) == 0, "whole seconds rounded up");
+        FuelHud.Content a = FuelHud.content(FuelHud.Vehicle.BALLOON, 14.2, 4, false);
+        check(FuelHud.changed(null, a), "first content is sent");
+        check(!FuelHud.changed(a, FuelHud.content(FuelHud.Vehicle.BALLOON, 14.9, 4, false)), "same whole second, no packet");
+        check(FuelHud.changed(a, FuelHud.content(FuelHud.Vehicle.BALLOON, 13.9, 4, false)), "next second changes");
+        check(FuelHud.changed(a, FuelHud.content(FuelHud.Vehicle.BALLOON, 14.2, 3, false)), "item count changes");
+        check(FuelHud.changed(a, FuelHud.content(FuelHud.Vehicle.AIRSHIP, 14.2, 4, false)), "vehicle changes");
+        FuelHud.Content b = FuelHud.content(FuelHud.Vehicle.BALLOON, 31, 4, false);
+        check(FuelHud.changed(b, FuelHud.content(FuelHud.Vehicle.BALLOON, 30.5, 4, false)) == false, "same second, same level");
+        check(FuelHud.changed(b, FuelHud.content(FuelHud.Vehicle.BALLOON, 30, 4, false)), "level change at 30 s");
+        FuelHud.Content dry = FuelHud.content(FuelHud.Vehicle.BALLOON, 12, 4, true);
+        check(!FuelHud.changed(dry, FuelHud.content(FuelHud.Vehicle.BALLOON, 0, 0, true)), "dry content does not depend on the rest");
+        check(FuelHud.changed(a, dry), "dry replaces the countdown");
+        check(!FuelHud.stale(1000, 3500) && FuelHud.stale(1000, 4500), "stale after 3 s");
+        check(FuelHud.vehicleOf(Deployables.STEAMBOAT) == FuelHud.Vehicle.STEAMBOAT
+                && FuelHud.vehicleOf(Deployables.STEAMBOAT_PUBLIC) == FuelHud.Vehicle.STEAMBOAT
+                && FuelHud.vehicleOf(Deployables.AIRSHIP) == FuelHud.Vehicle.AIRSHIP, "ship texts by kind");
+        String ui = Files.readString(Path.of("Common/UI/Custom/" + FuelHud.UI_FILE));
+        for (String id : new String[] {"#FuelTitle", FuelHud.TIME_NORMAL, FuelHud.TIME_LOW, FuelHud.TIME_CRITICAL, "#FuelItems"}) {
+            check(ui.contains("Label " + id + " "), "element in the .ui file: " + id);
+        }
+        check(!ui.contains("%server"), "texts are set from the plugin, no % key in the .ui file");
+        check(ui.contains("@PanelBottom = 160;") && ui.contains("@PanelWidth"), "position constants");
+        for (String lang : new String[] {"en-US", "fr-FR"}) {
+            String text = Files.readString(Path.of("Server/Languages/" + lang + "/server.lang"));
+            for (String k : new String[] {"title.balloon", "title.airship", "title.steamboat", "time.balloon", "time.airship",
+                    "time.steamboat", "items", "dry"}) {
+                check(text.contains("orbis_horizon.ui.fuel." + k + " = "), lang + " key ui.fuel." + k);
+            }
+            check(!text.contains("chat.fuel.level") && !text.contains("chat.fuel.status") && !text.contains("fuel.low =")
+                    && !text.contains("fuel.critical =") && !text.contains("hover.fuel"), lang + " no fuel countdown in the chat");
+            check(text.contains("orbis_horizon.chat.fuel.dryLanded") && text.contains("orbis_horizon.chat.airship.fuel.none"),
+                    lang + " fuel events kept");
+        }
     }
 
     private static void creativeVisibility() throws Exception {
@@ -5622,7 +5733,7 @@ public class TransitTests {
     }
 
     private static void shipTextKeys() throws Exception {
-        check(Texts.SHIP_KEYS.size() == 27, "27 restes");
+        check(Texts.SHIP_KEYS.size() == 23, "23 restes");
         for (String lang : new String[] {"en-US", "fr-FR"}) {
             List<String> lines = Files.readAllLines(Path.of("Server/Languages/" + lang + "/server.lang"));
             for (String l : lines) {

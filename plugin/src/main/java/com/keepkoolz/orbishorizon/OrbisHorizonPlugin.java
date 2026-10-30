@@ -68,20 +68,20 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             // plugins are loaded first, "Loading pending core plugins" of PluginManager).
             getChunkStoreRegistry().registerSystem(new BurnerFlameSystem());
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Flamme du brûleur au sol désactivée");
+            getLogger().at(Level.WARNING).withCause(e).log("Ground burner flame disabled");
         }
         try {
             // the fuel of burners placed before the tannery-style interface moves from the fuel container to the inputs,
             // before the game reduces the former to a capacity of 0 (and drops what does not fit).
             getChunkStoreRegistry().registerSystem(new BurnerMigrationSystem());
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Déplacement de l'ancien combustible des brûleurs désactivé");
+            getLogger().at(Level.WARNING).withCause(e).log("Move of the old burner fuel disabled");
         }
         try {
             // No camping pack in the chests of a mod tent: slot filters are not saved, reinstalled when a chest appears.
             getChunkStoreRegistry().registerSystem(new CampChestFilter());
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Filtre des coffres de tente désactivé");
+            getLogger().at(Level.WARNING).withCause(e).log("Tent chest filter disabled");
         }
         // resume files in the plugin data folder, landing on pilot disconnection and on
         // server shutdown, resume when worlds load.
@@ -97,6 +97,8 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         deleteStoredRoutes(getDataDirectory());
         SeaCharts.start(getDataDirectory());
         TransitSettings.load(getDataDirectory());
+        ConsoleLogs.init(getLogger());
+        ConsoleLogs.apply(TransitSettings.consoleLogLevel());
         PassengerProtection.load(getDataDirectory());
         CampRespawn.load(getDataDirectory());
         KnownStations.init(getDataDirectory());
@@ -105,51 +107,51 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             getEntityStoreRegistry().registerSystem(new BalloonLockSystems.Damage());
             getEntityStoreRegistry().registerSystem(new BalloonLockSystems.Place());
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Verrouillage des montgolfières désactivé");
+            getLogger().at(Level.WARNING).withCause(e).log("Balloon locking disabled");
         }
         // a pilot or passenger who dies in flight leaves the balloon, which descends on its own if it is the pilot.
         try {
             getEntityStoreRegistry().registerSystem(new BalloonDeathSystem());
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Mort du pilote en vol : système désactivé, seul le contrôle du tick reste");
+            getLogger().at(Level.WARNING).withCause(e).log("Pilot death in flight: system disabled, only the tick check remains");
         }
         // a player who gets up from the small tent's bed is put at the tent exit, the bed's respawn point too.
         try {
             getEntityStoreRegistry().registerSystem(new TentBedSystem());
             getEntityStoreRegistry().registerSystem(new CampRespawn.RespawnWatcher());
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Sortie du lit de la tente : système désactivé");
+            getLogger().at(Level.WARNING).withCause(e).log("Leaving the tent bed: system disabled");
         }
         // upgrading a camp pack keeps the contents of the lower pack (craft events).
         try {
             getEntityStoreRegistry().registerSystem(new CampUpgrade.Pre());
             getEntityStoreRegistry().registerSystem(new CampUpgrade.Post());
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Amélioration des sacs de campement : système désactivé");
+            getLogger().at(Level.WARNING).withCause(e).log("Camp bag upgrade: system disabled");
         }
         // disabled recipes of the mod cannot be crafted (craft events).
         try {
             getEntityStoreRegistry().registerSystem(new RecipeToggles.Guard());
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Recettes désactivées : blocage du craft désactivé");
+            getLogger().at(Level.WARNING).withCause(e).log("Disabled recipes: craft blocking disabled");
         }
         // bench tabs whose recipes are all disabled are removed from the window data.
         try {
             BenchTabs.register();
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Recettes désactivées : masquage des onglets d'établi désactivé");
+            getLogger().at(Level.WARNING).withCause(e).log("Disabled recipes: bench tab hiding disabled");
         }
         // a game mode change of a pilot or passenger makes them leave the vehicle (the game resets the movement settings).
         try {
             getEntityStoreRegistry().registerSystem(new GameModeSystem());
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Sortie du véhicule au changement de mode de jeu : système désactivé");
+            getLogger().at(Level.WARNING).withCause(e).log("Leaving the vehicle on game mode change: system disabled");
         }
         // Passengers aboard cannot be damaged (the Intangible marker is handled by PassengerProtection.protect).
         try {
             getEntityStoreRegistry().registerSystem(new PassengerProtection.DamageFilter());
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Protection des passagers contre les dégâts désactivée");
+            getLogger().at(Level.WARNING).withCause(e).log("Passenger damage protection disabled");
         }
         // the camp pack in the inventory is drawn on the player's back (look rebuilt as attachments).
         try {
@@ -161,20 +163,20 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             getEventRegistry().registerGlobal(com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent.class,
                     event -> PackBackView.onReady(event.getPlayerRef()));
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Sac de campement sur le dos désactivé");
+            getLogger().at(Level.WARNING).withCause(e).log("Camp bag on the back disabled");
         }
         try {
             getEventRegistry().registerGlobal(com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent.class,
                     event -> TransitFare.onReady(event.getPlayerRef()));
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Remboursements des billets à l'arrivée désactivés");
+            getLogger().at(Level.WARNING).withCause(e).log("Ticket refunds on arrival disabled");
         }
         // dual rendering of the vehicles in flight needs the per-viewer visibility filter. Without it every flight keeps the single entity.
         try {
             getEntityStoreRegistry().registerSystem(new ViewFilter.FilterSystem());
             ViewFilter.markRegistered();
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Affichage double des véhicules en vol : filtre de visibilité désactivé, une seule entité par véhicule");
+            getLogger().at(Level.WARNING).withCause(e).log("Double display of flying vehicles: visibility filter disabled, one entity per vehicle");
         }
         // a passenger who disconnects is dismounted cleanly (they would otherwise be saved in the air).
         getEventRegistry().register(PlayerDisconnectEvent.class,
@@ -192,7 +194,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                     try {
                         RecipeToggles.syncOnArrival(event.getHolder());
                     } catch (RuntimeException e) {
-                        getLogger().at(Level.WARNING).withCause(e).log("Recettes du mod non synchronisées à l'arrivée");
+                        getLogger().at(Level.WARNING).withCause(e).log("Mod recipes not synced on arrival");
                         Telemetry.error("recipes", e, null, null);
                     }
                 });
@@ -208,17 +210,17 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             try {
                 StationMarkerProvider.register(event.getWorld());
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des stations non enregistrés");
+                getLogger().at(Level.WARNING).withCause(e).log("Station map markers not registered");
             }
             try {
                 OwnedMarkerProvider.register(event.getWorld());
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des véhicules non enregistrés");
+                getLogger().at(Level.WARNING).withCause(e).log("Vehicle map markers not registered");
             }
             try {
                 RespawnPointMarkerProvider.register(event.getWorld());
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des lieux de réveil non enregistrés");
+                getLogger().at(Level.WARNING).withCause(e).log("Respawn point map markers not registered");
             }
         });
         getEventRegistry().registerGlobal(StartWorldEvent.class, event -> {
@@ -232,7 +234,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             try {
                 AirshipCrew.recoverWorld(event.getWorld());
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Reprise des pilotes de %s en échec", event.getWorld().getName());
+                getLogger().at(Level.WARNING).withCause(e).log("Resume of the pilots of %s failed", event.getWorld().getName());
             }
             AirshipManager.get().recoverWorld(event.getWorld());
         });
@@ -242,7 +244,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             getEventRegistry().registerGlobal(com.hypixel.hytale.server.core.universe.world.events.ChunkPreLoadProcessEvent.class,
                     GenerationListener::onChunk);
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Stations générées : écoute des chunks désactivée");
+            getLogger().at(Level.WARNING).withCause(e).log("Generated stations: chunk listening disabled");
         }
         getCommandRegistry().registerCommand(new OrbisHorizonCommand());
         getLogger().at(Level.INFO).log("Orbis Horizon plugin: interaction %s, /orbishorizon balloon command and flight system registered",
@@ -258,15 +260,15 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             StructureShape tent = kind.shapeOrNull();
             if (tent != null) {
                 StructureShape.Cell anchor = tent.anchor();
-                getLogger().at(Level.INFO).log("%s : %d case(s), repère en (%d, %d, %d)",
-                        kind == Deployables.TENT ? "Tente" : kind == Deployables.BEDROLL ? "Sac de couchage" : "Grande tente", tent.cells().size(), anchor.x(), anchor.y(), anchor.z());
+                getLogger().at(Level.INFO).log("%s: %d cell(s), anchor at (%d, %d, %d)",
+                        kind == Deployables.TENT ? "Tent" : kind == Deployables.BEDROLL ? "Bedroll" : "Large tent", tent.cells().size(), anchor.x(), anchor.y(), anchor.z());
             }
         }
         // Airship prototype: the shape is read once and the collision hull computed (logged by AirshipManager).
         for (Deployables.Kind shipKind : Deployables.SHIPS) {
             StructureShape airship = shipKind.shapeOrNull();
             if (airship != null) {
-                getLogger().at(Level.INFO).log("%s : %d case(s), repère « %s » en (%d, %d, %d)",
+                getLogger().at(Level.INFO).log("%s: %d cell(s), anchor '%s' at (%d, %d, %d)",
                         AirshipManager.cap(shipKind.airship.logLabel), airship.cells().size(),
                         airship.anchor().baseName(), airship.anchor().x(), airship.anchor().y(), airship.anchor().z());
                 AirshipManager.get().warmUp(shipKind, airship);
@@ -276,47 +278,47 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         for (Deployables.Kind kind : Deployables.BALLOONS) {
             StructureShape shape = kind.shapeOrNull();
             if (shape != null) {
-                getLogger().at(Level.INFO).log("Montgolfière « %s » : %d case(s), %d siège(s)", kind.id, shape.cells().size(), shape.seats().size());
+                getLogger().at(Level.INFO).log("Balloon '%s': %d cell(s), %d seat(s)", kind.id, shape.cells().size(), shape.seats().size());
             }
         }
         // Transit network: the transit balloon (not in BALLOONS) and the station, same startup log lines.
         StructureShape transit = Deployables.BALLOON_PUBLIC.shapeOrNull();
         if (transit != null) {
-            getLogger().at(Level.INFO).log("Montgolfière « %s » : %d case(s), %d siège(s)", Deployables.BALLOON_PUBLIC.id,
+            getLogger().at(Level.INFO).log("Balloon '%s': %d cell(s), %d seat(s)", Deployables.BALLOON_PUBLIC.id,
                     transit.cells().size(), transit.seats().size());
         } else {
-            getLogger().at(Level.WARNING).log("Montgolfière « %s » : prefab illisible", Deployables.BALLOON_PUBLIC.id);
+            getLogger().at(Level.WARNING).log("Balloon '%s': unreadable prefab", Deployables.BALLOON_PUBLIC.id);
         }
         StructureShape station = Deployables.STATION.shapeOrNull();
         if (station != null) {
-            getLogger().at(Level.INFO).log("Station : %d case(s), repère en (%d, %d, %d)", station.cells().size(),
+            getLogger().at(Level.INFO).log("Station: %d cell(s), anchor at (%d, %d, %d)", station.cells().size(),
                     station.anchor().x(), station.anchor().y(), station.anchor().z());
         } else {
-            getLogger().at(Level.WARNING).log("Station : prefab illisible");
+            getLogger().at(Level.WARNING).log("Station: unreadable prefab");
         }
         StructureShape boatStation = Deployables.BOAT_STATION.shapeOrNull();
         if (boatStation != null) {
-            getLogger().at(Level.INFO).log("Station maritime : %d case(s), repère en (%d, %d, %d)", boatStation.cells().size(),
+            getLogger().at(Level.INFO).log("Sea station: %d cell(s), anchor at (%d, %d, %d)", boatStation.cells().size(),
                     boatStation.anchor().x(), boatStation.anchor().y(), boatStation.anchor().z());
         } else {
-            getLogger().at(Level.WARNING).log("Station maritime : prefab illisible");
+            getLogger().at(Level.WARNING).log("Sea station: unreadable prefab");
         }
         // Worlds already started when the plugin starts (StartWorldEvent has already passed).
         for (World world : Universe.get().getWorlds().values()) {
             try {
                 StationMarkerProvider.register(world);
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des stations non enregistrés pour %s", world.getName());
+                getLogger().at(Level.WARNING).withCause(e).log("Station map markers not registered for %s", world.getName());
             }
             try {
                 OwnedMarkerProvider.register(world);
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des véhicules non enregistrés pour %s", world.getName());
+                getLogger().at(Level.WARNING).withCause(e).log("Vehicle map markers not registered for %s", world.getName());
             }
             try {
                 RespawnPointMarkerProvider.register(world);
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Marqueurs de carte des lieux de réveil non enregistrés pour %s", world.getName());
+                getLogger().at(Level.WARNING).withCause(e).log("Respawn point map markers not registered for %s", world.getName());
             }
             GenerationListener.onWorldStart(world);
             SeaCharts.onWorldStart(world);
@@ -324,33 +326,33 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             try {
                 BalloonManager.get().recoverWorld(world);
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Reprise des montgolfières de %s remise au démarrage du monde", world.getName());
+                getLogger().at(Level.WARNING).withCause(e).log("Resume of the balloons of %s deferred to world start", world.getName());
             }
             try {
                 CageAnimals.recoverWorld(world);
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Reprise des animaux de %s remise au démarrage du monde", world.getName());
+                getLogger().at(Level.WARNING).withCause(e).log("Resume of the animals of %s deferred to world start", world.getName());
             }
             try {
                 StationMaster.recoverWorld(world);
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Reprise des chefs de gare de %s remise au démarrage du monde", world.getName());
+                getLogger().at(Level.WARNING).withCause(e).log("Resume of the station masters of %s deferred to world start", world.getName());
             }
             try {
                 AirshipCrew.recoverWorld(world);
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Reprise des pilotes de %s remise au démarrage du monde", world.getName());
+                getLogger().at(Level.WARNING).withCause(e).log("Resume of the pilots of %s deferred to world start", world.getName());
             }
             try {
                 StationQueue.recoverWorld(world);
                 BoatQuay.recoverWorld(world);
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Reprise des quais de %s remise au démarrage du monde", world.getName());
+                getLogger().at(Level.WARNING).withCause(e).log("Resume of the docks of %s deferred to world start", world.getName());
             }
             try {
                 AirshipManager.get().recoverWorld(world);
             } catch (RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("Reprise des dirigeables de %s remise au démarrage du monde", world.getName());
+                getLogger().at(Level.WARNING).withCause(e).log("Resume of the airships of %s deferred to world start", world.getName());
             }
         }
         Telemetry.start(this); // last: Beacon starts after the normal setup
@@ -374,11 +376,11 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             try {
                 deleted |= java.nio.file.Files.deleteIfExists(dataDir.resolve(name));
             } catch (java.io.IOException | RuntimeException e) {
-                getLogger().at(Level.WARNING).withCause(e).log("%s : suppression impossible", name);
+                getLogger().at(Level.WARNING).withCause(e).log("%s: cannot delete", name);
             }
         }
         if (deleted) {
-            getLogger().at(Level.INFO).log("boat-routes.json supprimé : les routes d'eau enregistrées ne sont plus utilisées");
+            getLogger().at(Level.INFO).log("boat-routes.json deleted: the saved water routes are no longer used");
         }
     }
 
@@ -387,12 +389,12 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         try {
             getEntityStoreRegistry().registerSystem(new AirshipInputSystem());
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Dirigeable : lecteur d'entrées désactivé, le mode de cap « look » ne marchera pas");
+            getLogger().at(Level.WARNING).withCause(e).log("Airship: input reader disabled, the 'look' heading mode will not work");
         }
         try {
             getEntityStoreRegistry().registerSystem(new AirshipFlightSystem());
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Dirigeable : tick de vol désactivé");
+            getLogger().at(Level.WARNING).withCause(e).log("Airship: flight tick disabled");
         }
     }
 }

@@ -90,30 +90,30 @@ final class TentContents {
         }
         try {
             if (!d.containsKey("v") || !d.get("v").isNumber() || d.get("v").asNumber().intValue() != VERSION) {
-                LOGGER.at(Level.WARNING).log("Contenu de tente : version inconnue, ignoré");
+                LOGGER.at(Level.WARNING).log("Tent contents: unknown version, ignored");
                 return null;
             }
             String kind = d.containsKey("kind") && d.get("kind").isString() ? d.getString("kind").getValue() : null;
             if (!expectedKind.equals(kind)) {
-                LOGGER.at(Level.WARNING).log("Contenu de tente : type %s au lieu de %s, ignoré", kind, expectedKind);
+                LOGGER.at(Level.WARNING).log("Tent contents: type %s instead of %s, ignored", kind, expectedKind);
                 return null;
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Contenu de tente illisible, ignoré");
+            LOGGER.at(Level.WARNING).withCause(e).log("Unreadable tent contents, ignored");
             return null;
         }
         AirshipBenchContents b;
         try {
             b = AirshipBenchContents.fromBson(d.getDocument("benches"));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Contenu de tente : établis illisibles, remplacés par un ensemble vide");
+            LOGGER.at(Level.WARNING).withCause(e).log("Tent contents: unreadable benches, replaced by an empty set");
             b = AirshipBenchContents.fromBson(null);
         }
         BalloonCargo c;
         try {
             c = BalloonCargo.fromBson(d.getDocument("cargo"));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Contenu de tente : coffres illisibles, remplacés par un ensemble vide");
+            LOGGER.at(Level.WARNING).withCause(e).log("Tent contents: unreadable chests, replaced by an empty set");
             c = new BalloonCargo(new java.util.ArrayList<>());
         }
         return new TentContents(b, c);

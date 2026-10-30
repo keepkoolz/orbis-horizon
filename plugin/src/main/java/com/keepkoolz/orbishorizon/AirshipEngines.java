@@ -116,7 +116,7 @@ final class AirshipEngines {
             Vector3i p = c.rotated(rotation).add(origin);
             ProcessingBenchBlock bench = BurnerFuel.live(world, p);
             if (bench == null) {
-                LOGGER.at(Level.WARNING).log("Moteur du dirigeable introuvable en %s : contenu non gardé", p);
+                LOGGER.at(Level.WARNING).log("Airship engine not found at %s: contents not kept", p);
                 continue;
             }
             engines.entries.add(new Entry(new Vector3i(c.x(), c.y(), c.z()), BurnerFuel.takeFrom(bench)));

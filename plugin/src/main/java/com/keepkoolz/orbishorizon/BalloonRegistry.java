@@ -480,7 +480,7 @@ final class BalloonRegistry {
         try {
             addNamed(world.getName(), origin, rotation, kind, own);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Structure « %s » non enregistrée dans le registre de verrouillage", kind);
+            LOGGER.at(Level.WARNING).withCause(e).log("Structure '%s' not registered in the lock registry", kind);
         }
     }
 
@@ -538,13 +538,13 @@ final class BalloonRegistry {
                 save();
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Structure « %s » non retirée du registre de verrouillage", kind);
+            LOGGER.at(Level.WARNING).withCause(e).log("Structure '%s' not removed from the lock registry", kind);
         }
     }
 
     private static synchronized void remove(Entry entry) {
         if (ENTRIES.remove(entry)) {
-            LOGGER.at(Level.INFO).log("Structure « %s » en (%d, %d, %d) du monde %s absente : retirée du registre de verrouillage",
+            LOGGER.at(Level.INFO).log("Structure '%s' at (%d, %d, %d) of world %s is missing: removed from the lock registry",
                     entry.kind, entry.x, entry.y, entry.z, entry.world);
             save();
         }
@@ -652,7 +652,7 @@ final class BalloonRegistry {
     private static Deployables.Kind kindOf(Entry e) {
         Deployables.Kind kind = Deployables.get(e.kind);
         if (kind == null && UNKNOWN_WARNED.add(e.kind)) {
-            LOGGER.at(Level.WARNING).log("Registre de verrouillage : type de structure inconnu « %s », entrées ignorées", e.kind);
+            LOGGER.at(Level.WARNING).log("Lock registry: unknown structure type '%s', entries ignored", e.kind);
         }
         return kind;
     }
@@ -682,7 +682,7 @@ final class BalloonRegistry {
             remove(e);
             return true;
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Vérification de l'entrée du registre en échec : gardée");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Registry entry check failed: kept");
             return false;
         }
     }
@@ -801,9 +801,9 @@ final class BalloonRegistry {
                 // Persist the created ids so they stay stable across restarts.
                 save();
             }
-            LOGGER.at(Level.INFO).log("Registre de verrouillage : %d structure(s)", ENTRIES.size());
+            LOGGER.at(Level.INFO).log("Lock registry: %d structure(s)", ENTRIES.size());
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.SEVERE).withCause(e).log("Registre de verrouillage illisible : %s", f);
+            LOGGER.at(Level.SEVERE).withCause(e).log("Lock registry unreadable: %s", f);
             ENTRIES.clear();
             try {
                 Files.move(f, f.resolveSibling(f.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
@@ -837,7 +837,7 @@ final class BalloonRegistry {
                 Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Registre de verrouillage non écrit");
+            LOGGER.at(Level.WARNING).withCause(e).log("Lock registry not written");
         }
     }
 }

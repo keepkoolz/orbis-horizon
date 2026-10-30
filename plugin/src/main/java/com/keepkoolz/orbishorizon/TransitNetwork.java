@@ -173,12 +173,12 @@ final class TransitNetwork {
                 loadPayments(stations.get(stations.size() - 1), d);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("stations.json illisible, réseau vide");
+            LOGGER.at(Level.WARNING).withCause(e).log("stations.json unreadable, network empty");
             stations.clear();
             try {
                 Files.move(file, file.resolveSibling(file.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e2) {
-                LOGGER.at(Level.WARNING).withCause(e2).log("Impossible de renommer stations.json en .bad");
+                LOGGER.at(Level.WARNING).withCause(e2).log("Cannot rename stations.json to .bad");
             }
         }
     }
@@ -197,10 +197,10 @@ final class TransitNetwork {
                 if (!queued) continue;
                 String item = p.getString("item").getValue();
                 int qty = p.getInt32("qty").getValue();
-                if (item.isEmpty() || qty <= 0) throw new IllegalArgumentException("paiement invalide");
+                if (item.isEmpty() || qty <= 0) throw new IllegalArgumentException("invalid payment");
                 s.payments.put(key, new TransitFare.Payment(UUID.fromString(p.getString("payer").getValue()), item, qty));
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Paiement illisible dans stations.json, ignoré");
+                LOGGER.at(Level.WARNING).withCause(e).log("Unreadable payment in stations.json, ignored");
             }
         }
     }
@@ -332,7 +332,7 @@ final class TransitNetwork {
                 Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Écriture de stations.json impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Cannot write stations.json");
         }
     }
 }

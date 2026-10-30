@@ -106,7 +106,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
         Path path = prefabPath != null ? PrefabStore.get().findAssetPrefabPath(prefabPath) : null;
         boolean boatStation = kind == Deployables.BOAT_STATION;
         if ((kind != Deployables.STATION && !boatStation) || path == null) {
-            LOGGER.at(Level.WARNING).log("Transit_DeployStation: PrefabPath inattendu ou introuvable : %s", prefabPath);
+            LOGGER.at(Level.WARNING).log("Transit_DeployStation: unexpected or missing PrefabPath: %s", prefabPath);
             fail(context);
             return;
         }
@@ -116,7 +116,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
             station = kind.shape();
             balloon = boatStation ? null : Deployables.BALLOON_PUBLIC.shape();
         } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Transit_DeployStation: forme illisible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Transit_DeployStation: unreadable shape");
             Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
             fail(context);
             return;
@@ -136,7 +136,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
             // The origin follows the water surface under the pier end, whatever the height of the bank.
             origin = DeployPlacement.boatStationOrigin(DeployPlacement.worldState(world), origin, rotation);
             if (origin == null) {
-                LOGGER.at(Level.INFO).log("Station maritime refusée : pas d'eau sous le bout du ponton");
+                LOGGER.at(Level.INFO).log("Sea station refused: no water under the end of the pier");
                 playerRef.sendMessage(Texts.t("deploy.steamboat.noWater"));
                 fail(context);
                 return;
@@ -195,7 +195,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
                 }
                 p.getPageManager().openCustomPage(ref, store, new StationNamePage(playerRef, world, placedOrigin, placedRotation, kind.id));
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Fenêtre du nom de la station impossible : nom automatique");
+                LOGGER.at(Level.WARNING).withCause(e).log("Cannot open the station name window: automatic name");
                 Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
                 StationNamePage.onPlayerGone(playerRef.getUuid());
                 if (TransitNetwork.get().at(world.getName(), placedOrigin) == null) {
@@ -203,7 +203,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
                 }
             }
         });
-        LOGGER.at(Level.INFO).log("Station posée en (%d, %d, %d) rotation %s par %s, en attente du nom", origin.x, origin.y, origin.z,
+        LOGGER.at(Level.INFO).log("Station placed at (%d, %d, %d) rotation %s by %s, waiting for the name", origin.x, origin.y, origin.z,
                 rotation, playerRef.getUsername());
     }
 
@@ -218,10 +218,10 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
             if (BoatBerth.hasOpenWaterExit(world, probe)) {
                 return true;
             }
-            LOGGER.at(Level.INFO).log("Station maritime refusée en (%d, %d, %d) : pas de sortie vers le large", origin.x, origin.y, origin.z);
+            LOGGER.at(Level.INFO).log("Sea station refused at (%d, %d, %d): no way out to open water", origin.x, origin.y, origin.z);
             return false;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station maritime : recherche d'une sortie vers le large en échec, pose refusée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Sea station: search for a way out to open water failed, placement refused");
             Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
             return false;
         }
@@ -256,10 +256,10 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
                 BalloonRegistry.setWood(world, origin, rotation, kind.id, custom ? wood.species() : null);
                 if (custom) {
                     int changed = applyWood(world, station, origin, rotation, wood);
-                    LOGGER.at(Level.INFO).log("Station maritime : %d bloc(s) réécrits en %s", changed, wood.species());
+                    LOGGER.at(Level.INFO).log("Sea station: %d block(s) rewritten as %s", changed, wood.species());
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Bois de la station maritime non appliqué");
+                LOGGER.at(Level.WARNING).withCause(e).log("Sea station wood not applied");
                 Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
             }
         } else if (Deployables.STATION_KIND.equals(kind.id)) {
@@ -281,10 +281,10 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
             if (customStone) {
                 changed += applyStone(world, station, origin, rotation, stone);
             }
-            LOGGER.at(Level.INFO).log("Station : %d bloc(s) réécrits (bois %s, pierre %s)", changed,
+            LOGGER.at(Level.INFO).log("Station: %d block(s) rewritten (wood %s, stone %s)", changed,
                     customWood ? wood.species() : "d'origine", customStone ? stone.family() : "d'origine");
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Bois et pierre de la station non appliqués");
+            LOGGER.at(Level.WARNING).withCause(e).log("Station wood and stone not applied");
             Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
         }
     }
@@ -318,7 +318,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
             int id = BlockType.getAssetMap().getIndex(name);
             BlockType type = id < 0 ? null : BlockType.getAssetMap().getAsset(id);
             if (type == null) {
-                LOGGER.at(Level.WARNING).log("Station : bloc inconnu %s", name);
+                LOGGER.at(Level.WARNING).log("Station: unknown block %s", name);
                 continue;
             }
             Vector3i p = c.rotated(rotation).add(origin);
@@ -412,21 +412,21 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
             wet = BalloonManager.underLiquid(world, balloon, dock, rotation);
         }
         if (wet != null) {
-            LOGGER.at(Level.INFO).log("Station refusée en (%d, %d, %d) : liquide en (%d, %d, %d)", origin.x, origin.y, origin.z, wet.x, wet.y, wet.z);
+            LOGGER.at(Level.INFO).log("Station refused at (%d, %d, %d): liquid at (%d, %d, %d)", origin.x, origin.y, origin.z, wet.x, wet.y, wet.z);
             return Refusal.of("deploy.underwater");
         }
         SectionReader reader = new SectionReader(world.getChunkStore());
         for (Vector3i p : cells) {
             if (BalloonManager.outOfHeight(p.y)) {
-                LOGGER.at(Level.INFO).log("Station refusée en (%d, %d, %d) : la case (%d, %d, %d) dépasse la limite de hauteur",
+                LOGGER.at(Level.INFO).log("Station refused at (%d, %d, %d): cell (%d, %d, %d) exceeds the height limit",
                         origin.x, origin.y, origin.z, p.x, p.y, p.z);
                 return Refusal.of("deploy.heightLimit");
             }
             boolean loaded = reader.hasStorageInMemory(p.x, p.y, p.z);
             BlockType bt = loaded ? SectionBlocks.typeAt(reader, p.x, p.y, p.z) : null;
             if (!loaded || (bt != null && blocksRoom(bt.getId(), bt.getMaterial() == BlockMaterial.Solid, removableIsEmpty))) {
-                LOGGER.at(Level.INFO).log("Station refusée en (%d, %d, %d) : %s en (%d, %d, %d)",
-                        origin.x, origin.y, origin.z, loaded ? bt.getId() : "chunk non chargé", p.x, p.y, p.z);
+                LOGGER.at(Level.INFO).log("Station refused at (%d, %d, %d): %s at (%d, %d, %d)",
+                        origin.x, origin.y, origin.z, loaded ? bt.getId() : "chunk not loaded", p.x, p.y, p.z);
                 return loaded
                         ? Refusal.at("transit.deploy.noSpaceAt", bt.getId().startsWith("*") ? bt.getId().substring(1) : bt.getId(), p.x, p.y, p.z)
                         : Refusal.of("transit.deploy.noSpace");
@@ -460,7 +460,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
         for (StructureShape.Cell c : station.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             if (BalloonManager.outOfHeight(p.y)) {
-                LOGGER.at(Level.INFO).log("Station maritime refusée en (%d, %d, %d) : la case (%d, %d, %d) dépasse la limite de hauteur",
+                LOGGER.at(Level.INFO).log("Sea station refused at (%d, %d, %d): cell (%d, %d, %d) exceeds the height limit",
                         origin.x, origin.y, origin.z, p.x, p.y, p.z);
                 return Refusal.of("deploy.heightLimit");
             }
@@ -472,7 +472,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
             String liquidId = BalloonManager.liquidAt(reader, p.x, p.y, p.z);
             boolean liquid = liquidId != null && !emptied.contains(p);
             if (!boatCellAllowed(c.y(), solid, liquid)) {
-                LOGGER.at(Level.INFO).log("Station maritime refusée en (%d, %d, %d) : %s en (%d, %d, %d)",
+                LOGGER.at(Level.INFO).log("Sea station refused at (%d, %d, %d): %s at (%d, %d, %d)",
                         origin.x, origin.y, origin.z, solid ? bt.getId() : liquidId, p.x, p.y, p.z);
                 String what = solid ? (bt.getId().startsWith("*") ? bt.getId().substring(1) : bt.getId()) : liquidId;
                 return Refusal.at("transit.deploy.boatNoSpaceAt", what, p.x, p.y, p.z);
@@ -482,7 +482,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
         try {
             boat = Deployables.STEAMBOAT_PUBLIC.shape();
         } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station maritime : forme de la navette illisible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Sea station: unreadable shuttle shape");
             Telemetry.error("deploy", e, Telemetry.kindId(Deployables.BOAT_STATION), null);
             return new Refusal(null, null, null, null);
         }
@@ -499,8 +499,8 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
             String found = bt != null && bt.getMaterial() == BlockMaterial.Solid ? bt.getId() : liquidId != null ? liquidId
                     : bt != null ? bt.getId() : "air";
             String block = found.startsWith("*") ? found.substring(1) : found;
-            LOGGER.at(Level.INFO).log("Station maritime refusée en (%d, %d, %d) : poste d'amarrage (%s), %s en (%d, %d, %d), %s",
-                    origin.x, origin.y, origin.z, fault.key(), block, at.x, at.y, at.z, fault.hull() ? "coque" : "hors de l'eau");
+            LOGGER.at(Level.INFO).log("Sea station refused at (%d, %d, %d): docking post (%s), %s at (%d, %d, %d), %s",
+                    origin.x, origin.y, origin.z, fault.key(), block, at.x, at.y, at.z, fault.hull() ? "hull" : "out of the water");
             return new Refusal("transit.deploy.boatBerth", block, new Vector3i(at), fault.key(), fault.hull());
         }
         return null;
@@ -556,7 +556,7 @@ public class DeployStationInteraction extends SimpleInstantInteraction {
         } catch (RuntimeException ignored) {
             // the player may be gone
         }
-        LOGGER.at(Level.INFO).log("Station « %s » enregistrée en (%d, %d, %d)", chosen, origin.x, origin.y, origin.z);
+        LOGGER.at(Level.INFO).log("Station \"%s\" registered at (%d, %d, %d)", chosen, origin.x, origin.y, origin.z);
     }
 
     /**

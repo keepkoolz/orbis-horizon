@@ -20,7 +20,7 @@ final class TransitUiTexts {
     static void destinations(UICommandBuilder cmd, String titleKey) {
         cmd.set("#TitleText.Text", m(titleKey));
         cmd.set("#CloseButton.Text", m("close"));
-        cmd.set("#FarePrice.Text", m("fare.price"));
+        cmd.set("#FarePrice.Text", m(TransitSettings.fareEnabled() ? "fare.price" : "fare.free"));
         cmd.set("#HireButton.Text", m("crew.hire"));
         cmd.set("#RecallButton.Text", m("crew.recall"));
         cmd.set("#HirePrice.Text", m("crew.hirePrice")

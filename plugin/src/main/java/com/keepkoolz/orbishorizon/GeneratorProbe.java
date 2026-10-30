@@ -55,7 +55,7 @@ final class GeneratorProbe implements TerrainProbe {
             return new GeneratorProbe((ChunkGenerator) generator, (int) world.getWorldConfig().getSeed());
         }
         if (a == Availability.OFF && WARNED.add(world.getName())) {
-            LOGGER.at(Level.INFO).log("Stations générées : le monde %s est supprimé à sa fermeture ou n'utilise pas le générateur du jeu, fonction inactive pour ce monde", world.getName());
+            LOGGER.at(Level.INFO).log("Generated stations: world %s is deleted on close or does not use the game generator, feature inactive for this world", world.getName());
         }
         return null;
     }

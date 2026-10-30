@@ -77,13 +77,13 @@ final class StructureComponents {
                     found.add(p);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Contrôle des composants en %s impossible", p);
+                LOGGER.at(Level.WARNING).withCause(e).log("Cannot check the components at %s", p);
                 expected.add(p);
             }
         }
         List<Vector3i> missing = missing(expected, found);
         if (!missing.isEmpty()) {
-            LOGGER.at(Level.WARNING).log("Composants de blocs illisibles (%d case(s), premier en %s), retrait refusé", missing.size(),
+            LOGGER.at(Level.WARNING).log("Unreadable block components (%d cell(s), first at %s), removal refused", missing.size(),
                     missing.get(0));
         }
         return missing;

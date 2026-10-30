@@ -113,10 +113,10 @@ final class PackBackView {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Liste des plugins illisible, sac de campement sur le dos laissé actif");
+            LOGGER.at(Level.WARNING).withCause(e).log("Plugin list unreadable, camp backpack on the back left active");
         }
         otherBackpackMod = found;
-        LOGGER.at(Level.INFO).log("Sac de campement sur le dos : True Backpack %s", found ? "détecté, rien n'est dessiné" : "absent");
+        LOGGER.at(Level.INFO).log("Camp backpack on the back: True Backpack %s", found ? "detected, nothing is drawn" : "absent");
         return found;
     }
 
@@ -138,7 +138,7 @@ final class PackBackView {
                         refreshNow(store, player, id, cause);
                     }
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Sac de campement sur le dos (%s) en échec", cause);
+                    LOGGER.at(Level.WARNING).withCause(e).log("Camp backpack on the back (%s) failed", cause);
                 }
             });
         } catch (RuntimeException e) {
@@ -150,7 +150,7 @@ final class PackBackView {
             } catch (RuntimeException ignored) {
                 // nothing more to do
             }
-            LOGGER.at(Level.WARNING).withCause(e).log("Sac de campement sur le dos (%s) : planification en échec", cause);
+            LOGGER.at(Level.WARNING).withCause(e).log("Camp backpack on the back (%s): scheduling failed", cause);
         }
     }
 
@@ -237,7 +237,7 @@ final class PackBackView {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Garde du sac de campement sur le dos en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Camp backpack on the back guard failed");
         }
     }
 
@@ -281,7 +281,7 @@ final class PackBackView {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Sac de campement sur le dos : renvoi du modèle aux nouveaux spectateurs en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Camp backpack on the back: resending the model to new viewers failed");
         }
     }
 
@@ -313,10 +313,10 @@ final class PackBackView {
                 }
                 EntityScaleComponent scale = store.getComponent(ref, EntityScaleComponent.getComponentType());
                 self.queueUpdate(ref, new ModelUpdate(mc.getModel().toPacket(), scale != null ? scale.getScale() : 0f));
-                LOGGER.at(Level.INFO).log("Sac de campement sur le dos : modèle renvoyé au joueur après arrivée");
+                LOGGER.at(Level.INFO).log("Camp backpack on the back: model resent to the player after arrival");
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Sac de campement sur le dos : renvoi du modèle au joueur en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Camp backpack on the back: resending the model to the player failed");
         }
     }
 
@@ -324,14 +324,14 @@ final class PackBackView {
     static void onReady(Ref<EntityStore> ref) {
         try {
             if (ref != null && ref.isValid()) {
-                refresh(ref.getStore(), ref, "arrivée du joueur");
+                refresh(ref.getStore(), ref, "player arrival");
                 String id = uuid(ref.getStore(), ref);
                 if (id != null) {
                     SELF.put(id, new SelfResend(ref, System.currentTimeMillis() + VIEWER_RESEND_MS));
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Arrivée du joueur : sac de campement sur le dos en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Player arrival: camp backpack on the back failed");
         }
     }
 
@@ -350,16 +350,16 @@ final class PackBackView {
                         for (PlayerRef pr : world.getPlayerRefs()) {
                             Ref<EntityStore> ref = pr.getReference();
                             if (ref != null && ref.isValid()) {
-                                refresh(ref.getStore(), ref, "réglage");
+                                refresh(ref.getStore(), ref, "setup");
                             }
                         }
                     } catch (RuntimeException e) {
-                        LOGGER.at(Level.WARNING).withCause(e).log("Réglage du sac de campement sur le dos en échec");
+                        LOGGER.at(Level.WARNING).withCause(e).log("Camp backpack on the back setup failed");
                     }
                 });
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Réglage du sac de campement sur le dos en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Camp backpack on the back setup failed");
         }
     }
 
@@ -422,7 +422,7 @@ final class PackBackView {
 
         @Override
         String cause() {
-            return "changement de réglages (masquage de l'armure)";
+            return "settings change (armour hiding)";
         }
     }
 
@@ -435,7 +435,7 @@ final class PackBackView {
 
         @Override
         String cause() {
-            return "modèle remplacé par un autre système";
+            return "model replaced by another system";
         }
     }
 
@@ -456,7 +456,7 @@ final class PackBackView {
             try {
                 refresh(store, chunk.getReferenceTo(index), "changement d'inventaire");
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Sac de campement sur le dos : écouteur d'inventaire en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Camp backpack on the back: inventory listener failed");
             }
         }
     }
@@ -475,9 +475,9 @@ final class PackBackView {
         public void handle(int index, ArchetypeChunk<EntityStore> chunk, Store<EntityStore> store, CommandBuffer<EntityStore> cb,
                            RespawnEvent event) {
             try {
-                refresh(store, chunk.getReferenceTo(index), "réapparition");
+                refresh(store, chunk.getReferenceTo(index), "respawn");
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Sac de campement sur le dos : écouteur de réapparition en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Camp backpack on the back: respawn listener failed");
             }
         }
     }

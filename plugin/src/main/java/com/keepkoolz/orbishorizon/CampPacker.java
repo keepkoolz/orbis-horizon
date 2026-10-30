@@ -63,7 +63,7 @@ final class CampPacker {
             ItemStackTransaction t = Player.giveItem(stack, player, store);
             rest = t != null ? t.getRemainder() : stack;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Sac non donné au joueur, lâché au sol");
+            LOGGER.at(Level.WARNING).withCause(e).log("Bag not given to the player, dropped on the ground");
             Telemetry.error("pack", e, null, null);
         }
         if (rest != null && !rest.isEmpty()) {
@@ -99,7 +99,7 @@ final class CampPacker {
             try {
                 shape = kind.shape();
             } catch (IOException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Campement : forme illisible");
+                LOGGER.at(Level.WARNING).withCause(e).log("Camp: unreadable shape");
                 Telemetry.error("pack", e, null, null);
                 return Result.failure(Texts.t("camp.notACamp"));
             }
@@ -121,12 +121,12 @@ final class CampPacker {
                 playerRef.sendMessage(Texts.t("camp.packInChest"));
             }
             playerRef.sendMessage(Texts.t(!inInventory ? "camp.droppedAtFeet" : kept ? "camp.packedKept" : "camp.packed"));
-            LOGGER.at(Level.INFO).log("Campement « %s » rangé par %s en (%d, %d, %d) : %d bloc(s) retirés%s",
+            LOGGER.at(Level.INFO).log("Camp \"%s\" packed by %s at (%d, %d, %d): %d block(s) removed%s",
                     kind.id, playerRef.getUsername(), origin.x, origin.y, origin.z, removal.removed(),
-                    kept ? ", " + removal.items() + " objet(s) gardés dans le sac" : "");
+                    kept ? ", " + removal.items() + " item(s) kept in the bag" : "");
             return new Result(null, kept, !inInventory);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Campement : rangement en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Camp: packing failed");
             Telemetry.error("pack", e, null, null);
             return Result.failure(Texts.t("camp.notACamp"));
         }

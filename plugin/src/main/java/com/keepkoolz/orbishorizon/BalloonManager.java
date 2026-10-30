@@ -142,8 +142,6 @@ public final class BalloonManager {
     private static final long BOOST_START_DELAY_MS = 1000;
     private static final double BOOST_ON_SPEED = 1.0;
     private static final double BOOST_OFF_SPEED = 0.3;
-    /** Fuel level message in flight, every FUEL_MSG_INTERVAL_MS. */
-    private static final long FUEL_MSG_INTERVAL_MS = 15000;
     /**
      * automatic descent (dry burner in flight, or hovering). The server lowers the entity on
      * every tick by flight.descentSpeed blocks per second, the pilot's vertical flight speed read back from their
@@ -449,7 +447,7 @@ public final class BalloonManager {
                 tellPassengers(f, CaptainMap.STOP_KEY);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage de la montgolfière : arrêt par la carte en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Balloon voyage: stop from the map failed");
             Telemetry.error("balloon.flight", e, Telemetry.kindId(f.kind), "voyage");
         }
     }
@@ -484,7 +482,7 @@ public final class BalloonManager {
             CaptainMap.sweepAround(store, f.entityPos);
             CaptainMap.forget(v.captain);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage de la montgolfière : nettoyage de fin en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Balloon voyage: final cleanup failed");
             Telemetry.error("balloon.flight", e, Telemetry.kindId(f.kind), "voyage");
         }
     }
@@ -515,9 +513,9 @@ public final class BalloonManager {
             if (v.stop()) {
                 tellPassengers(f, "crew.voyage.captainGone");
             }
-            LOGGER.at(Level.INFO).log("Voyage : capitaine %s parti, la montgolfière descend et se pose", player);
+            LOGGER.at(Level.INFO).log("Voyage: captain %s left, the balloon descends and lands", player);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : départ du capitaine non traité");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: captain departure not handled");
             Telemetry.error("balloon.passenger", e, Telemetry.kindId(f.kind), "voyage");
         }
     }
@@ -618,7 +616,7 @@ public final class BalloonManager {
         try {
             return startVoyageChecked(store, world, captain, e, d);
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Voyage de la montgolfière : départ en échec");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Balloon voyage: departure failed");
             Telemetry.error("balloon.flight", ex, e != null ? e.kind() : null, "voyage");
             return Texts.t("error.noBalloon");
         }
@@ -711,7 +709,7 @@ public final class BalloonManager {
                 pr.sendMessage(ShipVoyage.withDest(Texts.pilot("crew.voyage.depart", entry.crew()), d.kind(), d.name()));
             }
         }
-        LOGGER.at(Level.INFO).log("Voyage : décollage de la montgolfière de %s vers %s (%s, %.0f, %.0f), croisière à y %.0f, %d passager(s)",
+        LOGGER.at(Level.INFO).log("Voyage: takeoff of the balloon of %s to %s (%s, %.0f, %.0f), cruise at y %.0f, %d passenger(s)",
                 captain.getUsername(), d.name(), d.kind(), d.x(), d.z(), f.voyage.cruiseY, f.passengers.size());
         return null;
     }
@@ -743,7 +741,7 @@ public final class BalloonManager {
             try {
                 k.shape();
             } catch (IOException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Lecture du prefab impossible");
+                LOGGER.at(Level.WARNING).withCause(e).log("Prefab read failed");
                 Telemetry.error("balloon.takeoff", e, null, null);
                 return Texts.t("error.prefabUnreadable").param("error", String.valueOf(e.getMessage()));
             }
@@ -859,11 +857,11 @@ public final class BalloonManager {
                 flight.crew = registered.crew();
                 crewLook = AirshipCrew.lookOf(store, AirshipCrew.refOf(world, registered));
                 if (crewLook == null) {
-                    LOGGER.at(Level.INFO).log("Pilote : absent au décollage, pas de mannequin de vol");
+                    LOGGER.at(Level.INFO).log("Pilot: absent at takeoff, no flight mannequin");
                 }
                 AirshipCrew.remove(store, world, registered);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Pilote de la montgolfière : retrait au décollage en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Balloon pilot: removal at takeoff failed");
                 Telemetry.error("balloon.flight", e, Telemetry.kindId(kind), null);
             }
         }
@@ -946,7 +944,6 @@ public final class BalloonManager {
         flight.lastCheckedOrigin.set(found.origin);
         flight.takeoffMs = System.currentTimeMillis();
         flight.lastBurnMs = flight.takeoffMs;
-        flight.nextFuelMsgMs = flight.takeoffMs + FUEL_MSG_INTERVAL_MS;
         if (dry) {
             // Dry descent: the flight starts out of fuel.
             flight.dry = true;
@@ -974,17 +971,17 @@ public final class BalloonManager {
         } else {
             PlayerRef notified = player != null ? player : voyageLaunch != null ? voyageLaunch.captain() : null;
             if (notified != null) {
-                notified.sendMessage(Texts.t("fuel.status").param("fuel", fuelMessage(flight.burner)));
+                FuelHud.show(store, notified, FuelHud.Vehicle.BALLOON, flight.burner.remainingSeconds(), flight.burner.fuelItems());
             }
             // the chest contents and the number of passengers go to the log (line below), not to the chat.
             if (!flight.cargo.isEmpty()) {
-                LOGGER.at(Level.INFO).log("Coffres : %d objet(s) transporté(s)", flight.cargo.itemCount());
+                LOGGER.at(Level.INFO).log("Chests: %d item(s) carried", flight.cargo.itemCount());
             }
         }
-        LOGGER.at(Level.INFO).log("%s : origine %s, rotation %s, %d blocs retirés%s", dry ? "Descente à sec" : "Décollage",
+        LOGGER.at(Level.INFO).log("%s: origin %s, rotation %s, %d blocks removed%s", dry ? "Dry descent" : "Takeoff",
                 found.origin, found.rotation, removed,
-                (pilotless ? " (sans pilote)" : "") + ", " + seated.size() + " passager(s)"
-                        + (groundCage > 0 ? ", sur la cage restée au sol (descente de " + groundCage + ")" : ""));
+                (pilotless ? " (no pilot)" : "") + ", " + seated.size() + " passenger(s)"
+                        + (groundCage > 0 ? ", on the cage left on the ground (descent of " + groundCage + ")" : ""));
         return null;
     }
 
@@ -1013,7 +1010,7 @@ public final class BalloonManager {
                 flight.crewMan.localYaw = AirshipCrew.seatYaw(Deployables.crewOf(kind.id).restRotation());
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote de la montgolfière : mannequin non créé");
+            LOGGER.at(Level.WARNING).withCause(e).log("Balloon pilot: mannequin not created");
             Telemetry.error("balloon.flight", e, Telemetry.kindId(kind), null);
         }
     }
@@ -1042,7 +1039,7 @@ public final class BalloonManager {
             flight.skyScanMs = now;
             StationDiscovery.scan(k, TransitNetwork.get().stations(flight.world.getName()), flight.entityPos.x, flight.entityPos.z);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Journal du ciel de la montgolfière : enregistrement impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Balloon sky log: recording failed");
             Telemetry.error("balloon.flight", e, Telemetry.kindId(flight.kind), "sky");
         }
     }
@@ -1061,7 +1058,7 @@ public final class BalloonManager {
             BalloonRegistry.setCrew(world, origin, rotation, flight.kind.id, flight.crew.withPost(post));
             AirshipCrew.ensure(world, BalloonRegistry.get(world, origin, rotation, flight.kind.id));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote de la montgolfière : retour à son poste en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Balloon pilot: return to post failed");
             Telemetry.error("balloon.flight", e, Telemetry.kindId(flight.kind), null);
         }
     }
@@ -1305,7 +1302,7 @@ public final class BalloonManager {
     Ref<EntityStore> spawnModelEntity(Store<EntityStore> store, Vector3d position, double yawRadians, String id, UUID uuid) {
         ModelAsset asset = ModelAsset.getAssetMap().getAsset(id);
         if (asset == null) {
-            LOGGER.at(Level.WARNING).log("Modèle %s introuvable", id);
+            LOGGER.at(Level.WARNING).log("Model %s not found", id);
             return null;
         }
         Model model = Model.createUnitScaleModel(asset);
@@ -1398,13 +1395,13 @@ public final class BalloonManager {
     void pastePrefab(Deployables.Kind kind, World world, Store<EntityStore> store, Vector3i origin, Rotation rotation, Ownership own) {
         Path path = PrefabStore.get().findAssetPrefabPath(kind.prefabPath);
         if (path == null) {
-            LOGGER.at(Level.WARNING).log("Prefab %s introuvable pour l'atterrissage", kind.prefabPath);
+            LOGGER.at(Level.WARNING).log("Prefab %s not found for landing", kind.prefabPath);
             return;
         }
         try {
             pasteKeepingTerrain(PrefabBufferUtil.getCached(path), world, kind.shape(), origin, rotation, 1 | 8, store, kind.id, own);
         } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Prefab illisible, pose sans protection du terrain");
+            LOGGER.at(Level.WARNING).withCause(e).log("Prefab unreadable, landing without terrain protection");
             Telemetry.error("balloon.land", e, Telemetry.kindId(kind), null);
             PrefabUtil.paste(PrefabBufferUtil.getCached(path), world, new Vector3i(origin), rotation,
                     new FastRandom(), 1 | 8, 0, store);
@@ -1486,11 +1483,11 @@ public final class BalloonManager {
         for (Terrain t : kept) {
             if (!SectionBlocks.setAt(world.getChunkStore(), t.x, t.y, t.z, t.id, t.type, t.rotation, t.filler,
                     SET_BLOCK_NO_PARTICLES)) {
-                LOGGER.at(Level.WARNING).log("Terrain non remis en (%d, %d, %d) : section non chargée", t.x, t.y, t.z);
+                LOGGER.at(Level.WARNING).log("Terrain not restored at (%d, %d, %d): section not loaded", t.x, t.y, t.z);
             }
         }
         if (!kept.isEmpty()) {
-            LOGGER.at(Level.INFO).log("Pose : %d case(s) d'échelle laissée(s) au terrain", kept.size());
+            LOGGER.at(Level.INFO).log("Landing: %d ladder cell(s) left to the terrain", kept.size());
         }
         // the placed balloon is locked (block breaking and placing cancelled, BalloonLockSystems).
         BalloonRegistry.add(world, origin, rotation, kind, own);
@@ -1597,7 +1594,7 @@ public final class BalloonManager {
             station = StationZone.blockingStation(flight.world, flight.kind.id, flight.kind.shape(), origin, rotation);
         } catch (RuntimeException e) {
             // A failing lookup must never break a pose, forced or voluntary: treated as "no zone".
-            LOGGER.at(Level.WARNING).withCause(e).log("Zone des stations non vérifiée (%s) : traitée comme absente", flight.kind.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Station zone not checked (%s): treated as absent", flight.kind.id);
             return null;
         }
         if (station == null) {
@@ -1606,7 +1603,7 @@ public final class BalloonManager {
         if (voluntary) {
             return Texts.t("deploy.stationZone").param("station", station);
         }
-        LOGGER.at(Level.INFO).log("Pose forcée dans la zone de la station %s (%s, origine %s)", station, flight.kind.id, origin);
+        LOGGER.at(Level.INFO).log("Forced landing in the zone of station %s (%s, origin %s)", station, flight.kind.id, origin);
         return null;
     }
 
@@ -1628,6 +1625,7 @@ public final class BalloonManager {
             }
         }
         flights.remove(flight.pilotUuid);
+        hideFuel(flight);
         endVoyageCleanup(store, flight);
         // lights first (the luminous blocks come back with the prefab, no double lighting).
         BalloonLights.removeAll(store, flight);
@@ -1646,7 +1644,7 @@ public final class BalloonManager {
             try {
                 setBurnerLit(flight.world, flight.kind.shape().burner().rotated(rotation).add(origin), true);
             } catch (IOException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Flamme de la montgolfière de transport non allumée");
+                LOGGER.at(Level.WARNING).withCause(e).log("Transport balloon flame not lit");
                 Telemetry.error("transit", e, Telemetry.kindId(flight.kind), tphase(flight));
             }
         } else {
@@ -1668,7 +1666,7 @@ public final class BalloonManager {
                 setPilotFlying(store, flight.pilotRef, player, false);
             }
         }
-        LOGGER.at(Level.INFO).log("Atterrissage : origine %s, rotation %s", origin, rotation);
+        LOGGER.at(Level.INFO).log("Landing: origin %s, rotation %s", origin, rotation);
         if (flight.transit != null) {
             TransitNetwork.Station station = TransitNetwork.get().byName(flight.world.getName(), flight.transit.from);
             if (station != null) {
@@ -1704,7 +1702,7 @@ public final class BalloonManager {
         TransitStart start = startTransit(store, world, s, origin, station.rotation, tf, List.of(), false);
         if (start.error() == null) {
             StationQueue.onApproach(station, start.flight());
-            LOGGER.at(Level.INFO).log("Station %s : montgolfière d'approche en %s", station.name, origin);
+            LOGGER.at(Level.INFO).log("Station %s: approaching balloon at %s", station.name, origin);
         }
         return start.error();
     }
@@ -1757,12 +1755,12 @@ public final class BalloonManager {
                 store.putComponent(extra.ref(), Teleport.getComponentType(), Teleport.createForPlayer(spot, look));
                 k++;
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Joueur laissé à quai non déplacé");
+                LOGGER.at(Level.WARNING).withCause(e).log("Player left on the platform not moved");
                 Telemetry.error("transit", e, null, null);
             }
         }
         StationQueue.onDeparting(station, flight);
-        LOGGER.at(Level.INFO).log("Station %s : départ vers %s, %d passager(s)", station.name, destination, flight.passengers.size());
+        LOGGER.at(Level.INFO).log("Station %s: departure to %s, %d passenger(s)", station.name, destination, flight.passengers.size());
         if (!flight.passengers.isEmpty()) {
             Telemetry.count("transit.trip");
         }
@@ -1812,7 +1810,7 @@ public final class BalloonManager {
                 try {
                     setBurnerLit(world, s.burner().rotated(rotation).add(origin), true);
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Flamme de la montgolfière de transport non rallumée");
+                    LOGGER.at(Level.WARNING).withCause(e).log("Transport balloon flame not relit");
                     Telemetry.error("transit", e, null, null);
                 }
             }
@@ -1846,6 +1844,7 @@ public final class BalloonManager {
         if (!flights.remove(flight.pilotUuid, flight)) {
             return;
         }
+        hideFuel(flight);
         flight.stopping = true;
         if (flight.transit != null && flight.transit.to != null) {
             // The arrival quay (ARRIVING or waiting order) is freed whatever the way the flight ended.
@@ -1864,12 +1863,12 @@ public final class BalloonManager {
             cancelFlame(flight.world, p, 3, flight.kind.balloon.flameSystem);
             cancelFlame(flight.world, p, BOOST_FLAME_CANCEL_RADIUS, flight.kind.balloon.boostSystem);
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Fin du vol de transport : nettoyage incomplet");
+            LOGGER.at(Level.WARNING).withCause(e).log("End of transport flight: cleanup incomplete");
             Telemetry.error("transit", e, Telemetry.kindId(flight.kind), tphase(flight));
         }
         BalloonResume.delete(flight.pilotUuid);
         removeEntities(store, flight);
-        LOGGER.at(Level.INFO).log("Montgolfière de transport retirée en %s", flight.entityPos);
+        LOGGER.at(Level.INFO).log("Transport balloon removed at %s", flight.entityPos);
     }
 
     /**
@@ -1917,7 +1916,7 @@ public final class BalloonManager {
                     i++;
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager %s non libéré proprement", p.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Passenger %s not released cleanly", p.name);
                 Telemetry.error("balloon.passenger", e, Telemetry.kindId(flight.kind), tphase(flight));
             }
         }
@@ -1938,7 +1937,7 @@ public final class BalloonManager {
                 setPassengerHover(store, p, false);
                 putOnGround(store, flight.world, p.ref, prefabPoint(flight.entityPos, flight.rotation, p.seatLocal));
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager %s non posé au sol", p.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Passenger %s not put on the ground", p.name);
                 Telemetry.error("balloon.passenger", e, Telemetry.kindId(flight.kind), tphase(flight));
             }
         }
@@ -1963,13 +1962,13 @@ public final class BalloonManager {
             t.claimed = false;
             t.comingFrom = null;
             if (target == null) {
-                LOGGER.at(Level.INFO).log("Station %s retirée : plus aucune station, la montgolfière descend au sol", removed.name);
+                LOGGER.at(Level.INFO).log("Station %s removed: no station left, the balloon descends to the ground", removed.name);
                 t.to = null;
                 t.groundLanding = true;
                 t.setPhase(TransitFlight.Phase.DESCEND, now);
                 continue;
             }
-            LOGGER.at(Level.INFO).log("Station %s retirée : la montgolfière est déroutée vers %s", removed.name, target.name);
+            LOGGER.at(Level.INFO).log("Station %s removed: the balloon is diverted to %s", removed.name, target.name);
             t.to = target.name;
             t.cruiseY = Math.max(t.cruiseY, TransitAutopilot.cruiseY(removed.origin.y + Deployables.STATION_DOCK_ORIGIN[1],
                     target.origin.y + Deployables.STATION_DOCK_ORIGIN[1]));
@@ -2018,6 +2017,9 @@ public final class BalloonManager {
                     landNow(flight);
                 } else if (!flight.stopping) {
                     long nowMs = System.currentTimeMillis();
+                    if (flight.dry && flight.voyage == null && flight.transit == null) {
+                        showDryFuel(store, flight);
+                    }
                     tickDriven(store, world, s, flight, nowMs);
                     updatePassengers(store, world, flight, nowMs);
                     recordSky(flight, nowMs);
@@ -2062,7 +2064,7 @@ public final class BalloonManager {
                     // no collision message in the chat any more, the log keeps the block touched (at most every 2 s).
                     if (now - flight.lastCollisionMsgMs > COLLISION_MSG_INTERVAL_MS) {
                         flight.lastCollisionMsgMs = now;
-                        LOGGER.at(Level.INFO).log("Collision : %s", hit);
+                        LOGGER.at(Level.INFO).log("Collision: %s", hit);
                     }
                     // the height limit is not visible, so the pilot is told (at most every 3 s).
                     if (hit.contains(HEIGHT_HIT) && now - flight.lastHeightMsgMs >= HEIGHT_MSG_INTERVAL_MS) {
@@ -2135,7 +2137,7 @@ public final class BalloonManager {
      * rows 0 to 319, see SectionReader.canHoldY; only the test generator CubicTestWorldGenProvider makes unbounded worlds).
      */
     static final int WORLD_MAX_Y = 319;
-    static final String HEIGHT_HIT = "limite de hauteur de construction";
+    static final String HEIGHT_HIT = "build height limit";
     /** minimum delay between two "height limit reached" messages to the pilot. */
     static final long HEIGHT_MSG_INTERVAL_MS = 3000;
 
@@ -2157,15 +2159,15 @@ public final class BalloonManager {
                 continue;
             }
             if (outOfHeight(p.y)) {
-                return c.baseName() + " de la montgolfière dépasse la " + HEIGHT_HIT + " en " + p.x + " " + p.y + " " + p.z;
+                return c.baseName() + " of the balloon exceeds the " + HEIGHT_HIT + " at " + p.x + " " + p.y + " " + p.z;
             }
             BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
             if (bt != null && bt.getMaterial() == BlockMaterial.Solid) {
-                return c.baseName() + " de la montgolfière touche " + bt.getId() + " en " + p.x + " " + p.y + " " + p.z;
+                return c.baseName() + " of the balloon touches " + bt.getId() + " at " + p.x + " " + p.y + " " + p.z;
             }
             String liquid = liquidAt(reader, p.x, p.y, p.z);
             if (liquid != null) {
-                return c.baseName() + " de la montgolfière touche le liquide " + liquid + " en " + p.x + " " + p.y + " " + p.z;
+                return c.baseName() + " of the balloon touches liquid " + liquid + " at " + p.x + " " + p.y + " " + p.z;
             }
         }
         return null;
@@ -2311,7 +2313,7 @@ public final class BalloonManager {
             mm.update(pr.getPacketHandler());
             return mm.getSettings().fly != FlyMode.Disabled;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Réglages du mode de jeu non réappliqués");
+            LOGGER.at(Level.WARNING).withCause(e).log("Game mode settings not reapplied");
             Telemetry.error("balloon.passenger", e, null, null);
             return false;
         }
@@ -2387,8 +2389,8 @@ public final class BalloonManager {
                 if (player != null) {
                     player.sendMessage(Texts.t("gameMode.left"));
                 }
-                LOGGER.at(Level.INFO).log("Pilote %s : changement de mode de jeu (%s), %s", player != null ? player.getUsername() : ref,
-                        mode, landed ? "montgolfière posée sur place" : "montgolfière sans pilote");
+                LOGGER.at(Level.INFO).log("Pilot %s: game mode change (%s), %s", player != null ? player.getUsername() : ref,
+                        mode, landed ? "balloon landed in place" : "balloon without pilot");
                 continue;
             }
             for (BalloonFlight.Passenger p : new ArrayList<>(flight.passengers)) {
@@ -2406,7 +2408,7 @@ public final class BalloonManager {
                 if (pr != null) {
                     pr.sendMessage(Texts.t("gameMode.left"));
                 }
-                LOGGER.at(Level.INFO).log("Passager %s : changement de mode de jeu (%s), démonté", p.name, mode);
+                LOGGER.at(Level.INFO).log("Passenger %s: game mode change (%s), dismounted", p.name, mode);
             }
         }
     }
@@ -2509,7 +2511,7 @@ public final class BalloonManager {
                 try {
                     error = landWith(store, flight, pilotPos, flight.rotation, false);
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Pose sur place après la mort du pilote %s en échec", name);
+                    LOGGER.at(Level.WARNING).withCause(e).log("Landing in place after death of pilot %s failed", name);
                     Telemetry.error("balloon.land", e, Telemetry.kindId(flight.kind), tphase(flight));
                     error = Texts.t("error.noRoom");
                 }
@@ -2519,11 +2521,11 @@ public final class BalloonManager {
                         try {
                             setPilotFlying(store, ref, player, false);
                         } catch (RuntimeException e) {
-                            LOGGER.at(Level.WARNING).withCause(e).log("Réglages de déplacement de %s non remis à la normale", name);
+                            LOGGER.at(Level.WARNING).withCause(e).log("Movement settings of %s not restored", name);
                             Telemetry.error("balloon.land", e, Telemetry.kindId(flight.kind), tphase(flight));
                         }
                     }
-                    LOGGER.at(Level.INFO).log("Pilote %s mort en vol : montgolfière posée sur place, %d passager(s) libéré(s)", name, count);
+                    LOGGER.at(Level.INFO).log("Pilot %s died in flight: balloon landed in place, %d passenger(s) released", name, count);
                     return;
                 }
                 flight.takeOver = false;
@@ -2543,7 +2545,7 @@ public final class BalloonManager {
             try {
                 setPilotFlying(store, ref, player, false);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Réglages de déplacement de %s non remis à la normale", name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Movement settings of %s not restored", name);
                 Telemetry.error("balloon.land", e, Telemetry.kindId(flight.kind), tphase(flight));
             }
         }
@@ -2579,8 +2581,8 @@ public final class BalloonManager {
                 pr.sendMessage(Texts.t(dead ? "pilotDied" : "pilotLeft"));
             }
         }
-        LOGGER.at(Level.INFO).log("Pilote %s %s : montgolfière sans pilote, descente automatique à %.2f blocs par seconde (%d passager(s))",
-                name, dead ? "mort en vol" : "parti du vol", flight.descentSpeed, flight.passengers.size());
+        LOGGER.at(Level.INFO).log("Pilot %s %s: balloon without pilot, automatic descent at %.2f blocks per second (%d passenger(s))",
+                name, dead ? "died in flight" : "left the flight", flight.descentSpeed, flight.passengers.size());
     }
 
     /** A passenger died: dismounted and forgotten by the flight, the flight continues. They respawn normally. */
@@ -2590,7 +2592,7 @@ public final class BalloonManager {
         }
         releaseDeadPassenger(store, flight, p);
         captainLeft(store, flight, p.uuid, p.ref);
-        LOGGER.at(Level.INFO).log("Passager %s mort en vol : démonté, le vol continue", p.name);
+        LOGGER.at(Level.INFO).log("Passenger %s died in flight: dismounted, the flight continues", p.name);
     }
 
     /**
@@ -2634,10 +2636,10 @@ public final class BalloonManager {
                     store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(dest, look));
                 }
             });
-            LOGGER.at(Level.INFO).log("Saut en glider : passager %s éjecté en (%.1f, %.1f, %.1f)", p.name, dest.x, dest.y, dest.z);
+            LOGGER.at(Level.INFO).log("Glider jump: passenger %s ejected at (%.1f, %.1f, %.1f)", p.name, dest.x, dest.y, dest.z);
             return GliderJump.Result.DONE;
         } catch (RuntimeException | java.io.IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Saut en glider : éjection du passager en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Glider jump: passenger ejection failed");
             Telemetry.error("balloon.passenger", e, Telemetry.kindId(flight.kind), tphase(flight));
             return GliderJump.Result.FAILED;
         }
@@ -2654,7 +2656,7 @@ public final class BalloonManager {
             clearPose(store, p);
             setPassengerHover(store, p, false);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Joueur mort %s non démonté proprement", p.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Dead player %s not dismounted cleanly", p.name);
             Telemetry.error("balloon.passenger", e, Telemetry.kindId(flight.kind), tphase(flight));
         }
     }
@@ -2776,7 +2778,7 @@ public final class BalloonManager {
             ItemStackTransaction t = Player.giveItem(crate, adminRef, store);
             rest = t != null ? t.getRemainder() : crate;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Caisse non donnée à l'administrateur, lâchée au sol");
+            LOGGER.at(Level.WARNING).withCause(e).log("Crate not given to the administrator, dropped on the ground");
             Telemetry.error("balloon.despawn", e, null, null);
         }
         if (rest != null && !rest.isEmpty()) {
@@ -2860,7 +2862,7 @@ public final class BalloonManager {
             try {
                 AirshipCrew.remove(store, world, cageEntry);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Retrait de la montgolfière : pilote non retiré");
+                LOGGER.at(Level.WARNING).withCause(e).log("Balloon removal: pilot not removed");
                 Telemetry.error("balloon.despawn", e, Telemetry.kindId(kind), null);
             }
         }
@@ -2883,11 +2885,11 @@ public final class BalloonManager {
                     o.player().sendMessage(Texts.t("despawn.removedByAdmin"));
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Joueur %s de la nacelle non posé au sol", o.player().getUsername());
+                LOGGER.at(Level.WARNING).withCause(e).log("Basket player %s not put on the ground", o.player().getUsername());
                 Telemetry.error("balloon.despawn", e, Telemetry.kindId(kind), null);
             }
         }
-        LOGGER.at(Level.INFO).log("Retrait par %s : montgolfière posée en %s (rotation %s), %d blocs retirés, %d objet(s) lâchés",
+        LOGGER.at(Level.INFO).log("Removal by %s: balloon landed at %s (rotation %s), %d blocks removed, %d item(s) dropped",
                 admin.getUsername(), origin, rotation, removed, items);
         return null;
     }
@@ -2918,6 +2920,7 @@ public final class BalloonManager {
         }
         World world = flight.world;
         flights.remove(flight.pilotUuid);
+        hideFuel(flight);
         endVoyageCleanup(store, flight);
         BalloonLights.removeAll(store, flight);
         BalloonLights.removeChain(store, flight);
@@ -2944,7 +2947,7 @@ public final class BalloonManager {
                     }
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager %s non démonté proprement", p.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Passenger %s not dismounted cleanly", p.name);
                 Telemetry.error("balloon.despawn", e, Telemetry.kindId(flight.kind), tphase(flight));
             }
         }
@@ -2963,7 +2966,7 @@ public final class BalloonManager {
                     putOnGround(store, world, pilot, pivot);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Pilote non remis au sol proprement");
+                LOGGER.at(Level.WARNING).withCause(e).log("Pilot not put back on the ground cleanly");
                 Telemetry.error("balloon.despawn", e, Telemetry.kindId(flight.kind), tphase(flight));
             }
         }
@@ -2992,7 +2995,7 @@ public final class BalloonManager {
         }
         BalloonResume.delete(flight.pilotUuid);
         removeEntities(store, flight);
-        LOGGER.at(Level.INFO).log("Retrait par %s : montgolfière en vol en %s, %d objet(s) lâchés", admin.getUsername(),
+        LOGGER.at(Level.INFO).log("Removal by %s: balloon in flight at %s, %d item(s) dropped", admin.getUsername(),
                 fmt(pivot), items);
         return null;
     }
@@ -3052,7 +3055,7 @@ public final class BalloonManager {
         if (chain != null) {
             ViewFilter.clear(chain.ref);
         }
-        LOGGER.at(Level.INFO).log("Affichage double terminé : une seule entité visible de tous");
+        LOGGER.at(Level.INFO).log("Double display finished: a single entity visible to everyone");
     }
 
     private volatile boolean renderDual = true;
@@ -3130,7 +3133,7 @@ public final class BalloonManager {
             Thread.currentThread().interrupt();
             return false;
         } catch (Exception e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pose sur le fil du monde %s impossible", world.getName());
+            LOGGER.at(Level.WARNING).withCause(e).log("Landing on the world thread %s failed", world.getName());
             Telemetry.error("balloon.land", e, null, null);
             return false;
         }
@@ -3148,8 +3151,8 @@ public final class BalloonManager {
         }
         boolean ok = runOnWorld(flight.world, () -> landNow(flight, true), LAND_WAIT_MS);
         LOGGER.at(ok ? Level.INFO : Level.WARNING).log(ok
-                ? "Pilote %s parti : montgolfière reposée"
-                : "Pilote %s parti : pose impossible, le fichier de reprise la reposera au prochain chargement du monde", pilotUuid);
+                ? "Pilot %s left: balloon landed again"
+                : "Pilot %s left: landing failed, the resume file will land it again on the next world load", pilotUuid);
     }
 
     /**
@@ -3162,7 +3165,7 @@ public final class BalloonManager {
         for (BalloonFlight flight : new ArrayList<>(flights.values())) {
             boolean ok = runOnWorld(flight.world, () -> landNow(flight, true), LAND_WAIT_MS);
             if (!ok) {
-                LOGGER.at(Level.WARNING).log("Montgolfière de %s non reposée : fichier de reprise gardé", flight.pilotUuid);
+                LOGGER.at(Level.WARNING).log("Balloon of %s not landed again: resume file kept", flight.pilotUuid);
             }
         }
     }
@@ -3204,23 +3207,23 @@ public final class BalloonManager {
                                 dest.origin.x, dest.origin.y + 32, dest.origin.z));
                     }
                 }
-                LOGGER.at(Level.INFO).log("Reprise du vol de %s dans %s : origine %s, sections à charger",
+                LOGGER.at(Level.INFO).log("Flight resume of %s in %s: origin %s, sections to load",
                         rec.pilot(), world.getName(), rec.origin());
                 CompletableFuture.allOf(loads.toArray(new CompletableFuture[0])).whenComplete((v, t) -> {
                     if (t != null) {
-                        LOGGER.at(Level.WARNING).withCause(t).log("Chargement des chunks de la reprise impossible pour %s", rec.pilot());
+                        LOGGER.at(Level.WARNING).withCause(t).log("Loading resume chunks failed for %s", rec.pilot());
                     }
                     try {
                         world.execute(() -> recoverOne(world, rec));
                     } catch (RuntimeException e) {
                         recovering.remove(rec.pilot());
-                        LOGGER.at(Level.WARNING).withCause(e).log("Monde %s arrêté : reprise de %s remise au prochain chargement",
+                        LOGGER.at(Level.WARNING).withCause(e).log("World %s stopped: resume of %s postponed to the next load",
                                 world.getName(), rec.pilot());
                     }
                 });
             } catch (IOException | RuntimeException e) {
                 recovering.remove(rec.pilot());
-                LOGGER.at(Level.SEVERE).withCause(e).log("Reprise du vol de %s impossible : fichier gardé", rec.pilot());
+                LOGGER.at(Level.SEVERE).withCause(e).log("Flight resume of %s failed: file kept", rec.pilot());
                 Telemetry.error("balloon.recover", e, Telemetry.kindId(rec.kind()), null);
             }
         }
@@ -3241,7 +3244,7 @@ public final class BalloonManager {
                 Ref<EntityStore> orphan = world.getEntityStore().getRefFromUUID(rec.balloon());
                 if (orphan != null && orphan.isValid()) {
                     store.removeEntity(orphan, RemoveReason.REMOVE);
-                    LOGGER.at(Level.INFO).log("Entité volante restée dans le monde supprimée (%s)", rec.balloon());
+                    LOGGER.at(Level.INFO).log("Flying entity left in the world removed (%s)", rec.balloon());
                 }
             }
             StructureShape s = rec.kind().shape();
@@ -3249,11 +3252,11 @@ public final class BalloonManager {
             // the file is kept untouched with a warning: nothing is emptied or placed, nothing is lost.
             int dy = heightShift(s, rec.origin(), rec.rotation());
             if (dy == Integer.MIN_VALUE) {
-                LOGGER.at(Level.WARNING).log("Reprise du vol de %s impossible : la montgolfière dépasse la hauteur du monde, fichier gardé", rec.pilot());
+                LOGGER.at(Level.WARNING).log("Flight resume of %s failed: the balloon exceeds the world height, file kept", rec.pilot());
                 return;
             }
             if (dy != 0) {
-                LOGGER.at(Level.WARNING).log("Reprise du vol de %s : pose hors de la limite de hauteur, décalée de %d bloc(s)", rec.pilot(), dy);
+                LOGGER.at(Level.WARNING).log("Flight resume of %s: landing outside the height limit, shifted by %d block(s)", rec.pilot(), dy);
                 rec = rec.shiftedBy(dy);
             }
             // auxiliary lights left in a world that survived the plugin (never saved otherwise).
@@ -3289,15 +3292,15 @@ public final class BalloonManager {
                     BalloonRegistry.setCrew(world, rec.origin(), rec.rotation(), rec.kind().id, rec.crew().withPost(CrewRecord.Post.STOOL));
                     AirshipCrew.ensure(world, BalloonRegistry.get(world, rec.origin(), rec.rotation(), rec.kind().id));
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Reprise : pilote de la montgolfière non recréé");
+                    LOGGER.at(Level.WARNING).withCause(e).log("Resume: balloon pilot not recreated");
                     Telemetry.error("balloon.recover", e, Telemetry.kindId(rec.kind()), null);
                 }
             }
             restoreStrandedPassengers(world, store, rec);
             BalloonResume.delete(rec.pilot());
-            LOGGER.at(Level.INFO).log("Montgolfière de %s reposée en %s (reprise après arrêt en vol)", rec.pilot(), rec.origin());
+            LOGGER.at(Level.INFO).log("Balloon of %s landed again at %s (resume after shutdown in flight)", rec.pilot(), rec.origin());
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.SEVERE).withCause(e).log("Reprise du vol de %s en échec : fichier gardé pour un prochain essai", rec.pilot());
+            LOGGER.at(Level.SEVERE).withCause(e).log("Flight resume of %s failed: file kept for a later attempt", rec.pilot());
             Telemetry.error("balloon.recover", e, Telemetry.kindId(rec.kind()), null);
         } finally {
             recovering.remove(rec.pilot());
@@ -3346,13 +3349,13 @@ public final class BalloonManager {
                     BalloonResume.writeStranded(sp.uuid(), world.getName(), spot.x, spot.y, spot.z);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager %s du vol de transport non reposé", sp.uuid());
+                LOGGER.at(Level.WARNING).withCause(e).log("Passenger %s of the transport flight not landed again", sp.uuid());
                 Telemetry.error("transit.recover", e, Telemetry.kindId(rec.kind()), null);
             }
         }
         BalloonResume.delete(rec.pilot());
-        LOGGER.at(Level.INFO).log("Vol de transport %s repris après arrêt : %d passager(s) posé(s) à %s", rec.pilot(),
-                rec.passengers().size(), points != null ? "la station de départ" : "le sol");
+        LOGGER.at(Level.INFO).log("Transport flight %s resumed after shutdown: %d passenger(s) landed at %s", rec.pilot(),
+                rec.passengers().size(), points != null ? "the departure station" : "the ground");
     }
 
     // ------------------------------------------------------------------ passengers
@@ -3516,7 +3519,7 @@ public final class BalloonManager {
                     setPassengerHover(store, p, true);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Montage du passager %s impossible, repli par téléportation", p.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Mounting passenger %s failed, falling back to teleport", p.name);
                 Telemetry.error("balloon.passenger", e, Telemetry.kindId(flight.kind), tphase(flight));
                 p.mode = BalloonFlight.PassengerMode.TELEPORT;
                 setPassengerHover(store, p, true);
@@ -3526,7 +3529,7 @@ public final class BalloonManager {
             if (pr != null && p.seat >= 0) {
                 pr.sendMessage(Texts.t("seated"));
             }
-            LOGGER.at(Level.INFO).log("Passager %s : siège %d, %s, pose %s", p.name, p.seat + 1, p.mode, p.pose.describe());
+            LOGGER.at(Level.INFO).log("Passenger %s: seat %d, %s, pose %s", p.name, p.seat + 1, p.mode, p.pose.describe());
         }
     }
 
@@ -3561,7 +3564,7 @@ public final class BalloonManager {
         } catch (RuntimeException e) {
             if (!p.poseFailed) {
                 p.poseFailed = true;
-                LOGGER.at(Level.WARNING).withCause(e).log("Pose assise du passager %s impossible (%s)", p.name, pose.describe());
+                LOGGER.at(Level.WARNING).withCause(e).log("Seated pose of passenger %s failed (%s)", p.name, pose.describe());
                 Telemetry.error("balloon.passenger", e, null, null);
             }
         }
@@ -3597,7 +3600,7 @@ public final class BalloonManager {
                 p.poseAnimOn = false;
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pose assise du passager %s non défaite", p.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Seated pose of passenger %s not undone", p.name);
             Telemetry.error("balloon.passenger", e, null, null);
         }
     }
@@ -3807,7 +3810,7 @@ public final class BalloonManager {
                 boolean fallBack = p.losses > PASSENGER_MAX_LOSSES;
                 if (fallBack) {
                     p.mode = BalloonFlight.PassengerMode.TELEPORT;
-                    LOGGER.at(Level.WARNING).log("Passager %s : montage perdu %d fois, repli par téléportation", p.name, p.losses);
+                    LOGGER.at(Level.WARNING).log("Passenger %s: mount lost %d times, falling back to teleport", p.name, p.losses);
                 }
                 world.execute(() -> {
                     if (flights.get(flight.pilotUuid) != flight || !flight.passengers.contains(p) || !p.ref.isValid()) {
@@ -3882,7 +3885,7 @@ public final class BalloonManager {
                     pr.sendMessage(Texts.t(flight.takeOver ? "pilotDiedTakeOver" : "landedStandUp"));
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager %s non démonté proprement", p.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Passenger %s not dismounted cleanly", p.name);
                 Telemetry.error("balloon.passenger", e, Telemetry.kindId(flight.kind), tphase(flight));
             }
         }
@@ -3920,7 +3923,7 @@ public final class BalloonManager {
             }
             PassengerProtection.sweep(store, world, aboard);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Balayage de la protection des passagers impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Passenger protection sweep failed");
             Telemetry.error("balloon.passenger", e, null, null);
         }
     }
@@ -3969,8 +3972,8 @@ public final class BalloonManager {
                 }
                 boolean ok = runOnWorld(f.world, () -> dropPassenger(f, p), LAND_WAIT_MS);
                 LOGGER.at(ok ? Level.INFO : Level.WARNING).log(ok
-                        ? "Passager %s parti : démonté, position enregistrée au sol"
-                        : "Passager %s parti : démontage impossible", p.name);
+                        ? "Passenger %s left: dismounted, position saved on the ground"
+                        : "Passenger %s left: dismount failed", p.name);
             }
         }
     }
@@ -4086,7 +4089,7 @@ public final class BalloonManager {
                     BalloonResume.writeStranded(sp.uuid(), world.getName(), spot.x, spot.y, spot.z);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager %s de la reprise non reposé", sp.uuid());
+                LOGGER.at(Level.WARNING).withCause(e).log("Passenger %s of the resume not landed again", sp.uuid());
                 Telemetry.error("balloon.recover", e, Telemetry.kindId(rec.kind()), null);
             }
         }
@@ -4112,10 +4115,10 @@ public final class BalloonManager {
             TransformComponent t = holder.getComponent(TransformComponent.getComponentType());
             if (t != null) {
                 t.setPosition(new Vector3d(st.x(), st.y(), st.z()));
-                LOGGER.at(Level.INFO).log("Passager %s reposé sur la montgolfière après la reprise du vol", pr.getUsername());
+                LOGGER.at(Level.INFO).log("Passenger %s put back on the balloon after the flight resume", pr.getUsername());
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Reposer le passager arrivé a échoué");
+            LOGGER.at(Level.WARNING).withCause(e).log("Putting the arrived passenger back failed");
             Telemetry.error("balloon.passenger", e, null, null);
         }
     }
@@ -4134,8 +4137,8 @@ public final class BalloonManager {
         long validatedMs;
         long nextRetryMs;
         long lastSaveMs;
-        boolean warned30;
-        boolean warned10;
+        /** Players whose fuel window this balloon shows (the players in the gondola). */
+        final Set<UUID> fuelShown = new HashSet<>();
     }
 
     /** A player in the gondola, with their distance to the pivot. */
@@ -4199,8 +4202,7 @@ public final class BalloonManager {
             return;
         }
         if (!isInAir(world, s, h.actual != null ? h.actual : s, h.origin, h.rotation)) {
-            h.warned30 = false;
-            h.warned10 = false;
+            hideHoverFuel(h);
             return; // on the ground: nothing burns
         }
         if (now < h.nextRetryMs) {
@@ -4215,32 +4217,43 @@ public final class BalloonManager {
                 markChunkDirty(world, burnerPos);
             }
         }
-        if (!BurnerFuel.hasFuel(bench)) {
+        boolean fuelled = BurnerFuel.hasFuel(bench);
+        double left = fuelled ? BurnerFuel.remainingSeconds(bench) : 0;
+        int items = fuelled ? BurnerFuel.fuelItems(bench) : 0;
+        try {
+            // the players in the gondola see the fuel window, those who left it lose it (dry: until the descent takes over)
+            Set<UUID> inside = new HashSet<>();
+            for (Occupant o : nacelleOccupants(world, store, h.kind, h.origin, h.rotation)) {
+                inside.add(o.player().getUuid());
+                if (fuelled) {
+                    FuelHud.show(store, o.player(), FuelHud.Vehicle.BALLOON, left, items);
+                } else {
+                    FuelHud.showDry(store, o.player(), FuelHud.Vehicle.BALLOON);
+                }
+            }
+            for (UUID id : h.fuelShown) {
+                if (!inside.contains(id)) {
+                    FuelHud.hide(id);
+                }
+            }
+            h.fuelShown.clear();
+            h.fuelShown.addAll(inside);
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Fuel window of the hovering balloon: update failed");
+            Telemetry.error("balloon.hover", e, Telemetry.kindId(h.kind), null);
+        }
+        if (!fuelled) {
             h.nextRetryMs = now + HOVER_RETRY_MS;
             startDryDescent(world, store, s, h, bench);
-            return;
         }
-        double left = BurnerFuel.remainingSeconds(bench);
-        if (left > 30) {
-            h.warned30 = false;
+    }
+
+    /** Removes the fuel window of every player the hovering balloon showed it to. */
+    private static void hideHoverFuel(Hover h) {
+        for (UUID id : h.fuelShown) {
+            FuelHud.hide(id);
         }
-        if (left > 10) {
-            h.warned10 = false;
-        }
-        String msgKey = null;
-        if (left <= 10 && !h.warned10) {
-            h.warned10 = true;
-            h.warned30 = true;
-            msgKey = "hover.fuelCritical";
-        } else if (left <= 30 && !h.warned30) {
-            h.warned30 = true;
-            msgKey = "hover.fuelLow";
-        }
-        if (msgKey != null) {
-            for (Occupant o : nacelleOccupants(world, store, h.kind, h.origin, h.rotation)) {
-                o.player().sendMessage(Texts.t(msgKey).param("time", durationText(left)));
-            }
-        }
+        h.fuelShown.clear();
     }
 
     static String durationText(double seconds) {
@@ -4398,13 +4411,13 @@ public final class BalloonManager {
         Message error = launch(store, world, s, found, bench,
                 pilot != null ? pilot.ref() : null, pilot != null ? pilot.player() : null, true, others, groundCage);
         if (error != null && pilot != null) {
-            LOGGER.at(Level.WARNING).log("Descente à sec avec pilote impossible (%s), essai sans pilote", error.getMessageId());
+            LOGGER.at(Level.WARNING).log("Dry descent with pilot failed (%s), trying without pilot", error.getMessageId());
             pilot = null;
             // Without a pilot, all players in the gondola are passengers (the entity is moved by the server).
             error = launch(store, world, s, found, bench, null, null, true, occupants, groundCage);
         }
         if (error != null) {
-            LOGGER.at(Level.WARNING).log("Descente à sec impossible en %s : %s", h.origin, error.getMessageId());
+            LOGGER.at(Level.WARNING).log("Dry descent failed at %s: %s", h.origin, error.getMessageId());
         }
     }
 
@@ -4532,7 +4545,7 @@ public final class BalloonManager {
         Vector3i dropPos = cargo.firstPosition(origin, rotation);
         List<ItemStack> left = cargo.putInto(world, origin, rotation, false);
         if (!left.isEmpty()) {
-            LOGGER.at(Level.WARNING).log("%d piles de coffre sans place, lâchées en %s", left.size(), dropPos);
+            LOGGER.at(Level.WARNING).log("%d chest stacks with no room, dropped at %s", left.size(), dropPos);
         }
         dropItems(store, left, dropPos);
         if (!cargo.isEmpty()) {
@@ -4552,7 +4565,7 @@ public final class BalloonManager {
                 Vector3i dropPos = p.cargo.firstPosition(p.origin, p.rotation);
                 List<ItemStack> left = p.cargo.putInto(world, p.origin, p.rotation, last);
                 if (last && !left.isEmpty()) {
-                    LOGGER.at(Level.WARNING).log("Coffre introuvable ou plein près de %s : contenu lâché au sol", dropPos);
+                    LOGGER.at(Level.WARNING).log("Chest not found or full near %s: contents dropped on the ground", dropPos);
                 }
                 dropItems(store, left, dropPos);
                 if (p.cargo.isEmpty()) {
@@ -4562,17 +4575,12 @@ public final class BalloonManager {
         }
     }
 
-    /** Niveau de carburant traduit, par exemple "1 min 12 s of flight (9 fuel items)". */
-    static Message fuelMessage(BurnerFuel fuel) {
-        return Texts.t("fuel.level").param("time", durationText(fuel.remainingSeconds())).param("items", fuel.fuelItems());
-    }
-
     /** Fuel level for /orbishorizon balloon debug (diagnostic, in English). */
     static String fuelDebug(BurnerFuel fuel) {
         return durationText(fuel.remainingSeconds()) + " of flight (" + fuel.fuelItems() + " fuel items)";
     }
 
-    /** Fuel burning in flight, messages to the pilot and switch to dry. */
+    /** Fuel burning in flight, fuel window of the pilot and switch to dry. */
     private void updateFuel(Store<EntityStore> store, World world, BalloonFlight flight, long now) {
         BurnerFuel fuel = flight.burner;
         if (fuel == null) {
@@ -4580,36 +4588,48 @@ public final class BalloonManager {
         }
         double dt = (now - flight.lastBurnMs) / 1000.0;
         flight.lastBurnMs = now;
-        if (flight.dry || dt <= 0) {
+        PlayerRef player = store.getComponent(flight.pilotRef, PlayerRef.getComponentType());
+        if (flight.dry) {
+            FuelHud.showDry(store, player, FuelHud.Vehicle.BALLOON);
+            return;
+        }
+        if (dt <= 0) {
             return;
         }
         fuel.burn(dt);
         double left = fuel.remainingSeconds();
-        PlayerRef player = store.getComponent(flight.pilotRef, PlayerRef.getComponentType());
         if (left <= 0) {
             flight.dry = true;
-            if (player != null) {
-                player.sendMessage(Texts.t("fuel.dry"));
-            }
+            FuelHud.showDry(store, player, FuelHud.Vehicle.BALLOON);
             world.execute(() -> enterDry(store, flight));
             return;
         }
-        String key = null;
-        if (left <= 10 && !flight.warned10) {
-            flight.warned10 = true;
-            flight.warned30 = true;
-            key = "fuel.critical";
-        } else if (left <= 30 && !flight.warned30) {
-            flight.warned30 = true;
-            key = "fuel.low";
-        } else if (now >= flight.nextFuelMsgMs) {
-            key = "fuel.status";
-        }
-        if (key != null) {
-            flight.nextFuelMsgMs = now + FUEL_MSG_INTERVAL_MS;
-            if (player != null) {
-                player.sendMessage(Texts.t(key).param("fuel", fuelMessage(fuel)));
+        FuelHud.show(store, player, FuelHud.Vehicle.BALLOON, left, fuel.fuelItems());
+    }
+
+    /** Out-of-fuel window of a dry descent: the pilot, else (pilotless descent) the passengers. Never throws. */
+    private static void showDryFuel(Store<EntityStore> store, BalloonFlight flight) {
+        try {
+            if (!flight.pilotless()) {
+                FuelHud.showDry(store, store.getComponent(flight.pilotRef, PlayerRef.getComponentType()), FuelHud.Vehicle.BALLOON);
+                return;
             }
+            for (BalloonFlight.Passenger p : flight.passengers) {
+                if (p.ref.isValid()) {
+                    FuelHud.showDry(store, store.getComponent(p.ref, PlayerRef.getComponentType()), FuelHud.Vehicle.BALLOON);
+                }
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Dry fuel window: update failed");
+            Telemetry.error("balloon.flight", e, Telemetry.kindId(flight.kind), "dry");
+        }
+    }
+
+    /** Removes the fuel window of the pilot and of the passengers (end of the flight). Never throws. */
+    private static void hideFuel(BalloonFlight flight) {
+        FuelHud.hide(flight.pilotUuid);
+        for (BalloonFlight.Passenger p : flight.passengers) {
+            FuelHud.hide(p.uuid);
         }
     }
 
@@ -4662,7 +4682,7 @@ public final class BalloonManager {
         if (asset == null) {
             flight.boost = false;
             flight.boostUnavailable = true;
-            LOGGER.at(Level.WARNING).log("Modèle %s introuvable : pas de flamme renforcée", id);
+            LOGGER.at(Level.WARNING).log("Model %s not found: no boosted flame", id);
             return;
         }
         VehicleView.putModel(store, flight.balloonRef, flight.observerRef, asset); // both entities
@@ -4724,7 +4744,7 @@ public final class BalloonManager {
             if (on) {
                 EntityEffect effect = EntityEffect.getAssetMap().getAsset(effectId);
                 if (effect == null) {
-                    LOGGER.at(Level.WARNING).log("Effet %s introuvable : pas de son", effectId);
+                    LOGGER.at(Level.WARNING).log("Effect %s not found: no sound", effectId);
                     return false;
                 }
                 return ec.addEffect(ref, effect, store);
@@ -4735,7 +4755,7 @@ public final class BalloonManager {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Son de lance-flammes : changement d'état impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Flamethrower sound: state change failed");
             Telemetry.error("balloon.flight", e, null, null);
             return !on;
         }
@@ -4788,7 +4808,7 @@ public final class BalloonManager {
                 block, new Vector3f(pv.x, pv.y + seatHeight, pv.z), false, passengerMode, pose);
         boardPassengers(store, flight, List.of(p));
         flight.driven = true;
-        LOGGER.at(Level.INFO).log("Descente automatique de %s : %.2f blocs par seconde, pilote assis", p.name, flight.descentSpeed);
+        LOGGER.at(Level.INFO).log("Automatic descent of %s: %.2f blocks per second, pilot seated", p.name, flight.descentSpeed);
     }
 
     /** Vertical flight speed of the pilot (after FLY_SPEED_FACTOR), falling back to the default speed. */
@@ -4871,7 +4891,7 @@ public final class BalloonManager {
         if (asset != null) {
             VehicleView.putModel(store, flight.balloonRef, flight.observerRef, asset); // both entities
         } else {
-            LOGGER.at(Level.WARNING).log("Modèle %s introuvable : la flamme reste affichée", id);
+            LOGGER.at(Level.WARNING).log("Model %s not found: the flame stays displayed", id);
         }
         // the burner light goes out with the flame (dry burner), regardless of the model found.
         BalloonLights.set(store, flight, BalloonLights.KEY_BURNER, BalloonLights.burnerColor(!lit, false));
@@ -4970,7 +4990,7 @@ public final class BalloonManager {
                     pendingRestores.remove(p);
                 } else if (System.currentTimeMillis() > p.deadlineMs) {
                     pendingRestores.remove(p);
-                    LOGGER.at(Level.WARNING).log("Brûleur introuvable en %s : contenu lâché au sol", p.burnerPos);
+                    LOGGER.at(Level.WARNING).log("Burner not found at %s: contents dropped on the ground", p.burnerPos);
                     dropItems(store, p.fuel.allItems(), p.burnerPos);
                 }
             });

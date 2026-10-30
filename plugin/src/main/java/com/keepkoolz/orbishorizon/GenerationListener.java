@@ -108,12 +108,12 @@ final class GenerationListener {
             try {
                 if (!p.awaitTermination(STOP_WAIT_S, TimeUnit.SECONDS)) {
                     int dropped = p.shutdownNow().size();
-                    LOGGER.at(Level.WARNING).log("Station générée : arrêt avant la fin de la planification, %d tâche(s) abandonnée(s)", dropped);
+                    LOGGER.at(Level.WARNING).log("Generated station: shutdown before planning finished, %d task(s) dropped", dropped);
                 }
             } catch (InterruptedException e) {
                 int dropped = p.shutdownNow().size();
                 Thread.currentThread().interrupt();
-                LOGGER.at(Level.WARNING).log("Station générée : arrêt interrompu, %d tâche(s) abandonnée(s)", dropped);
+                LOGGER.at(Level.WARNING).log("Generated station: shutdown interrupted, %d task(s) dropped", dropped);
             }
         }
         PROBES.clear();
@@ -127,7 +127,7 @@ final class GenerationListener {
         try {
             NewChunks.flushAll();
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : écriture des chunks neufs impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated station: cannot write the new chunks");
             Telemetry.error("worldgen", e, null, "flush");
         }
     }
@@ -269,12 +269,12 @@ final class GenerationListener {
                 try {
                     plan(world, probe, cx, cz, portal);
                 } catch (RuntimeException | LinkageError e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Station générée : planification interrompue autour du chunk (%d, %d)", cx, cz);
+                    LOGGER.at(Level.WARNING).withCause(e).log("Generated station: planning interrupted around chunk (%d, %d)", cx, cz);
                     Telemetry.error("worldgen", e, null, "plan");
                 }
             }));
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : chunk neuf non traité");
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated station: new chunk not handled");
             Telemetry.error("worldgen", e, null, "chunk");
         }
     }
@@ -309,7 +309,7 @@ final class GenerationListener {
                     world.execute(() -> decideAll(world, list));
                 }
             } catch (RuntimeException | LinkageError e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Station générée : portail du chunk (%d, %d) non planifié", cx, cz);
+                LOGGER.at(Level.WARNING).withCause(e).log("Generated station: portal of chunk (%d, %d) not planned", cx, cz);
                 Telemetry.error("worldgen", e, null, "plan");
             }
         }));
@@ -344,11 +344,11 @@ final class GenerationListener {
             boolean unmarked = unmarkedSea || unmarkedLand;
             reg.forgetPortals(name, cx * 32, cz * 32, cx * 32 + 31, cz * 32 + 31);
             if (!forgotten.isEmpty() || unmarked) {
-                LOGGER.at(Level.INFO).log("Station générée : chunk (%d, %d) regénéré, sauvegarde restaurée : %d station(s) oubliée(s), cellule %s",
-                        cx, cz, forgotten.size(), unmarked ? "à replanifier" : "déjà replanifiée");
+                LOGGER.at(Level.INFO).log("Generated station: chunk (%d, %d) regenerated, save restored: %d station(s) forgotten, cell %s",
+                        cx, cz, forgotten.size(), unmarked ? "to replan" : "already replanned");
             }
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : restauration non traitée au chunk (%d, %d)", cx, cz);
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated station: restore not handled at chunk (%d, %d)", cx, cz);
             Telemetry.error("worldgen", e, null, "rollback");
         }
     }
@@ -383,9 +383,9 @@ final class GenerationListener {
                 StationQueue.onStationRemoved(world, s);
                 BoatQuay.onStationRemoved(world, s);
                 BalloonRegistry.remove(world, s.origin, s.rotation, StationSpec.of(s.kind).structure().id);
-                LOGGER.at(Level.INFO).log("Station « %s » retirée du réseau : son terrain a été regénéré", s.name);
+                LOGGER.at(Level.INFO).log("Station '%s' removed from the network: its terrain was regenerated", s.name);
             } catch (RuntimeException | LinkageError ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("%s : retrait du réseau impossible en (%d, %d)", logName(e.kind), e.x, e.z);
+                LOGGER.at(Level.WARNING).withCause(ex).log("%s: cannot remove from the network at (%d, %d)", logName(e.kind), e.x, e.z);
                 Telemetry.error("worldgen", ex, e.kind, "rollback");
             }
         }
@@ -408,7 +408,7 @@ final class GenerationListener {
                 world.execute(() -> reviveWorld(world));
             }
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : reprise des stations en attente impossible pour %s", world.getName());
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated station: cannot resume the pending stations for %s", world.getName());
             Telemetry.error("worldgen", e, null, "resume");
         }
     }
@@ -466,14 +466,14 @@ final class GenerationListener {
                 site = reg.activeSite(e);
                 e.oldTerrainSeen = true;
                 if (!REQUESTED.contains(e) && moveOffOldTerrain(reg, e, name)) {
-                    LOGGER.at(Level.INFO).log("%s : terrain ancien rechargé en (%d, %d), site suivant %d/%d", logName(e.kind), site.x(), site.z(),
+                    LOGGER.at(Level.INFO).log("%s: old terrain reloaded at (%d, %d), next site %d/%d", logName(e.kind), site.x(), site.z(),
                             e.active + 1, e.sites.size());
                     decideAgain(world, e);
                 } else {
-                    abandon(e, "terrain ancien rechargé", GeneratedStations.Reason.OLD_TERRAIN);
+                    abandon(e, "old terrain reloaded", GeneratedStations.Reason.OLD_TERRAIN);
                 }
             } catch (RuntimeException | LinkageError ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("%s : terrain ancien non traité en (%d, %d)", logName(e.kind),
+                LOGGER.at(Level.WARNING).withCause(ex).log("%s: old terrain not handled at (%d, %d)", logName(e.kind),
                         site == null ? e.x : site.x(), site == null ? e.z : site.z());
                 Telemetry.error("worldgen", ex, e.kind, "chunk");
             }
@@ -497,9 +497,9 @@ final class GenerationListener {
         try {
             GeneratedStations.get().abandon(e, why);
             Telemetry.count("worldgen.station.abandoned");
-            LOGGER.at(Level.INFO).log("%s abandonnée en (%d, %d) : %s", logName(e.kind), e.x, e.z, reason);
+            LOGGER.at(Level.INFO).log("%s abandoned at (%d, %d): %s", logName(e.kind), e.x, e.z, reason);
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("%s : abandon non enregistré", logName(e.kind));
+            LOGGER.at(Level.WARNING).withCause(ex).log("%s: abandon not recorded", logName(e.kind));
             Telemetry.error("worldgen", ex, e.kind, "abandon");
         }
     }
@@ -539,7 +539,7 @@ final class GenerationListener {
                 if (!portalResolved) {
                     portalId = BlockType.getAssetMap().getIndex(PORTAL_BLOCK);
                     if (portalId < 0) {
-                        LOGGER.at(Level.WARNING).log("Station générée : bloc de portail %s introuvable, pas de station près des portails", PORTAL_BLOCK);
+                        LOGGER.at(Level.WARNING).log("Generated station: portal block %s not found, no station near portals", PORTAL_BLOCK);
                     }
                     portalResolved = true;
                 }
@@ -557,13 +557,13 @@ final class GenerationListener {
         try {
             touched.addAll(planCell(world, probe, WorldStationPlanner.cellOf(cx * 32 + 16), WorldStationPlanner.cellOf(cz * 32 + 16)));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station maritime générée : cellule autour du chunk (%d, %d) non planifiée", cx, cz);
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated sea station: cell around chunk (%d, %d) not planned", cx, cz);
             Telemetry.error("worldgen", e, Deployables.BOAT_STATION_KIND, "plan");
         }
         try {
             touched.addAll(planLandCell(world, probe, WorldStationPlanner.landCellOf(cx * 32 + 16), WorldStationPlanner.landCellOf(cz * 32 + 16)));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station aérienne générée : cellule terrestre autour du chunk (%d, %d) non planifiée", cx, cz);
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated air station: land cell around chunk (%d, %d) not planned", cx, cz);
             Telemetry.error("worldgen", e, Deployables.STATION_KIND, "plan");
         }
         try {
@@ -573,7 +573,7 @@ final class GenerationListener {
                 world.execute(() -> decideAll(world, list));
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : décision impossible après le chunk (%d, %d)", cx, cz);
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated station: cannot decide after chunk (%d, %d)", cx, cz);
             Telemetry.error("worldgen", e, null, "decide");
         }
     }
@@ -592,14 +592,14 @@ final class GenerationListener {
                 if (site != null) {
                     touched.add(reg.add(name, site, GeneratedStations.Origin.PORTAL));
                     world.execute(() -> displaceLandEntries(world, site));
-                    LOGGER.at(Level.INFO).log("Station aérienne générée : portail (%d, %d) planifié, site en (%d, %d)", portal[0], portal[1],
+                    LOGGER.at(Level.INFO).log("Generated air station: portal (%d, %d) planned, site at (%d, %d)", portal[0], portal[1],
                             site.x(), site.z());
                 } else {
-                    LOGGER.at(Level.INFO).log("Station aérienne générée : portail (%d, %d) sans site", portal[0], portal[1]);
+                    LOGGER.at(Level.INFO).log("Generated air station: portal (%d, %d) without a site", portal[0], portal[1]);
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station aérienne générée : portail en (%d, %d) non planifié", portal[0], portal[1]);
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated air station: portal at (%d, %d) not planned", portal[0], portal[1]);
             Telemetry.error("worldgen", e, Deployables.STATION_KIND, "plan");
         }
     }
@@ -620,9 +620,9 @@ final class GenerationListener {
                 added.add(reg.add(name, s));
             }
             long ms = (System.nanoTime() - start) / 1_000_000;
-            LOGGER.at(Level.INFO).log("Station maritime générée : cellule (%d, %d) planifiée en %d ms, %d site(s)", cellX, cellZ, ms, sites.size());
+            LOGGER.at(Level.INFO).log("Generated sea station: cell (%d, %d) planned in %d ms, %d site(s)", cellX, cellZ, ms, sites.size());
             if (ms > SLOW_CELL_MS) {
-                LOGGER.at(Level.WARNING).log("Station maritime générée : la cellule (%d, %d) a pris plus de %d ms", cellX, cellZ, SLOW_CELL_MS);
+                LOGGER.at(Level.WARNING).log("Generated sea station: cell (%d, %d) took more than %d ms", cellX, cellZ, SLOW_CELL_MS);
             }
         }
         return added;
@@ -644,10 +644,10 @@ final class GenerationListener {
                 added.add(reg.add(name, site, GeneratedStations.Origin.LAND));
             }
             long ms = (System.nanoTime() - start) / 1_000_000;
-            LOGGER.at(Level.INFO).log("Station aérienne générée : cellule terrestre (%d, %d) planifiée en %d ms, %s", cellX, cellZ, ms,
-                    site == null ? "sans site" : "site en (" + site.x() + ", " + site.z() + ")");
+            LOGGER.at(Level.INFO).log("Generated air station: land cell (%d, %d) planned in %d ms, %s", cellX, cellZ, ms,
+                    site == null ? "no site" : "site at (" + site.x() + ", " + site.z() + ")");
             if (ms > SLOW_CELL_MS) {
-                LOGGER.at(Level.WARNING).log("Station aérienne générée : la cellule terrestre (%d, %d) a pris plus de %d ms", cellX, cellZ, SLOW_CELL_MS);
+                LOGGER.at(Level.WARNING).log("Generated air station: land cell (%d, %d) took more than %d ms", cellX, cellZ, SLOW_CELL_MS);
             }
         }
         return added;
@@ -733,12 +733,12 @@ final class GenerationListener {
                         world.execute(() -> queueAround(world, probe));
                     }
                 } catch (RuntimeException | LinkageError e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Station générée : planification en avance impossible pour %s", world.getName());
+                    LOGGER.at(Level.WARNING).withCause(e).log("Generated station: cannot plan ahead for %s", world.getName());
                     Telemetry.error("worldgen", e, null, "ahead");
                 }
             }
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : planification en avance interrompue");
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated station: planning ahead interrupted");
             Telemetry.error("worldgen", e, null, "ahead");
         }
     }
@@ -787,7 +787,7 @@ final class GenerationListener {
                 }
             }
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : cellules en avance non mises en file pour %s", world.getName());
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated station: cells ahead not queued for %s", world.getName());
             Telemetry.error("worldgen", e, null, "ahead");
         }
     }
@@ -800,7 +800,7 @@ final class GenerationListener {
                 world.execute(() -> decideAll(world, added));
             }
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station maritime générée : cellule (%d, %d) non planifiée en avance", cellX, cellZ);
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated sea station: cell (%d, %d) not planned ahead", cellX, cellZ);
             Telemetry.error("worldgen", e, Deployables.BOAT_STATION_KIND, "ahead");
         } finally {
             AHEAD_QUEUED.remove(aheadKey(world.getName(), cellX, cellZ));
@@ -815,7 +815,7 @@ final class GenerationListener {
                 world.execute(() -> decideAll(world, added));
             }
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station aérienne générée : cellule terrestre (%d, %d) non planifiée en avance", cellX, cellZ);
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated air station: land cell (%d, %d) not planned ahead", cellX, cellZ);
             Telemetry.error("worldgen", e, Deployables.STATION_KIND, "ahead");
         } finally {
             AHEAD_QUEUED.remove(aheadLandKey(world.getName(), cellX, cellZ));
@@ -824,7 +824,7 @@ final class GenerationListener {
 
     /** Log prefix naming the kind of a generated station: aerial (balloon) or maritime (boat). */
     static String logName(String kind) {
-        return Deployables.BOAT_STATION_KIND.equals(kind) ? "Station maritime générée" : "Station aérienne générée";
+        return Deployables.BOAT_STATION_KIND.equals(kind) ? "Generated sea station" : "Generated air station";
     }
 
     /**
@@ -875,15 +875,15 @@ final class GenerationListener {
                 }
                 int fromX = e.x, fromZ = e.z;
                 if (moveOffOldTerrain(reg, e, name)) {
-                    LOGGER.at(Level.INFO).log("%s : trop près du portail en (%d, %d), site (%d, %d) remplacé par le suivant %d/%d",
+                    LOGGER.at(Level.INFO).log("%s: too close to the portal at (%d, %d), site (%d, %d) replaced by the next one %d/%d",
                             logName(e.kind), portal.x(), portal.z(), fromX, fromZ, e.active + 1, e.sites.size());
                     decideAgain(world, e);
                 } else {
-                    abandon(e, "trop près d'une station de portail", GeneratedStations.Reason.OTHER);
+                    abandon(e, "too close to a portal station", GeneratedStations.Reason.OTHER);
                 }
             }
         } catch (RuntimeException | LinkageError ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Station aérienne générée : stations terrestres proches du portail (%d, %d) non déplacées",
+            LOGGER.at(Level.WARNING).withCause(ex).log("Generated air station: land stations near portal (%d, %d) not moved",
                     portal.x(), portal.z());
             Telemetry.error("worldgen", ex, Deployables.STATION_KIND, "decide");
         }
@@ -965,12 +965,12 @@ final class GenerationListener {
                         world.execute(() -> reviveWorld(world));
                     }
                 } catch (RuntimeException | LinkageError e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Station générée : reprise des abandons impossible pour %s", world.getName());
+                    LOGGER.at(Level.WARNING).withCause(e).log("Generated station: cannot revive the abandoned stations for %s", world.getName());
                     Telemetry.error("worldgen", e, null, "revive");
                 }
             }
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : reprise des abandons interrompue");
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated station: reviving the abandoned stations interrupted");
             Telemetry.error("worldgen", e, null, "revive");
         }
     }
@@ -990,12 +990,12 @@ final class GenerationListener {
                 }
                 return out;
             });
-            LOGGER.at(Level.INFO).log("Stations générées : %d station(s) abandonnée(s) reprise(s) dans le monde %s", revived.size(), name);
+            LOGGER.at(Level.INFO).log("Generated stations: %d abandoned station(s) revived in world %s", revived.size(), name);
             if (!revived.isEmpty()) {
                 decideAll(world, revived);
             }
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Station générée : reprise des abandons impossible pour %s", world.getName());
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated station: cannot revive the abandoned stations for %s", world.getName());
             Telemetry.error("worldgen", e, null, "revive");
         }
     }
@@ -1066,18 +1066,18 @@ final class GenerationListener {
                     case ABANDON -> {
                         e.oldTerrainSeen = true;
                         if (moveOffOldTerrain(GeneratedStations.get(), e, world.getName())) {
-                            LOGGER.at(Level.INFO).log("%s : terrain ancien en (%d, %d), site suivant %d/%d", logName(e.kind), site.x(), site.z(),
+                            LOGGER.at(Level.INFO).log("%s: old terrain at (%d, %d), next site %d/%d", logName(e.kind), site.x(), site.z(),
                                     e.active + 1, e.sites.size());
                             decideAgain(world, e);
                         } else {
-                            abandon(e, "terrain ancien dans l'emprise", GeneratedStations.Reason.OLD_TERRAIN);
+                            abandon(e, "old terrain in the footprint", GeneratedStations.Reason.OLD_TERRAIN);
                         }
                     }
                     case WAIT -> {
                     }
                 }
             } catch (RuntimeException | LinkageError ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("%s : décision impossible en (%d, %d)", logName(e.kind),
+                LOGGER.at(Level.WARNING).withCause(ex).log("%s: cannot decide at (%d, %d)", logName(e.kind),
                         site == null ? e.x : site.x(), site == null ? e.z : site.z());
                 Telemetry.error("worldgen", ex, e.kind, "decide");
             }

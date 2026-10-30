@@ -69,11 +69,11 @@ final class HeldCratePreview {
                 try {
                     update(store, world, pr, now);
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Aperçu de la caisse tenue non mis à jour");
+                    LOGGER.at(Level.WARNING).withCause(e).log("Held crate preview not updated");
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Aperçu des caisses tenues : tick en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Held crate preview: tick failed");
         }
     }
 
@@ -208,7 +208,7 @@ final class HeldCratePreview {
             Path path = PrefabStore.get().findAssetPrefabPath(prefabPath);
             BlockSelection sel = path == null ? null : PrefabStore.get().getPrefab(path);
             if (sel == null) {
-                LOGGER.at(Level.WARNING).log("Aperçu : prefab introuvable : %s", prefabPath);
+                LOGGER.at(Level.WARNING).log("Preview: prefab not found: %s", prefabPath);
                 return null;
             }
             sel = sel.cloneSelection();
@@ -222,7 +222,7 @@ final class HeldCratePreview {
             CACHE.put(key, pkt);
             return pkt;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Aperçu : prefab %s non encodé", prefabPath);
+            LOGGER.at(Level.WARNING).withCause(e).log("Preview: prefab %s not encoded", prefabPath);
             return null;
         }
     }
@@ -258,7 +258,7 @@ final class HeldCratePreview {
         try {
             pr.getPacketHandler().writeNoCache(new HideTriggerVolumePastePrefabPreview());
         } catch (RuntimeException e) {
-            LOGGER.at(Level.FINE).withCause(e).log("Aperçu non masqué");
+            LOGGER.at(Level.FINE).withCause(e).log("Preview not hidden");
         }
     }
 

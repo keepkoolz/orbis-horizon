@@ -92,7 +92,7 @@ public final class MapCommand extends AbstractCommandCollection {
                     }
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Partage de station impossible");
+                LOGGER.at(Level.WARNING).withCause(e).log("Cannot share the station");
                 Telemetry.error("map.shareStation", e, null, null);
                 ctx.sendMessage(Texts.t("map.station.error"));
             }

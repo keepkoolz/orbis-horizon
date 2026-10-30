@@ -169,7 +169,7 @@ final class BalloonResume {
                 Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Fichier de reprise du vol de %s non écrit", f.pilotUuid);
+            LOGGER.at(Level.WARNING).withCause(e).log("Resume file for flight of %s not written", f.pilotUuid);
         }
     }
 
@@ -186,7 +186,7 @@ final class BalloonResume {
             Files.deleteIfExists(file(pilot));
             Files.deleteIfExists(dir.resolve(pilot + ".json.tmp"));
         } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Fichier de reprise du vol de %s non effacé", pilot);
+            LOGGER.at(Level.WARNING).withCause(e).log("Resume file for flight of %s not deleted", pilot);
         }
     }
 
@@ -211,7 +211,7 @@ final class BalloonResume {
         try (Stream<Path> s = Files.list(d)) {
             s.filter(p -> p.getFileName().toString().endsWith(".json")).forEach(files::add);
         } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Dossier de reprise illisible : %s", d);
+            LOGGER.at(Level.WARNING).withCause(e).log("Resume folder unreadable: %s", d);
             return list;
         }
         for (Path p : files) {
@@ -231,7 +231,7 @@ final class BalloonResume {
                 String kindId = doc.containsKey("kind") ? doc.getString("kind").getValue() : Deployables.BALLOON_KIND;
                 Deployables.Kind kind = Deployables.get(kindId);
                 if (kind == null || !kind.isBalloon()) {
-                    throw new IllegalStateException("Type de montgolfière inconnu : " + kindId);
+                    throw new IllegalStateException("Unknown balloon type: " + kindId);
                 }
                 list.add(new Record(UUID.fromString(doc.getString("pilot").getValue()), worldName, kind,
                         new Vector3i(doc.getNumber("x").intValue(), doc.getNumber("y").intValue(), doc.getNumber("z").intValue()),
@@ -249,7 +249,7 @@ final class BalloonResume {
                         doc.containsKey("crew") ? crewFromBson(doc.get("crew").isDocument() ? doc.getDocument("crew") : null) : null,
                         doc.containsKey("sky") ? SkyLog.fromBson(doc.getDocument("sky")) : null));
             } catch (IOException | RuntimeException e) {
-                LOGGER.at(Level.SEVERE).withCause(e).log("Fichier de reprise illisible : %s", p);
+                LOGGER.at(Level.SEVERE).withCause(e).log("Resume file unreadable: %s", p);
                 try {
                     Files.move(p, p.resolveSibling(p.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
                 } catch (IOException ignored) {
@@ -285,7 +285,7 @@ final class BalloonResume {
             Files.createDirectories(d);
             Files.writeString(strandedFile(player), doc.toJson(), StandardCharsets.UTF_8);
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Position de reprise du passager %s non écrite", player);
+            LOGGER.at(Level.WARNING).withCause(e).log("Resume position of passenger %s not written", player);
         }
     }
 
@@ -298,7 +298,7 @@ final class BalloonResume {
         try {
             Files.deleteIfExists(strandedFile(player));
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Position de reprise du passager %s non effacée", player);
+            LOGGER.at(Level.WARNING).withCause(e).log("Resume position of passenger %s not deleted", player);
         }
     }
 
@@ -317,7 +317,7 @@ final class BalloonResume {
             return new Stranded(world, doc.getNumber("x").doubleValue(), doc.getNumber("y").doubleValue(),
                     doc.getNumber("z").doubleValue());
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Position de reprise du passager %s illisible", player);
+            LOGGER.at(Level.WARNING).withCause(e).log("Resume position of passenger %s unreadable", player);
             return null;
         }
     }

@@ -37,7 +37,7 @@ final class BenchTabs {
                     uw.windowData = rewrite(uw.windowData);
                 }
             } catch (Throwable e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Onglets d'établi non filtrés");
+                LOGGER.at(Level.WARNING).withCause(e).log("Bench tabs not filtered");
                 Telemetry.error("recipes", e, null, null);
             }
         });
@@ -50,7 +50,7 @@ final class BenchTabs {
         try {
             PacketAdapters.deregisterOutbound(filter);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Filtre des onglets d'établi non retiré");
+            LOGGER.at(Level.WARNING).withCause(e).log("Bench tab filter not removed");
         }
         filter = null;
     }

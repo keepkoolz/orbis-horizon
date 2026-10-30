@@ -139,7 +139,7 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             if (playerRef != null) {
                 playerRef.sendMessage(Texts.t("deploy.heightLimit"));
             }
-            LOGGER.at(Level.INFO).log("Caisse %s refusée en (%d, %d, %d) : la structure dépasse la limite de hauteur", kind.id, origin.x, origin.y, origin.z);
+            LOGGER.at(Level.INFO).log("Crate %s refused at (%d, %d, %d): the structure exceeds the height limit", kind.id, origin.x, origin.y, origin.z);
             context.getState().state = InteractionState.Failed;
             return;
         }
@@ -156,7 +156,7 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             if (playerRef != null) {
                 playerRef.sendMessage(Texts.t("deploy.underwater"));
             }
-            LOGGER.at(Level.INFO).log("Caisse %s refusée en (%d, %d, %d) : liquide en (%d, %d, %d)", kind.id, origin.x, origin.y, origin.z,
+            LOGGER.at(Level.INFO).log("Crate %s refused at (%d, %d, %d): liquid at (%d, %d, %d)", kind.id, origin.x, origin.y, origin.z,
                     wet.x, wet.y, wet.z);
             context.getState().state = InteractionState.Failed;
             return;
@@ -167,7 +167,7 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             if (playerRef != null) {
                 playerRef.sendMessage(Texts.t("deploy.stationZone").param("station", zoneStation));
             }
-            LOGGER.at(Level.INFO).log("Caisse %s refusée en (%d, %d, %d) : zone de la station %s", kind.id, origin.x, origin.y, origin.z, zoneStation);
+            LOGGER.at(Level.INFO).log("Crate %s refused at (%d, %d, %d): station zone %s", kind.id, origin.x, origin.y, origin.z, zoneStation);
             context.getState().state = InteractionState.Failed;
             return;
         }
@@ -175,7 +175,7 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             PlayerRef owner = commandBuffer.getComponent(player, PlayerRef.getComponentType());
             if (owner != null && AirshipLimit.ownsAirship(owner.getUuid())) {
                 owner.sendMessage(Texts.t("airship.error.alreadyOwned"));
-                LOGGER.at(Level.INFO).log("Caisse %s refusée en (%d, %d, %d) : %s possède déjà un dirigeable", kind.id, origin.x, origin.y, origin.z, owner.getUsername());
+                LOGGER.at(Level.INFO).log("Crate %s refused at (%d, %d, %d): %s already owns an airship", kind.id, origin.x, origin.y, origin.z, owner.getUsername());
                 context.getState().state = InteractionState.Failed;
                 return;
             }

@@ -54,7 +54,7 @@ final class VehicleView {
             ViewFilter.hide(observer, pilot);
             return observer;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Entité d'observation impossible : affichage simple");
+            LOGGER.at(Level.WARNING).withCause(e).log("Observer entity failed: simple display");
             ViewFilter.clear(main);
             return null;
         }
@@ -102,7 +102,7 @@ final class VehicleView {
             try {
                 store.putComponent(observer, ModelComponent.getComponentType(), new ModelComponent(Model.createUnitScaleModel(asset)));
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Modèle non appliqué à l'entité d'observation");
+                LOGGER.at(Level.WARNING).withCause(e).log("Model not applied to the observer entity");
             }
         }
     }
@@ -118,7 +118,7 @@ final class VehicleView {
                 store.removeEntity(observer, RemoveReason.REMOVE);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Entité d'observation non supprimée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Observer entity not removed");
         }
     }
 }

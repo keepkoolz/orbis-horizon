@@ -19,21 +19,28 @@ final class Texts {
     private Texts() {
     }
 
+    /** Prefix of the texts of pages and windows (.ui files cannot use keys with an underscore, so Java sets them). */
+    static final String UI = "server.orbis_horizon.ui.";
+
+    /** Translated text of a page or window, key relative to UI. */
+    static Message ui(String key) {
+        return Message.translation(UI + key);
+    }
+
     /** Translated chat message, key relative to CHAT. */
     static Message t(String key) {
         return Message.translation(CHAT + key);
     }
 
     /** Keys shared by the airship and the steamboat: "airship.<rest>" or "steamboat.<rest>" depending on the ship. */
-    static final List<String> SHIP_KEYS = List.of("takeoff", "fuel.level", "fuel.low", "fuel.critical", "fuel.dry",
-            "fuel.none", "landing.start", "landing.already", "landing.stuck", "landing.noRoom", "landed",
+    static final List<String> SHIP_KEYS = List.of("takeoff", "fuel.none", "landing.start", "landing.already", "landing.stuck", "landing.noRoom", "landed",
             "error.alreadyPiloting", "error.notPiloting", "error.noAirship", "error.prefabUnreadable", "error.full",
             "error.modelMissing", "passenger.seated", "passenger.landed", "passenger.pilotDied", "passenger.pilotLeft",
             "despawn.none", "despawn.done", "despawn.doneInventoryFull", "despawn.removedByAdmin",
             "despawn.alreadyLanding", "approach");
 
     /** True for the steamboat and the public shuttle boat (they share the boat texts). */
-    private static boolean isBoat(Deployables.Kind kind) {
+    static boolean isBoat(Deployables.Kind kind) {
         return kind == Deployables.STEAMBOAT || kind == Deployables.STEAMBOAT_PUBLIC;
     }
 

@@ -88,11 +88,6 @@ final class BalloonFlight {
     long lastResumeMs;
     /** Last burn update (ms). */
     long lastBurnMs;
-    /** Next fuel level message (ms). */
-    long nextFuelMsgMs;
-    /** Low fuel alerts already sent (30 s and 10 s). */
-    boolean warned30;
-    boolean warned10;
     /** Burner dry: the balloon can no longer climb and descends to the ground. */
     volatile boolean dry;
     /**

@@ -146,7 +146,7 @@ final class BalloonVoyage {
             v.stop();
             if (now - v.lastErrorMs >= 10_000) {
                 v.lastErrorMs = now;
-                LOGGER.at(Level.WARNING).withCause(e).log("Voyage de la montgolfière : pas de vol en échec, voyage arrêté");
+                LOGGER.at(Level.WARNING).withCause(e).log("Balloon voyage: flight step failed, voyage stopped");
                 Telemetry.error("balloon.flight", e, Telemetry.kindId(f.kind), "voyage");
             }
         }
@@ -206,10 +206,15 @@ final class BalloonVoyage {
         BalloonLights.follow(store, f);
     }
 
-    /** Burns the fuel; dry: flame off, the voyage stops and the pilot says so. Warnings at 30 and 10 s to the captain. */
+    /** Burns the fuel and shows the fuel window to the captain; dry: flame off, the voyage stops and the pilot says so. */
     private static void burn(Store<EntityStore> store, BalloonFlight f, BalloonVoyage v, BalloonManager bm, long now) {
         BurnerFuel fuel = f.burner;
-        if (fuel == null || f.dry) {
+        if (fuel == null) {
+            return;
+        }
+        PlayerRef captain = captainOf(store, f, v);
+        if (f.dry) {
+            FuelHud.showDry(store, captain, FuelHud.Vehicle.BALLOON);
             return;
         }
         double dt = (now - f.lastBurnMs) / 1000.0;
@@ -219,27 +224,16 @@ final class BalloonVoyage {
         }
         fuel.burn(dt);
         double left = fuel.remainingSeconds();
-        PlayerRef captain = captainOf(store, f, v);
         if (left <= 0) {
             f.dry = true;
             bm.setBalloonFlame(store, f, false);
+            FuelHud.showDry(store, captain, FuelHud.Vehicle.BALLOON);
             if (v.stop() && captain != null) {
                 captain.sendMessage(Texts.pilot("crew.voyage.dryBalloon", f.crew));
             }
             return;
         }
-        String key = null;
-        if (left <= 10 && !f.warned10) {
-            f.warned10 = true;
-            f.warned30 = true;
-            key = "fuel.critical";
-        } else if (left <= 30 && !f.warned30) {
-            f.warned30 = true;
-            key = "fuel.low";
-        }
-        if (key != null && captain != null) {
-            captain.sendMessage(Texts.t(key).param("fuel", BalloonManager.fuelMessage(fuel)));
-        }
+        FuelHud.show(store, captain, FuelHud.Vehicle.BALLOON, left, fuel.fuelItems());
     }
 
     private static void blockedStop(Store<EntityStore> store, BalloonFlight f, BalloonVoyage v) {
@@ -306,7 +300,7 @@ final class BalloonVoyage {
             captain.sendMessage(ShipVoyage.withDest(Texts.pilot("crew.voyage.arrivedBalloon", f.crew), v.destKind, v.destName));
         }
         if (v.forced) {
-            LOGGER.at(Level.INFO).log("Pose forcée dans la zone d'une station : voyage de la montgolfière vers %s, origine %s", v.destName, origin);
+            LOGGER.at(Level.INFO).log("Forced landing in a station zone: balloon voyage to %s, origin %s", v.destName, origin);
         }
         CaptainMap.forget(v.captain);
         if (capRef != null && capRef.isValid()) {
@@ -319,7 +313,7 @@ final class BalloonVoyage {
             try {
                 bm.finishFlight(store, f, origin);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Voyage de la montgolfière : pose en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Balloon voyage: landing failed");
                 Telemetry.error("balloon.flight", e, Telemetry.kindId(f.kind), "voyage");
             }
         });

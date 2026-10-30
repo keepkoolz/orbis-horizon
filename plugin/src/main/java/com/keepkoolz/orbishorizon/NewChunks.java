@@ -112,18 +112,18 @@ final class NewChunks {
         if (!Files.exists(file)) return n;
         try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
             int version = in.readInt();
-            if (version != FORMAT_VERSION && version != FORMAT_WITHOUT_UUID) throw new IOException("version inconnue");
+            if (version != FORMAT_VERSION && version != FORMAT_WITHOUT_UUID) throw new IOException("unknown version");
             UUID stored = null;
             if (version == FORMAT_VERSION && in.readBoolean()) {
                 stored = new UUID(in.readLong(), in.readLong());
             }
             if (stored != null && current != null && !stored.equals(current)) {
                 in.close();
-                LOGGER.at(Level.INFO).log("Carte des chunks générés de %s : le monde a changé d'identité, carte vide", file.getFileName());
+                LOGGER.at(Level.INFO).log("Generated chunk map of %s: world changed identity, map empty", file.getFileName());
                 try {
                     Files.move(file, file.resolveSibling(file.getFileName() + ".old"), StandardCopyOption.REPLACE_EXISTING);
                 } catch (IOException e2) {
-                    LOGGER.at(Level.WARNING).withCause(e2).log("Impossible de renommer %s en .old", file.getFileName());
+                    LOGGER.at(Level.WARNING).withCause(e2).log("Cannot rename %s to .old", file.getFileName());
                 }
                 n.dirty = true;
                 return n;
@@ -131,7 +131,7 @@ final class NewChunks {
             if (stored != null && current == null) n.world = stored;
             if (stored == null && current != null) n.dirty = true;
             int count = in.readInt();
-            if (count < 0) throw new IOException("nombre de régions invalide");
+            if (count < 0) throw new IOException("invalid region count");
             for (int r = 0; r < count; r++) {
                 int rx = in.readInt();
                 int rz = in.readInt();
@@ -141,15 +141,15 @@ final class NewChunks {
                 }
                 n.regions.put(regionKey(rx, rz), bits);
             }
-            if (in.read() != -1) throw new IOException("données en trop");
+            if (in.read() != -1) throw new IOException("extra data");
             return n;
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Carte des chunks générés illisible (%s), carte vide", file.getFileName());
+            LOGGER.at(Level.WARNING).withCause(e).log("Generated chunk map unreadable (%s), map empty", file.getFileName());
             Telemetry.error("worldgen", e, null, "read");
             try {
                 Files.move(file, file.resolveSibling(file.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e2) {
-                LOGGER.at(Level.WARNING).withCause(e2).log("Impossible de renommer %s en .bad", file.getFileName());
+                LOGGER.at(Level.WARNING).withCause(e2).log("Cannot rename %s to .bad", file.getFileName());
             }
             NewChunks fresh = new NewChunks();
             fresh.world = current;
@@ -201,7 +201,7 @@ final class NewChunks {
                 Path f = fileOf(e.getKey());
                 if (f != null && e.getValue().dirty()) e.getValue().write(f);
             } catch (IOException | RuntimeException ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("Écriture de la carte des chunks générés impossible (%s)", e.getKey());
+                LOGGER.at(Level.WARNING).withCause(ex).log("Cannot write the generated chunk map (%s)", e.getKey());
                 Telemetry.error("worldgen", ex, null, "write");
             }
         }

@@ -201,7 +201,7 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
         }
         if ("Recall".equals(data.action)) {
             if (boat) { // the button is hidden on a boat station: a crafted event is ignored
-                LOGGER.at(Level.INFO).log("Rappel ignoré : %s est une station maritime", station.name);
+                LOGGER.at(Level.INFO).log("Recall ignored: %s is a sea station", station.name);
                 return;
             }
             if (!StationMaster.holds(station, playerRef.getUuid())) {
@@ -237,7 +237,7 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
                 }
             }
             if (!offered) {
-                LOGGER.at(Level.INFO).log("Destination ignorée : « %s » n'est pas connue du joueur", data.dest);
+                LOGGER.at(Level.INFO).log("Destination ignored: '%s' is not known to the player", data.dest);
                 finish();
                 close();
                 return;

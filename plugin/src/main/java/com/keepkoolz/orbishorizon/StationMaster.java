@@ -89,12 +89,12 @@ final class StationMaster {
         try {
             NPCPlugin plugin = NPCPlugin.get();
             if (plugin == null || plugin.getIndex(ROLE) < 0) {
-                LOGGER.at(Level.WARNING).log("Rôle %s introuvable : pas de chef de gare pour « %s »", ROLE, s.name);
+                LOGGER.at(Level.WARNING).log("Role %s not found: no station master for '%s'", ROLE, s.name);
                 return null;
             }
             Vector3d point = masterPoint(s);
             if (!SectionBlocks.entitiesLoaded(world.getChunkStore(), (int) Math.floor(point.x), (int) Math.floor(point.y), (int) Math.floor(point.z))) {
-                LOGGER.at(Level.INFO).log("Chef de gare de « %s » : section non chargée, il sera créé à son chargement", s.name);
+                LOGGER.at(Level.INFO).log("Station master of '%s': section not loaded, it will be created when it loads", s.name);
                 ensure(world, s, false);
                 return null;
             }
@@ -102,9 +102,9 @@ final class StationMaster {
                     plugin.spawnNPC(store, ROLE, null, point, yawRotation(facingYaw(s)));
             if (p == null || p.first() == null || !p.first().isValid()) {
                 if (retried) {
-                    LOGGER.at(Level.WARNING).log("Chef de gare de « %s » : création impossible après un second essai", s.name);
+                    LOGGER.at(Level.WARNING).log("Station master of '%s': cannot create after a second try", s.name);
                 } else {
-                    LOGGER.at(Level.WARNING).log("Chef de gare de « %s » : création impossible, confié à la reprise", s.name);
+                    LOGGER.at(Level.WARNING).log("Station master of '%s': cannot create, left to the resume", s.name);
                     ensure(world, s, true);
                 }
                 return null;
@@ -116,10 +116,10 @@ final class StationMaster {
                 return null;
             }
             TransitNetwork.get().setMaster(s, id.getUuid());
-            LOGGER.at(Level.INFO).log("Chef de gare de « %s » créé (%s)", s.name, id.getUuid());
+            LOGGER.at(Level.INFO).log("Station master of '%s' created (%s)", s.name, id.getUuid());
             return id.getUuid();
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Chef de gare de « %s » non créé", s.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Station master of '%s' not created", s.name);
             Telemetry.error("transit", e, null, null);
             return null;
         }
@@ -142,7 +142,7 @@ final class StationMaster {
         {
             org.joml.Vector3i origin = new org.joml.Vector3i(e.x(), e.y(), e.z());
             if (TransitNetwork.get().at(world.getName(), origin) == null) {
-                LOGGER.at(Level.INFO).log("Station posée en (%d, %d, %d) sans nom : enregistrée avec un nom automatique",
+                LOGGER.at(Level.INFO).log("Station placed at (%d, %d, %d) without a name: registered with an automatic name",
                         origin.x, origin.y, origin.z);
                 DeployStationInteraction.completeRegistration(world, origin, e.rotation(), e.owner(), null, null, kind);
             }
@@ -181,7 +181,7 @@ final class StationMaster {
                 store.putComponent(ref, com.hypixel.hytale.server.core.modules.entity.player.PlayerSkinComponent.getComponentType(), c);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Apparence du chef de gare de « %s » non posée", s.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Look of the station master of '%s' not applied", s.name);
             Telemetry.error("transit", e, null, null);
         }
     }
@@ -235,7 +235,7 @@ final class StationMaster {
                 store.removeEntity(ref, RemoveReason.REMOVE);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Chef de gare de « %s » non supprimé", s.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Station master of '%s' not removed", s.name);
             Telemetry.error("transit", e, null, null);
         }
         RESERVATIONS.remove(s);
@@ -330,12 +330,12 @@ final class StationMaster {
                         PENDING.add(new Pending(world, s, retried));
                     });
                 } catch (RuntimeException ex) {
-                    LOGGER.at(Level.WARNING).withCause(ex).log("Monde %s arrêté : chef de gare de « %s » non retrouvé", world.getName(), s.name);
+                    LOGGER.at(Level.WARNING).withCause(ex).log("World %s stopped: station master of '%s' not found", world.getName(), s.name);
                 }
             });
         } catch (RuntimeException ex) {
             // At plugin start a world that has not finished starting is not ready: StartWorldEvent calls again.
-            LOGGER.at(Level.INFO).log("Monde %s pas encore prêt : chef de gare de « %s » repris au démarrage du monde (%s)",
+            LOGGER.at(Level.INFO).log("World %s not ready yet: station master of '%s' resumed at world start (%s)",
                     world.getName(), s.name, ex.getClass().getSimpleName());
         }
     }
@@ -380,14 +380,14 @@ final class StationMaster {
                     if (id != null) {
                         TransitNetwork.get().setMaster(s, id.getUuid());
                         wire(store, orphan, s);
-                        LOGGER.at(Level.INFO).log("Chef de gare de « %s » repris sur place (%s)", s.name, id.getUuid());
+                        LOGGER.at(Level.INFO).log("Station master of '%s' resumed in place (%s)", s.name, id.getUuid());
                         removeDuplicates(store, s, orphan);
                         continue;
                     }
                 }
                 spawn(store, world, s, p.retried);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Chef de gare de « %s » non remis en état", s.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Station master of '%s' not restored", s.name);
                 Telemetry.error("transit", e, null, null);
             }
         }
@@ -427,7 +427,7 @@ final class StationMaster {
             }
         }
         if (removed > 0) {
-            LOGGER.at(Level.INFO).log("Chef de gare de « %s » : %d doublon(s) retiré(s)", s.name, removed);
+            LOGGER.at(Level.INFO).log("Station master of '%s': %d duplicate(s) removed", s.name, removed);
         }
     }
 
@@ -463,7 +463,7 @@ final class StationMaster {
                 removeDuplicates(store, s, ref); // a stacked master coming back with its section later
 
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Câblage du chef de gare de « %s » non vérifié", s.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Wiring of the station master of '%s' not checked", s.name);
                 Telemetry.error("transit", e, null, null);
             }
         }
@@ -513,7 +513,7 @@ final class StationMaster {
                     h.setRotation(r);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Orientation du chef de gare de « %s » non réglée", s.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Orientation of the station master of '%s' not set", s.name);
                 Telemetry.error("transit", e, null, null);
             }
         }
@@ -610,7 +610,7 @@ final class StationMaster {
             }
             p.getPageManager().openCustomPage(playerRef, store, new DestinationPage(player, s));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Fenêtre de destination impossible pour « %s »", s.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Cannot open the destination window for '%s'", s.name);
             Telemetry.error("transit", e, null, null);
             release(s, player.getUuid());
         }

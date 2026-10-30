@@ -57,7 +57,7 @@ final class StructureRemoval {
         try {
             return PermissionsModule.get().getGroupsForUser(uuid).contains(HytalePermissionsProvider.GROUP_ADMIN);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Droits de %s non lus : traité comme non op", uuid);
+            LOGGER.at(Level.WARNING).withCause(e).log("Permissions of %s not read: treated as non-op", uuid);
             return false;
         }
     }

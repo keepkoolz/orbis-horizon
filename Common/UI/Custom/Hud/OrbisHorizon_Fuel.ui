@@ -1,0 +1,41 @@
+// Remaining-fuel window of a vehicle, centred at the bottom of the screen, above the game's stamina bar and the mod's oxygen bar.
+// Position: PanelBottom is the distance from the bottom of the screen (the oxygen bar sits at 140), PanelWidth and PanelHeight set the size.
+// All texts are set from the plugin. The time line exists in three colours, the plugin shows one of them (normal, low, critical).
+$C = "../Common.ui";
+
+@PanelWidth = 220;
+@PanelHeight = 72;
+@PanelBottom = 160;
+
+$C.@SimpleContainer {
+  Anchor: (Bottom: @PanelBottom, Width: @PanelWidth, Height: @PanelHeight);
+  Padding: (Horizontal: 12, Vertical: 6);
+  LayoutMode: Top;
+
+  Label #FuelTitle {
+    Anchor: (Height: 16);
+    Style: (FontSize: 12, RenderBold: true, RenderUppercase: true, TextColor: #b4bfcb, HorizontalAlignment: Center);
+  }
+
+  Label #FuelTime {
+    Anchor: (Height: 28);
+    Style: (FontSize: 22, RenderBold: true, TextColor: #ffffff, HorizontalAlignment: Center);
+  }
+
+  Label #FuelTimeLow {
+    Visible: false;
+    Anchor: (Height: 28);
+    Style: (FontSize: 22, RenderBold: true, TextColor: #f2c14e, HorizontalAlignment: Center);
+  }
+
+  Label #FuelTimeCritical {
+    Visible: false;
+    Anchor: (Height: 28);
+    Style: (FontSize: 22, RenderBold: true, TextColor: #e5533d, HorizontalAlignment: Center);
+  }
+
+  Label #FuelItems {
+    Anchor: (Height: 14);
+    Style: (FontSize: 12, TextColor: #96a9be, HorizontalAlignment: Center);
+  }
+}

@@ -159,9 +159,6 @@ final class AirshipManager {
     /** Thrust state thresholds on the yaw rate (deg/s): a turn state is entered at or above ON and left below OFF. */
     private static final double TURN_FLAME_ON_DEG = 2;
     private static final double TURN_FLAME_OFF_DEG = 1;
-    /** Travel time left (s) at which the low and critical fuel messages are sent. */
-    private static final double FUEL_LOW_S = 30;
-    private static final double FUEL_CRITICAL_S = 10;
 
     /** +1 or -1: sign of the heading in the entity's visual yaw (diagnostic, in case the client turns the opposite way). */
     volatile double yawSign = 1;
@@ -314,7 +311,7 @@ final class AirshipManager {
     Hull hullOf(Deployables.Kind kind, StructureShape s) {
         return hulls.computeIfAbsent(s, shape -> {
             Hull h = hullFor(shape, pivot(kind), spec(kind).waterlineY);
-            LOGGER.at(Level.INFO).log("%s : %d case(s), %d case(s) de coque extérieure pour les collisions",
+            LOGGER.at(Level.INFO).log("%s: %d cell(s), %d outer hull cell(s) for collisions",
                     cap(spec(kind).logLabel), shape.cells().size(), h.size());
             return h;
         });
@@ -400,17 +397,17 @@ final class AirshipManager {
     /** Text of a blocking cell of {@link #firstBlockingCell} for the log: the world block (or liquid) found there. */
     static String describeCell(World world, int[] cell) {
         if (cell == null) {
-            return "aucune case";
+            return "no cell";
         }
         try {
             SectionReader reader = new SectionReader(world.getChunkStore());
             BlockType bt = SectionBlocks.typeAt(reader, cell[0], cell[1], cell[2]);
             String liquid = BalloonManager.liquidAt(reader, cell[0], cell[1], cell[2]);
-            return String.format(Locale.ROOT, "case (%d, %d, %d) %s : bloc %s, fluide %s", cell[0], cell[1], cell[2],
-                    cell[3] == 1 ? "sous la ligne de flottaison sans eau" : "à l'air libre", bt != null ? bt.getId() : "aucun",
-                    liquid != null ? liquid : "aucun");
+            return String.format(Locale.ROOT, "cell (%d, %d, %d) %s: block %s, fluid %s", cell[0], cell[1], cell[2],
+                    cell[3] == 1 ? "below the waterline without water" : "in open air", bt != null ? bt.getId() : "none",
+                    liquid != null ? liquid : "none");
         } catch (RuntimeException e) {
-            return String.format(Locale.ROOT, "case (%d, %d, %d)", cell[0], cell[1], cell[2]);
+            return String.format(Locale.ROOT, "cell (%d, %d, %d)", cell[0], cell[1], cell[2]);
         }
     }
 
@@ -511,7 +508,7 @@ final class AirshipManager {
         try {
             s = kind.shape();
         } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : lecture du prefab du dirigeable impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: reading the airship prefab failed");
             Telemetry.error("airship.takeoff", e, null, null);
             return Texts.ship(kind, "error.prefabUnreadable").param("error", String.valueOf(e.getMessage()));
         }
@@ -632,9 +629,9 @@ final class AirshipManager {
                     }
                 }
             }
-            LOGGER.at(Level.INFO).log("Voyage : échelle du côté %d déployée pour le capitaine à terre", v.ashoreSide);
+            LOGGER.at(Level.INFO).log("Voyage: ladder on side %d deployed for the captain ashore", v.ashoreSide);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : échelle du capitaine à terre non déployée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: ladder for the captain ashore not deployed");
             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
@@ -674,7 +671,7 @@ final class AirshipManager {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : barre d'action illisible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: action bar unreadable");
         }
         return false;
     }
@@ -707,7 +704,7 @@ final class AirshipManager {
         try {
             s = kind.shape();
         } catch (IOException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Voyage : lecture du prefab du dirigeable impossible");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Voyage: reading the airship prefab failed");
             Telemetry.error("airship.autopilot", ex, Telemetry.kindId(kind), null);
             return Texts.ship(kind, "error.prefabUnreadable").param("error", String.valueOf(ex.getMessage()));
         }
@@ -818,13 +815,13 @@ final class AirshipManager {
         // The ship must still wait in blocks here: a second call (window closed by the server) must not launch a ship that already left.
         if (AirshipRecall.parkedAt(world, origin, rotation) != r
                 || BalloonRegistry.get(world, origin, rotation, Deployables.AIRSHIP_KIND) == null) {
-            LOGGER.at(Level.INFO).log("Rappel : départ ignoré, le dirigeable n'attend plus au-dessus de %s", r.station.name);
+            LOGGER.at(Level.INFO).log("Recall: departure ignored, the airship is no longer waiting above %s", r.station.name);
             return Texts.ship(Deployables.AIRSHIP, "error.noAirship");
         }
         if (!shipSectionsLoaded(world, origin)) {
             // Never detach a structure that is not in memory (nothing would be removed, the ship would be duplicated).
             loadShipSections(world, origin);
-            LOGGER.at(Level.INFO).log("Rappel : sections du dirigeable en attente non chargées, chargement demandé");
+            LOGGER.at(Level.INFO).log("Recall: sections of the waiting airship not loaded, loading requested");
             return Texts.t("crew.recall.unreachable");
         }
         Message models = modelCheck(Deployables.AIRSHIP);
@@ -865,7 +862,7 @@ final class AirshipManager {
                     AirshipPassengers.teleport(store, o.ref(), points.get(i++ % points.size()));
                 }
             }
-            LOGGER.at(Level.WARNING).log("Rappel : %d joueur(s) sans place posé(s) sur le quai", aboard.size() - riders.size());
+            LOGGER.at(Level.WARNING).log("Recall: %d player(s) without a seat placed on the pier", aboard.size() - riders.size());
         }
         if (captain != null) {
             AirshipPassengers.Rider chair = passengers.chairRider(Deployables.AIRSHIP, s, new BalloonManager.Occupant(captain, captain.getReference(), 0));
@@ -883,7 +880,7 @@ final class AirshipManager {
                                  List<int[]> plan, RecallState leave, UUID ownerId, String ownerName) {
         Deployables.AirshipSpec spec = spec(kind);
         if (spec.ladders && !ShipLadder.allUp(world, origin, rotation)) {
-            LOGGER.at(Level.WARNING).log("Décollage refusé : échelle encore descendue");
+            LOGGER.at(Level.WARNING).log("Takeoff refused: ladder still down");
             return Texts.ship(kind, "error.noAirship");
         }
         boolean boat = spec.waterborne() && plan != null && leave == null;
@@ -948,7 +945,7 @@ final class AirshipManager {
             CaptainMap.removeAll(store, captain.getReference()); // no stale map before the new one
             CaptainMap.give(store, captain.getReference());
             if (f.engines.isEmpty()) {
-                enterDry(store, f, false);
+                enterDry(store, f);
             }
             for (AirshipPassengers.Rider r : f.riders) {
                 PlayerRef pr = playerOf(store, r.p.ref);
@@ -956,11 +953,11 @@ final class AirshipManager {
                     pr.sendMessage(ShipVoyage.withDest(Texts.pilot("crew.voyage.depart", f.crew), d.kind(), d.name()));
                 }
             }
-            LOGGER.at(Level.INFO).log("Voyage : décollage du %s de %s vers %s (%s, %.0f, %.0f), croisière à y %.0f, %d blocs retirés, "
-                            + "%d joueur(s) à bord%s", spec.logLabel, ownerName, d.name(), d.kind(), f.voyage.destX, f.voyage.destZ,
-                    f.voyage.cruiseY, detached.removed(), f.riders.size(), boat ? ", " + plan.size() + " point(s) de passage" : "");
+            LOGGER.at(Level.INFO).log("Voyage: takeoff of the %s of %s to %s (%s, %.0f, %.0f), cruise at y %.0f, %d blocks removed, "
+                            + "%d player(s) aboard%s", spec.logLabel, ownerName, d.name(), d.kind(), f.voyage.destX, f.voyage.destZ,
+                    f.voyage.cruiseY, detached.removed(), f.riders.size(), boat ? ", " + plan.size() + " waypoint(s)" : "");
         } else {
-            LOGGER.at(Level.INFO).log("Rappel : le dirigeable de %s décolle de %s, %d blocs retirés, %d joueur(s) à bord", ownerName,
+            LOGGER.at(Level.INFO).log("Recall: the airship of %s takes off from %s, %d blocks removed, %d player(s) aboard", ownerName,
                     leave.station.name, detached.removed(), f.riders.size());
         }
         return null;
@@ -981,13 +978,13 @@ final class AirshipManager {
         try {
             s = kind.shape();
         } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette : lecture du prefab impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle: reading the prefab failed");
             Telemetry.error("transit", e, Telemetry.kindId(kind), null);
             passengers.releaseAll(store, riders);
             return null;
         }
         UUID id = UUID.randomUUID();
-        AirshipFlight f = new AirshipFlight(id, id, null, "navette", world, kind);
+        AirshipFlight f = new AirshipFlight(id, id, null, "shuttle", world, kind);
         long now = System.currentTimeMillis();
         f.pos.set(pivot);
         f.theta = theta;
@@ -1010,7 +1007,7 @@ final class AirshipManager {
         f.riders.addAll(riders);
         Ref<EntityStore> ship = spawnShip(store, f, spec.idleModelId);
         if (ship == null) {
-            LOGGER.at(Level.WARNING).log("Navette : modèle %s introuvable", spec.idleModelId);
+            LOGGER.at(Level.WARNING).log("Shuttle: model %s not found", spec.idleModelId);
             passengers.releaseAll(store, f.riders);
             f.riders.clear();
             return null;
@@ -1022,10 +1019,10 @@ final class AirshipManager {
                 f.crewMan = AirshipCrew.createMannequin(store, f.shipUuid, ship, null, null, shipPoint(f, pivot(kind)), new Vector3f(),
                         helmLook, now, AirshipCrew.POSE_STAND);
                 if (f.crewMan == null) {
-                    LOGGER.at(Level.WARNING).log("Navette %s : mannequin du pilote non créé (création refusée), nouvel essai en route", f.id);
+                    LOGGER.at(Level.WARNING).log("Shuttle %s: pilot mannequin not created (creation refused), retrying en route", f.id);
                 }
             } else {
-                LOGGER.at(Level.WARNING).log("Navette %s : départ sans mannequin de pilote (apparence du chef de gare introuvable), nouvel essai en route", f.id);
+                LOGGER.at(Level.WARNING).log("Shuttle %s: departure without a pilot mannequin (station master appearance not found), retrying en route", f.id);
             }
             f.takeoffMs = now;
             spawnLights(store, f, s);
@@ -1033,12 +1030,12 @@ final class AirshipManager {
             passengers.board(store, f);
             flights.put(f.id, f);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette : départ impossible, vol retiré");
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle: departure failed, flight removed");
             Telemetry.error("transit", e, Telemetry.kindId(kind), null);
-            endShuttle(store, f, "départ impossible"); // ship entity, parts, mannequin, lights and prepared riders
+            endShuttle(store, f, "departure failed"); // ship entity, parts, mannequin, lights and prepared riders
             return null;
         }
-        LOGGER.at(Level.INFO).log("Navette : départ de %s vers %s en (%.1f, %.1f, %.1f), %d point(s), %d passager(s)",
+        LOGGER.at(Level.INFO).log("Shuttle: departure from %s to %s at (%.1f, %.1f, %.1f), %d point(s), %d passenger(s)",
                 state.from != null ? state.from.name : "?", state.to != null ? state.to.name : "?", f.pos.x, f.pos.y, f.pos.z,
                 state.waypoints.size(), f.riders.size());
         return f;
@@ -1064,9 +1061,9 @@ final class AirshipManager {
             passengers.releaseAll(store, f);
             removeLights(store, f);
             removeShipEntities(store, f);
-            LOGGER.at(Level.INFO).log("Navette %s retirée (%s)", f.id, reason);
+            LOGGER.at(Level.INFO).log("Shuttle %s removed (%s)", f.id, reason);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette %s : retrait incomplet", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle %s: removal incomplete", f.id);
             Telemetry.error("transit", e, Telemetry.kindId(f.kind), null);
         }
     }
@@ -1077,7 +1074,7 @@ final class AirshipManager {
      * steps of a landing. Returns true if the structure is registered afterwards. Call on the world thread. Never throws.
      */
     boolean moorShuttle(Store<EntityStore> store, AirshipFlight f, Vector3i origin, Rotation rotation) {
-        endShuttle(store, f, "amarrage");
+        endShuttle(store, f, "docking");
         return pasteShuttle(store, f.world, origin, rotation);
     }
 
@@ -1091,7 +1088,7 @@ final class AirshipManager {
                 drainHull(world, kind, s, origin, rotation);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette : pose à quai en échec en %s", origin);
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle: docking at the pier failed at %s", origin);
             Telemetry.error("transit", e, Telemetry.kindId(kind), null);
         }
         return BalloonRegistry.get(world, origin, rotation, kind.id) != null;
@@ -1151,7 +1148,7 @@ final class AirshipManager {
         try {
             s = kind.shape();
         } catch (IOException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Rappel : lecture du prefab du dirigeable impossible");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Recall: reading the airship prefab failed");
             Telemetry.error("airship.recall", ex, Telemetry.kindId(kind), null);
             return Texts.ship(Deployables.AIRSHIP, "error.prefabUnreadable").param("error", String.valueOf(ex.getMessage()));
         }
@@ -1167,12 +1164,12 @@ final class AirshipManager {
             // Safety net: rungs remain (section not loaded): ask for the sections so the next try can remove them.
             ShipLadder.raiseAll(world, origin, rotation);
             ShipLadder.requestRungSections(world, origin, rotation);
-            LOGGER.at(Level.WARNING).log("Rappel refusé : échelle encore descendue, remontée lancée");
+            LOGGER.at(Level.WARNING).log("Recall refused: ladder still down, raising started");
             return Texts.t("airship.ladder.raisingBeforeTakeoff");
         }
         if (!shipSectionsLoaded(world, origin)) {
             // Never detach a structure that is not in memory (nothing would be removed, the ship would be duplicated).
-            LOGGER.at(Level.WARNING).log("Rappel : sections du dirigeable posé non chargées, rappel refusé");
+            LOGGER.at(Level.WARNING).log("Recall: sections of the landed airship not loaded, recall refused");
             return Texts.t("crew.recall.unreachable");
         }
         Hull hull = hullOf(kind, s);
@@ -1186,7 +1183,7 @@ final class AirshipManager {
             while (blocked(world, hull, plan.spawnX(), y, plan.spawnZ(), plan.theta(), 0) > 0) {
                 y += SPAWN_RAISE_BLOCKS;
                 if (++tries > SPAWN_RAISE_TRIES || y > BalloonManager.WORLD_MAX_Y - 10) {
-                    throw new IllegalStateException("point d'apparition bloqué");
+                    throw new IllegalStateException("spawn point blocked");
                 }
             }
             f.pos.set(plan.spawnX(), y, plan.spawnZ());
@@ -1196,7 +1193,7 @@ final class AirshipManager {
             f.lastValidPivotCell.set(f.pivotCell(f.pos));
             Ref<EntityStore> ship = spawnShip(store, f, spec.idleModelId);
             if (ship == null) {
-                throw new IllegalStateException("modèle introuvable : " + spec.idleModelId);
+                throw new IllegalStateException("model not found: " + spec.idleModelId);
             }
             f.parts = VehicleParts.spawn(store, partsMode, spec.modelId, ship, f.shipUuid, null, null);
             long now = System.currentTimeMillis();
@@ -1215,11 +1212,11 @@ final class AirshipManager {
             flights.put(f.id, f);
             f.lastResumeMs = f.lastTickMs;
             AirshipResume.write(f, false);
-            LOGGER.at(Level.INFO).log("Rappel : dirigeable de %s apparu en (%.0f, %.0f, %.0f) vers %s, %d blocs retirés", entry.ownerName(),
+            LOGGER.at(Level.INFO).log("Recall: airship of %s spawned at (%.0f, %.0f, %.0f) toward %s, %d blocks removed", entry.ownerName(),
                     f.pos.x, f.pos.y, f.pos.z, station.name, detached.removed());
             return null;
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Rappel : apparition impossible, le dirigeable est reposé");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Recall: spawn failed, the airship is set down");
             Telemetry.error("airship.recall", ex, Telemetry.kindId(kind), null);
             flights.remove(f.id);
             f.recall = null;
@@ -1257,7 +1254,7 @@ final class AirshipManager {
                            Ref<EntityStore> pilotRef, PlayerRef player, List<AirshipPassengers.Rider> riders) {
         Deployables.AirshipSpec spec = spec(kind);
         if (spec.ladders && !ShipLadder.allUp(world, origin, rotation)) {
-            LOGGER.at(Level.WARNING).log("Décollage refusé : échelle encore descendue");
+            LOGGER.at(Level.WARNING).log("Takeoff refused: ladder still down");
             return Texts.ship(kind, "error.noAirship");
         }
         TransformComponent pilotTransform = store.getComponent(pilotRef, TransformComponent.getComponentType());
@@ -1338,13 +1335,13 @@ final class AirshipManager {
         player.sendMessage(Texts.ship(f.kind, "takeoff"));
         if (f.engines.isEmpty()) {
             // No fuel: the ship still climbs, descends and hovers (gas lift), but cannot travel.
-            enterDry(store, f, false);
+            enterDry(store, f);
             player.sendMessage(Texts.ship(f.kind, "fuel.none"));
         } else {
-            player.sendMessage(fuelMessage(f));
+            updateFuelHud(store, f);
         }
-        LOGGER.at(Level.INFO).log("Décollage du " + spec(f.kind).logLabel + " par %s : origine %s, rotation %s, %d blocs retirés, %d objet(s) de coffre, "
-                        + "%d moteur(s), %d objet(s) de moteur, %.0f s de combustible, établis améliorés : %s, %d passager(s)",
+        LOGGER.at(Level.INFO).log("Takeoff of the " + spec(f.kind).logLabel + " by %s: origin %s, rotation %s, %d blocks removed, %d chest item(s), "
+                        + "%d engine(s), %d engine item(s), %.0f s of fuel, upgraded benches: %s, %d passenger(s)",
                 player.getUsername(), origin, rotation, removed, f.cargo.itemCount(), f.engines.entryCount(), f.engines.itemCount(),
                 f.engines.remainingSeconds(), f.benches.describe(), f.riders.size());
         return null;
@@ -1425,7 +1422,7 @@ final class AirshipManager {
         if (f.crew != null) {
             crewLook = AirshipCrew.lookOf(store, AirshipCrew.refOf(world, registered));
             if (crewLook == null) {
-                LOGGER.at(Level.INFO).log("Pilote : absent au décollage, pas de mannequin de vol");
+                LOGGER.at(Level.INFO).log("Pilot: absent at takeoff, no flight mannequin");
             }
             AirshipCrew.remove(store, world, registered);
         }
@@ -1455,11 +1452,11 @@ final class AirshipManager {
             String id = t != null ? t.getId() : null;
             if (id != null && id.startsWith("Wood_Softwood_Beam")
                     && SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, BlockType.EMPTY_KEY, 4)) {
-                LOGGER.at(Level.INFO).log("Dirigeable : ancienne poutre sous la barre retirée en (%d, %d, %d)", p.x, p.y, p.z);
+                LOGGER.at(Level.INFO).log("Airship: old beam under the helm removed at (%d, %d, %d)", p.x, p.y, p.z);
                 return 1;
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Dirigeable : ancienne poutre sous la barre non retirée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Airship: old beam under the helm not removed");
             Telemetry.error("airship.takeoff", e, null, null);
         }
         return 0;
@@ -1544,7 +1541,7 @@ final class AirshipManager {
         if (f.helm != null) {
             ViewFilter.clear(f.helm.ref);
         }
-        LOGGER.at(Level.INFO).log("Dirigeable de %s : affichage double terminé, une seule entité visible de tous", f.pilotName);
+        LOGGER.at(Level.INFO).log("Airship of %s: dual display finished, a single entity visible to everyone", f.pilotName);
     }
 
     /**
@@ -1565,7 +1562,7 @@ final class AirshipManager {
             CaptainMap.sweepAround(store, f.pos);
             CaptainMap.forget(captain);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : nettoyage de fin en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: final cleanup failed");
             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
@@ -1620,9 +1617,51 @@ final class AirshipManager {
         return f.engines != null ? f.engines.remainingSeconds() / Math.max(0.01, fuelFactor) : 0;
     }
 
-    private Message fuelMessage(AirshipFlight f) {
-        return Texts.ship(f.kind, "fuel.level").param("time", BalloonManager.durationText(travelSecondsLeft(f)))
-                .param("items", f.engines.fuelItems());
+    /** Player the fuel window of this flight goes to: the pilot, or the captain of an NPC pilot voyage. Null when there is none. */
+    private PlayerRef fuelHudTarget(Store<EntityStore> store, AirshipFlight f) {
+        if (f.engines == null || spec(f.kind).fuelless) {
+            return null;
+        }
+        if (!f.pilotless()) {
+            return playerOf(store, f.pilotRef);
+        }
+        VoyageState v = f.voyage;
+        if (v == null || v.fuelFree || f.shuttle != null || f.recall != null) {
+            return null;
+        }
+        for (AirshipPassengers.Rider r : f.riders) {
+            if (r.p.uuid.equals(v.captain)) {
+                return playerOf(store, r.p.ref);
+            }
+        }
+        return null;
+    }
+
+    /** Shows or refreshes the fuel window of the pilot (or the voyage captain): time of travel left, items, or out of fuel. Never throws. */
+    private void updateFuelHud(Store<EntityStore> store, AirshipFlight f) {
+        try {
+            PlayerRef pr = fuelHudTarget(store, f);
+            if (pr == null) {
+                return;
+            }
+            FuelHud.Vehicle vehicle = FuelHud.vehicleOf(f.kind);
+            if (f.dry) {
+                FuelHud.showDry(store, pr, vehicle);
+            } else {
+                FuelHud.show(store, pr, vehicle, travelSecondsLeft(f), f.engines.fuelItems());
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Fuel window of %s: update failed", f.id);
+            Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), "fuelHud");
+        }
+    }
+
+    /** Removes the fuel window of the pilot and of the riders (end of the flight). Never throws. */
+    private static void hideFuelHud(AirshipFlight f) {
+        FuelHud.hide(f.pilotUuid);
+        for (AirshipPassengers.Rider r : f.riders) {
+            FuelHud.hide(r.p.uuid);
+        }
     }
 
     /**
@@ -1630,7 +1669,7 @@ final class AirshipManager {
      * the off model replaces the smoke model and the smoke is cancelled. Nothing else changes: the ship stays in the air (gas lift).
      * The engines are part of the entity: they cannot be refuelled until the ship lands. Never throws.
      */
-    private void enterDry(Store<EntityStore> store, AirshipFlight f, boolean announce) {
+    private void enterDry(Store<EntityStore> store, AirshipFlight f) {
         if (f.dry) {
             return;
         }
@@ -1638,13 +1677,7 @@ final class AirshipManager {
         f.burning = false;
         showOffModel(store, f);
         applyShipSpeeds(store, f);
-        if (announce) {
-            PlayerRef pr = playerOf(store, f.pilotRef);
-            if (pr != null) {
-                pr.sendMessage(Texts.ship(f.kind, "fuel.dry"));
-            }
-        }
-        LOGGER.at(Level.INFO).log("%s de %s : moteurs à sec, vitesse horizontale du pilote à 0", cap(spec(f.kind).logLabel), f.pilotName);
+        LOGGER.at(Level.INFO).log("%s of %s: engines dry, pilot horizontal speed set to 0", cap(spec(f.kind).logLabel), f.pilotName);
     }
 
     /** Horizontal flight speed of the pilot, or 0 if unreadable. Never throws. */
@@ -1653,7 +1686,7 @@ final class AirshipManager {
             MovementManager mm = store.getComponent(ref, MovementManager.getComponentType());
             return mm == null ? 0f : mm.getSettings().horizontalFlySpeed;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Vitesse de vol du pilote illisible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot flight speed unreadable");
             return 0f;
         }
     }
@@ -1690,7 +1723,7 @@ final class AirshipManager {
             }
             mm.update(pr.getPacketHandler());
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Vitesses du pilote %s non réglées", f.pilotName);
+            LOGGER.at(Level.WARNING).withCause(e).log("Speeds of pilot %s not set", f.pilotName);
             Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
@@ -1698,8 +1731,7 @@ final class AirshipManager {
     /**
      * Burns the engines' fuel for one travel sample. Called with the sample length and the measured travel speed (carry
      * excluded). Burns when travelling (speed above fuelMoveMin) or turning (mean turn rate above turnFuelMinDeg), nothing while
-     * hovering, climbing or descending. Warns at 30 s and 10 s of travel
-     * left, and goes dry when the fuel runs out.
+     * hovering, climbing or descending, and goes dry when the fuel runs out (the fuel window shows the rest).
      */
     void burnFuel(Store<EntityStore> store, AirshipFlight f, double seconds) {
         if (f.dry || f.engines == null) {
@@ -1716,22 +1748,9 @@ final class AirshipManager {
             return;
         }
         double unburned = f.engines.burn(seconds * fuelFactor);
-        double left = travelSecondsLeft(f);
         if (unburned > 0 || f.engines.isEmpty()) {
-            enterDry(store, f, true);
+            enterDry(store, f);
             return;
-        }
-        PlayerRef pr = playerOf(store, f.pilotRef);
-        if (pr == null) {
-            return;
-        }
-        if (left <= FUEL_CRITICAL_S && !f.warned10) {
-            f.warned10 = true;
-            f.warned30 = true;
-            pr.sendMessage(Texts.ship(f.kind, "fuel.critical").param("time", BalloonManager.durationText(left)));
-        } else if (left <= FUEL_LOW_S && !f.warned30) {
-            f.warned30 = true;
-            pr.sendMessage(Texts.ship(f.kind, "fuel.low").param("time", BalloonManager.durationText(left)));
         }
     }
 
@@ -1804,7 +1823,7 @@ final class AirshipManager {
         String id = spec(f.kind).modelFor(to);
         ModelAsset asset = ModelAsset.getAssetMap().getAsset(id);
         if (asset == null) {
-            LOGGER.at(Level.WARNING).log("Modèle %s introuvable : le modèle actuel reste affiché", id);
+            LOGGER.at(Level.WARNING).log("Model %s not found: the current model stays displayed", id);
             return;
         }
         try {
@@ -1818,7 +1837,7 @@ final class AirshipManager {
                 ShipHelm.onModelChanged(store, f, System.currentTimeMillis());
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Modèle %s non appliqué au dirigeable", id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Model %s not applied to the airship", id);
             Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             return;
         }
@@ -1881,7 +1900,7 @@ final class AirshipManager {
                 BalloonManager.get().applyLoopEffect(store, observer, on, ENGINE_EFFECT);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Son du moteur : changement d'état impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Engine sound: state change failed");
         }
     }
 
@@ -1893,7 +1912,7 @@ final class AirshipManager {
                 BalloonManager.get().setPilotFlying(store, ref, pr, false, 1f);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Réglages de déplacement du pilote non remis à la normale");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot movement settings not reset to normal");
             Telemetry.error("airship.land", e, null, null);
         }
     }
@@ -1923,7 +1942,7 @@ final class AirshipManager {
                     }
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("États de %s non lus pour les particules", n);
+                LOGGER.at(Level.WARNING).withCause(e).log("States of %s not read for the particles", n);
                 Telemetry.error("airship.flight", e, null, null);
             }
             return ids;
@@ -2087,7 +2106,7 @@ final class AirshipManager {
             f.lights.add(light);
             return light;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Lumière %s du dirigeable impossible", key);
+            LOGGER.at(Level.WARNING).withCause(e).log("Airship light %s failed", key);
             Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             return null;
         }
@@ -2139,7 +2158,7 @@ final class AirshipManager {
                     BalloonLights.setTwinColor(store, l, color);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Lumière du foyer du dirigeable non mise à jour");
+                LOGGER.at(Level.WARNING).withCause(e).log("Airship hearth light not updated");
                 Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
             return;
@@ -2203,7 +2222,7 @@ final class AirshipManager {
                     if (!passengers.eject(store, f, r, exit)) {
                         return GliderJump.Result.FAILED;
                     }
-                    LOGGER.at(Level.INFO).log("Saut en glider : passager du dirigeable %s éjecté en (%.1f, %.1f, %.1f)",
+                    LOGGER.at(Level.INFO).log("Glider jump: airship passenger %s ejected at (%.1f, %.1f, %.1f)",
                             r.p.name, exit.x, exit.y, exit.z);
                     if (f.voyage != null && f.recall == null && uuid.equals(f.voyage.captain)) {
                         // The captain left the chair for good: his map is deleted and the voyage stops.
@@ -2211,7 +2230,7 @@ final class AirshipManager {
                             CaptainMap.removeAll(store, r.p.ref);
                             CaptainMap.forget(uuid);
                         } catch (RuntimeException e) {
-                            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : carte du capitaine non reprise");
+                            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: captain's map not resumed");
                             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
                         }
                         AirshipAutopilot.captainAshore(f);
@@ -2221,7 +2240,7 @@ final class AirshipManager {
             }
             return GliderJump.Result.FAILED;
         } catch (RuntimeException | java.io.IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Saut en glider : éjection du passager du dirigeable en échec");
+            LOGGER.at(Level.WARNING).withCause(e).log("Glider jump: ejecting the airship passenger failed");
             Telemetry.error("airship.passenger", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             return GliderJump.Result.FAILED;
         }
@@ -2282,7 +2301,7 @@ final class AirshipManager {
             } catch (RuntimeException e) {
                 if (now - f.lastCollisionLogMs > COLLISION_LOG_INTERVAL_MS) {
                     f.lastCollisionLogMs = now;
-                    LOGGER.at(Level.WARNING).withCause(e).log("Erreur dans le tick du dirigeable %s", f.id);
+                    LOGGER.at(Level.WARNING).withCause(e).log("Error in the tick of airship %s", f.id);
                     Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
                 }
             }
@@ -2292,11 +2311,11 @@ final class AirshipManager {
     private void tickOne(Store<EntityStore> store, World world, AirshipFlight f, long now) {
         if (f.shipRef == null || !f.shipRef.isValid()) {
             if (f.shuttle != null) {
-                LOGGER.at(Level.WARNING).log("Entité de la navette %s perdue : secours", f.id);
+                LOGGER.at(Level.WARNING).log("Shuttle entity %s lost: fallback", f.id);
                 BoatAutopilot.rescue(store, f);
                 return;
             }
-            LOGGER.at(Level.WARNING).log("Entité du dirigeable %s perdue : pose immédiate", f.id);
+            LOGGER.at(Level.WARNING).log("Airship entity %s lost: immediate landing", f.id);
             landImmediately(f);
             return;
         }
@@ -2324,6 +2343,7 @@ final class AirshipManager {
         f.lastTickNs = nowNs;
         f.lastDt = dt;
         f.lastTickMs = now;
+        updateFuelHud(store, f);
         if (f.turnDir != 0 && dt > 0) {
             f.turnDtMin = Math.min(f.turnDtMin, dt);
             f.turnDtMax = Math.max(f.turnDtMax, dt);
@@ -2434,7 +2454,7 @@ final class AirshipManager {
                 w.addReached(s.origin.x, s.origin.y, s.origin.z);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Journal des eaux : enregistrement impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Waters journal: recording failed");
             Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), "water");
         }
     }
@@ -2464,7 +2484,7 @@ final class AirshipManager {
             f.skyScanMs = now;
             StationDiscovery.scan(k, TransitNetwork.get().stations(f.world.getName()), c.x, c.z);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Journal du ciel : enregistrement impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Sky journal: recording failed");
             Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), "sky");
         }
     }
@@ -2527,7 +2547,7 @@ final class AirshipManager {
             }
             f.velActive = vx != 0 || vz != 0;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Vitesse de portage du dirigeable non envoyée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Airship carry speed not sent");
             Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
@@ -2708,7 +2728,7 @@ final class AirshipManager {
         if (now - f.lastCollisionLogMs > BalloonManager.COLLISION_MSG_INTERVAL_MS) {
             f.lastCollisionLogMs = now;
             f.lastCollision = String.format(Locale.ROOT, "pos %.2f %.2f %.2f theta %.1f deg", pp.x, pp.y, pp.z, Math.toDegrees(newTheta));
-            LOGGER.at(Level.INFO).log("Collision du dirigeable de %s : %s", f.pilotName, f.lastCollision);
+            LOGGER.at(Level.INFO).log("Airship collision of %s: %s", f.pilotName, f.lastCollision);
         }
         // when the pose leaves the world's height range, the pilot is told (at most every 3 s).
         if (heightExceeded(hull, pp.y) && now - f.lastHeightMsgMs >= BalloonManager.HEIGHT_MSG_INTERVAL_MS) {
@@ -2768,8 +2788,8 @@ final class AirshipManager {
             f.chkRatio = ratio;
             if (ratio < CARRY_MIN_RATIO) {
                 f.carryFallback = true;
-                LOGGER.at(Level.INFO).log("Portage par vitesse du dirigeable de %s sans effet mesurable (%.2f de %.1f bloc(s) attendus) : "
-                        + "portage par téléportation pour ce vol", f.pilotName, f.chkRes, f.chkExp);
+                LOGGER.at(Level.INFO).log("Velocity carry of the airship of %s without measurable effect (%.2f of %.1f block(s) expected): "
+                        + "teleport carry for this flight", f.pilotName, f.chkRes, f.chkExp);
             }
             f.chkExp = 0;
             f.chkRes = 0;
@@ -2978,10 +2998,10 @@ final class AirshipManager {
             f.crewMan = AirshipCrew.createMannequin(store, f.shipUuid, f.shipRef, null, null, shipPoint(f, pivot(f.kind)), new Vector3f(),
                     look, now, AirshipCrew.POSE_STAND);
             if (f.crewMan != null) {
-                LOGGER.at(Level.INFO).log("Navette %s : mannequin du pilote ajouté en route", f.id);
+                LOGGER.at(Level.INFO).log("Shuttle %s: pilot mannequin added en route", f.id);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette %s : mannequin du pilote non ajouté", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle %s: pilot mannequin not added", f.id);
         }
     }
 
@@ -3003,16 +3023,16 @@ final class AirshipManager {
             f.lastCollisionLogMs = now;
             f.lastCollision = String.format(Locale.ROOT, "pos %.2f %.2f %.2f theta %.1f deg", newPos.x, newPos.y, newPos.z,
                     Math.toDegrees(newTheta));
-            LOGGER.at(Level.INFO).log("Collision du dirigeable de %s : %s", f.pilotName, f.lastCollision);
+            LOGGER.at(Level.INFO).log("Airship collision of %s: %s", f.pilotName, f.lastCollision);
             ShuttleState sh = f.sailState();
             if (sh != null) {
                 // Evidence for route problems: which hull cell hits which world block, and whether the pose was a turn.
                 boolean turn = Math.abs(newTheta - f.theta) > 1e-9;
                 int[] cell = firstBlockingCell(world, hull, newPos.x, newPos.y, newPos.z, newTheta, allowed);
                 sh.lastHit = cell;
-                LOGGER.at(Level.INFO).log("Collision de la navette : %s, coque %s, cap %.1f -> %.1f deg, phase %s",
+                LOGGER.at(Level.INFO).log("Shuttle collision: %s, hull %s, heading %.1f -> %.1f deg, phase %s",
                         describeCell(world, cell),
-                        turn ? "en rotation" : "en translation", Math.toDegrees(f.theta), Math.toDegrees(newTheta), sh.phase);
+                        turn ? "rotating" : "translating", Math.toDegrees(f.theta), Math.toDegrees(newTheta), sh.phase);
             }
         }
         if (Math.abs(newTheta - f.theta) > 1e-9 && blocked(world, hull, newPos.x, newPos.y, newPos.z, f.theta, allowed) <= allowed) {
@@ -3135,9 +3155,9 @@ final class AirshipManager {
                 pr.sendMessage(Texts.ship(f.kind, "landing.start"));
             }
         }
-        LOGGER.at(Level.INFO).log("%s de %s : alignement pour l'atterrissage, quart de tour %s, case du pivot %s%s",
+        LOGGER.at(Level.INFO).log("%s of %s: alignment for landing, quarter turn %s, pivot cell %s%s",
                 cap(spec(f.kind).logLabel), f.pilotName,
-                f.targetRotation, f.targetPivot, automatic ? " (automatique)" : "");
+                f.targetRotation, f.targetPivot, automatic ? " (automatic)" : "");
     }
 
     private static PlayerRef playerOf(Store<EntityStore> store, Ref<EntityStore> ref) {
@@ -3183,7 +3203,7 @@ final class AirshipManager {
         String zone = safeZone(world, f.kind.id, s, origin, q);
         if (zone != null) {
             if (!f.automatic) {
-                abortLanding(store, f, Texts.t("deploy.stationZone").param("station", zone), "zone de la station " + zone);
+                abortLanding(store, f, Texts.t("deploy.stationZone").param("station", zone), "station zone " + zone);
                 return;
             }
             logForcedZone(f, zone, origin);
@@ -3203,13 +3223,13 @@ final class AirshipManager {
         try {
             return StationZone.blockingStation(world, kindId, s, origin, q);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Zone des stations non vérifiée pour le dirigeable (%s) : traitée comme absente", kindId);
+            LOGGER.at(Level.WARNING).withCause(e).log("Station zone not checked for the airship (%s): treated as absent", kindId);
             return null;
         }
     }
 
     private static void logForcedZone(AirshipFlight f, String station, Vector3i origin) {
-        LOGGER.at(Level.INFO).log("Pose forcée dans la zone de la station %s (%s, origine %s)", station, f.kind.id, origin);
+        LOGGER.at(Level.INFO).log("Forced landing in the zone of station %s (%s, origin %s)", station, f.kind.id, origin);
     }
 
     private void abortLanding(Store<EntityStore> store, AirshipFlight f, Message message, String reason) {
@@ -3219,7 +3239,7 @@ final class AirshipManager {
         f.nextLandingRetryMs = now + LANDING_RETRY_MS;
         if (f.voyage != null) {
             // a voyage climbs a few blocks and tries again (at most 10 times, then it lands where it is).
-            LOGGER.at(Level.INFO).log("Voyage : atterrissage refusé (%s), nouvel essai dans %d s", reason, LANDING_RETRY_MS / 1000);
+            LOGGER.at(Level.INFO).log("Voyage: landing refused (%s), retrying in %d s", reason, LANDING_RETRY_MS / 1000);
             AirshipAutopilot.onLandingRefused(f);
             return;
         }
@@ -3238,7 +3258,7 @@ final class AirshipManager {
                         applyShipSpeeds(store, f); // dry: no horizontal travel; boat: height locked again
                     }
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Vol libre du pilote %s non rétabli", f.pilotName);
+                    LOGGER.at(Level.WARNING).withCause(e).log("Free flight of pilot %s not restored", f.pilotName);
                     Telemetry.error("airship.land", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
                 }
                 pr.sendMessage(message);
@@ -3247,8 +3267,8 @@ final class AirshipManager {
             f.takeoffMs = now;
             f.teleportUntilMs = now + BalloonManager.COLLISION_PAUSE_MS;
         }
-        LOGGER.at(Level.INFO).log("Atterrissage du " + spec(f.kind).logLabel + " de %s annulé (%s)%s", f.pilotName, reason,
-                f.automatic ? ", nouvel essai dans 5 s" : "");
+        LOGGER.at(Level.INFO).log("Landing of the " + spec(f.kind).logLabel + " of %s cancelled (%s)%s", f.pilotName, reason,
+                f.automatic ? ", retrying in 5 s" : "");
     }
 
     /**
@@ -3270,6 +3290,7 @@ final class AirshipManager {
         }
         f.finishing = true;
         flights.remove(f.id);
+        hideFuelHud(f);
         stopCarry(store, f);
         removeLights(store, f);
         cancelSmoke(f);
@@ -3312,7 +3333,7 @@ final class AirshipManager {
         AirshipResume.delete(f.id);
         setRoar(store, f, false); // the end sound plays before the entity goes
         removeShipEntities(store, f);
-        LOGGER.at(Level.INFO).log("Atterrissage du " + spec(f.kind).logLabel + " de %s : origine %s, rotation %s", f.pilotName, origin, rotation);
+        LOGGER.at(Level.INFO).log("Landing of the " + spec(f.kind).logLabel + " of %s: origin %s, rotation %s", f.pilotName, origin, rotation);
     }
 
     /** Restores the pilot's movement and puts him on the pivot cell of the placed prefab (free: no stool). Never throws. */
@@ -3335,7 +3356,7 @@ final class AirshipManager {
                 pr.sendMessage(Texts.ship(f.kind, "landed"));
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote %s non reposé proprement", f.pilotName);
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot %s not set down cleanly", f.pilotName);
             Telemetry.error("airship.land", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }
@@ -3389,9 +3410,9 @@ final class AirshipManager {
                     }
                 }
             }
-            LOGGER.at(Level.WARNING).log("Pose immédiate du dirigeable %s impossible : fichier de reprise gardé", f.id);
+            LOGGER.at(Level.WARNING).log("Immediate landing of airship %s failed: resume file kept", f.id);
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pose immédiate du dirigeable %s en échec", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Immediate landing of airship %s failed", f.id);
             Telemetry.error("airship.land", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
         return null;
@@ -3506,7 +3527,7 @@ final class AirshipManager {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage : côté de l'échelle du capitaine illisible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Voyage: captain's ladder side unreadable");
             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
         return -1;
@@ -3525,21 +3546,21 @@ final class AirshipManager {
             }
             try {
                 if (ashore && f.recall == null && AirshipAutopilot.captainAshore(f)) {
-                    LOGGER.at(Level.INFO).log("Voyage : capitaine %s (%s), le dirigeable descend avant de se poser", why, captain);
+                    LOGGER.at(Level.INFO).log("Voyage: captain %s (%s), the airship descends before landing", why, captain);
                     continue;
                 }
                 if (AirshipRecall.divertToLeave(f)) {
-                    LOGGER.at(Level.INFO).log("Voyage : capitaine %s (%s), le dirigeable s'éloigne de la station avant de se poser", why, captain);
+                    LOGGER.at(Level.INFO).log("Voyage: captain %s (%s), the airship moves away from the station before landing", why, captain);
                     continue;
                 }
                 boolean ok = landImmediately(f);
-                LOGGER.at(ok ? Level.INFO : Level.WARNING).log("Voyage : capitaine %s (%s), dirigeable %s", why, captain,
-                        ok ? "posé sur place" : "pose impossible, arrêt du voyage");
+                LOGGER.at(ok ? Level.INFO : Level.WARNING).log("Voyage: captain %s (%s), airship %s", why, captain,
+                        ok ? "landed in place" : "landing failed, voyage stopped");
                 if (!ok) {
                     AirshipAutopilot.stop(f, "crew.voyage.captainGone");
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Voyage : pose après départ du capitaine en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Voyage: landing after the captain left failed");
                 Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
         }
@@ -3562,16 +3583,16 @@ final class AirshipManager {
                 for (AirshipPassengers.Rider r : f.riders) {
                     if (ref.equals(r.p.ref)) {
                         passengers.releaseDead(store, f, r); // the flight goes on, the player respawns normally
-                        LOGGER.at(Level.INFO).log("Passager du dirigeable %s mort en vol : libéré", r.p.name);
+                        LOGGER.at(Level.INFO).log("Airship passenger %s died in flight: released", r.p.name);
                     }
                 }
                 try {
                     PlayerRef pr = ref.isValid() ? playerOf(store, ref) : null;
                     if (pr != null && f.voyage != null && pr.getUuid().equals(f.voyage.captain)) {
-                        landVoyagesOf(pr.getUuid(), "mort", true);
+                        landVoyagesOf(pr.getUuid(), "death", true);
                     }
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Voyage : mort du capitaine non traitée");
+                    LOGGER.at(Level.WARNING).withCause(e).log("Voyage: captain death not handled");
                     Telemetry.error("airship.passenger", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
                 }
             }
@@ -3628,23 +3649,23 @@ final class AirshipManager {
                     if (pr != null) {
                         pr.sendMessage(Texts.t("gameMode.left"));
                     }
-                    LOGGER.at(Level.INFO).log("Pilote %s : changement de mode de jeu (%s), dirigeable %s", f.pilotName, newMode,
-                            landed ? "posé sur place" : "sans pilote");
+                    LOGGER.at(Level.INFO).log("Pilot %s: game mode change (%s), airship %s", f.pilotName, newMode,
+                            landed ? "landed in place" : "without pilot");
                     continue;
                 }
                 for (AirshipPassengers.Rider r : new ArrayList<>(f.riders)) {
                     if (ref.equals(r.p.ref)) {
                         passengers.leaveForGameMode(store, f, r, newMode);
-                        LOGGER.at(Level.INFO).log("Passager du dirigeable %s : changement de mode de jeu (%s), libéré", r.p.name, newMode);
+                        LOGGER.at(Level.INFO).log("Airship passenger %s: game mode change (%s), released", r.p.name, newMode);
                     }
                 }
                 try {
                     PlayerRef cpr = playerOf(store, ref);
                     if (cpr != null && f.voyage != null && cpr.getUuid().equals(f.voyage.captain)) {
-                        landVoyagesOf(cpr.getUuid(), "changement de mode de jeu");
+                        landVoyagesOf(cpr.getUuid(), "game mode change");
                     }
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Voyage : changement de mode du capitaine non traité");
+                    LOGGER.at(Level.WARNING).withCause(e).log("Voyage: captain game mode change not handled");
                     Telemetry.error("airship.passenger", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
                 }
             }
@@ -3666,6 +3687,7 @@ final class AirshipManager {
             return;
         }
         Ref<EntityStore> ref = f.pilotRef;
+        FuelHud.hide(f.pilotUuid);
         stopCarry(store, f);
         detachShip(store, f);
         collapseView(store, f);
@@ -3677,7 +3699,7 @@ final class AirshipManager {
             f.yawRate = 0; f.yawAcc = 0;
             f.hasTarget = false;
             if (landImmediately(f)) {
-                LOGGER.at(Level.INFO).log("Pilote %s mort en vol : dirigeable posé sur place", f.pilotName);
+                LOGGER.at(Level.INFO).log("Pilot %s died in flight: airship landed in place", f.pilotName);
                 return;
             }
             f.takeOver = false;
@@ -3697,7 +3719,7 @@ final class AirshipManager {
         f.lastResumeMs = System.currentTimeMillis();
         AirshipResume.write(f, true);
         AirshipResume.delete(oldId);
-        LOGGER.at(Level.INFO).log("Pilote %s mort en vol : dirigeable sans pilote, alignement puis atterrissage automatique", f.pilotName);
+        LOGGER.at(Level.INFO).log("Pilot %s died in flight: airship without pilot, alignment then automatic landing", f.pilotName);
     }
 
     private void showOffModel(Store<EntityStore> store, AirshipFlight f) {
@@ -3718,7 +3740,7 @@ final class AirshipManager {
             f.turnDir = 0;
             f.restActive = false;
         } else {
-            LOGGER.at(Level.WARNING).log("Modèle %s introuvable : le modèle allumé reste affiché", spec(f.kind).offModelId);
+            LOGGER.at(Level.WARNING).log("Model %s not found: the lit model stays displayed", spec(f.kind).offModelId);
         }
         setFireboxColor(store, f, null); // the dark firebox of the off model has no light
         setRoar(store, f, false);
@@ -3749,8 +3771,8 @@ final class AirshipManager {
                     }
                 }, LAND_WAIT_MS);
                 LOGGER.at(ok ? Level.INFO : Level.WARNING).log(ok
-                        ? "Passager du dirigeable %s parti : libéré, position enregistrée au sol"
-                        : "Passager du dirigeable %s parti : libération impossible", r.p.name);
+                        ? "Airship passenger %s left: released, position saved on the ground"
+                        : "Airship passenger %s left: release failed", r.p.name);
             }
         }
         for (AirshipFlight f : voyages) {
@@ -3776,10 +3798,10 @@ final class AirshipManager {
                     }
                 }
                 LOGGER.at(ok && landed[0] ? Level.INFO : Level.WARNING).log(ok && landed[0]
-                        ? "Voyage : capitaine %s parti, dirigeable reposé"
-                        : "Voyage : capitaine %s parti, pose impossible : arrêt du voyage", uuid);
+                        ? "Voyage: captain %s left, airship set down"
+                        : "Voyage: captain %s left, landing failed: voyage stopped", uuid);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Voyage : départ du capitaine non traité");
+                LOGGER.at(Level.WARNING).withCause(e).log("Voyage: captain departure not handled");
                 Telemetry.error("airship.passenger", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
         }
@@ -3801,8 +3823,8 @@ final class AirshipManager {
         }
         boolean ok = BalloonManager.runOnWorld(f.world, () -> landImmediately(f), LAND_WAIT_MS);
         LOGGER.at(ok ? Level.INFO : Level.WARNING).log(ok
-                ? "Pilote %s parti : dirigeable reposé"
-                : "Pilote %s parti : pose impossible, le fichier de reprise le reposera au prochain chargement du monde", pilotUuid);
+                ? "Pilot %s left: airship set down"
+                : "Pilot %s left: landing failed, the resume file will set it down at the next world load", pilotUuid);
     }
 
     /** ShutdownEvent (-50) and plugin shutdown: every ship in flight is put down at once. */
@@ -3810,7 +3832,7 @@ final class AirshipManager {
         for (AirshipFlight f : new ArrayList<>(flights.values())) {
             boolean ok = BalloonManager.runOnWorld(f.world, () -> landForShutdown(f), LAND_WAIT_MS);
             if (!ok) {
-                LOGGER.at(Level.WARNING).log("Dirigeable %s non reposé : fichier de reprise gardé", f.id);
+                LOGGER.at(Level.WARNING).log("Airship %s not set down: resume file kept", f.id);
             }
         }
         AirshipBenchContents.flushAll(LAND_WAIT_MS); // bench contents still waiting for their bench are not lost with the resume file
@@ -3825,7 +3847,7 @@ final class AirshipManager {
         if (f.shuttle != null) {
             // The shuttle is never put down in blocks at a shutdown: its riders go back to the departure pier first.
             BoatQuay.dropAllRiders(f);
-            endShuttle(f.world.getEntityStore().getStore(), f, "arrêt du serveur");
+            endShuttle(f.world.getEntityStore().getStore(), f, "server shutdown");
             return true;
         }
         RecallState r = f.recall != null ? f.recall : (f.quayStation != null ? f.recallInfo : null);
@@ -3836,13 +3858,13 @@ final class AirshipManager {
                 int y = (int) Math.floor(f.pos.y);
                 if (SectionBlocks.sectionsLoaded(f.world.getChunkStore(), px - 16, y - 12, pz - 16, px + 16, y + 14 + SEARCH_UP, pz + 16)) {
                     f.pos.set(px + 0.5, f.pos.y, pz + 0.5);
-                    LOGGER.at(Level.INFO).log("Rappel : arrêt du serveur, le dirigeable est posé à son point d'éloignement (%d, %d)", px, pz);
+                    LOGGER.at(Level.INFO).log("Recall: server shutdown, the airship is landed at its departure point (%d, %d)", px, pz);
                 } else if (f.quayStation != null && !AirshipRecall.outsideZone(f, f.quayStation)) {
-                    LOGGER.at(Level.WARNING).log("Rappel : point d'éloignement non chargé, dirigeable %s non posé (fichier de reprise gardé)", f.id);
+                    LOGGER.at(Level.WARNING).log("Recall: departure point not loaded, airship %s not landed (resume file kept)", f.id);
                     return false;
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Rappel : point d'éloignement non calculé pour %s", f.id);
+                LOGGER.at(Level.WARNING).withCause(e).log("Recall: departure point not computed for %s", f.id);
                 Telemetry.error("airship.land", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
         }
@@ -3863,7 +3885,7 @@ final class AirshipManager {
                 continue;
             }
             try {
-                LOGGER.at(Level.INFO).log("Rappel : station %s retirée, le dirigeable %s se pose sur place", removed.name, f.id);
+                LOGGER.at(Level.INFO).log("Recall: station %s removed, airship %s lands in place", removed.name, f.id);
                 f.quayStation = null; // no endRecall: the quay of the removed station was dropped with it
                 f.recall = null;
                 f.recallInfo = null;
@@ -3874,7 +3896,7 @@ final class AirshipManager {
                     f.voyage = null; // the pilotless automatic landing takes over
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Rappel : dirigeable %s non posé après le retrait de la station", f.id);
+                LOGGER.at(Level.WARNING).withCause(e).log("Recall: airship %s not landed after the station was removed", f.id);
                 Telemetry.error("airship.recall", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
         }
@@ -3910,24 +3932,24 @@ final class AirshipManager {
                 // A recalled ship is put down at its leave point, never above the station.
                 int px = rec.recall() != null ? (int) Math.floor(rec.recall().retreatX()) : rec.pivotX();
                 int pz = rec.recall() != null ? (int) Math.floor(rec.recall().retreatZ()) : rec.pivotZ();
-                LOGGER.at(Level.INFO).log("Reprise du vol de dirigeable %s dans %s : pivot (%d, %d, %d), sections à charger",
+                LOGGER.at(Level.INFO).log("Resuming flight of airship %s in %s: pivot (%d, %d, %d), sections to load",
                         rec.id(), world.getName(), px, rec.pivotY(), pz);
                 SectionBlocks.loadSections(world.getChunkStore(), px - 16, rec.pivotY() + dyMin + Math.min(0, shift), pz - 16,
                         px + 16, rec.pivotY() + dyMax + Math.max(0, shift) + 8, pz + 16).whenComplete((v, t) -> {
                     if (t != null) {
-                        LOGGER.at(Level.WARNING).withCause(t).log("Chargement des chunks de la reprise impossible pour %s", rec.id());
+                        LOGGER.at(Level.WARNING).withCause(t).log("Loading the resume chunks failed for %s", rec.id());
                     }
                     try {
                         world.execute(() -> recoverOne(world, rec));
                     } catch (RuntimeException e) {
                         recovering.remove(rec.id());
-                        LOGGER.at(Level.WARNING).withCause(e).log("Monde %s arrêté : reprise de %s remise au prochain chargement",
+                        LOGGER.at(Level.WARNING).withCause(e).log("World %s stopped: resume of %s postponed to the next load",
                                 world.getName(), rec.id());
                     }
                 });
             } catch (RuntimeException | java.io.IOException e) {
                 recovering.remove(rec.id());
-                LOGGER.at(Level.SEVERE).withCause(e).log("Reprise du vol de dirigeable %s impossible : fichier gardé", rec.id());
+                LOGGER.at(Level.SEVERE).withCause(e).log("Resuming flight of airship %s failed: file kept", rec.id());
                 Telemetry.error("airship.recover", e, null, null);
             }
         }
@@ -3956,18 +3978,18 @@ final class AirshipManager {
             {
                 heightDy = resumeHeightShift(kind, rec, s);
                 if (heightDy == Integer.MIN_VALUE) {
-                    LOGGER.at(Level.WARNING).log("Reprise du dirigeable %s impossible : il dépasse la hauteur du monde, fichier gardé", rec.id());
+                    LOGGER.at(Level.WARNING).log("Resume of airship %s failed: it exceeds the world height, file kept", rec.id());
                     return;
                 }
                 if (heightDy != 0) {
-                    LOGGER.at(Level.WARNING).log("Reprise du dirigeable %s : pose hors de la limite de hauteur, décalée de %d bloc(s)", rec.id(), heightDy);
+                    LOGGER.at(Level.WARNING).log("Resume of airship %s: landing outside the height limit, shifted by %d block(s)", rec.id(), heightDy);
                 }
             }
             if (rec.ship() != null) {
                 Ref<EntityStore> orphan = world.getEntityStore().getRefFromUUID(rec.ship());
                 if (orphan != null && orphan.isValid()) {
                     store.removeEntity(orphan, RemoveReason.REMOVE);
-                    LOGGER.at(Level.INFO).log("Entité du dirigeable restée dans le monde supprimée (%s)", rec.ship());
+                    LOGGER.at(Level.INFO).log("Airship entity left in the world removed (%s)", rec.ship());
                 }
             }
             BalloonLights.removeOrphans(world, store, rec.ship(), s);
@@ -4046,9 +4068,9 @@ final class AirshipManager {
                 AirshipPassengers.restoreSaved(world, store, s, rec.riders(), origin, q); // absent in older resume files
             }
             AirshipResume.delete(rec.id());
-            LOGGER.at(Level.INFO).log("Dirigeable %s reposé en %s (reprise après arrêt en vol)", rec.id(), origin);
+            LOGGER.at(Level.INFO).log("Airship %s set down at %s (resume after shutdown in flight)", rec.id(), origin);
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.SEVERE).withCause(e).log("Reprise du dirigeable %s en échec : fichier gardé pour un prochain essai", rec.id());
+            LOGGER.at(Level.SEVERE).withCause(e).log("Resume of airship %s failed: file kept for a later attempt", rec.id());
             Telemetry.error("airship.recover", e, null, null);
         } finally {
             recovering.remove(rec.id());
@@ -4081,7 +4103,7 @@ final class AirshipManager {
             if (spec(kind).recall) {
                 AirshipRecall.removeLegacyRungs(world, rec.takeoffRungs()); // the temporary ladder of a recall came back with the old save
             }
-            LOGGER.at(Level.INFO).log("Ancien dirigeable resté au point de décollage retiré (%d blocs)", n);
+            LOGGER.at(Level.INFO).log("Old airship left at the takeoff point removed (%d blocks)", n);
         }
     }
 
@@ -4220,7 +4242,7 @@ final class AirshipManager {
                 AirshipCrew.remove(store, world, posedEntry);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote non retiré avec le dirigeable");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot not removed with the airship");
             Telemetry.error("airship.despawn", e, null, null);
         }
         for (int i = 0; i < inside.size(); i++) {
@@ -4231,11 +4253,11 @@ final class AirshipManager {
                     pr.sendMessage(Texts.ship(kind, "despawn.removedByAdmin"));
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Joueur du dirigeable non posé au sol");
+                LOGGER.at(Level.WARNING).withCause(e).log("Airship player not placed on the ground");
                 Telemetry.error("airship.despawn", e, null, null);
             }
         }
-        LOGGER.at(Level.INFO).log("Retrait par %s : dirigeable posé en %s (rotation %s), %d blocs retirés, %d objet(s) lâchés",
+        LOGGER.at(Level.INFO).log("Removal by %s: airship landed at %s (rotation %s), %d blocks removed, %d item(s) dropped",
                 admin.getUsername(), origin, rotation, result.removed(), result.items());
         return null;
     }
@@ -4246,6 +4268,7 @@ final class AirshipManager {
         }
         f.finishing = true;
         flights.remove(f.id);
+        hideFuelHud(f);
         if (spec(f.kind).recall) {
             AirshipRecall.endQuay(f); // a recall flight frees its quay
         }
@@ -4266,7 +4289,7 @@ final class AirshipManager {
                     pp.sendMessage(Texts.ship(f.kind, "despawn.removedByAdmin"));
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Pilote non remis au sol proprement");
+                LOGGER.at(Level.WARNING).withCause(e).log("Pilot not set on the ground cleanly");
                 Telemetry.error("airship.despawn", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
         }
@@ -4290,7 +4313,7 @@ final class AirshipManager {
         AirshipResume.delete(f.id);
         setRoar(store, f, false); // the end sound plays before the entity goes
         removeShipEntities(store, f);
-        LOGGER.at(Level.INFO).log("Retrait par %s : dirigeable en vol en %s, %d objet(s) lâchés", admin.getUsername(), fmt(pos), items);
+        LOGGER.at(Level.INFO).log("Removal by %s: airship in flight at %s, %d item(s) dropped", admin.getUsername(), fmt(pos), items);
         return null;
     }
 
@@ -4524,7 +4547,7 @@ final class AirshipManager {
         w.lastText = text;
         w.samples++;
         String line = String.format(Locale.ROOT, "[+%.1fs mountId=%d]%s", (now - w.startMs) / 1000.0, mountId, text);
-        LOGGER.at(Level.INFO).log("Entrée de %s : %s", pr.getUsername(), line);
+        LOGGER.at(Level.INFO).log("Input from %s: %s", pr.getUsername(), line);
         w.pending.append(line).append('\n');
         if (now - w.lastSendMs >= 300) {
             flushWatch(w, now);

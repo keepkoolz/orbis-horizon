@@ -256,7 +256,7 @@ final class BalloonLights {
             flight.lights.add(light);
             return light;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Lumière %s de la montgolfière impossible", key);
+            LOGGER.at(Level.WARNING).withCause(e).log("Balloon light %s failed", key);
             return null;
         }
     }
@@ -371,10 +371,10 @@ final class BalloonLights {
                 if (ref != null && ref.isValid()) {
                     ViewFilter.clear(ref);
                     store.removeEntity(ref, RemoveReason.REMOVE);
-                    LOGGER.at(Level.INFO).log("Lumière %s restée dans le monde supprimée", key);
+                    LOGGER.at(Level.INFO).log("Light %s left in the world removed", key);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Lumière %s restée dans le monde non supprimée", key);
+                LOGGER.at(Level.WARNING).withCause(e).log("Light %s left in the world not removed", key);
             }
         }
     }
@@ -410,7 +410,7 @@ final class BalloonLights {
             store.putComponent(light.twinRef, MountedComponent.getComponentType(),
                     new MountedComponent(observer, new Vector3f(mountOffset), MountController.Minecart));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Lumière jumelle %s impossible", light.key);
+            LOGGER.at(Level.WARNING).withCause(e).log("Twin light %s failed", light.key);
         }
     }
 
@@ -437,7 +437,7 @@ final class BalloonLights {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Lumière jumelle %s non mise à jour", l.key);
+            LOGGER.at(Level.WARNING).withCause(e).log("Twin light %s not updated", l.key);
         }
     }
 
@@ -451,7 +451,7 @@ final class BalloonLights {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Lumière jumelle %s non supprimée", l.key);
+            LOGGER.at(Level.WARNING).withCause(e).log("Twin light %s not removed", l.key);
         }
         l.twinRef = null;
         ViewFilter.clear(l.ref);
@@ -474,7 +474,7 @@ final class BalloonLights {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Lumière %s non supprimée", l.key);
+            LOGGER.at(Level.WARNING).withCause(e).log("Light %s not removed", l.key);
         }
     }
 

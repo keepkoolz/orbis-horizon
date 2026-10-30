@@ -246,7 +246,7 @@ final class ShipVoyage {
             }
             double[] goal = goalOf(w, d, station, station != null ? pierAndZone(station) : null);
             if (goal == null) {
-                LOGGER.at(Level.INFO).log("Voyage du bateau : aucune case du journal pour %s", d.name());
+                LOGGER.at(Level.INFO).log("Boat voyage: no log cell for %s", d.name());
                 return Texts.pilot("crew.voyage.noChart", crew);
             }
             int gx = (int) Math.floor(goal[0]);
@@ -259,22 +259,22 @@ final class ShipVoyage {
             String source;
             if (!logPath.isEmpty()) {
                 p.answer = corridorFromLog(logPath);
-                source = "journal, " + logPath.size() + " case(s)";
+                source = "log, " + logPath.size() + " cell(s)";
             } else {
                 SeaChart chart = SeaCharts.chart(world.getName());
                 if (chart == null) {
-                    LOGGER.at(Level.INFO).log("Voyage du bateau : le monde %s n'a pas de carte de l'océan, aucun couloir vers %s", world.getName(), d.name());
+                    LOGGER.at(Level.INFO).log("Boat voyage: world %s has no sea chart, no corridor to %s", world.getName(), d.name());
                     return Texts.pilot("crew.voyage.noChart", crew);
                 }
                 p.search = new ChartRoute(chart, ShuttleNav.view(SeaCharts.book(), world.getName()), sx, sz, gx, gz);
-                source = "carte de l'océan";
+                source = "sea chart";
             }
             PLANS.put(key, p);
             captain.sendMessage(Texts.pilot("crew.voyage.charting", crew));
-            LOGGER.at(Level.INFO).log("Voyage du bateau vers %s : calcul du couloir (%s)", d.name(), source);
+            LOGGER.at(Level.INFO).log("Boat voyage to %s: computing corridor (%s)", d.name(), source);
             return null;
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Voyage du bateau : calcul du couloir impossible");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Boat voyage: cannot compute corridor");
             Telemetry.error("boat.corridor", ex, e != null ? e.kind() : null, "plan");
             return Texts.pilot("crew.voyage.noChart", crew);
         }
@@ -293,7 +293,7 @@ final class ShipVoyage {
                 try {
                     if (now - p.startMs > PLAN_TIMEOUT_MS) {
                         PLANS.remove(p.key, p);
-                        LOGGER.at(Level.INFO).log("Voyage du bateau vers %s : calcul abandonné après %d s", p.dest.name(), PLAN_TIMEOUT_MS / 1000);
+                        LOGGER.at(Level.INFO).log("Boat voyage to %s: computation abandoned after %d s", p.dest.name(), PLAN_TIMEOUT_MS / 1000);
                         p.captain.sendMessage(Texts.pilot("crew.voyage.noChart", p.entry.crew()));
                         continue;
                     }
@@ -310,7 +310,7 @@ final class ShipVoyage {
                     if (answer != null) {
                         PLANS.remove(p.key, p);
                         if (answer.isEmpty()) {
-                            LOGGER.at(Level.INFO).log("Voyage du bateau vers %s : aucun couloir sur la carte", p.dest.name());
+                            LOGGER.at(Level.INFO).log("Boat voyage to %s: no corridor on the chart", p.dest.name());
                             p.captain.sendMessage(Texts.pilot("crew.voyage.noChart", p.entry.crew()));
                         } else {
                             depart(world, p, answer);
@@ -318,12 +318,12 @@ final class ShipVoyage {
                     }
                 } catch (RuntimeException ex) {
                     PLANS.remove(p.key, p);
-                    LOGGER.at(Level.WARNING).withCause(ex).log("Voyage du bateau : plan abandonné");
+                    LOGGER.at(Level.WARNING).withCause(ex).log("Boat voyage: plan abandoned");
                     Telemetry.error("boat.corridor", ex, p.entry.kind(), "plan");
                 }
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Voyages du bateau : tick en échec");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Boat voyages: tick failed");
             Telemetry.error("boat.corridor", ex, Deployables.STEAMBOAT_KIND, "plan");
         }
     }
@@ -381,14 +381,14 @@ final class ShipVoyage {
                     // A back-off point is reached: try to land here (no arrival announced).
                     v.phase = VoyageState.Phase.STOPPING;
                     v.retries = 0;
-                    LOGGER.at(Level.INFO).log("Voyage du bateau %s : point de repli atteint, essai d'amarrage", fl.id);
+                    LOGGER.at(Level.INFO).log("Boat voyage %s: fallback point reached, trying to dock", fl.id);
                     AirshipManager.get().startLanding(fl, false);
                     return;
                 }
                 v.arrived = true;
                 v.phase = VoyageState.Phase.ARRIVE;
                 v.progressMs = 0;
-                LOGGER.at(Level.INFO).log("Voyage du bateau : arrivé à %s, début de l'amarrage", v.destName);
+                LOGGER.at(Level.INFO).log("Boat voyage: arrived at %s, starting to dock", v.destName);
                 AirshipManager.get().startLanding(fl, false);
             }
 
@@ -476,7 +476,7 @@ final class ShipVoyage {
                 long now = System.currentTimeMillis();
                 if (v.noMooringLogMs == 0 || now - v.noMooringLogMs >= NO_MOORING_LOG_MS) {
                     v.noMooringLogMs = now;
-                    LOGGER.at(Level.WARNING).log("Voyage du bateau %s : plus aucun point de repli, nouveaux essais sur place", f.id);
+                    LOGGER.at(Level.WARNING).log("Boat voyage %s: no fallback point left, retrying on the spot", f.id);
                 }
                 if (action == BackoffAction.RELEASE_RIDERS) {
                     releaseRiders(f, v);
@@ -498,10 +498,10 @@ final class ShipVoyage {
             st.rerouting = false;
             BoatAutopilot.resume(f, st, ShuttleState.Phase.SAIL, System.currentTimeMillis());
             v.phase = VoyageState.Phase.CRUISE;
-            LOGGER.at(Level.INFO).log("Voyage du bateau %s : aucun amarrage possible, repli vers (%d, %d)%s, %d point(s) restant(s)", f.id,
-                    p[0], p[1], home ? " (point de départ)" : "", v.backoff.size());
+            LOGGER.at(Level.INFO).log("Boat voyage %s: no docking possible, falling back to (%d, %d)%s, %d point(s) left", f.id,
+                    p[0], p[1], home ? " (start point)" : "", v.backoff.size());
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage du bateau : repli impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Boat voyage: fallback not possible");
             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), "backoff");
         }
     }
@@ -520,9 +520,9 @@ final class ShipVoyage {
             CaptainMap.forget(v.captain);
             int n = f.riders.size();
             AirshipManager.get().passengers.releaseAll(store, f);
-            LOGGER.at(Level.INFO).log("Voyage du bateau %s : aucun amarrage possible, %d passager(s) posé(s) sur l'eau, le bateau reste seul", f.id, n);
+            LOGGER.at(Level.INFO).log("Boat voyage %s: no docking possible, %d passenger(s) put on the water, the boat stays alone", f.id, n);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage du bateau : passagers non libérés");
+            LOGGER.at(Level.WARNING).withCause(e).log("Boat voyage: passengers not released");
             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), "backoff");
         }
     }
@@ -544,11 +544,11 @@ final class ShipVoyage {
                 try {
                     List<int[]> pts = corridorNow(world, f.water, cellsNear(st.avoid), fromX, fromZ, goalX, goalZ);
                     if (pts != null) {
-                        LOGGER.at(Level.INFO).log("Voyage du bateau %s : couloir tracé de nouveau depuis (%d, %d), %d point(s)", f.id, fromX, fromZ, pts.size());
+                        LOGGER.at(Level.INFO).log("Boat voyage %s: corridor traced again from (%d, %d), %d point(s)", f.id, fromX, fromZ, pts.size());
                     }
                     return pts;
                 } catch (RuntimeException e) {
-                    LOGGER.at(Level.WARNING).withCause(e).log("Voyage du bateau %s : nouveau tracé du couloir en échec", f.id);
+                    LOGGER.at(Level.WARNING).withCause(e).log("Boat voyage %s: new corridor tracing failed", f.id);
                     Telemetry.error("boat.localnav", e, Telemetry.kindId(f.kind), "retrace");
                     return null;
                 }
@@ -585,10 +585,10 @@ final class ShipVoyage {
                 corridor = List.of(new int[] {fx, fz}, new int[] {back[0], back[1]});
             }
             startNav(f, st, back[0], back[1], corridor);
-            LOGGER.at(Level.INFO).log("Voyage du bateau %s en (%d, %d) : pilote local vers le point de repli (%d, %d)", f.id, fx, fz, back[0], back[1]);
+            LOGGER.at(Level.INFO).log("Boat voyage %s at (%d, %d): local pilot to the fallback point (%d, %d)", f.id, fx, fz, back[0], back[1]);
             ShuttleNav.requestSearch(f, st, stuck);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage du bateau %s : nouvelle recherche impossible", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Boat voyage %s: new search not possible", f.id);
             Telemetry.error("boat.localnav", e, Telemetry.kindId(f.kind), "reroute");
         }
     }
@@ -601,7 +601,7 @@ final class ShipVoyage {
                 noteTrack(st.track, c.x, c.z);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage du bateau %s : route parcourue non notée", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Boat voyage %s: travelled route not recorded", f.id);
             Telemetry.error("boat.localnav", e, Telemetry.kindId(f.kind), "track");
         }
     }
@@ -645,7 +645,7 @@ final class ShipVoyage {
                 }
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Voyage du bateau : erreur dans le tick de %s", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Boat voyage: error in tick of %s", f.id);
             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
         }
     }

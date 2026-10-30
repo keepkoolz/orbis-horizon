@@ -48,7 +48,7 @@ A boat station is a wooden pier on a shore with its own station master. Pick ano
 
 You will not always find an empty world. As you explore new land, balloon stations appear across the land, with more of them near the portals of the Forgotten Temple, and ports rise along the sea coasts, with a partner port waiting across the water. They have their own names and belong to nobody: discover one, talk to its station master and travel.
 
-Each trip, by balloon or by boat, costs a ticket paid in life essences by the traveller who picks the destination. If the trip never happens, the ticket is refunded.
+Each trip, by balloon or by boat, costs a ticket paid in life essences by the traveller who picks the destination, unless the server makes tickets free. If the trip never happens, the ticket is refunded.
 
 ## Before you set off
 

@@ -36,7 +36,7 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
         try {
             AirshipCrew.tick(store, store.getExternalData().getWorld());
         } catch (RuntimeException e) {
-            com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(e).log("Pilote : tick en échec");
+            com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(e).log("Pilot: tick failed");
         }
         // preview of the structure while a deployment crate is held.
         HeldCratePreview.tick(store, store.getExternalData().getWorld());
@@ -47,6 +47,7 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
         CampRespawn.tick(store, store.getExternalData().getWorld());
         PackBackView.tick(store, store.getExternalData().getWorld()); // never throws
         OxygenHud.tick(store, store.getExternalData().getWorld()); // never throws
+        FuelHud.sweep(store, store.getExternalData().getWorld()); // never throws
         CampUpgrade.tick(store, store.getExternalData().getWorld());
         LegacyCamps.tick(store, store.getExternalData().getWorld()); // never throws
         CaptainMap.tick(store, store.getExternalData().getWorld()); // never throws
@@ -55,7 +56,7 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
         try {
             GliderJump.tick(store, store.getExternalData().getWorld());
         } catch (RuntimeException e) {
-            com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(e).log("Saut en glider : tick en échec");
+            com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(e).log("Glider jump: tick failed");
         }
     }
 }

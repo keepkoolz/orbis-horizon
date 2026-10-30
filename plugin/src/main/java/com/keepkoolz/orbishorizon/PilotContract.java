@@ -75,12 +75,12 @@ final class PilotContract {
                 cost.add(new ItemStack(e.getKey(), e.getValue()));
             }
             if (!inv.canRemoveItemStacks(cost)) {
-                LOGGER.at(Level.WARNING).log("Pilote : retrait du prix impossible malgré les comptes");
+                LOGGER.at(Level.WARNING).log("Pilot: price removal failed despite the counts");
                 return Texts.t("crew.contract.failed");
             }
             inv.removeItemStacks(cost);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote : achat du contrat en échec avant le retrait");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot: contract purchase failed before the removal");
             return Texts.t("crew.contract.failed");
         }
         // The price is paid: from here on a failure must not lose the contract.
@@ -90,7 +90,7 @@ final class PilotContract {
             ItemStackTransaction t = Player.giveItem(contract, playerRef, store);
             rest = t != null ? t.getRemainder() : contract;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Pilote : contrat non donné, lâché au sol");
+            LOGGER.at(Level.WARNING).withCause(e).log("Pilot: contract not given, dropped on the ground");
         }
         if (rest != null && !rest.isEmpty()) {
             Vector3d at = store.getComponent(playerRef, TransformComponent.getComponentType()).getPosition();
@@ -99,7 +99,7 @@ final class PilotContract {
         } else {
             player.sendMessage(Texts.t("crew.contract.bought"));
         }
-        LOGGER.at(Level.INFO).log("Pilote : contrat acheté par %s", player.getUsername());
+        LOGGER.at(Level.INFO).log("Pilot: contract bought by %s", player.getUsername());
         return null;
     }
 }

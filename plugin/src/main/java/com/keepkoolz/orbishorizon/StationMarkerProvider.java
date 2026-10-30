@@ -58,7 +58,7 @@ final class StationMarkerProvider implements WorldMapManager.MarkerProvider {
         } catch (RuntimeException e) {
             if (!errorLogged) {
                 errorLogged = true;
-                LOGGER.at(Level.WARNING).withCause(e).log("Marqueurs de stations ignorés");
+                LOGGER.at(Level.WARNING).withCause(e).log("Station markers ignored");
             }
             Telemetry.error("map.stations", e, null, null);
         }

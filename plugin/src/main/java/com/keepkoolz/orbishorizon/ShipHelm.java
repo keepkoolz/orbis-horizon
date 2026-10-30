@@ -165,7 +165,7 @@ final class ShipHelm {
         } catch (RuntimeException e) {
             if (nowMs - st.lastLogMs >= LOG_EVERY_MS) {
                 st.lastLogMs = nowMs;
-                LOGGER.at(Level.WARNING).withCause(e).log("Barre animée : mise à jour en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Animated helm: update failed");
                 Telemetry.error("airship.flight", e, Telemetry.kindId(f.kind), AirshipAutopilot.phaseOf(f));
             }
         }
@@ -187,7 +187,7 @@ final class ShipHelm {
         } catch (RuntimeException e) {
             if (nowMs - st.lastLogMs >= LOG_EVERY_MS) {
                 st.lastLogMs = nowMs;
-                LOGGER.at(Level.WARNING).withCause(e).log("Barre animée : rejeu après changement de modèle en échec");
+                LOGGER.at(Level.WARNING).withCause(e).log("Animated helm: replay after model change failed");
             }
         }
     }

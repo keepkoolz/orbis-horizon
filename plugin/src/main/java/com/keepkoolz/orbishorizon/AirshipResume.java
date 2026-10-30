@@ -182,7 +182,7 @@ final class AirshipResume {
                 Files.move(tmp, file(f.id), StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Fichier de reprise du dirigeable %s non écrit", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Airship resume file %s not written", f.id);
         }
     }
 
@@ -198,7 +198,7 @@ final class AirshipResume {
             Files.deleteIfExists(file(id));
             Files.deleteIfExists(dir.resolve(id + ".json.tmp"));
         } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Fichier de reprise du dirigeable %s non effacé", id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Airship resume file %s not deleted", id);
         }
     }
 
@@ -213,7 +213,7 @@ final class AirshipResume {
         try (Stream<Path> s = Files.list(d)) {
             s.filter(p -> p.getFileName().toString().endsWith(".json")).forEach(files::add);
         } catch (IOException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Dossier de reprise des dirigeables illisible : %s", d);
+            LOGGER.at(Level.WARNING).withCause(e).log("Airship resume folder unreadable: %s", d);
             return list;
         }
         for (Path p : files) {
@@ -249,7 +249,7 @@ final class AirshipResume {
                         doc.containsKey("water") ? WaterLog.fromBson(doc.getDocument("water")) : null,
                         doc.containsKey("sky") ? SkyLog.fromBson(doc.getDocument("sky")) : null));
             } catch (IOException | RuntimeException e) {
-                LOGGER.at(Level.SEVERE).withCause(e).log("Fichier de reprise de dirigeable illisible : %s", p);
+                LOGGER.at(Level.SEVERE).withCause(e).log("Airship resume file unreadable: %s", p);
                 try {
                     Files.move(p, p.resolveSibling(p.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
                 } catch (IOException ignored) {

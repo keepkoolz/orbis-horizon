@@ -126,7 +126,7 @@ public final class StationCommand extends AbstractCommandCollection {
                 StructureShape reg = entry == null ? null : BalloonRegistry.shapeOf(entry);
                 shape = reg != null ? reg : spec.structure().shape();
             } catch (java.io.IOException | RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Forme de la station %s illisible", s.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Shape of station %s unreadable", s.name);
                 ctx.sendMessage(Texts.t("transit.cmd.despawnFailed"));
                 return;
             }
@@ -158,14 +158,14 @@ public final class StationCommand extends AbstractCommandCollection {
                 }
                 for (Ref<EntityStore> sr : stranded.keySet()) MountUtil.unseat(store, sr);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Joueurs de la station %s non repérés", s.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Players of station %s not located", s.name);
             }
             // 1. Station blocks first: it refuses (chunks not loaded) before anything else is touched. Contents dropped, lock entry removed.
             StructureRemoval.Result r;
             try {
                 r = StructureRemoval.remove(store, world, spec.structure(), shape, s.origin, s.rotation);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Station %s non retirée", s.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Station %s not removed", s.name);
                 ctx.sendMessage(Texts.t("transit.cmd.despawnFailed"));
                 return;
             }
@@ -197,11 +197,11 @@ public final class StationCommand extends AbstractCommandCollection {
                 GeneratedStations.Entry generated = GeneratedStations.get().at(world.getName(), s.origin.x, s.origin.z);
                 if (generated != null) GeneratedStations.get().setState(generated, GeneratedStations.State.REMOVED);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Station %s retirée mais son entrée du registre n'a pas changé d'état", s.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Station %s removed but its registry entry did not change state", s.name);
                 Telemetry.error("worldgen", e, s.kind, "remove");
             }
             boolean given = BalloonManager.get().giveCrate(store, ref, here, spec.crateId());
-            LOGGER.at(Level.INFO).log("Station « %s » retirée par %s : %d bloc(s), %d objet(s) lâchés, %d trou(s) du sol rebouché(s)",
+            LOGGER.at(Level.INFO).log("Station '%s' removed by %s: %d block(s), %d item(s) dropped, %d ground hole(s) filled",
                     s.name, player.getUsername(), r.removed(), r.items(), filled);
             ctx.sendMessage(Texts.t(given ? "transit.cmd.despawnDone" : "transit.cmd.despawnDoneFull").param("name", s.name));
         }
@@ -250,7 +250,7 @@ public final class StationCommand extends AbstractCommandCollection {
                     ctx.sendMessage(done);
                 });
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Téléportation vers « %s » impossible", label);
+                LOGGER.at(Level.WARNING).withCause(e).log("Cannot teleport to '%s'", label);
             }
         });
     }
@@ -376,7 +376,7 @@ public final class StationCommand extends AbstractCommandCollection {
                 holes = left;
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Trous du sol de la station non rebouchés");
+            LOGGER.at(Level.WARNING).withCause(e).log("Station ground holes not filled");
         }
         return filled;
     }
@@ -412,7 +412,7 @@ public final class StationCommand extends AbstractCommandCollection {
             try {
                 com.hypixel.hytale.server.core.command.system.CommandManager.get().broadcastArgCacheInvalidation(INSTANCE.getSuggestionTypeId());
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Liste des stations non renvoyée aux joueurs");
+                LOGGER.at(Level.WARNING).withCause(e).log("Station list not sent back to players");
             }
         }
 

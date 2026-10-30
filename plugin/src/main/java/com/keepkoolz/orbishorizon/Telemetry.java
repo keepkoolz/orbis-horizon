@@ -148,7 +148,7 @@ final class Telemetry {
         }
         try {
             if (owner != null) {
-                owner.getLogger().at(Level.INFO).log("Télémétrie : envoi d'arrêt terminé en %d ms (en attente : %d, résultat : %s)",
+                owner.getLogger().at(Level.INFO).log("Telemetry: shutdown send finished in %d ms (pending: %d, result: %s)",
                         System.currentTimeMillis() - started, pending, last);
             }
         } catch (Throwable ignored) {
@@ -169,7 +169,7 @@ final class Telemetry {
         if (warned) return;
         warned = true;
         try {
-            if (owner != null) owner.getLogger().at(Level.WARNING).withCause(t).log("Télémétrie indisponible : %s", t);
+            if (owner != null) owner.getLogger().at(Level.WARNING).withCause(t).log("Telemetry unavailable: %s", t);
         } catch (Throwable ignored) {
             // logging must never break the mod
         }

@@ -238,7 +238,7 @@ final class TransportCage {
         if (e.descent() > 0) {
             Outcome o = apply(world, e, e.descent(), e.open(), 0, e.open(), null);
             if (o != Outcome.OK) {
-                LOGGER.at(Level.WARNING).log("Cage de la montgolfière de transport en %s : remontée avant la descente à sec impossible (%s)", origin, o);
+                LOGGER.at(Level.WARNING).log("Transport balloon cage at %s: raising before the dry descent failed (%s)", origin, o);
                 return false;
             }
             BalloonRegistry.Entry up = BalloonRegistry.setCage(world, origin, rotation, kind.id, 0, e.open(), true);
@@ -255,7 +255,7 @@ final class TransportCage {
                     listener.onClosed(world, closed);
                 }
             } else {
-                LOGGER.at(Level.WARNING).log("Cage de la montgolfière de transport en %s : pan resté ouvert avant la descente à sec (%s)", origin, o);
+                LOGGER.at(Level.WARNING).log("Transport balloon cage at %s: panel left open before the dry descent (%s)", origin, o);
             }
         }
         return true;
@@ -309,7 +309,7 @@ final class TransportCage {
             }
             Outcome o = apply(world, e, e.descent(), true, e.descent(), false, null);
             if (o != Outcome.OK) {
-                LOGGER.at(Level.WARNING).log("Cage de la montgolfière de transport en %s : pan non refermé avant la descente à sec sur la cage (%s)", origin, o);
+                LOGGER.at(Level.WARNING).log("Transport balloon cage at %s: panel not closed before the dry descent onto the cage (%s)", origin, o);
                 return -1;
             }
             BalloonRegistry.Entry closed = BalloonRegistry.setCage(world, origin, rotation, kind.id, e.descent(), false, true);
@@ -584,9 +584,9 @@ final class TransportCage {
         Outcome o = apply(m.world, e, from, e.open(), to, e.open(), blockedAt);
         if (o != Outcome.OK) {
             if (o == Outcome.DAMAGED) {
-                LOGGER.at(Level.WARNING).log("Cage de la montgolfière de transport en %s : bloc absent, mouvement arrêté", m.origin);
+                LOGGER.at(Level.WARNING).log("Transport balloon cage at %s: block missing, movement stopped", m.origin);
             } else if (o == Outcome.BLOCKED) {
-                LOGGER.at(Level.INFO).log("Cage de la montgolfière de transport en %s : arrêt à %d bloc(s), case (%d, %d, %d) prise",
+                LOGGER.at(Level.INFO).log("Transport balloon cage at %s: stopped after %d block(s), cell (%d, %d, %d) occupied",
                         m.origin, from, blockedAt.x, blockedAt.y, blockedAt.z);
             }
             tell(m, outcomeMessage(o));
@@ -737,7 +737,7 @@ final class TransportCage {
         for (Vector3i p : oldSet) {
             if (!newMap.containsKey(p) && !keep.contains(p)) {
                 if (!SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES)) {
-                    LOGGER.at(Level.WARNING).log("Cage : retrait impossible en (%d, %d, %d), mouvement arrêté", p.x, p.y, p.z);
+                    LOGGER.at(Level.WARNING).log("Cage: removal failed at (%d, %d, %d), movement stopped", p.x, p.y, p.z);
                     return Outcome.DAMAGED;
                 }
             }
@@ -747,7 +747,7 @@ final class TransportCage {
             Blk d = me.getValue();
             if (!SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, d.id(), d.type(), d.rotation(), d.filler(),
                     SET_BLOCK_NO_PARTICLES)) {
-                LOGGER.at(Level.WARNING).log("Cage : pose impossible en (%d, %d, %d), mouvement arrêté", p.x, p.y, p.z);
+                LOGGER.at(Level.WARNING).log("Cage: placement failed at (%d, %d, %d), movement stopped", p.x, p.y, p.z);
                 return Outcome.DAMAGED;
             }
         }

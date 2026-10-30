@@ -103,7 +103,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
                 }
             });
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Lit de tente : montage non traité");
+            LOGGER.at(Level.WARNING).withCause(e).log("Tent bed: mounting not handled");
         }
     }
 
@@ -123,14 +123,14 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
         java.time.Instant target = SLEEP_TARGET.remove(ref);
         try {
             Vector3i bed = bedPosition(mount);
-            String source = "composant";
+            String source = "component";
             Vector3i remembered = BEDS.remove(ref);
             if (bed == null) {
                 bed = remembered;
-                source = "mémorisée";
+                source = "remembered";
             }
             if (bed == null) {
-                source = "position du joueur";
+                source = "player position";
                 // Last resort: the player's own block (they lay on the bed).
                 TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
                 if (t != null) {
@@ -151,7 +151,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
                         store.getResource(com.hypixel.hytale.server.core.modules.time.WorldTimeResource.getResourceType());
                 fullNight = reachedTarget(target, time != null ? time.getGameTime() : null);
             } catch (RuntimeException ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("Lit : nuit complète non évaluée");
+                LOGGER.at(Level.WARNING).withCause(ex).log("Bed: full night not evaluated");
             }
             final boolean night = fullNight;
             com.hypixel.hytale.server.core.universe.PlayerRef pr = store.getComponent(ref, com.hypixel.hytale.server.core.universe.PlayerRef.getComponentType());
@@ -161,7 +161,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
             // Queued after getUp: the sleeping bag packs itself once its owner is out of the bed.
             world.execute(() -> autoPack(store, ref, world, bedPos, night, sleeper));
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Lit de tente : démontage non traité");
+            LOGGER.at(Level.WARNING).withCause(e).log("Tent bed: dismounting not handled");
         }
     }
 
@@ -178,11 +178,11 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
             }
             boolean owner = e.owner() != null && e.owner().equals(sleeper);
             if (CampPacker.shouldAutoPack(true, owner, e.kind())) {
-                LOGGER.at(Level.INFO).log("Sac de couchage : nuit complète, rangement automatique en %d, %d, %d", e.x(), e.y(), e.z());
+                LOGGER.at(Level.INFO).log("Bedroll: full night, automatic packing at %d, %d, %d", e.x(), e.y(), e.z());
                 CampPacker.pack(store, ref, world, e, false);
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Sac de couchage : rangement au réveil non traité");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Bedroll: packing on waking not handled");
         }
     }
 
@@ -209,24 +209,24 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
     private static Lookup lookup(World world, Vector3i pos) {
         BalloonRegistry.Entry e = BalloonRegistry.find(world, pos);
         if (e == null) {
-            return new Lookup(null, "pas d'entrée au registre");
+            return new Lookup(null, "no registry entry");
         }
         Deployables.Kind kind = Deployables.get(e.kind());
         if (kind == null || kind.tent == null || kind.tent.exitPoint == null) {
-            return new Lookup(null, "type sans point de sortie (" + e.kind() + ")");
+            return new Lookup(null, "kind without exit point (" + e.kind() + ")");
         }
         StructureShape shape = BalloonRegistry.shapeOf(e);
         if (shape == null) {
-            return new Lookup(null, "forme introuvable");
+            return new Lookup(null, "shape not found");
         }
         Vector3i local = e.rotation().toInverse().rotateYaw(new Vector3i(pos.x - e.x(), pos.y - e.y(), pos.z - e.z()), new Vector3i());
         StructureShape.Cell cell = shape.inBounds(local.x, local.y, local.z) ? shape.cellAt(local.x, local.y, local.z) : null;
         if (cell == null || !cell.baseName().startsWith("Furniture_Crude_Bed")) {
-            return new Lookup(null, "la case du prefab n'est pas un lit");
+            return new Lookup(null, "the prefab cell is not a bed");
         }
         BlockType bt = SectionBlocks.typeAt(new SectionReader(world.getChunkStore()), pos.x, pos.y, pos.z);
         if (bt == null || !BalloonManager.sameBlock(bt, cell)) {
-            return new Lookup(null, "bloc différent dans le monde");
+            return new Lookup(null, "different block in the world");
         }
         return new Lookup(e, null);
     }
@@ -249,22 +249,22 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
         String bedText = bedPos.x + ", " + bedPos.y + ", " + bedPos.z + " (" + source + ")";
         try {
             if (!ref.isValid()) {
-                LOGGER.at(Level.INFO).log("Lit de tente : lit en %s, abandon : joueur invalide", bedText);
+                LOGGER.at(Level.INFO).log("Tent bed: bed at %s, aborted: invalid player", bedText);
                 return;
             }
             // Dead, or already on another mount (bed, seat, vehicle): not our business.
             if (store.getComponent(ref, DeathComponent.getComponentType()) != null) {
-                LOGGER.at(Level.INFO).log("Lit de tente : lit en %s, abandon : joueur mort", bedText);
+                LOGGER.at(Level.INFO).log("Tent bed: bed at %s, aborted: dead player", bedText);
                 return;
             }
             if (store.getComponent(ref, MountedComponent.getComponentType()) != null) {
-                LOGGER.at(Level.INFO).log("Lit de tente : lit en %s, abandon : joueur remonté", bedText);
+                LOGGER.at(Level.INFO).log("Tent bed: bed at %s, aborted: player mounted again", bedText);
                 return;
             }
             Lookup found = lookup(world, bedPos);
             BalloonRegistry.Entry e = found.entry();
             if (e == null) {
-                LOGGER.at(Level.INFO).log("Lit de tente : lit en %s, abandon : %s", bedText, found.why());
+                LOGGER.at(Level.INFO).log("Tent bed: bed at %s, aborted: %s", bedText, found.why());
                 return;
             }
             Deployables.TentSpec spec = Deployables.get(e.kind()).tent;
@@ -273,13 +273,13 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
             Rotation3f look = new Rotation3f();
             look.setYaw(yaw);
             store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(pos, look));
-            LOGGER.at(Level.INFO).log("Lit de tente : lit en %s, téléportation vers %.2f, %.2f, %.2f (lacet %.2f)",
+            LOGGER.at(Level.INFO).log("Tent bed: bed at %s, teleporting to %.2f, %.2f, %.2f (yaw %.2f)",
                     bedText, pos.x, pos.y, pos.z, yaw);
             PENDING.put(ref, new Pending(world, bedPos, pos, yaw, System.currentTimeMillis() + SECOND_TELEPORT_MS,
                     System.currentTimeMillis()));
             patchRespawnPoints(store, ref, world);
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Lit de tente : sortie non traitée");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Tent bed: exit not handled");
         }
     }
 
@@ -308,7 +308,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
                 world.execute(() -> secondTeleport(store, ref, p));
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Lit de tente : seconde téléportation non traitée");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Tent bed: second teleport not handled");
         }
     }
 
@@ -329,27 +329,27 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
                 }
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Lit : nuit non échantillonnée");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Bed: night not sampled");
         }
     }
 
     private static void secondTeleport(Store<EntityStore> store, Ref<EntityStore> ref, Pending p) {
         try {
             if (!ref.isValid()) {
-                LOGGER.at(Level.INFO).log("Lit de tente : seconde téléportation abandonnée : joueur invalide");
+                LOGGER.at(Level.INFO).log("Tent bed: second teleport aborted: invalid player");
                 return;
             }
             if (store.getComponent(ref, DeathComponent.getComponentType()) != null) {
-                LOGGER.at(Level.INFO).log("Lit de tente : seconde téléportation abandonnée : joueur mort");
+                LOGGER.at(Level.INFO).log("Tent bed: second teleport aborted: dead player");
                 return;
             }
             if (store.getComponent(ref, MountedComponent.getComponentType()) != null) {
-                LOGGER.at(Level.INFO).log("Lit de tente : seconde téléportation abandonnée : joueur remonté");
+                LOGGER.at(Level.INFO).log("Tent bed: second teleport aborted: player mounted again");
                 return;
             }
             TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
             if (t == null) {
-                LOGGER.at(Level.INFO).log("Lit de tente : seconde téléportation abandonnée : pas de position");
+                LOGGER.at(Level.INFO).log("Tent bed: second teleport aborted: no position");
                 return;
             }
             Vector3d cur = t.getPosition();
@@ -358,16 +358,16 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
             double dz = cur.z - (p.bed.z + 0.5);
             double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
             if (dist > MAX_BED_DISTANCE) {
-                LOGGER.at(Level.INFO).log("Lit de tente : seconde téléportation abandonnée : joueur à %.2f bloc(s) du lit", dist);
+                LOGGER.at(Level.INFO).log("Tent bed: second teleport aborted: player %.2f block(s) from the bed", dist);
                 return;
             }
             Rotation3f look = new Rotation3f();
             look.setYaw(p.yaw);
             store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(p.target, look));
-            LOGGER.at(Level.INFO).log("Lit de tente : seconde téléportation envoyée vers %.2f, %.2f, %.2f (joueur à %.2f bloc(s) du lit)",
+            LOGGER.at(Level.INFO).log("Tent bed: second teleport sent to %.2f, %.2f, %.2f (player %.2f block(s) from the bed)",
                     p.target.x, p.target.y, p.target.z, dist);
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Lit de tente : seconde téléportation non traitée");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Tent bed: second teleport not handled");
         }
     }
 
@@ -413,7 +413,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
                 data.setRespawnPoints(result);
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Lit de tente : point de réapparition non corrigé");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Tent bed: respawn point not corrected");
         }
     }
 }

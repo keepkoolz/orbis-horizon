@@ -108,7 +108,7 @@ final class PassengerCamera {
             try {
                 cells = k.shape().flightCells();
             } catch (java.io.IOException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Forme de %s illisible pour la vue extérieure", k);
+                LOGGER.at(Level.WARNING).withCause(e).log("Shape of %s unreadable for the outside view", k);
                 return new Framing(0, 10);
             }
             for (StructureShape.Cell c : cells) {
@@ -172,7 +172,7 @@ final class PassengerCamera {
             p.cameraOn = true;
             p.cameraTargetId = nid.getId();
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Vue extérieure du passager %s non envoyée", p.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Outside view of passenger %s not sent", p.name);
         }
     }
 
@@ -263,7 +263,7 @@ final class PassengerCamera {
                 p.camYawSet = true;
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Regard du passager %s non repris", p.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Look direction of passenger %s not restored", p.name);
         }
     }
 
@@ -307,7 +307,7 @@ final class PassengerCamera {
                 pr.getPacketHandler().writeNoCache(new SetServerCamera(ClientCameraView.Custom, false, null));
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Caméra du passager %s non remise", p.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Camera of passenger %s not restored", p.name);
         }
     }
 }

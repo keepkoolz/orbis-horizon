@@ -72,7 +72,7 @@ final class GenClear {
         try {
             return SectionBlocks.setAt(world.getChunkStore(), x, y, z, BlockType.EMPTY_KEY, SET_NO_PARTICLES);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Nettoyage impossible en (%d, %d, %d)", x, y, z);
+            LOGGER.at(Level.WARNING).withCause(e).log("Cannot clear at (%d, %d, %d)", x, y, z);
             Telemetry.error("worldgen", e, null, "clear");
             return false;
         }

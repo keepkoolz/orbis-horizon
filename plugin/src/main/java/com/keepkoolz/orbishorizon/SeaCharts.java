@@ -257,7 +257,7 @@ final class SeaCharts {
             GeneratorProbe probe = a == GeneratorProbe.Availability.READY ? GeneratorProbe.forChart(world) : null;
             if (probe == null) {
                 if (WARNED.add(world.getName())) {
-                    LOGGER.at(Level.INFO).log("Carte de l'océan : le monde %s n'utilise pas le générateur du jeu, aucune carte pour ce monde", world.getName());
+                    LOGGER.at(Level.INFO).log("Sea chart: world %s does not use the game generator, no chart for this world", world.getName());
                 }
                 return;
             }
@@ -267,7 +267,7 @@ final class SeaCharts {
             if (stopped) {
                 return; // an interrupted fill published nothing, and stop() saves what the chart holds
             }
-            LOGGER.at(Level.INFO).log("Carte de l'océan : remplissage depuis (%d, %d) dans %s en %d ms, océan %d", x, z, world.getName(),
+            LOGGER.at(Level.INFO).log("Sea chart: fill from (%d, %d) in %s took %d ms, ocean %d", x, z, world.getName(),
                     (System.nanoTime() - t0) / 1_000_000L, ocean);
             if (!THROWAWAY.contains(world.getName()) && !stopped) {
                 save(world.getName(), chart);
@@ -316,7 +316,7 @@ final class SeaCharts {
     }
 
     private static void failed(Throwable e, String what) {
-        LOGGER.at(Level.WARNING).withCause(e).log("Carte de l'océan : échec (%s), l'océan reste inconnu", what);
+        LOGGER.at(Level.WARNING).withCause(e).log("Sea chart: failed (%s), the ocean stays unknown", what);
         Telemetry.error("boat.chart", e, Deployables.BOAT_STATION_KIND, null);
     }
 }

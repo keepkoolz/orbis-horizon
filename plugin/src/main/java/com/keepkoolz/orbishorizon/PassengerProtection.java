@@ -100,14 +100,14 @@ public final class PassengerProtection {
                 }
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("protected.json illisible, liste des marqueurs posés vide");
+            LOGGER.at(Level.WARNING).withCause(e).log("protected.json unreadable, placed markers list empty");
             MARKED.clear();
             try {
                 if (file != null && Files.isRegularFile(file)) {
                     Files.move(file, file.resolveSibling(file.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
                 }
             } catch (IOException | RuntimeException e2) {
-                LOGGER.at(Level.WARNING).withCause(e2).log("Impossible de renommer protected.json en .bad");
+                LOGGER.at(Level.WARNING).withCause(e2).log("Could not rename protected.json to .bad");
             }
         }
     }
@@ -150,7 +150,7 @@ public final class PassengerProtection {
                 Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Écriture de protected.json impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Writing protected.json failed");
         }
     }
 
@@ -178,9 +178,9 @@ public final class PassengerProtection {
             // A marker the mod placed earlier and could not remove (listed) still belongs to the mod.
             boolean ours = add || (had && isMarked(uuid));
             PROTECTED.put(ref, new Entry(store.getExternalData().getWorld(), ours));
-            LOGGER.at(Level.INFO).log("Protection du passager " + name(store, ref) + " : activée (marqueur posé : " + (add ? "oui" : "non") + ")");
+            LOGGER.at(Level.INFO).log("Passenger protection " + name(store, ref) + " : enabled (marker placed: " + (add ? "yes" : "no") + ")");
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Protection du passager : activation impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Passenger protection: enabling failed");
         }
     }
 
@@ -196,10 +196,10 @@ public final class PassengerProtection {
                     store.tryRemoveComponent(ref, Intangible.getComponentType());
                     unmark(uuidOf(store, ref));
                 }
-                LOGGER.at(Level.INFO).log("Protection du passager " + name(store, ref) + " : retirée");
+                LOGGER.at(Level.INFO).log("Passenger protection " + name(store, ref) + " : removed");
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Protection du passager : retrait impossible");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Passenger protection: removal failed");
         }
     }
 
@@ -213,11 +213,11 @@ public final class PassengerProtection {
                 }
             }
             for (Ref<EntityStore> r : gone) {
-                LOGGER.at(Level.WARNING).log("Protection retirée par le balayage : " + name(store, r));
+                LOGGER.at(Level.WARNING).log("Protection removed by the sweep: " + name(store, r));
                 release(store, r);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Protection du passager : nettoyage impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Passenger protection: cleanup failed");
         }
     }
 
@@ -234,10 +234,10 @@ public final class PassengerProtection {
             if (isMarked(uuid) && store.getComponent(ref, Spectating.getComponentType()) == null) {
                 store.tryRemoveComponent(ref, Intangible.getComponentType());
                 unmark(uuid);
-                LOGGER.at(Level.INFO).log("Marqueur résiduel du mod retiré : " + name(store, ref));
+                LOGGER.at(Level.INFO).log("Leftover mod marker removed: " + name(store, ref));
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Protection du passager : marqueur résiduel non retiré");
+            LOGGER.at(Level.WARNING).withCause(e).log("Passenger protection: leftover marker not removed");
         }
     }
 
@@ -253,10 +253,10 @@ public final class PassengerProtection {
             if (holder.getComponent(Spectating.getComponentType()) == null) {
                 holder.tryRemoveComponent(Intangible.getComponentType());
                 unmark(uuid);
-                LOGGER.at(Level.INFO).log("Marqueur du mod retiré à l'arrivée du joueur " + uuid);
+                LOGGER.at(Level.INFO).log("Mod marker removed on player arrival " + uuid);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Protection du passager : marqueur non retiré à l'arrivée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Passenger protection: marker not removed on arrival");
         }
     }
 

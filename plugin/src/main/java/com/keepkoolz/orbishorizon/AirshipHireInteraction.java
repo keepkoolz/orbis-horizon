@@ -118,7 +118,7 @@ public class AirshipHireInteraction extends SimpleInstantInteraction {
         }
         if (uuid == null) {
             // Not hired: give the contract back.
-            LOGGER.at(Level.WARNING).log("Pilote : engagement impossible en (%d, %d, %d), contrat rendu", entry.x(), entry.y(), entry.z());
+            LOGGER.at(Level.WARNING).log("Pilot: hiring failed at (%d, %d, %d), contract returned", entry.x(), entry.y(), entry.z());
             try {
                 if (player.isValid()) {
                     ItemStack back = new ItemStack(PilotContract.ITEM_ID, 1);
@@ -131,14 +131,14 @@ public class AirshipHireInteraction extends SimpleInstantInteraction {
                     }
                 }
             } catch (RuntimeException ex) {
-                LOGGER.at(Level.WARNING).withCause(ex).log("Pilote : contrat non rendu");
+                LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: contract not returned");
             }
             playerRef.sendMessage(Texts.t("crew.contract.failed"));
             return;
         }
         Telemetry.count("airship.pilot_hired");
         playerRef.sendMessage(Texts.pilot("crew.hire.welcome", hired));
-        LOGGER.at(Level.INFO).log("Pilote : engagé par %s en (%d, %d, %d)", playerRef.getUsername(), entry.x(), entry.y(), entry.z());
+        LOGGER.at(Level.INFO).log("Pilot: hired by %s at (%d, %d, %d)", playerRef.getUsername(), entry.x(), entry.y(), entry.z());
     }
 
     private static void fail(InteractionContext context) {

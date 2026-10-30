@@ -59,7 +59,7 @@ final class AirshipCaptainChest {
                 Store<EntityStore> store = world.getEntityStore().getStore();
                 BalloonManager.get().restoreCargo(world, store, gemsCargo(), o, rotation);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Gemmes de la caisse du dirigeable non rangées dans le coffre du capitaine");
+                LOGGER.at(Level.WARNING).withCause(e).log("Gems from the airship crate not stored in the captain's chest");
                 Telemetry.error("airship.captainChest", e, Deployables.AIRSHIP_KIND, null);
             }
         });

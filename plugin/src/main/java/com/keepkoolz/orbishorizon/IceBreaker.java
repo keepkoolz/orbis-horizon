@@ -437,7 +437,7 @@ final class IceBreaker {
         long now = System.currentTimeMillis();
         if (now - lastErrorLogMs >= 60_000L) {
             lastErrorLogMs = now;
-            LOGGER.at(Level.WARNING).withCause(e).log("Bris de la glace ignoré");
+            LOGGER.at(Level.WARNING).withCause(e).log("Ice breaking ignored");
         }
         Telemetry.error("boat.icebreak", e, Telemetry.kindId(kind), null);
     }

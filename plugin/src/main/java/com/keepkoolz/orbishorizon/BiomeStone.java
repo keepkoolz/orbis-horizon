@@ -73,7 +73,7 @@ final class BiomeStone {
             Stone stone = stoneOfZone(zone);
             if (log) {
                 com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.INFO)
-                        .log("Station de montgolfière : pierre %s, zone %s", stone.family(), zone);
+                        .log("Balloon station: stone %s, zone %s", stone.family(), zone);
             }
             return stone;
         } catch (RuntimeException | LinkageError e) {

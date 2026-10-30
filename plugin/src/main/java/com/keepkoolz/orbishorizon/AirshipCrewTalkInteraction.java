@@ -58,7 +58,7 @@ public class AirshipCrewTalkInteraction extends SimpleInstantInteraction {
                 p.getPageManager().openCustomPage(player, store, new AirshipVoyagePage(pr, id.getUuid()));
             } catch (RuntimeException ex) {
                 com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(ex)
-                        .log("Pilote : dialogue non ouvert");
+                        .log("Pilot: dialogue not opened");
             }
         });
     }

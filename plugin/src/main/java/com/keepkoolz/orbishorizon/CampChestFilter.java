@@ -138,7 +138,7 @@ public final class CampChestFilter extends RefSystem<ChunkStore> {
                 install(block.getItemContainer());
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Filtre des coffres de tente : installation impossible");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Tent chest filter: cannot install");
         }
     }
 
@@ -167,7 +167,7 @@ public final class CampChestFilter extends RefSystem<ChunkStore> {
                 }
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Filtre des coffres de tente : installation après la pose impossible");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Tent chest filter: cannot install after placement");
             return false;
         }
         return all;
@@ -198,12 +198,12 @@ public final class CampChestFilter extends RefSystem<ChunkStore> {
                     try {
                         RETRY.schedule(() -> attempt(world, shape, origin, rotation, tries + 1), 250, java.util.concurrent.TimeUnit.MILLISECONDS);
                     } catch (RuntimeException ex) {
-                        LOGGER.at(Level.WARNING).withCause(ex).log("Filtre des coffres de tente : nouvel essai impossible");
+                        LOGGER.at(Level.WARNING).withCause(ex).log("Tent chest filter: retry failed");
                     }
                 }
             });
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Filtre des coffres de tente : essai impossible");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Tent chest filter: attempt failed");
         }
     }
 }

@@ -123,7 +123,7 @@ final class VoyagePlanner {
                 }
             }
         } catch (Throwable t) {
-            LOGGER.atWarning().log("Voyage : lecture des marqueurs impossible : " + t);
+            LOGGER.atWarning().log("Voyage: cannot read the markers: " + t);
         }
         try { // markers shared with the whole world (0.7: world resource SharedUserMapMarkers, like the game's SharedMarkersProvider; world thread)
             var shared = world.getChunkStore().getStore().getResource(
@@ -137,13 +137,13 @@ final class VoyagePlanner {
                 }
             }
         } catch (Throwable t) {
-            LOGGER.atWarning().log("Voyage : lecture des marqueurs partagés impossible : " + t);
+            LOGGER.atWarning().log("Voyage: cannot read the shared markers: " + t);
         }
         try {
             // Destinations: every station, balloon and boat. Zones to avoid: every station too.
             all.addAll(stationDestinations(TransitNetwork.get().stations(world.getName()), fromX, fromZ));
         } catch (Throwable t) {
-            LOGGER.atWarning().log("Voyage : lecture des stations impossible : " + t);
+            LOGGER.atWarning().log("Voyage: cannot read the stations: " + t);
         }
         return all;
     }

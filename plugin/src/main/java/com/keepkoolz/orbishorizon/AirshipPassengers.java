@@ -282,7 +282,7 @@ final class AirshipPassengers {
                     setHover(store, r, true);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager du dirigeable %s non tenu en l'air", r.p.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Airship passenger %s not held in the air", r.p.name);
             }
         }
     }
@@ -322,9 +322,9 @@ final class AirshipPassengers {
                         && p.seatBlock.z == cs.captainSeat()[2];
                 pr.sendMessage(chair ? Texts.t("crew.voyage.seatedChair") : Texts.ship(f.kind, "passenger.seated"));
             }
-            LOGGER.at(Level.INFO).log("Passager du dirigeable %s : tabouret %s, %s", p.name, p.seatBlock, r.mode);
+            LOGGER.at(Level.INFO).log("Airship passenger %s: stool %s, %s", p.name, p.seatBlock, r.mode);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Passager du dirigeable %s non installé", p.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Airship passenger %s not seated", p.name);
         }
     }
 
@@ -344,7 +344,7 @@ final class AirshipPassengers {
                 if (BalloonManager.isDead(store, p.ref)) {
                     release(store, r);
                     f.riders.remove(r);
-                    LOGGER.at(Level.INFO).log("Passager du dirigeable %s mort en vol : libéré, le vol continue", p.name);
+                    LOGGER.at(Level.INFO).log("Airship passenger %s died in flight: released, the flight continues", p.name);
                     continue;
                 }
                 BalloonManager.get().applyPose(store, p, now);
@@ -352,7 +352,7 @@ final class AirshipPassengers {
             } catch (RuntimeException e) {
                 if (now - r.lastActionMs > 2000) {
                     r.lastActionMs = now;
-                    LOGGER.at(Level.WARNING).withCause(e).log("Passager du dirigeable %s : mise à jour en échec", p.name);
+                    LOGGER.at(Level.WARNING).withCause(e).log("Airship passenger %s: update failed", p.name);
                 }
             }
         }
@@ -403,7 +403,7 @@ final class AirshipPassengers {
             r.lastActionMs = now;
             if (++r.losses > MAX_LOSSES) {
                 r.mode = Mode.TELEPORT;
-                LOGGER.at(Level.WARNING).log("Passager du dirigeable %s : montage perdu %d fois, repli par téléportation", p.name, r.losses);
+                LOGGER.at(Level.WARNING).log("Airship passenger %s: mount lost %d times, falling back to teleport", p.name, r.losses);
                 world.execute(() -> {
                     if (f.riders.contains(r) && p.ref.isValid()) {
                         MountUtil.unseat(store, p.ref);
@@ -552,7 +552,7 @@ final class AirshipPassengers {
             BalloonManager.clearPose(store, r.p);
             setHover(store, r, false);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Passager du dirigeable %s non libéré proprement", r.p.name);
+            LOGGER.at(Level.WARNING).withCause(e).log("Airship passenger %s not released cleanly", r.p.name);
         }
     }
 
@@ -587,7 +587,7 @@ final class AirshipPassengers {
                     pr.sendMessage(f.takeOver ? Texts.t("airship.passenger.pilotDiedTakeOver") : Texts.ship(f.kind, "passenger.landed"));
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager du dirigeable %s non reposé proprement", r.p.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Airship passenger %s not set down cleanly", r.p.name);
             }
         }
         f.riders.clear();
@@ -612,7 +612,7 @@ final class AirshipPassengers {
                     BalloonManager.putOnGround(store, f.world, r.p.ref, manager.shipPoint(f, r.p.seatLocal));
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager de la navette %s non libéré proprement", r.p.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Shuttle passenger %s not released cleanly", r.p.name);
             }
         }
         f.riders.clear();
@@ -653,7 +653,7 @@ final class AirshipPassengers {
                     out.add(pr);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager de la navette %s non déposé proprement", r.p.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Shuttle passenger %s not dropped off cleanly", r.p.name);
             }
         }
         f.riders.clear();
@@ -678,7 +678,7 @@ final class AirshipPassengers {
                     }
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager du dirigeable %s non posé au sol", r.p.name);
+                LOGGER.at(Level.WARNING).withCause(e).log("Airship passenger %s not placed on the ground", r.p.name);
             }
         }
         f.riders.clear();
@@ -847,7 +847,7 @@ final class AirshipPassengers {
                     BalloonResume.writeStranded(sv.uuid(), world.getName(), spot.x, spot.y, spot.z);
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Passager %s de la reprise du dirigeable non reposé", sv.uuid());
+                LOGGER.at(Level.WARNING).withCause(e).log("Passenger %s of the airship resume not set down", sv.uuid());
             }
         }
     }

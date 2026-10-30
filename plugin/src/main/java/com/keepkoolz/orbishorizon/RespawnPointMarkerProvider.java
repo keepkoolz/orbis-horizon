@@ -88,7 +88,7 @@ final class RespawnPointMarkerProvider implements WorldMapManager.MarkerProvider
     private static void logOnce(RuntimeException e) {
         if (!errorLogged) {
             errorLogged = true;
-            LOGGER.at(Level.WARNING).withCause(e).log("Marqueur de réapparition ignoré");
+            LOGGER.at(Level.WARNING).withCause(e).log("Respawn marker ignored");
         }
     }
 }

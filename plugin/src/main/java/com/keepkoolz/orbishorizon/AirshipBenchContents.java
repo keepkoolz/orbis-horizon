@@ -116,7 +116,7 @@ final class AirshipBenchContents {
                     kept.entries.add(new Entry(new Vector3i(c.x(), c.y(), c.z()), BurnerFuel.takeFrom(bench), fuel));
                 }
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Établi du dirigeable en (%d, %d, %d) : contenu non gardé", c.x(), c.y(), c.z());
+                LOGGER.at(Level.WARNING).withCause(e).log("Airship bench at (%d, %d, %d): contents not kept", c.x(), c.y(), c.z());
             }
         }
         return kept;
@@ -212,7 +212,7 @@ final class AirshipBenchContents {
                     PENDING.remove(p);
                 } else if (System.currentTimeMillis() > p.deadlineMs) {
                     PENDING.remove(p);
-                    LOGGER.at(Level.WARNING).log("Établi du dirigeable introuvable en %s : contenu lâché au sol", p.pos);
+                    LOGGER.at(Level.WARNING).log("Airship bench not found at %s: contents dropped on the ground", p.pos);
                     List<ItemStack> all = new ArrayList<>(p.entry.contents.allItems());
                     all.addAll(p.entry.fuelStacks());
                     BalloonManager.dropItems(store, all, p.pos);
@@ -242,12 +242,12 @@ final class AirshipBenchContents {
                             List<ItemStack> all = new ArrayList<>(p.entry.contents.allItems());
                             all.addAll(p.entry.fuelStacks());
                             BalloonManager.dropItems(store, all, p.pos);
-                            LOGGER.at(Level.WARNING).log("Arrêt : contenu de l'établi du dirigeable en %s lâché au sol", p.pos);
+                            LOGGER.at(Level.WARNING).log("Shutdown: airship bench contents at %s dropped on the ground", p.pos);
                         }
                     }
                 }, timeoutMs);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Arrêt : contenus d'établis en attente non traités");
+                LOGGER.at(Level.WARNING).withCause(e).log("Shutdown: pending bench contents not processed");
             }
         }
     }

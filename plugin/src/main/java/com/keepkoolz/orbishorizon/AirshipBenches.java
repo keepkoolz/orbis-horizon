@@ -206,7 +206,7 @@ final class AirshipBenches {
                     PENDING.remove(p);
                 } else if (System.currentTimeMillis() > p.deadlineMs) {
                     PENDING.remove(p);
-                    LOGGER.at(Level.WARNING).log("Établi %s du dirigeable introuvable en %s : niveau %d perdu, objets d'amélioration lâchés",
+                    LOGGER.at(Level.WARNING).log("Airship bench %s not found at %s: tier %d lost, upgrade items dropped",
                             p.entry.block, p.pos, p.entry.tier);
                     BalloonManager.dropItems(store, Arrays.asList(p.entry.upgradeItems), p.pos);
                 }
@@ -231,7 +231,7 @@ final class AirshipBenches {
             String placedName = placedBase != null ? placedBase.getId() : null;
             if (placedName != null && !placedName.equals(e.block)) {
                 // Never put a level on a different bench (prefab layout changed between take-off and landing).
-                LOGGER.at(Level.WARNING).log("Établi %s du dirigeable en %s : le bloc posé est %s, niveau %d non remis",
+                LOGGER.at(Level.WARNING).log("Airship bench %s at %s: the placed block is %s, tier %d not restored",
                         e.block, p, placedName, e.tier);
                 return false;
             }
@@ -241,7 +241,7 @@ final class AirshipBenches {
         BlockModule.BlockStateInfo info = BlockModule.getComponent(BlockModule.BlockStateInfo.getComponentType(), world, p.x, p.y, p.z);
         BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
         if (info == null || bt == null) {
-            LOGGER.at(Level.WARNING).log("Établi %s du dirigeable en %s : état du bloc illisible, niveau %d mis sans changer l'apparence",
+            LOGGER.at(Level.WARNING).log("Airship bench %s at %s: block state unreadable, tier %d set without changing the appearance",
                     e.block, p, e.tier);
             return true;
         }
@@ -257,10 +257,10 @@ final class AirshipBenches {
                 processing.setupSlots(world, bench, info, p.x, p.y, p.z, base, rotationIndex);
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Établi %s du dirigeable en %s : apparence du niveau %d non appliquée",
+            LOGGER.at(Level.WARNING).withCause(ex).log("Airship bench %s at %s: appearance of tier %d not applied",
                     e.block, p, e.tier);
         }
-        LOGGER.at(Level.INFO).log("Établi %s du dirigeable en %s remis au niveau %d (%d objet(s) d'amélioration)",
+        LOGGER.at(Level.INFO).log("Airship bench %s at %s restored to tier %d (%d upgrade item(s))",
                 e.block, p, e.tier, e.upgradeItems.length);
         return true;
     }

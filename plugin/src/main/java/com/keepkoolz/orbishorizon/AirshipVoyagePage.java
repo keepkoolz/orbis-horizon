@@ -117,7 +117,7 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
             close();
         } catch (RuntimeException e) {
             com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(e)
-                    .log("Rappel : fenêtre non fermée");
+                    .log("Recall: window not closed");
         }
     }
 
@@ -366,7 +366,7 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
             }
         } catch (RuntimeException ex) {
             com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(ex)
-                    .log("Pilote : ordre non transmis");
+                    .log("Pilot: order not passed on");
         } finally {
             if (!keepOpen) {
                 close();

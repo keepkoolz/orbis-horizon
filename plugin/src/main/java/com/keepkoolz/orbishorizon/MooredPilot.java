@@ -86,7 +86,7 @@ final class MooredPilot {
             if (look == null) {
                 if (!e.warned) {
                     e.warned = true;
-                    LOGGER.at(Level.WARNING).log("Station maritime %s : pas de pilote à la barre de la navette à quai (apparence du chef de gare introuvable)", s.name);
+                    LOGGER.at(Level.WARNING).log("Sea station %s: no pilot at the helm of the docked shuttle (station master appearance not found)", s.name);
                 }
                 return;
             }
@@ -94,14 +94,14 @@ final class MooredPilot {
             if (e.man == null) {
                 if (!e.warned) {
                     e.warned = true;
-                    LOGGER.at(Level.WARNING).log("Station maritime %s : pas de pilote à la barre de la navette à quai (création de l'entité refusée)", s.name);
+                    LOGGER.at(Level.WARNING).log("Sea station %s: no pilot at the helm of the docked shuttle (entity creation refused)", s.name);
                 }
             } else {
                 e.warned = false;
-                LOGGER.at(Level.INFO).log("Station maritime %s : pilote à la barre de la navette à quai", s.name);
+                LOGGER.at(Level.INFO).log("Sea station %s: pilot at the helm of the docked shuttle", s.name);
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Station maritime %s : pilote de la navette à quai en échec", s.name);
+            LOGGER.at(Level.WARNING).withCause(ex).log("Sea station %s: docked shuttle pilot failed", s.name);
             Telemetry.error("transit", ex, Telemetry.kindId(Deployables.STEAMBOAT_PUBLIC), null);
         }
     }
@@ -120,7 +120,7 @@ final class MooredPilot {
                 store.removeEntity(ref, RemoveReason.REMOVE);
             }
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Pilote de la navette à quai non retiré");
+            LOGGER.at(Level.WARNING).withCause(ex).log("Docked shuttle pilot not removed");
             Telemetry.error("transit", ex, Telemetry.kindId(Deployables.STEAMBOAT_PUBLIC), null);
         }
     }

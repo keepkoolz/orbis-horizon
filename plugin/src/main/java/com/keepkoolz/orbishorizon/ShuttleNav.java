@@ -144,7 +144,7 @@ final class ShuttleNav {
             try {
                 tripArrived(SeaCharts.book(), t);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Navette : trajet non retenu dans la mémoire de la carte");
+                LOGGER.at(Level.WARNING).withCause(e).log("Shuttle: trip not kept in the chart memory");
             }
         }
     }
@@ -157,7 +157,7 @@ final class ShuttleNav {
             try {
                 tripFailed(SeaCharts.book(), t);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Navette : trajet non oublié dans la mémoire de la carte");
+                LOGGER.at(Level.WARNING).withCause(e).log("Shuttle: trip not forgotten in the chart memory");
             }
         }
     }
@@ -173,7 +173,7 @@ final class ShuttleNav {
             try {
                 tripRemoved(SeaCharts.book(), t);
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Navette : trajet non oublié dans la mémoire de la carte");
+                LOGGER.at(Level.WARNING).withCause(e).log("Shuttle: trip not forgotten in the chart memory");
             }
         }
     }
@@ -238,7 +238,7 @@ final class ShuttleNav {
             SeaChart chart = SeaCharts.chart(wn);
             if (chart == null) {
                 st.noCorridor = true;
-                LOGGER.at(Level.INFO).log("Navette %s : le monde %s n'a pas de carte de l'océan, aucun couloir", f.id, wn);
+                LOGGER.at(Level.INFO).log("Shuttle %s: world %s has no sea chart, no corridor", f.id, wn);
                 st.nav = new LocalNav(noCorridor(), HullClearance.SHUTTLE, goal.x, goal.z);
                 return;
             }
@@ -256,10 +256,10 @@ final class ShuttleNav {
                             st.corridorSearch = null; // the new corridor replaces the first one, still searched
                             capTrip(st, pts);
                         }
-                        LOGGER.at(Level.INFO).log("Navette %s : couloir tracé de nouveau depuis (%d, %d), %d point(s)", f.id, fromX, fromZ, pts.size());
+                        LOGGER.at(Level.INFO).log("Shuttle %s: corridor traced again from (%d, %d), %d point(s)", f.id, fromX, fromZ, pts.size());
                         return pts;
                     } catch (RuntimeException e) {
-                        LOGGER.at(Level.WARNING).withCause(e).log("Navette %s : nouveau tracé du couloir en échec", f.id);
+                        LOGGER.at(Level.WARNING).withCause(e).log("Shuttle %s: new corridor tracing failed", f.id);
                         Telemetry.error("boat.corridor", e, Telemetry.kindId(f.kind), st.phase.name());
                         return null;
                     }
@@ -273,12 +273,12 @@ final class ShuttleNav {
                     int cx = SeaChart.cellOf(x);
                     int cz = SeaChart.cellOf(z);
                     book.close(wn, cx, cz, System.currentTimeMillis());
-                    LOGGER.at(Level.INFO).log("Navette %s : case (%d, %d) de la carte fermée, obstacle vers (%d, %d)", f.id, cx, cz, x, z);
+                    LOGGER.at(Level.INFO).log("Shuttle %s: chart cell (%d, %d) closed, obstacle towards (%d, %d)", f.id, cx, cz, x, z);
                 }
             }, HullClearance.SHUTTLE, goal.x, goal.z);
-            LOGGER.at(Level.INFO).log("Navette %s : navigation vers %s depuis (%.0f, %.0f)", f.id, to.name, c.x, c.z);
+            LOGGER.at(Level.INFO).log("Shuttle %s: navigating to %s from (%.0f, %.0f)", f.id, to.name, c.x, c.z);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette %s : navigation non démarrée", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle %s: navigation not started", f.id);
             Telemetry.error("boat.corridor", e, Telemetry.kindId(f.kind), st.phase.name());
             st.noCorridor = true;
             if (st.nav == null) {
@@ -323,7 +323,7 @@ final class ShuttleNav {
             st.nav.cancel(); // drops a search in progress: the next one starts with the columns to avoid
             st.navActive = false;
         }
-        LOGGER.at(Level.INFO).log("Navette %s en (%.1f, %.1f) : nouvelle recherche du pilote local demandée", f.id, f.pos.x, f.pos.z);
+        LOGGER.at(Level.INFO).log("Shuttle %s at (%.1f, %.1f): new local pilot search requested", f.id, f.pos.x, f.pos.z);
     }
 
     // ------------------------------------------------------------------ every tick
@@ -340,7 +340,7 @@ final class ShuttleNav {
         try {
             record(world, st, c);
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette %s : trajet non noté", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle %s: trip not recorded", f.id);
             Telemetry.error("boat.corridor", e, Telemetry.kindId(f.kind), st.phase.name());
         }
         try {
@@ -348,7 +348,7 @@ final class ShuttleNav {
                 return true;
             }
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette %s : couloir en échec", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle %s: corridor failed", f.id);
             Telemetry.error("boat.corridor", e, Telemetry.kindId(f.kind), st.phase.name());
             st.corridorSearch = null;
             st.noCorridor = false;
@@ -358,7 +358,7 @@ final class ShuttleNav {
         try {
             return local(store, world, am, f, st, c, now);
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Navette %s : pilote local en échec", f.id);
+            LOGGER.at(Level.WARNING).withCause(e).log("Shuttle %s: local pilot failed", f.id);
             Telemetry.error("boat.localnav", e, Telemetry.kindId(f.kind), st.phase.name());
             BoatAutopilot.rescue(store, f, st);
             return true;
@@ -404,7 +404,7 @@ final class ShuttleNav {
                 st.nav.setCorridor(pts);
                 st.navActive = st.navReady; // a path found before the corridor is replaced by one that follows it
                 endWait(f, st, System.currentTimeMillis());
-                LOGGER.at(Level.INFO).log("Navette %s : couloir trouvé, %d point(s), %d blocs", f.id, pts.size(), corridorBlocks(pts));
+                LOGGER.at(Level.INFO).log("Shuttle %s: corridor found, %d point(s), %d blocks", f.id, pts.size(), corridorBlocks(pts));
                 return false;
             }
             default:
@@ -416,14 +416,14 @@ final class ShuttleNav {
 
     /** No corridor to the destination: next candidate station if one is left, else the departure fails (still at the berth) or the rescue. */
     private static void noCorridorFound(Store<EntityStore> store, AirshipFlight f, ShuttleState st, Vector3d c) {
-        LOGGER.at(Level.INFO).log("Navette %s : aucun couloir vers %s", f.id, st.to != null ? st.to.name : "?");
+        LOGGER.at(Level.INFO).log("Shuttle %s: no corridor to %s", f.id, st.to != null ? st.to.name : "?");
         failed(st); // the pair is noted incomplete
         if (BoatAutopilot.retarget(f, st)) {
             return;
         }
         boolean atBerth = atDepartureBerth(st, c);
         if (!atBerth) {
-            Telemetry.error("boat.corridor", new IllegalStateException(st.trip == null ? "approche sans couloir" : "aucun couloir en route"), Telemetry.kindId(f.kind), st.phase.name());
+            Telemetry.error("boat.corridor", new IllegalStateException(st.trip == null ? "approach without corridor" : "no corridor en route"), Telemetry.kindId(f.kind), st.phase.name());
         }
         BoatAutopilot.noCorridor(store, f, st, atBerth);
     }
@@ -467,7 +467,7 @@ final class ShuttleNav {
             st.nav.cancel(); // drops a search in progress: the pilot stays frozen
             st.arrivalFor = null;
             st.preparedFor = null;
-            LOGGER.at(Level.INFO).log("Navette %s : à moins de %.0f blocs de %s, pilote local figé", f.id, BoatAutopilot.ARRIVAL_DECIDE_RANGE, to.name);
+            LOGGER.at(Level.INFO).log("Shuttle %s: within %.0f blocks of %s, local pilot frozen", f.id, BoatAutopilot.ARRIVAL_DECIDE_RANGE, to.name);
             return false;
         }
         boolean wanted = forced || !st.navReady;
@@ -499,14 +499,14 @@ final class ShuttleNav {
                 waitForData(world, f, st, r.box(), now);
                 return true;
             case FAILED: {
-                LOGGER.at(Level.WARNING).log("Navette %s : le pilote local ne trouve pas de passage vers %s", f.id, goalName);
+                LOGGER.at(Level.WARNING).log("Shuttle %s: local pilot finds no way to %s", f.id, goalName);
                 if (atDepartureBerth(st, c)) {
                     // No corridor (a new tracing found none) while still at the berth: a failed departure, not a rescue.
                     failed(st);
                     BoatAutopilot.noCorridor(store, f, st, true);
                     return true;
                 }
-                Telemetry.error("boat.localnav", new IllegalStateException("pilote local sans passage"), Telemetry.kindId(f.kind), ph.name());
+                Telemetry.error("boat.localnav", new IllegalStateException("local pilot without a way through"), Telemetry.kindId(f.kind), ph.name());
                 BoatAutopilot.rescue(store, f, st);
                 return true;
             }
@@ -553,7 +553,7 @@ final class ShuttleNav {
             }
             BoatAutopilot.markProgress(f, st, now); // the new path gets its full 30 s
         }
-        LOGGER.at(Level.FINE).log("Navette %s : chemin local de %d point(s)", f.id, list.size());
+        LOGGER.at(Level.FINE).log("Shuttle %s: local path of %d point(s)", f.id, list.size());
     }
 
     /**
@@ -575,7 +575,7 @@ final class ShuttleNav {
                 BoatAutopilot.markProgress(f, st, now);
                 return;
             case GIVE_UP:
-                LOGGER.at(Level.WARNING).log("Navette %s : sections de la fenêtre locale jamais chargées (%d essais), colonnes comptées bloquées",
+                LOGGER.at(Level.WARNING).log("Shuttle %s: sections of the local window never loaded (%d tries), columns counted as blocked",
                         f.id, st.loadAttempts);
                 st.nav.dataGaveUp();
                 endWait(f, st, now);

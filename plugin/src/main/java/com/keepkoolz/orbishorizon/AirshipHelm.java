@@ -92,7 +92,7 @@ final class AirshipHelm {
         try {
             ModelAsset asset = ModelAsset.getAssetMap().getAsset(MODEL_ID);
             if (asset == null) {
-                LOGGER.at(Level.WARNING).log("Modèle %s introuvable : pas de barre utilisable en vol", MODEL_ID);
+                LOGGER.at(Level.WARNING).log("Model %s not found: no usable helm in flight", MODEL_ID);
                 return null;
             }
             double s = MODEL_SCALE;
@@ -125,7 +125,7 @@ final class AirshipHelm {
                     new MountedComponent(shipRef, new Vector3f(mountOffset), MountController.Minecart));
             return h;
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Entité de la barre du dirigeable impossible");
+            LOGGER.at(Level.WARNING).withCause(e).log("Airship helm entity failed");
             return null;
         }
     }
@@ -140,7 +140,7 @@ final class AirshipHelm {
                 store.removeEntity(h.ref, RemoveReason.REMOVE);
             }
         } catch (RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Entité de la barre non supprimée");
+            LOGGER.at(Level.WARNING).withCause(e).log("Helm entity not removed");
         }
         h.ref = null;
     }

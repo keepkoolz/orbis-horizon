@@ -90,7 +90,7 @@ final class ShipSmoke {
             long now = System.currentTimeMillis();
             if (now - lastLogMs > LOG_INTERVAL_MS) {
                 lastLogMs = now;
-                LOGGER.at(Level.WARNING).log("Fumée du navire à quai : échec (%s)", e);
+                LOGGER.at(Level.WARNING).log("Docked ship smoke: failed (%s)", e);
             }
             Telemetry.error("airship.land", e, null, null);
         }
