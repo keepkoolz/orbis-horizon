@@ -20,6 +20,7 @@ import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
+import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
@@ -48,6 +49,8 @@ import java.util.logging.Level;
  *    the Failed state (the pack is not touched, and no block is placed). Grass and plants are overwritten.
  * 2. After placement, the tent is entered in the lock registry (tent type, owner = the player).
  * 3. The held pack is consumed here (no empty crate any more: the placed bag packs the camp).
+ * A camping pack is pitched only while crouching. Standing, a tent pack opens its chests (PackChests) and the bedroll pack
+ * sends a reminder. Neither places anything.
  *
  * JSON fields:
  *   PrefabPath      prefab path, relative to Server/Prefabs/ (the tent's)
@@ -129,6 +132,25 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
         if (held == null || heldContainer == null || tier == null || !tier.kindId().equals(kind.id)) {
             LOGGER.at(Level.WARNING).log("Camping_DeployCamp: unexpected held item (%s)", held != null ? held.getItemId() : "none");
             fail(context);
+            return;
+        }
+        // A camping pack is pitched only while crouching. Standing, a tent pack opens the chests kept in it and the
+        // bedroll pack reminds the player to crouch. Nothing is placed and the pack is not touched.
+        boolean crouching = false;
+        try {
+            MovementStatesComponent movement = commandBuffer.getComponent(player, MovementStatesComponent.getComponentType());
+            crouching = movement != null && movement.getMovementStates() != null && movement.getMovementStates().crouching;
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Camping_DeployCamp: crouch check failed");
+            Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
+        }
+        if (CampTiers.pitchedOnlyCrouching(held.getItemId()) && !crouching) {
+            if (!PackChests.open(context, kind, shape)) {
+                if (Deployables.BEDROLL_KIND.equals(kind.id)) {
+                    playerRef.sendMessage(Texts.t("camp.crouchToPitch"));
+                }
+                fail(context);
+            }
             return;
         }
         IPrefabBuffer buffer = PrefabBufferUtil.getCached(path);

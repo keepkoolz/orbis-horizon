@@ -1583,6 +1583,10 @@ public class TransitTests {
         run("campUpgradeCarryAfterPost", TransitTests::campUpgradeCarryAfterPost);
         run("campUpgradeReconcile", TransitTests::campUpgradeReconcile);
         run("tentContentsConvert", TransitTests::tentContentsConvert);
+        run("campPackCrouchRule", TransitTests::campPackCrouchRule);
+        run("packChestsEmpty", TransitTests::packChestsEmpty);
+        run("packChestsBigOrder", TransitTests::packChestsBigOrder);
+        run("packChestsRoundTrip", TransitTests::packChestsRoundTrip);
         run("campRecipesJson", TransitTests::campRecipesJson);
         run("explorerBenchJson", TransitTests::explorerBenchJson);
         run("recipesOnExplorerBench", TransitTests::recipesOnExplorerBench);
@@ -4089,6 +4093,78 @@ public class TransitTests {
     }
 
     /** Shape read from a prefab file (the real shapes need the asset module, absent in these tests). */
+    /** Only the three camping packs are pitched crouching, every crate keeps its usual placement. */
+    private static void campPackCrouchRule() {
+        check(CampTiers.pitchedOnlyCrouching("Camping_Pack_Bedroll"), "bedroll pack");
+        check(CampTiers.pitchedOnlyCrouching("Camping_Pack_Tent"), "tent pack");
+        check(CampTiers.pitchedOnlyCrouching("Camping_Pack_Tent_Big"), "large tent pack");
+        check(!CampTiers.pitchedOnlyCrouching("Camping_Tent_Crate"), "old tent crate");
+        check(!CampTiers.pitchedOnlyCrouching("Camping_Tent_Big_Crate"), "old large tent crate");
+        check(!CampTiers.pitchedOnlyCrouching(null), "no item");
+        for (String id : DeployPlacement.CRATES.keySet()) {
+            if (!id.startsWith("Camping_Pack_")) {
+                check(!CampTiers.pitchedOnlyCrouching(id), "crate " + id);
+            }
+        }
+    }
+
+    /** An empty pack gives one empty chest per prefab chest cell, 18 slots each. */
+    private static void packChestsEmpty() throws Exception {
+        List<Vector3i> small = PackChests.chestCells(prefabShape("Camping_Tent.prefab.json"));
+        eq(1, small.size());
+        PackChests.Layout layout = PackChests.toSlots(null, small, new short[]{18});
+        eq(1, layout.slots().length);
+        eq(18, layout.slots()[0].length);
+        check(layout.leftovers().isEmpty(), "no leftover");
+        List<Vector3i> big = PackChests.chestCells(prefabShape("Camping_Tent_Big.prefab.json"));
+        PackChests.Layout bigLayout = PackChests.toSlots(null, big, new short[]{18, 18});
+        eq(2, bigLayout.slots().length);
+        eq(18, bigLayout.slots()[1].length);
+    }
+
+    /** The large tent lists its chests in ascending (y, x, z) order, and the stored chests follow their position. */
+    private static void packChestsBigOrder() throws Exception {
+        List<Vector3i> big = PackChests.chestCells(prefabShape("Camping_Tent_Big.prefab.json"));
+        eq(new Vector3i(-2, 0, 3), big.get(0));
+        eq(new Vector3i(2, 0, 3), big.get(1));
+        BalloonCargo cargo = new BalloonCargo(List.of(new BalloonCargo.Entry(new Vector3i(2, 0, 3),
+                "Furniture_Kweebec_Chest_Small", (short) 12, new com.hypixel.hytale.server.core.inventory.ItemStack[12])));
+        PackChests.Layout layout = PackChests.toSlots(new TentContents(AirshipBenchContents.fromBson(null), cargo), big, new short[]{18, 18});
+        eq(18, layout.slots()[0].length);
+        eq(12, layout.slots()[1].length);
+    }
+
+    /** Contents to slots to contents keeps the campfire, the position of stored chests and the entries without a cell. */
+    private static void packChestsRoundTrip() throws Exception {
+        List<Vector3i> big = PackChests.chestCells(prefabShape("Camping_Tent_Big.prefab.json"));
+        org.bson.BsonDocument benchDoc = new org.bson.BsonDocument();
+        org.bson.BsonDocument e = new org.bson.BsonDocument();
+        e.put("x", new org.bson.BsonInt32(-3));
+        e.put("y", new org.bson.BsonInt32(0));
+        e.put("z", new org.bson.BsonInt32(1));
+        e.put("bench", new org.bson.BsonDocument());
+        org.bson.BsonArray arr = new org.bson.BsonArray();
+        arr.add(e);
+        benchDoc.put("benchContents", arr);
+        BalloonCargo cargo = new BalloonCargo(List.of(
+                new BalloonCargo.Entry(new Vector3i(-2, 0, 3), "Furniture_Kweebec_Chest_Small", (short) 18,
+                        new com.hypixel.hytale.server.core.inventory.ItemStack[18]),
+                new BalloonCargo.Entry(new Vector3i(9, 9, 9), "Furniture_Kweebec_Chest_Small", (short) 6,
+                        new com.hypixel.hytale.server.core.inventory.ItemStack[6])));
+        TentContents before = new TentContents(AirshipBenchContents.fromBson(benchDoc), cargo);
+        PackChests.Layout layout = PackChests.toSlots(before, big, new short[]{18, 18});
+        eq(1, layout.leftovers().size());
+        TentContents after = PackChests.fromSlots(before, big, layout.slots(), layout.leftovers());
+        org.bson.BsonDocument d = after.toBson("tent_big");
+        eq(before.toBson("tent_big").getDocument("benches"), d.getDocument("benches"));
+        // the chests are all empty (no stack can be built here): only the foreign entry stays, at its position
+        eq(1, d.getDocument("cargo").getArray("containers").size());
+        eq(9, d.getDocument("cargo").getArray("containers").get(0).asDocument().getInt32("x").getValue());
+        check(PackChests.sameMetadata(null, null), "no metadata matches no metadata");
+        check(!PackChests.sameMetadata(null, d), "metadata appeared");
+        check(PackChests.sameMetadata(d, d.clone()), "same metadata");
+    }
+
     private static StructureShape prefabShape(String file) throws Exception {
         var root = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Prefabs", file)));
         List<StructureShape.Cell> cells = new java.util.ArrayList<>();

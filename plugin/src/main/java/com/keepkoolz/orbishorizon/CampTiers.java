@@ -66,6 +66,11 @@ final class CampTiers {
         return null;
     }
 
+    /** True for the items that are pitched only while crouching (the three camping packs); false for crates and anything else. */
+    static boolean pitchedOnlyCrouching(String itemId) {
+        return ofPack(itemId) != null;
+    }
+
     /** The tier whose placed bag block is this id, or null. */
     static Tier ofPlacedBlock(String blockId) {
         for (Tier t : Tier.values()) {

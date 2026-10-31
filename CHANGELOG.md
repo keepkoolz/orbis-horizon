@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.12.5
+
+### Added
+
+- Use a Small or Large tent pack while standing to open the chests it carries, without setting up camp. Take things out or put things in, and the next camp you set up holds them.
+
+### Changed
+
+- Camping packs are set up while crouching. The preview of the camp only shows while you crouch, so scrolling past a pack in your hotbar no longer shows it. Using the sleeping bag while standing reminds you to crouch.
+
 ## v1.12.4
 
 ### Added

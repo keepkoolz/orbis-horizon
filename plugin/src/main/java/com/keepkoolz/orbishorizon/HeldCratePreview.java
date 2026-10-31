@@ -2,6 +2,7 @@ package com.keepkoolz.orbishorizon;
 
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.math.Axis;
 import com.hypixel.hytale.protocol.packets.buildertools.ClipboardEntityChange;
@@ -107,6 +108,14 @@ final class HeldCratePreview {
             }
             return;
         }
+        if (CampTiers.pitchedOnlyCrouching(heldItemId(store, ref)) && !crouching(store, ref)) {
+            // A camping pack is pitched only while crouching: no preview while standing (or without movement states).
+            if (st != null) {
+                hide(pr);
+                STATES.remove(id);
+            }
+            return;
+        }
         TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
         if (t == null) {
             return;
@@ -168,6 +177,11 @@ final class HeldCratePreview {
         st.worldName = world.getName();
         st.origin = new Vector3i(p.origin());
         st.rotation = p.rotation();
+    }
+
+    private static boolean crouching(Store<EntityStore> store, Ref<EntityStore> ref) {
+        MovementStatesComponent msc = store.getComponent(ref, MovementStatesComponent.getComponentType());
+        return msc != null && msc.getMovementStates() != null && msc.getMovementStates().crouching;
     }
 
     private static String heldItemId(Store<EntityStore> store, Ref<EntityStore> ref) {

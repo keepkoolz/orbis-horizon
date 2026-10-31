@@ -37,6 +37,14 @@ final class TentContents {
         this.cargo = cargo;
     }
 
+    AirshipBenchContents benches() {
+        return benches;
+    }
+
+    BalloonCargo cargo() {
+        return cargo;
+    }
+
     List<com.hypixel.hytale.server.core.inventory.ItemStack> ejected() {
         return ejected;
     }
@@ -163,7 +171,7 @@ final class TentContents {
         return new TentContents(newBenches, new BalloonCargo(out));
     }
 
-    private static int byYxz(Vector3i a, Vector3i b) {
+    static int byYxz(Vector3i a, Vector3i b) {
         if (a.y != b.y) {
             return Integer.compare(a.y, b.y);
         }

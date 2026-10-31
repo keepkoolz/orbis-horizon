@@ -54,7 +54,7 @@ Each trip, by balloon or by boat, costs a ticket paid in life essences by the tr
 
 - Everything is crafted at the Explorer's workbench, an explorer's desk with its own tabs. Upgrade it and plans and little models of what you can build appear on top of it, down to a balloon floating above the bench. Its Gear tab holds a diving outfit for exploring under water.
 - Hold a crate and you see where the structure will go, block by block, before you set it up.
-- Pack a camp and what you left in its chests and campfire travels in the pack, ready for your next camp. The small tent has a chest outside for your things.
+- Pack a camp and what you left in its chests and campfire travels in the pack, ready for your next camp. Crouch to set up camp, and use a tent pack standing to rummage through its chests. The small tent has a chest outside for your things.
 - Once set up, a tent, balloon, airship or station is locked, so nobody breaks it by accident. Beds, chests, burners and seats still work.
 - Friends standing on board when you take off travel with you, seated, and watch the sky from outside the vehicle. Passengers can leave mid-flight with a glider. Other players see you fly by.
 - Stations keep a clear area around their landing pad, and you can only own one airship at a time.
