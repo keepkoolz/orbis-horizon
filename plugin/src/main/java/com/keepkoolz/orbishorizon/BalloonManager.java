@@ -1097,7 +1097,8 @@ public final class BalloonManager {
                     // The anchor block (the burner, formerly the brazier, or the tent's campfire) is removed without the "no particles" option: with it, the flame
                     // stayed displayed in the sky (suspected cause). The airship (broadAttached) is excluded: its
                     // anchor is the wooden helm, which burst into break particles, and its block particles are cancelled apart.
-                    boolean flameAnchor = !broadAttached && s.anchor().baseName().equals(c.baseName());
+                    boolean flameAnchor = !broadAttached && s.anchor().baseName().equals(c.baseName())
+                            && s.anchor().x() == c.x() && s.anchor().y() == c.y() && s.anchor().z() == c.z();
                     int settings = flameAnchor ? 0 : SET_BLOCK_NO_PARTICLES;
                     SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, BlockType.EMPTY_KEY, settings);
                     removed++;
@@ -1105,6 +1106,15 @@ public final class BalloonManager {
                         cancelBlockFlame(world, p);
                     }
                 }
+            }
+        }
+        // Cells that older placed structures held and the prefab no longer has (never part of the prefab: nothing is pasted there).
+        for (StructureShape.Cell c : s.legacyCells()) {
+            Vector3i p = c.rotated(rotation).add(origin);
+            BlockType bt = SectionBlocks.typeAt(reader, p.x, p.y, p.z);
+            if (bt != null && sameBlock(bt, c)) {
+                SectionBlocks.setAt(world.getChunkStore(), p.x, p.y, p.z, BlockType.EMPTY_KEY, SET_BLOCK_NO_PARTICLES);
+                removed++;
             }
         }
         return removed;
@@ -1286,6 +1296,10 @@ public final class BalloonManager {
         if ("Steamboat_Chimney_Top".equals(prefabName)) {
             return worldBase.startsWith("Metal_Bronze_Pipe_Large_Mouthpiece");
         }
+        if (prefabName.startsWith("Wood_") && prefabName.endsWith("_Trunk")) {
+            // the posts of the first boat station piers were beams
+            return worldBase.startsWith("Wood_") && worldBase.endsWith("_Beam");
+        }
         return "Airship_Rope_Ladder".equals(prefabName) && worldBase.startsWith("Furniture_Crude_Ladder");
     }
 
@@ -1456,6 +1470,14 @@ public final class BalloonManager {
                                     World world, StructureShape s, Vector3i origin, Rotation rotation, int flags,
                                     com.hypixel.hytale.component.ComponentAccessor<EntityStore> accessor,
                                     String kind, Ownership own, int keepLayerY) {
+        pasteKeepingTerrain(buffer, world, s, origin, rotation, flags, accessor, kind, own, keepLayerY, true);
+    }
+
+    /** Same, and the registry entry of the structure is written only when inscribe is true (a whole station whose quay is inscribed on its own). */
+    static void pasteKeepingTerrain(com.hypixel.hytale.server.core.prefab.selection.buffer.impl.IPrefabBuffer buffer,
+                                    World world, StructureShape s, Vector3i origin, Rotation rotation, int flags,
+                                    com.hypixel.hytale.component.ComponentAccessor<EntityStore> accessor,
+                                    String kind, Ownership own, int keepLayerY, boolean inscribe) {
         List<Terrain> kept = new ArrayList<>();
         SectionReader reader = new SectionReader(world.getChunkStore());
         List<StructureShape.Cell> protectedCells = new ArrayList<>(s.unfoldedLadder());
@@ -1490,7 +1512,9 @@ public final class BalloonManager {
             LOGGER.at(Level.INFO).log("Landing: %d ladder cell(s) left to the terrain", kept.size());
         }
         // the placed balloon is locked (block breaking and placing cancelled, BalloonLockSystems).
-        BalloonRegistry.add(world, origin, rotation, kind, own);
+        if (inscribe) {
+            BalloonRegistry.add(world, origin, rotation, kind, own);
+        }
     }
 
     /** Balloon type of a crate's prefab, null if the given prefab is not a balloon's. */
@@ -1614,7 +1638,7 @@ public final class BalloonManager {
 
     void finishFlight(Store<EntityStore> store, BalloonFlight flight, Vector3i origin, Rotation rotation) {
         if (flight.transit != null && flight.transit.phase == TransitFlight.Phase.APPROACH) {
-            TransitNetwork.Station station = TransitNetwork.get().byName(flight.world.getName(), flight.transit.from);
+            TransitNetwork.Station station = TransitNetwork.get().byNameWithQuay(flight.world.getName(), flight.transit.from);
             if (station == null || !origin.equals(StationQueue.dockOrigin(station))) {
                 // Stopped above the dock (a block was built over the pad): never placed there, the quay retries later.
                 endTransit(store, flight);
@@ -1668,7 +1692,7 @@ public final class BalloonManager {
         }
         LOGGER.at(Level.INFO).log("Landing: origin %s, rotation %s", origin, rotation);
         if (flight.transit != null) {
-            TransitNetwork.Station station = TransitNetwork.get().byName(flight.world.getName(), flight.transit.from);
+            TransitNetwork.Station station = TransitNetwork.get().byNameWithQuay(flight.world.getName(), flight.transit.from);
             if (station != null) {
                 StationQueue.onDocked(flight.world, station, origin);
             }
@@ -1699,7 +1723,7 @@ public final class BalloonManager {
         Vector3i origin = StationQueue.dockOrigin(station).add(0, TransitConstants.SPAWN_HEIGHT_ABOVE_PLATFORM, 0);
         TransitFlight tf = new TransitFlight(station.name, TransitNetwork.get().queueHead(station), TransitFlight.Phase.APPROACH,
                 System.currentTimeMillis());
-        TransitStart start = startTransit(store, world, s, origin, station.rotation, tf, List.of(), false);
+        TransitStart start = startTransit(store, world, s, origin, station.quayRotation, tf, List.of(), false);
         if (start.error() == null) {
             StationQueue.onApproach(station, start.flight());
             LOGGER.at(Level.INFO).log("Station %s: approaching balloon at %s", station.name, origin);
@@ -1720,10 +1744,10 @@ public final class BalloonManager {
             return Texts.t("error.prefabUnreadable").param("error", Deployables.BALLOON_PUBLIC.prefabPath);
         }
         Vector3i dock = StationQueue.dockOrigin(station);
-        if (BalloonRegistry.get(world, dock, station.rotation, Deployables.BALLOON_PUBLIC.id) == null) {
+        if (BalloonRegistry.get(world, dock, station.quayRotation, Deployables.BALLOON_PUBLIC.id) == null) {
             return Texts.t("transit.error.notDocked");
         }
-        List<Occupant> inside = nacelleOccupants(world, store, Deployables.BALLOON_PUBLIC, dock, station.rotation);
+        List<Occupant> inside = nacelleOccupants(world, store, Deployables.BALLOON_PUBLIC, dock, station.quayRotation);
         List<Occupant> board = destination == null ? List.of()
                 : inside.size() > TransitConstants.PASSENGERS ? inside.subList(0, TransitConstants.PASSENGERS) : inside;
         long now = System.currentTimeMillis();
@@ -1731,7 +1755,7 @@ public final class BalloonManager {
                 board.isEmpty() ? TransitFlight.Phase.VANISH : TransitFlight.Phase.CLIMB, now);
         tf.cruiseY = TransitAutopilot.cruiseY(world, station, destination);
         tf.vanishY = dock.y + TransitConstants.DESPAWN_HEIGHT_ABOVE_DROP;
-        TransitStart start = startTransit(store, world, s, dock, station.rotation, tf, new ArrayList<>(board), true);
+        TransitStart start = startTransit(store, world, s, dock, station.quayRotation, tf, new ArrayList<>(board), true);
         if (start.error() != null) {
             return start.error();
         }
@@ -1740,16 +1764,13 @@ public final class BalloonManager {
         setBalloonBoost(store, flight, true);
         // Players left in the gondola (excess, or no destination) are put on top of the pad before they could fall.
         int k = 0;
-        Vector3d logical = new Vector3d(station.origin.x + 0.5, station.origin.y, station.origin.z + 0.5);
         for (Occupant extra : inside.subList(board.size(), inside.size())) {
             if (destination != null) {
                 extra.player().sendMessage(Texts.t("transit.quay.full"));
             }
             try {
-                int w = Deployables.STATION_PAD_MAX[0] - Deployables.STATION_PAD_MIN[0] + 1;
-                int d = Deployables.STATION_PAD_MAX[2] - Deployables.STATION_PAD_MIN[2] + 1;
-                Vector3d spot = prefabPoint(logical, station.rotation, new Vector3f(Deployables.STATION_PAD_MIN[0] + k % w,
-                        Deployables.STATION_PAD_MAX[1] + 1.05f, Deployables.STATION_PAD_MIN[2] + (k / w) % d));
+                Vector3i cell = StationGeometry.padCell(station, k);
+                Vector3d spot = new Vector3d(cell.x + 0.5, cell.y + 1.05, cell.z + 0.5);
                 TransformComponent et = store.getComponent(extra.ref(), TransformComponent.getComponentType());
                 Rotation3f look = et != null ? new Rotation3f(et.getRotation()) : new Rotation3f();
                 store.putComponent(extra.ref(), Teleport.getComponentType(), Teleport.createForPlayer(spot, look));
@@ -1782,7 +1803,7 @@ public final class BalloonManager {
         flight.cruiseSpeed = defaultHorizontalSpeed(world, store);
         List<BalloonFlight.Passenger> seated = fromBlocks
                 ? assignSeats(store, kind, s, origin, rotation, people, false, null) : List.of();
-        TransitNetwork.Station destination = tf.to == null ? null : TransitNetwork.get().byName(world.getName(), tf.to);
+        TransitNetwork.Station destination = tf.to == null ? null : TransitNetwork.get().byNameWithQuay(world.getName(), tf.to);
         Vector3d centre = prefabPoint(new Vector3d(origin.x + 0.5, origin.y, origin.z + 0.5), rotation, new Vector3f(pivot(kind)));
         for (BalloonFlight.Passenger p : seated) {
             PassengerCamera.keepSeatedLook(store, p); // seated on a stool: his look is kept
@@ -1791,7 +1812,8 @@ public final class BalloonManager {
             if (destination != null && !p.camYawSet) {
                 // The view looks where the balloon goes, a little toward the outside of the seat.
                 Vector3d seat = prefabPoint(new Vector3d(origin.x + 0.5, origin.y, origin.z + 0.5), rotation, p.seatLocal);
-                p.camYaw = PassengerCamera.towardYaw(destination.origin.x - origin.x, destination.origin.z - origin.z,
+                Vector3d target = StationGeometry.position(destination);
+                p.camYaw = PassengerCamera.towardYaw(target.x - origin.x, target.z - origin.z,
                         seat.x - centre.x, seat.z - centre.z);
                 p.camYawSet = true;
             }
@@ -1848,7 +1870,7 @@ public final class BalloonManager {
         flight.stopping = true;
         if (flight.transit != null && flight.transit.to != null) {
             // The arrival quay (ARRIVING or waiting order) is freed whatever the way the flight ended.
-            TransitNetwork.Station dest = TransitNetwork.get().byName(flight.world.getName(), flight.transit.to);
+            TransitNetwork.Station dest = TransitNetwork.get().byNameWithQuay(flight.world.getName(), flight.transit.to);
             if (dest != null) {
                 StationQueue.endArrival(dest, flight.pilotUuid);
             }
@@ -1970,8 +1992,8 @@ public final class BalloonManager {
             }
             LOGGER.at(Level.INFO).log("Station %s removed: the balloon is diverted to %s", removed.name, target.name);
             t.to = target.name;
-            t.cruiseY = Math.max(t.cruiseY, TransitAutopilot.cruiseY(removed.origin.y + Deployables.STATION_DOCK_ORIGIN[1],
-                    target.origin.y + Deployables.STATION_DOCK_ORIGIN[1]));
+            t.cruiseY = Math.max(t.cruiseY, TransitAutopilot.cruiseY(StationQueue.dockOrigin(removed).y,
+                    StationQueue.dockOrigin(target).y));
             switch (t.phase) {
                 case HOLD, DESCEND, DROP -> t.setPhase(TransitFlight.Phase.CLIMB, now);
                 default -> {
@@ -3198,13 +3220,14 @@ public final class BalloonManager {
                 loads.add(SectionBlocks.loadSections(world.getChunkStore(), minX, minY, minZ, maxX, maxY, maxZ));
                 if (rec.transit()) {
                     // Passengers are set down at the destination: its sections must be loaded too.
-                    TransitNetwork.Station dest = rec.transitTo() != null ? TransitNetwork.get().byName(world.getName(), rec.transitTo()) : null;
+                    TransitNetwork.Station dest = rec.transitTo() != null ? TransitNetwork.get().byNameWithQuay(world.getName(), rec.transitTo()) : null;
                     if (dest == null && rec.transitFrom() != null) {
-                        dest = TransitNetwork.get().byName(world.getName(), rec.transitFrom());
+                        dest = TransitNetwork.get().byNameWithQuay(world.getName(), rec.transitFrom());
                     }
                     if (dest != null) {
-                        loads.add(SectionBlocks.loadSections(world.getChunkStore(), dest.origin.x, dest.origin.y - 16, dest.origin.z,
-                                dest.origin.x, dest.origin.y + 32, dest.origin.z));
+                        Vector3i centre = StationGeometry.sectionCentre(dest);
+                        loads.add(SectionBlocks.loadSections(world.getChunkStore(), centre.x, centre.y - 16, centre.z,
+                                centre.x, centre.y + 32, centre.z));
                     }
                 }
                 LOGGER.at(Level.INFO).log("Flight resume of %s in %s: origin %s, sections to load",
@@ -3987,7 +4010,7 @@ public final class BalloonManager {
         if (st == null) {
             return null;
         }
-        return TransitAutopilot.boardingPoints(st);
+        return TransitAutopilot.boardingPoints(world, st);
     }
 
     private void dropPassenger(BalloonFlight f, BalloonFlight.Passenger p) {

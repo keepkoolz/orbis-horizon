@@ -19,7 +19,8 @@
     "Flags": {},
     "Gathering": {
       "Breaking": {
-        "GatherType": "SoftBlocks"
+        "GatherType": "SoftBlocks",
+        "ItemId": "Deco_Treasure"
       }
     },
     "BlockParticleSetId": "Coins",

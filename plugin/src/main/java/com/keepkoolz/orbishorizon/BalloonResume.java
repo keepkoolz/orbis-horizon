@@ -51,7 +51,7 @@ final class BalloonResume {
     record Record(UUID pilot, String world, Deployables.Kind kind, Vector3i origin, Rotation rotation, UUID balloon,
                   BurnerFuel burner, BalloonCargo cargo, List<Seated> passengers, List<CageAnimals.Animal> animals,
                   String transitFrom, String transitTo, int cageDescent, int cageHomeY, Ownership ownership, CrewRecord crew, SkyLog sky) {
-        /** A transit flight (Task 9): nothing is placed on resume, only the passengers are set down at the destination station. */
+        /** A transit flight: nothing is placed on resume, only the passengers are set down at the destination station. */
         boolean transit() {
             return transitFrom != null;
         }

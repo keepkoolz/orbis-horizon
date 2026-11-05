@@ -247,7 +247,8 @@ final class Deployables {
     static final String STATION_KIND = "station";
 
     /**
-     * Balloon station (transit network). All positions are in the frame of Balloon_Landing_zone.prefab.json as stored in the file
+     * Balloon station (transit network), whole prefab as generated or converted: the constants below describe that prefab only,
+     * the geometry of a station in use is its own master cell, quay anchor and rotation (StationGeometry). All positions are in the frame of Balloon_Landing_zone.prefab.json as stored in the file
      * (it is NOT recentred: x starts at 2), whole cells, before rotation. Measured on the prefab; if the prefab changes, update
      * them. The station is placed by its prefab origin, like the other structures.
      *
@@ -261,7 +262,7 @@ final class Deployables {
     static final int[] STATION_PAD_MAX = {21, 6, 2};
     static final int[] STATION_DOCK_ORIGIN = {19, 9, 0};
     /**
-     * Drop points of the arriving passengers at the top of the stair ramp, before the boarding steps: the Rock_Stone_Brick row
+     * Boarding points of the whole prefab (the public API reports the first one): the top of the stair ramp, before the boarding steps: the Rock_Stone_Brick row
      * x = 13 (top y = 6) and the last stair row x = 12 (Rock_Stone_Brick_Stairs at y = 6), z -2..2, prefab frame, feet height
      * (cell y = 7 plus 0.1, cell centres at integers), plus two on the first boarding step (x = 14, Rock_Stone_Brick_Stairs at y = 7,
      * z = -1 and 1, feet y = 8.1). Each is a standable cell: solid block below, two free cells above. One point per seat (12).
@@ -292,11 +293,10 @@ final class Deployables {
     /**
      * Boat station (shore kiosk and pier), prefab frame of Boat_Station.prefab.json, whole cells, before rotation. The pier deck
      * (Wood_Hardwood_Planks_Half, y 0) is x 0..3, z 5..11; the original terrain water surface is y -1. Master NPC cell inside the
-     * kiosk, looking toward the shore end of the pier; the marker cell is the middle of the pier.
+     * kiosk, looking toward the shore end of the pier.
      */
     static final int[] BOAT_STATION_MASTER_POS = {-4, 0, 5};
     static final float[] BOAT_STATION_MASTER_LOOK = {2f, 0f, 5f};
-    static final int[] BOAT_STATION_MARKER_CELL = {1, 0, 8};
     /** Last deck cell of the pier on the water side: the column where the water surface is read. */
     static final int[] BOAT_STATION_PIER_END = {1, 0, 11};
     /**
@@ -312,15 +312,6 @@ final class Deployables {
      * on the water surface y -1. The world rotation of the boat is the station rotation plus BOAT_STATION_BERTH_ROTATION.
      */
     static final int[] BOAT_STATION_BERTH_ORIGIN = {1, -1, 14};
-    /**
-     * Drop points of the shuttle passengers arriving at a boat station: the shore half of the pier deck (Wood_Hardwood_Planks_Half
-     * at y 0, x 0..3, z 6..8), away from the boarding step at the water end. Station frame, whole cells (the cell centre +0.5 is added
-     * when converted), feet on the top of the half plank plus 0.1. Every cell has two free cells above. Two points per seat (12).
-     */
-    static final float[][] BOAT_STATION_DROP_POINTS = {
-            {0f, 0.6f, 6f}, {1f, 0.6f, 6f}, {2f, 0.6f, 6f}, {3f, 0.6f, 6f},
-            {0f, 0.6f, 7f}, {1f, 0.6f, 7f}, {2f, 0.6f, 7f}, {3f, 0.6f, 7f},
-            {0f, 0.6f, 8f}, {1f, 0.6f, 8f}, {2f, 0.6f, 8f}, {3f, 0.6f, 8f}};
     static final Rotation BOAT_STATION_BERTH_ROTATION = Rotation.Ninety;
     static final int[] BOAT_STATION_PLACE_MIN = {-6, -10, 1};
     static final int[] BOAT_STATION_PLACE_MAX = {5, 3, 11};
@@ -330,11 +321,37 @@ final class Deployables {
             BOAT_STATION_PLACE_MIN, BOAT_STATION_PLACE_MAX,
             "lock.boatStation.break", "lock.boatStation.place");
 
+    /** Prefab-frame bounds of the pad (7 x 7, one layer) and its marker: the centre cell, Rock_Basalt, unchanged by the zone stone. */
+    static final String PAD_KIND = "station_pad";
+    static final int[] STATION_PAD_BOX_MIN = {-3, 0, -3};
+    static final int[] STATION_PAD_BOX_MAX = {3, 0, 3};
+
+    /** The standalone balloon station pad: the anchor is the quay anchor, locked like the stations. */
+    static final Kind STATION_PAD = new Kind(PAD_KIND, "Balloon_Station_Pad.prefab.json", "Rock_Basalt", false,
+            STATION_PAD_BOX_MIN, STATION_PAD_BOX_MAX, "lock.station.break", "lock.station.place");
+
+    /**
+     * Pier end of a boat station: deck x -1..2, z -3..0 (water side z 0, anchor (0, 0, 0) = the last deck cell, one of the deck
+     * half planks), posts of logs at the four corners down to y -10, and two logs standing beside the deck one cell before its end
+     * (x -2 and 3, z -1, y -10 to 1) that mark where the shuttle moors, a Deco_Lantern on the right one (-2, 2, -1, right when
+     * walking toward the water). Every cell is inside StationGeometry.inQuayCore. Piers placed
+     * with an older prefab hold beams as posts and a tall lantern at (-1, 1, -3): the beams match the log cells
+     * (BalloonManager.legacyAlias), the lantern is a legacy cell. The box reaches y 2 for the lantern, so the space above the deck stays locked.
+     */
+    static final String PIER_KIND = "boat_station_pier";
+    static final int[] BOAT_STATION_PIER_BOX_MIN = {-2, -10, -3};
+    static final int[] BOAT_STATION_PIER_BOX_MAX = {3, 2, 0};
+
+    static final Kind BOAT_STATION_PIER = new Kind(PIER_KIND, "Boat_Station_Pier.prefab.json", "Wood_Hardwood_Planks_Half", false,
+            BOAT_STATION_PIER_BOX_MIN, BOAT_STATION_PIER_BOX_MAX, "lock.station.break", "lock.station.place")
+            .anchoredAt(0, 0, 0)
+            .withLegacy(new StructureShape.Cell(-1, 1, -3, "Furniture_Desert_Lantern_Tall"));
+
     /** Vehicle types flown by AirshipManager (free-heading ships). */
     static final List<Kind> SHIPS = List.of(AIRSHIP, STEAMBOAT);
 
     private static final List<Kind> ALL = List.of(BALLOON, BALLOON_BASIC, BALLOON_TRANSPORT, BEDROLL, TENT, TENT_BIG, AIRSHIP, STEAMBOAT,
-            STEAMBOAT_PUBLIC, BALLOON_PUBLIC, STATION, BOAT_STATION);
+            STEAMBOAT_PUBLIC, BALLOON_PUBLIC, STATION, BOAT_STATION, STATION_PAD, BOAT_STATION_PIER);
 
     /** Tent types, in the order they are logged at startup. */
     /** Every structure kind. */
@@ -652,6 +669,21 @@ final class Deployables {
             this.messagePlace = messagePlace;
         }
 
+        /** Prefab position {x, y, z} of the anchor among the cells of its block, null when the block is unique. */
+        int[] anchorAt;
+        /** Cells of older placed structures that the prefab no longer has (see StructureShape.legacyCells). */
+        List<StructureShape.Cell> legacy = List.of();
+
+        Kind anchoredAt(int x, int y, int z) {
+            this.anchorAt = new int[]{x, y, z};
+            return this;
+        }
+
+        Kind withLegacy(StructureShape.Cell... cells) {
+            this.legacy = List.of(cells);
+            return this;
+        }
+
         boolean isBalloon() {
             return balloon != null;
         }
@@ -671,7 +703,7 @@ final class Deployables {
                 synchronized (this) {
                     s = shape;
                     if (s == null) {
-                        s = StructureShape.load(prefabPath, anchorBlock, requireBurner);
+                        s = StructureShape.load(prefabPath, anchorBlock, requireBurner, anchorAt).withLegacyCells(legacy);
                         shape = s;
                     }
                 }

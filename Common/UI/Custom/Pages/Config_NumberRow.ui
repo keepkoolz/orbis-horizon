@@ -1,0 +1,17 @@
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Left;
+  Anchor: (Bottom: 8);
+
+  Label #Label {
+    FlexWeight: 1;
+    Anchor: (Left: 6);
+    Style: (...$C.@DefaultLabelStyle, VerticalAlignment: Center, Wrap: true);
+  }
+
+  $C.@NumberField #Input {
+    @Anchor = (Width: 120, Right: 6);
+    Format: (MinValue: 1, MaxValue: 1000000, MaxDecimalPlaces: 0, Step: 1);
+  }
+}

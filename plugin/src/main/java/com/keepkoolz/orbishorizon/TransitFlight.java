@@ -13,7 +13,7 @@ final class TransitFlight {
     /** Name of the destination station, null for a balloon that only climbs and vanishes. */
     volatile String to;
     volatile Phase phase;
-    /** Index among the arrivals waiting at the same quay (Task 8). */
+    /** Index among the arrivals waiting at the same quay. */
     volatile int holdIndex;
     volatile long phaseSinceMs;
     /** Last time the balloon moved forward (rescue after TransitConstants.RESCUE_NO_PROGRESS_SECONDS without progress). */

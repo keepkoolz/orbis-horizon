@@ -21,7 +21,8 @@
     "Flags": {},
     "Gathering": {
       "Soft": {
-        "IsWeaponBreakable": false
+        "IsWeaponBreakable": false,
+        "ItemId": "Deco_Map"
       }
     },
     "BlockParticleSetId": "Stone",

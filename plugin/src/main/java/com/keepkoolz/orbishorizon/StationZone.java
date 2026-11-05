@@ -21,8 +21,8 @@ final class StationZone {
     }
 
     static Zone zoneOf(TransitNetwork.Station s) {
-        Vector3d p = StationMarkerProvider.markerPoint(s);
-        return new Zone(s.name, p.x, p.z, s.origin.y + StationSpec.of(s.kind).zoneBottomY(),
+        Vector3d p = StationGeometry.markerPoint(s);
+        return new Zone(s.name, p.x, p.z, StationGeometry.zoneBottomY(s.kind, s.quay),
                 (int) p.y + TransitConstants.STATION_ZONE_HEIGHT);
     }
 
@@ -98,6 +98,9 @@ final class StationZone {
         }
         List<Zone> zones = new ArrayList<>();
         for (TransitNetwork.Station st : TransitNetwork.get().stations(world.getName())) {
+            if (st.quay == null) {
+                continue;
+            }
             zones.add(zoneOf(st));
         }
         return blockingStation(zones, s, origin, rotation);

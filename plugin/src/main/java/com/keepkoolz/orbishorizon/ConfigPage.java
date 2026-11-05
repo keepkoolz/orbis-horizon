@@ -20,8 +20,13 @@ import com.hypixel.hytale.server.core.ui.builder.UIEventBuilder;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import com.keepkoolz.orbishorizon.api.ConfigRow;
+
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 
 /**
@@ -33,13 +38,18 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
     private static final String UI = "server.orbis_horizon.ui.config.";
 
-    static final String WORLDGEN = "worldgen";
-    static final String WORLDGEN_OLD_TERRAIN = "worldgenOldTerrain";
     static final String MARKER_SHARING = "markerSharing";
     static final String PACK_BACK = "packBack";
     static final String PROTECT = "protect";
     static final String FARE = "fare";
+    static final String GENERATED_EDITABLE = "generatedStationsEditable";
     static final String CONSOLE_LOG_LEVEL = "consoleLogLevel";
+    static final String CONTRACT_ESSENCES = "contractEssences";
+    static final String CONTRACT_CONCENTRATED = "contractConcentrated";
+
+    /** Keys of the built-in rows, which an extension row cannot take. */
+    static final Set<String> BUILT_IN_KEYS = Set.of(MARKER_SHARING, PACK_BACK, PROTECT, FARE, GENERATED_EDITABLE, CONSOLE_LOG_LEVEL,
+            CONTRACT_ESSENCES, CONTRACT_CONCENTRATED);
 
     static final class Data {
         static final BuilderCodec<Data> CODEC = BuilderCodec.builder(Data.class, Data::new)
@@ -48,12 +58,14 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
                 .append(new KeyedCodec<>("@Checked", Codec.BOOLEAN), (d, v) -> d.checked = v, d -> d.checked).add()
                 .append(new KeyedCodec<>("@Choice", Codec.STRING), (d, v) -> d.choice = v, d -> d.choice).add()
                 .append(new KeyedCodec<>("@SearchQuery", Codec.STRING), (d, v) -> d.searchQuery = v, d -> d.searchQuery).add()
+                .append(new KeyedCodec<>("@Number", Codec.DOUBLE), (d, v) -> d.number = v, d -> d.number).add()
                 .build();
         String action;
         String key;
         Boolean checked;
         String choice;
         String searchQuery;
+        Double number;
     }
 
     private String query = "";
@@ -89,25 +101,30 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
                 toggleRow(cmd, events, index, id, Message.translation(recipeKey(id)), id, RecipeToggles.enabled(id));
             }
         }
-        boolean worldgenRow = settingVisible(WORLDGEN, lang);
-        boolean oldTerrainRow = settingVisible(WORLDGEN_OLD_TERRAIN, lang);
-        if (worldgenRow || oldTerrainRow) {
-            section(cmd, index, "section.world");
-            if (worldgenRow) {
-                toggleRow(cmd, events, index, WORLDGEN, Message.translation(UI + WORLDGEN), null, TransitSettings.worldgenEnabled());
-            }
-            if (oldTerrainRow) {
-                toggleRow(cmd, events, index, WORLDGEN_OLD_TERRAIN, Message.translation(UI + WORLDGEN_OLD_TERRAIN), null,
-                        TransitSettings.worldgenOldTerrain());
-            }
-        }
+        fillExtensionRows(cmd, events, index, lang);
         if (settingVisible(MARKER_SHARING, lang)) {
             section(cmd, index, "section.map");
             toggleRow(cmd, events, index, MARKER_SHARING, Message.translation(UI + MARKER_SHARING), null, TransitSettings.markerSharing());
         }
-        if (settingVisible(FARE, lang)) {
+        boolean fareShown = settingVisible(FARE, lang);
+        boolean editableShown = settingVisible(GENERATED_EDITABLE, lang);
+        boolean essencesShown = settingVisible(CONTRACT_ESSENCES, lang);
+        boolean concentratedShown = settingVisible(CONTRACT_CONCENTRATED, lang);
+        if (fareShown || editableShown || essencesShown || concentratedShown) {
             section(cmd, index, "section.transit");
+        }
+        if (fareShown) {
             toggleRow(cmd, events, index, FARE, Message.translation(UI + FARE), null, TransitSettings.fareEnabled());
+        }
+        if (editableShown) {
+            toggleRow(cmd, events, index, GENERATED_EDITABLE, Message.translation(UI + GENERATED_EDITABLE), null,
+                    TransitSettings.generatedStationsEditable());
+        }
+        if (essencesShown) {
+            numberRow(cmd, events, index, CONTRACT_ESSENCES, TransitSettings.contractEssences());
+        }
+        if (concentratedShown) {
+            numberRow(cmd, events, index, CONTRACT_CONCENTRATED, TransitSettings.contractConcentrated());
         }
         if (settingVisible(PACK_BACK, lang)) {
             section(cmd, index, "section.camping");
@@ -120,6 +137,24 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
         if (settingVisible(CONSOLE_LOG_LEVEL, lang)) {
             section(cmd, index, "section.server");
             choiceRow(cmd, events, index, CONSOLE_LOG_LEVEL, ConsoleLogs.Threshold.values(), TransitSettings.consoleLogLevel());
+        }
+    }
+
+    /** The rows of the extension, grouped by section in order of arrival. A section with no visible row is left out. */
+    private void fillExtensionRows(UICommandBuilder cmd, UIEventBuilder events, int[] index, String lang) {
+        List<ConfigRow> rows = Extensions.configRows();
+        Map<String, List<ConfigRow>> bySection = new LinkedHashMap<>();
+        for (ConfigRow r : rows) {
+            if (ConfigSearch.matches(translate(lang, r.labelKey()), query) || ConfigSearch.matches(r.key(), query)) {
+                bySection.computeIfAbsent(r.sectionKey(), k -> new ArrayList<>()).add(r);
+            }
+        }
+        for (Map.Entry<String, List<ConfigRow>> e : bySection.entrySet()) {
+            cmd.append("#List", "Pages/Config_Section.ui");
+            cmd.set("#List[" + index[0]++ + "] #Label.Text", Message.translation(e.getKey()));
+            for (ConfigRow r : e.getValue()) {
+                toggleRow(cmd, events, index, r.key(), Message.translation(r.labelKey()), null, Extensions.readRow(r));
+            }
         }
     }
 
@@ -144,6 +179,16 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
         }
         events.addEventBinding(CustomUIEventBindingType.ValueChanged, sel + " #Input",
                 new EventData().append("Action", "Toggle").append("Key", key).append("@Checked", sel + " #Input.Value"), false);
+    }
+
+    /** A whole number row. The label is the key {@code ui.config.<key>}. */
+    private void numberRow(UICommandBuilder cmd, UIEventBuilder events, int[] index, String key, int value) {
+        cmd.append("#List", "Pages/Config_NumberRow.ui");
+        String sel = "#List[" + index[0]++ + "]";
+        cmd.set(sel + " #Label.Text", Message.translation(UI + key));
+        cmd.set(sel + " #Input.Value", value);
+        events.addEventBinding(CustomUIEventBindingType.ValueChanged, sel + " #Input",
+                new EventData().append("Action", "Number").append("Key", key).append("@Number", sel + " #Input.Value"), false);
     }
 
     /** A dropdown row. Entry labels are the keys {@code <key>.<constant name in lower case>}, values the constant names. */
@@ -174,6 +219,9 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
                 query = data.searchQuery;
             } else if ("Toggle".equals(data.action) && data.key != null && data.checked != null) {
                 applyToggle(data.key, data.checked);
+            } else if ("Number".equals(data.action) && data.key != null && data.number != null) {
+                applyNumber(data.key, data.number);
+                return; // the list is not redrawn: the field being typed in keeps its text
             } else if ("Choice".equals(data.action) && data.key != null && data.choice != null) {
                 applyChoice(data.key, data.choice);
             } else {
@@ -190,13 +238,27 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
     }
 
     private static void applyToggle(String key, boolean on) {
+        ConfigRow row = Extensions.configRow(key);
+        if (row != null) {
+            Extensions.writeRow(row, on);
+            return;
+        }
         switch (key) {
-            case WORLDGEN -> TransitSettings.setWorldgenEnabled(on);
-            case WORLDGEN_OLD_TERRAIN -> TransitSettings.setWorldgenOldTerrain(on);
             case MARKER_SHARING -> TransitSettings.setMarkerSharing(on);
             case FARE -> TransitSettings.setFareEnabled(on);
+            case GENERATED_EDITABLE -> TransitSettings.setGeneratedStationsEditable(on);
             case PACK_BACK -> PackBackView.set(on);
             default -> RecipeToggles.set(key, on); // ignores an id that is not a mod item
+        }
+    }
+
+    private static void applyNumber(String key, double value) {
+        if (Double.isNaN(value) || value < 1 || value > 1_000_000) return;
+        int n = (int) Math.round(value);
+        switch (key) {
+            case CONTRACT_ESSENCES -> TransitSettings.setContractEssences(n);
+            case CONTRACT_CONCENTRATED -> TransitSettings.setContractConcentrated(n);
+            default -> LOGGER.at(Level.INFO).log("Number ignored: unknown setting '%s'", key);
         }
     }
 

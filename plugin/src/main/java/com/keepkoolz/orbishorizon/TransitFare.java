@@ -48,8 +48,13 @@ final class TransitFare {
 
     /** Essences first (100), concentrated essence (1) when there are not enough. Null when the player cannot pay. */
     static Payment choose(UUID payer, int essences, int concentrated) {
-        if (essences >= ESSENCE_PRICE) return new Payment(payer, ESSENCE, ESSENCE_PRICE);
-        if (concentrated >= CONCENTRATED_PRICE) return new Payment(payer, CONCENTRATED, CONCENTRATED_PRICE);
+        return choose(payer, essences, concentrated, ESSENCE_PRICE, CONCENTRATED_PRICE);
+    }
+
+    /** Same choice for any price: essences when there are enough, else concentrated essence, else null. */
+    static Payment choose(UUID payer, int essences, int concentrated, int needEssences, int needConcentrated) {
+        if (essences >= needEssences) return new Payment(payer, ESSENCE, needEssences);
+        if (concentrated >= needConcentrated) return new Payment(payer, CONCENTRATED, needConcentrated);
         return null;
     }
 
@@ -194,6 +199,20 @@ final class TransitFare {
             });
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Ticket: refund failed");
+            refundOffline(p);
+        }
+    }
+
+    /**
+     * Gives back a payment to a player on the world thread of this player, with the given message keys (no destination in the
+     * text). When the item cannot be given at all the refund is noted in refunds.json. Never throws.
+     */
+    static void refundHere(PlayerRef player, Payment p, String keyOk, String keyDropped) {
+        if (p == null) return;
+        try {
+            giveBack(player, p, keyOk, keyDropped, null);
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Refund failed, noted for later");
             refundOffline(p);
         }
     }

@@ -1,5 +1,34 @@
 # Changelog
 
+## v2.0.0
+
+### Found your own stations
+
+- Every station master sells a station contract. Use it where you want your station and your own station master appears there.
+- Choose a plan from your station master: a bare landing pad or pier end, or a complete station with its walkway and hut. A preview shows where it will stand, then you give the station its name.
+- Only the landing pad or the pier end is locked. The rest of the station is ordinary blocks, so dress it to match your own buildings.
+- The first traveller to reach a world with no station yet is handed a balloon contract.
+
+### Boat stations
+
+- Lay the pier end after your own pier, toward the water. Close to a beach, it digs a natural basin in the sea floor so the shuttle boat can moor.
+- Choose where arriving travellers step off with the arrival point plan, on any solid block near the pier.
+
+### Stations in the wild
+
+- Orbis Horizon Worldgen is a new optional add-on, on this same page. Add it and balloon stations and ports rise across new land as you explore.
+- Operators can open the stations of the wild to building, for all of them from the configuration window or one by one with `/orbishorizon station unlock <name>`.
+
+### For operators
+
+- Set the contract price in the configuration window and hand out contracts with `/orbishorizon station contract balloon|boat`.
+- `/orbishorizon station despawn` removes the nearest station, keeps what was built around it and gives its contract back.
+
+### Before you update
+
+- Copy both files, Orbis Horizon and Orbis Horizon Worldgen, to keep the stations of the wild. A station crate you own turns into the matching contract when you use it.
+- A world opened with this version stays on it. Keep a copy of your world if you might go back.
+
 ## v1.12.5
 
 ### Added

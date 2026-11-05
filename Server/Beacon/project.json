@@ -68,8 +68,6 @@
         "deploy.bedroll",
         "deploy.tent",
         "deploy.tent_big",
-        "deploy.station",
-        "deploy.boatStation",
         "takeoff.balloon",
         "takeoff.balloon_basic",
         "takeoff.balloon_transport",
@@ -84,6 +82,9 @@
         "cage.capture",
         "glider.jump",
         "camp.upgrade",
+        "station.contract",
+        "station.masterPlaced",
+        "station.quayPlaced",
         "worldgen.station.air",
         "worldgen.station.boat",
         "worldgen.station.abandoned",
@@ -147,20 +148,6 @@
           }
         },
         "deploy.tent_big": {
-          "allowedFields": {
-            "count": {
-              "type": "number"
-            }
-          }
-        },
-        "deploy.station": {
-          "allowedFields": {
-            "count": {
-              "type": "number"
-            }
-          }
-        },
-        "deploy.boatStation": {
           "allowedFields": {
             "count": {
               "type": "number"
@@ -259,6 +246,27 @@
           }
         },
         "camp.upgrade": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "station.contract": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "station.masterPlaced": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "station.quayPlaced": {
           "allowedFields": {
             "count": {
               "type": "number"

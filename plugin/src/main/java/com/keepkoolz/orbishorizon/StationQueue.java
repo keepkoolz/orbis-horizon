@@ -27,7 +27,7 @@ import java.util.logging.Level;
  *
  * Cycle: FREE, then (queue not empty) APPROACH while the balloon descends onto the pad, DOCKED while it rests in blocks and the 60 s
  * countdown runs, DEPARTING while it climbs away, back to FREE once it is 20 blocks above the pad. ARRIVING is set by the automatic
- * flight (Task 8). The launches go through world.execute: the store is not written while the tick runs.
+ * flight. The launches go through world.execute: the store is not written while the tick runs.
  */
 final class StationQueue {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
@@ -55,6 +55,8 @@ final class StationQueue {
         UUID arriving;
         /** Flight of the recalled airship that holds the quay (state RECALL), null otherwise. */
         UUID recall;
+        /** The last approach of a balloon ended on an obstructed quay; cleared by the next landing. */
+        volatile boolean obstructed;
     }
 
     private static final Map<TransitNetwork.Station, Quay> QUAYS = new ConcurrentHashMap<>();
@@ -114,7 +116,7 @@ final class StationQueue {
     static EnqueueResult enqueue(World world, TransitNetwork.Station s, String destination, PlayerRef chooser,
                                  Store<EntityStore> store, Ref<EntityStore> ref) {
         TransitNetwork net = TransitNetwork.get();
-        TransitNetwork.Station target = net.byName(world.getName(), destination);
+        TransitNetwork.Station target = net.byNameWithQuay(world.getName(), destination);
         if (!Deployables.STATION_KIND.equals(s.kind) || (target != null && !target.kind.equals(s.kind))) {
             LOGGER.at(Level.INFO).log("Queue of %s ignored: stations of different types or sea station", s.name);
             return EnqueueResult.UNKNOWN;
@@ -154,15 +156,14 @@ final class StationQueue {
         return (int) Math.max(0, Math.ceil((q.deadlineMs - System.currentTimeMillis()) / 1000.0));
     }
 
-    /** World cell of the origin of the transit balloon resting at the dock of this station (same conversion as DeployStationInteraction). */
+    /** World cell of the origin of the transit balloon resting at the dock of this station: its quay anchor raised by 3. */
     static Vector3i dockOrigin(TransitNetwork.Station s) {
-        return s.rotation.rotateYaw(new Vector3i(Deployables.STATION_DOCK_ORIGIN[0], Deployables.STATION_DOCK_ORIGIN[1],
-                Deployables.STATION_DOCK_ORIGIN[2]), new Vector3i()).add(s.origin);
+        return StationGeometry.dockOrigin(s.quay);
     }
 
-    /** Height of the top layer of the pad. */
+    /** Height of the top layer of the pad: the quay anchor. */
     static int padY(TransitNetwork.Station s) {
-        return s.origin.y + Deployables.STATION_PAD_MIN[1];
+        return s.quay.y;
     }
 
     // ------------------------------------------------------------------ tick
@@ -231,7 +232,7 @@ final class StationQueue {
         if (q.busy) {
             return;
         }
-        if (BalloonRegistry.get(world, dockOrigin(s), s.rotation, Deployables.BALLOON_PUBLIC.id) == null) {
+        if (BalloonRegistry.get(world, dockOrigin(s), s.quayRotation, Deployables.BALLOON_PUBLIC.id) == null) {
             LOGGER.at(Level.INFO).log("Station %s: docked balloon gone, dock freed", s.name);
             q.state = QuayState.FREE;
             return;
@@ -284,7 +285,7 @@ final class StationQueue {
         }
     }
 
-    // ------------------------------------------------------------------ arrivals (automatic flight, Task 8)
+    // ------------------------------------------------------------------ arrivals (automatic flight)
 
     /** True while an arriving balloon holds the quay or waits for it. */
     static boolean arrivalPending(TransitNetwork.Station s) {
@@ -403,6 +404,12 @@ final class StationQueue {
 
     // ------------------------------------------------------------------ callbacks
 
+    /** Whether the last approach to this station's quay was obstructed and no balloon has landed since. In memory only. */
+    static boolean quayObstructed(TransitNetwork.Station s) {
+        Quay q = QUAYS.get(s);
+        return q != null && q.obstructed;
+    }
+
     /** The approaching balloon was created. */
     static void onApproach(TransitNetwork.Station s, BalloonFlight flight) {
         Quay q = quay(s);
@@ -419,6 +426,7 @@ final class StationQueue {
         q.flight = null;
         q.retryAtMs = System.currentTimeMillis() + 30000;
         q.state = QuayState.FREE;
+        q.obstructed = true;
         broadcast(world, s, Texts.t("transit.quay.obstructed"));
     }
 
@@ -426,6 +434,7 @@ final class StationQueue {
     static void onDocked(World world, TransitNetwork.Station s, Vector3i origin) {
         Quay q = quay(s);
         q.flight = null;
+        q.obstructed = false;
         startCountdown(world, s, q);
     }
 
@@ -463,7 +472,9 @@ final class StationQueue {
         if (!Deployables.STATION_KIND.equals(removed.kind)) {
             return; // boat stations have no quay, approach or recall flows yet
         }
-        TransitFare.refundRemovedStation(removed); // its own queue is lost with it
+        if (removed.quay == null) {
+            return; // a pending station has no quay: no flight, docked balloon or queue can exist for it
+        }
         Quay q = QUAYS.remove(removed);
         if (q != null) {
             BalloonFlight f = q.flight;
@@ -483,10 +494,10 @@ final class StationQueue {
         // The docked balloon is found through the lock registry, whatever the quay state says (quay lost, not recovered yet).
         try {
             Vector3i dock = dockOrigin(removed);
-            if (BalloonRegistry.get(world, dock, removed.rotation, Deployables.BALLOON_PUBLIC.id) != null) {
+            if (BalloonRegistry.get(world, dock, removed.quayRotation, Deployables.BALLOON_PUBLIC.id) != null) {
                 StructureShape shape = Deployables.BALLOON_PUBLIC.shape();
-                BalloonRegistry.remove(world, dock, removed.rotation, Deployables.BALLOON_PUBLIC.id);
-                BalloonManager.removeBlocks(world, shape, dock, removed.rotation);
+                BalloonRegistry.remove(world, dock, removed.quayRotation, Deployables.BALLOON_PUBLIC.id);
+                BalloonManager.removeBlocks(world, shape, dock, removed.quayRotation);
             }
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Docked balloon of %s not removed", removed.name);
@@ -530,7 +541,7 @@ final class StationQueue {
     private static void recoverOnThread(World world) {
         for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName(), Deployables.STATION_KIND)) {
             if (quay(s).state == QuayState.FREE
-                    && BalloonRegistry.get(world, dockOrigin(s), s.rotation, Deployables.BALLOON_PUBLIC.id) != null) {
+                    && BalloonRegistry.get(world, dockOrigin(s), s.quayRotation, Deployables.BALLOON_PUBLIC.id) != null) {
                 LOGGER.at(Level.INFO).log("Station %s: docked balloon found again, countdown of %d s", s.name,
                         TransitConstants.COUNTDOWN_SECONDS);
                 startCountdown(world, s, quay(s));

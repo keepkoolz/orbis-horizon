@@ -4,7 +4,9 @@ import com.hypixel.hytale.logger.HytaleLogger;
 import org.bson.BsonArray;
 import org.bson.BsonBoolean;
 import org.bson.BsonDocument;
+import org.bson.BsonInt32;
 import org.bson.BsonString;
+import org.bson.BsonValue;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -17,26 +19,57 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.logging.Level;
 
-/** Server-wide settings, stored in transit-settings.json of the data folder, including the recipes switched off. Default: station crate recipes off. */
+/** Server-wide settings, stored in transit-settings.json of the data folder, including the recipes switched off and the station contract prices. */
 final class TransitSettings {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
-    private static volatile Set<String> disabledRecipes = new HashSet<>(StationSpec.CRATE_IDS);
+    private static volatile Set<String> disabledRecipes = new HashSet<>();
+    static final int DEFAULT_CONTRACT_ESSENCES = 1000;
+    static final int DEFAULT_CONTRACT_CONCENTRATED = 10;
+    private static volatile int contractEssences = DEFAULT_CONTRACT_ESSENCES;
+    private static volatile int contractConcentrated = DEFAULT_CONTRACT_CONCENTRATED;
     private static volatile boolean packBackView = true;
-    private static volatile boolean worldgenEnabled = true;
     private static volatile boolean markerSharing = true;
-    private static volatile boolean worldgenOldTerrain = false;
+    /** The worldgenEnabled and worldgenOldTerrain values as read, not interpreted (null when absent), written back unchanged. */
+    private static volatile BsonValue rawWorldgenEnabled;
+    private static volatile BsonValue rawWorldgenOldTerrain;
     private static volatile boolean fareEnabled = true;
+    private static volatile boolean generatedStationsEditable = false;
     private static volatile ConsoleLogs.Threshold consoleLogLevel = ConsoleLogs.Threshold.INFO;
     private static volatile Path file;
 
     private TransitSettings() {
     }
 
-    /** Item ids of the recipes switched off, as an unmodifiable copy. Default: the station crates. */
+    /** Life essences a station contract costs when paid with essences. Default: 1000. */
+    static int contractEssences() {
+        return contractEssences;
+    }
+
+    /** Concentrated life essences a station contract costs when the player lacks essences. Default: 10. */
+    static int contractConcentrated() {
+        return contractConcentrated;
+    }
+
+    /** Sets the price in essences. A value below 1 is refused. */
+    static synchronized void setContractEssences(int n) {
+        if (n < 1) return;
+        contractEssences = n;
+        save();
+    }
+
+    /** Sets the price in concentrated essences. A value below 1 is refused. */
+    static synchronized void setContractConcentrated(int n) {
+        if (n < 1) return;
+        contractConcentrated = n;
+        save();
+    }
+
+    /** Item ids of the recipes switched off, as an unmodifiable copy. Default: none. */
     static Set<String> disabledRecipes() {
         return Collections.unmodifiableSet(new HashSet<>(disabledRecipes));
     }
 
+    /** Switches a recipe off or on. */
     static synchronized void setRecipeDisabled(String itemId, boolean disabled) {
         Set<String> next = new HashSet<>(disabledRecipes);
         if (disabled) next.add(itemId);
@@ -50,16 +83,6 @@ final class TransitSettings {
         return packBackView;
     }
 
-    /** Whether stations are generated with the world. Default: on. */
-    static boolean worldgenEnabled() {
-        return worldgenEnabled;
-    }
-
-    /** Whether stations may also be generated on terrain explored before the mod generated stations. Default: off. */
-    static boolean worldgenOldTerrain() {
-        return worldgenOldTerrain;
-    }
-
     /** Whether map markers (vehicles, tents, stations) can be shared between players. Default: on. */
     static boolean markerSharing() {
         return markerSharing;
@@ -70,6 +93,11 @@ final class TransitSettings {
         return fareEnabled;
     }
 
+    /** Whether the generated stations may be edited like the stations of players: only the quay core stays locked. Default: off. */
+    static boolean generatedStationsEditable() {
+        return generatedStationsEditable;
+    }
+
     /** Minimal level of the mod's logs shown in the server console. Default: INFO. */
     static ConsoleLogs.Threshold consoleLogLevel() {
         return consoleLogLevel;
@@ -78,12 +106,15 @@ final class TransitSettings {
     /** Reads the file. Missing: defaults. Unreadable: defaults, and the file is kept as .bad (same rule as stations.json). */
     static synchronized void load(Path dataDir) {
         file = dataDir.resolve("transit-settings.json");
-        disabledRecipes = new HashSet<>(StationSpec.CRATE_IDS);
+        disabledRecipes = new HashSet<>();
+        contractEssences = DEFAULT_CONTRACT_ESSENCES;
+        contractConcentrated = DEFAULT_CONTRACT_CONCENTRATED;
         packBackView = true;
-        worldgenEnabled = true;
+        rawWorldgenEnabled = null;
+        rawWorldgenOldTerrain = null;
         markerSharing = true;
-        worldgenOldTerrain = false;
         fareEnabled = true;
+        generatedStationsEditable = false;
         consoleLogLevel = ConsoleLogs.Threshold.INFO;
         if (!Files.isRegularFile(file)) return;
         try {
@@ -94,19 +125,25 @@ final class TransitSettings {
                     if (v.isString() && ModRecipes.isModItem(v.asString().getValue())) read.add(v.asString().getValue());
                 }
                 disabledRecipes = read;
-            } else if (doc.containsKey("recipeEnabled") && doc.getBoolean("recipeEnabled").getValue()) {
-                disabledRecipes = new HashSet<>();
             }
+            contractEssences = positiveInt(doc, "contractEssences", DEFAULT_CONTRACT_ESSENCES);
+            contractConcentrated = positiveInt(doc, "contractConcentrated", DEFAULT_CONTRACT_CONCENTRATED);
             packBackView = !doc.containsKey("packBackView") || doc.getBoolean("packBackView").getValue();
-            worldgenEnabled = !doc.containsKey("worldgenEnabled") || doc.getBoolean("worldgenEnabled").getValue();
-            worldgenOldTerrain = doc.containsKey("worldgenOldTerrain") && doc.getBoolean("worldgenOldTerrain").getValue();
+            rawWorldgenEnabled = doc.get("worldgenEnabled");
+            rawWorldgenOldTerrain = doc.get("worldgenOldTerrain");
             markerSharing = !doc.containsKey("markerSharing") || doc.getBoolean("markerSharing").getValue();
             fareEnabled = !doc.containsKey("fareEnabled") || doc.getBoolean("fareEnabled").getValue();
+            generatedStationsEditable = doc.containsKey("generatedStationsEditable") && doc.get("generatedStationsEditable").isBoolean()
+                    && doc.getBoolean("generatedStationsEditable").getValue();
             consoleLogLevel = doc.containsKey("consoleLogLevel") && doc.get("consoleLogLevel").isString()
                     ? ConsoleLogs.Threshold.parse(doc.getString("consoleLogLevel").getValue()) : ConsoleLogs.Threshold.INFO;
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("transit-settings.json unreadable, default settings");
-            disabledRecipes = new HashSet<>(StationSpec.CRATE_IDS);
+            disabledRecipes = new HashSet<>();
+            contractEssences = DEFAULT_CONTRACT_ESSENCES;
+            contractConcentrated = DEFAULT_CONTRACT_CONCENTRATED;
+            rawWorldgenEnabled = null;
+            rawWorldgenOldTerrain = null;
             try {
                 Files.move(file, file.resolveSibling(file.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e2) {
@@ -120,32 +157,6 @@ final class TransitSettings {
         save();
     }
 
-    /** Sets the setting and saves it. When it goes from off to on with worldgenOldTerrain on, the abandoned entries are taken up (see reviveAll). */
-    static void setWorldgenEnabled(boolean on) {
-        boolean revive;
-        synchronized (TransitSettings.class) {
-            revive = on && !worldgenEnabled && worldgenOldTerrain;
-            worldgenEnabled = on;
-            save();
-        }
-        if (revive) {
-            GenerationListener.reviveAll();
-        }
-    }
-
-    /** Sets the setting, saves it, and when it goes from off to on takes up the abandoned entries of every world (see GenerationListener.reviveAll). */
-    static void setWorldgenOldTerrain(boolean on) {
-        boolean was;
-        synchronized (TransitSettings.class) {
-            was = worldgenOldTerrain;
-            worldgenOldTerrain = on;
-            save();
-        }
-        if (on && !was) {
-            GenerationListener.reviveAll();
-        }
-    }
-
     static synchronized void setMarkerSharing(boolean on) {
         markerSharing = on;
         save();
@@ -153,6 +164,11 @@ final class TransitSettings {
 
     static synchronized void setFareEnabled(boolean on) {
         fareEnabled = on;
+        save();
+    }
+
+    static synchronized void setGeneratedStationsEditable(boolean on) {
+        generatedStationsEditable = on;
         save();
     }
 
@@ -165,6 +181,13 @@ final class TransitSettings {
         ConsoleLogs.apply(level);
     }
 
+    /** A whole number of at least 1 under the key, the default when the key is missing or not such a number. */
+    private static int positiveInt(BsonDocument doc, String key, int fallback) {
+        if (!doc.containsKey(key) || !doc.get(key).isNumber()) return fallback;
+        int n = doc.get(key).asNumber().intValue();
+        return n >= 1 ? n : fallback;
+    }
+
     private static void save() {
         Path f = file;
         if (f == null) return;
@@ -175,11 +198,16 @@ final class TransitSettings {
                 if (disabledRecipes.contains(id)) off.add(new BsonString(id));
             }
             doc.put("disabledRecipes", off);
+            doc.put("contractEssences", new BsonInt32(contractEssences));
+            doc.put("contractConcentrated", new BsonInt32(contractConcentrated));
             doc.put("packBackView", new BsonBoolean(packBackView));
-            doc.put("worldgenEnabled", new BsonBoolean(worldgenEnabled));
+            BsonValue legacyEnabled = rawWorldgenEnabled;
+            if (legacyEnabled != null) doc.put("worldgenEnabled", legacyEnabled);
             doc.put("markerSharing", new BsonBoolean(markerSharing));
-            doc.put("worldgenOldTerrain", new BsonBoolean(worldgenOldTerrain));
+            BsonValue legacyOldTerrain = rawWorldgenOldTerrain;
+            if (legacyOldTerrain != null) doc.put("worldgenOldTerrain", legacyOldTerrain);
             doc.put("fareEnabled", new BsonBoolean(fareEnabled));
+            doc.put("generatedStationsEditable", new BsonBoolean(generatedStationsEditable));
             doc.put("consoleLogLevel", new BsonString(consoleLogLevel.name()));
             Files.createDirectories(f.getParent());
             Path tmp = f.resolveSibling(f.getFileName() + ".tmp");

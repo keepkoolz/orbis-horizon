@@ -3,7 +3,9 @@ package com.keepkoolz.orbishorizon;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
 import org.bson.BsonArray;
+import org.bson.BsonBoolean;
 import org.bson.BsonDocument;
+import org.bson.BsonDouble;
 import org.bson.BsonInt32;
 import org.bson.BsonString;
 import org.joml.Vector3d;
@@ -20,6 +22,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
@@ -35,7 +38,8 @@ final class TransitNetwork {
     enum NameCheck { OK, TOO_SHORT, TOO_LONG, TAKEN }
 
     static final class Station {
-        final String name;
+        /** Name of the station. Changes once, when a station that just received its quay is named (rename). */
+        volatile String name;
         final String world;
         final Vector3i origin;
         final Rotation rotation;
@@ -52,7 +56,49 @@ final class TransitNetwork {
         /** Identity of the entry at the head of the queue: a new value each time the head entry leaves. In memory only. Guarded by the network lock. */
         long headId = HEAD_IDS.incrementAndGet();
 
+        /** Cell of the station master. Volatile: read on world threads. */
+        volatile Vector3i master;
+        /** Yaw of the station master, in degrees. */
+        volatile float masterYaw;
+        /** Quay anchor (null without a quay). */
+        volatile Vector3i quay;
+        volatile Rotation quayRotation;
+        /** Cell where passengers arrive on a maritime station (null = not set). */
+        volatile Vector3i arrival;
+        /** True when the owner may edit the station's structure. */
+        volatile boolean editable;
+        /** True when origin and rotation designate a whole prefab of the registry (generated and converted stations). */
+        final boolean fullPrefab;
+        /**
+         * True while the name window of the station is open: the station has its quay but stays out of the destinations, queues, map
+         * and discovery until the name is validated or the window expires. In memory only, false after a restart.
+         */
+        volatile boolean naming;
+
+        /** True when the station is part of the network: it has a quay and its name window is not open. */
+        boolean inNetwork() {
+            return quay != null && !naming;
+        }
+
         Station(String name, String world, Vector3i origin, Rotation rotation, UUID masterUuid, UUID owner, List<String> queue, String kind) {
+            this(name, world, origin, rotation, masterUuid, owner, queue, kind, true, owner != null,
+                    StationGeometry.convert(kind, origin, rotation));
+        }
+
+        Station(String name, String world, Vector3i origin, Rotation rotation, UUID masterUuid, UUID owner, List<String> queue, String kind,
+                boolean fullPrefab, boolean editable, StationGeometry.Converted geometry) {
+            this(name, world, origin, rotation, masterUuid, owner, queue, kind, fullPrefab, editable,
+                    geometry.master(), geometry.masterYaw(), geometry.quay(), geometry.quayRotation());
+        }
+
+        Station(String name, String world, Vector3i origin, Rotation rotation, UUID masterUuid, UUID owner, List<String> queue, String kind,
+                boolean fullPrefab, boolean editable, Vector3i master, float masterYaw, Vector3i quay, Rotation quayRotation) {
+            this.fullPrefab = fullPrefab;
+            this.editable = editable;
+            this.master = master;
+            this.masterYaw = masterYaw;
+            this.quay = quay;
+            this.quayRotation = quayRotation;
             this.name = name;
             this.world = world;
             this.origin = origin;
@@ -66,6 +112,8 @@ final class TransitNetwork {
 
     private final List<Station> stations = new CopyOnWriteArrayList<>();
     private volatile Path file;
+    /** Names of the worlds whose first station contract was given (key firstContractGiven of stations.json). */
+    private final Set<String> firstContractGiven = new java.util.TreeSet<>();
 
     static TransitNetwork get() { return INSTANCE; }
 
@@ -98,10 +146,17 @@ final class TransitNetwork {
         return out;
     }
 
-    /** Stations of this world that have the given kind (Deployables.STATION_KIND or BOAT_STATION_KIND). */
+    /** Stations of this world that have the given kind (Deployables.STATION_KIND or BOAT_STATION_KIND) and are in the network (a quay, no name window open). */
     List<Station> stations(String world, String kind) {
         List<Station> out = new ArrayList<>();
-        for (Station s : stations) if (s.world.equals(world) && s.kind.equals(kind)) out.add(s);
+        for (Station s : stations) if (s.world.equals(world) && s.kind.equals(kind) && s.inNetwork()) out.add(s);
+        return out;
+    }
+
+    /** Stations of this world that have no quay yet. */
+    List<Station> pending(String world) {
+        List<Station> out = new ArrayList<>();
+        for (Station s : stations) if (s.world.equals(world) && s.quay == null) out.add(s);
         return out;
     }
 
@@ -116,6 +171,12 @@ final class TransitNetwork {
             if (s.world.equals(world) && s.name.equalsIgnoreCase(n)) return s;
         }
         return null;
+    }
+
+    /** Same as byName, but a station outside the network (pending, or its name window open) is not returned: the one to use for every flight or queue destination. */
+    Station byNameWithQuay(String world, String name) {
+        Station s = byName(world, name);
+        return s != null && s.inNetwork() ? s : null;
     }
 
     Station at(String world, Vector3i origin) {
@@ -138,15 +199,76 @@ final class TransitNetwork {
         double bestD = maxDist * maxDist;
         for (Station s : stations) {
             if (!s.world.equals(world)) continue;
-            double d = pos.distanceSquared(s.origin.x, s.origin.y, s.origin.z);
+            double d = pos.distanceSquared(StationGeometry.position(s));
             if (d <= bestD) { bestD = d; best = s; }
         }
         return best;
     }
 
+    /** The worlds whose first station contract was given, as a copy. */
+    synchronized Set<String> firstContractWorlds() { return new java.util.TreeSet<>(firstContractGiven); }
+
+    /** Notes (or forgets) that the first contract of a world was given and saves. True when the note changed. */
+    synchronized boolean setFirstContract(String world, boolean given) {
+        boolean changed = given ? firstContractGiven.add(world) : firstContractGiven.remove(world);
+        if (changed) save();
+        return changed;
+    }
+
     synchronized void add(Station s) { stations.add(s); }
 
     synchronized void remove(Station s) { stations.remove(s); }
+
+    /**
+     * Registers a station that has only its master so far (no quay): origin = master cell, not a whole prefab, editable, the
+     * automatic name of the world, saved. The quay is added later by the owner. Returns the new station.
+     */
+    synchronized Station addPending(String world, Vector3i master, float masterYaw, UUID owner, String kind) {
+        List<String> taken = new ArrayList<>();
+        for (Station o : stations) if (o.world.equals(world)) taken.add(o.name);
+        Station s = new Station(autoName(taken), world, new Vector3i(master), Rotation.None, null, owner, new ArrayList<>(), kind,
+                false, true, new Vector3i(master), masterYaw, null, null);
+        stations.add(s);
+        save();
+        return s;
+    }
+
+    /**
+     * Gives a pending station its quay: the quay anchor and rotation are set, the station is saved and from then on part of the
+     * network (stations(world, kind), the map, the discovery and the queues only read stations with a quay). Returns false when the
+     * station already has a quay.
+     */
+    synchronized boolean setQuay(Station s, Vector3i quay, Rotation rotation) {
+        if (s.quay != null) {
+            return false;
+        }
+        s.quayRotation = rotation;
+        s.quay = quay;
+        save();
+        return true;
+    }
+
+    /** Same, and moves the station master to another cell and yaw (a whole station: the master stands in its hut). */
+    synchronized boolean setQuay(Station s, Vector3i quay, Rotation rotation, Vector3i master, float masterYaw) {
+        if (s.quay != null) {
+            return false;
+        }
+        s.master = master;
+        s.masterYaw = masterYaw;
+        return setQuay(s, quay, rotation);
+    }
+
+    /** Renames a station when the name is valid and free in its world, saves. True when the station now has that name. */
+    synchronized boolean rename(Station s, String name) {
+        List<String> taken = new ArrayList<>();
+        for (Station o : stations) if (o.world.equals(s.world) && o != s) taken.add(o.name);
+        if (checkName(name, taken) != NameCheck.OK) {
+            return false;
+        }
+        s.name = normalize(name);
+        save();
+        return true;
+    }
 
     /** Sets the station master's UUID (null = none) and saves. The Station object keeps its identity (reservations key on it). */
     synchronized void setMaster(Station s, UUID master) {
@@ -154,26 +276,82 @@ final class TransitNetwork {
         save();
     }
 
+    /** Sets the arrival cell of a station (copied) and saves. */
+    synchronized void setArrival(Station s, Vector3i cell) {
+        s.arrival = new Vector3i(cell.x, cell.y, cell.z);
+        save();
+    }
+
+    /** True once stations.json was unreadable at a load (the file left as .bad). Never reset during the session. */
+    volatile boolean loadFailed;
+    /** True while the file read is a version 1 file that was not yet rewritten: the first save copies it to .v1.bak. */
+    private boolean v1Pending;
+
+    private static Vector3i readCell(BsonDocument d) {
+        return new Vector3i(d.getInt32("x").getValue(), d.getInt32("y").getValue(), d.getInt32("z").getValue());
+    }
+
+    private static BsonDocument cellDoc(Vector3i v) {
+        BsonDocument d = new BsonDocument();
+        d.put("x", new BsonInt32(v.x));
+        d.put("y", new BsonInt32(v.y));
+        d.put("z", new BsonInt32(v.z));
+        return d;
+    }
+
     synchronized void load(Path dataDir) {
         file = dataDir.resolve("stations.json");
         stations.clear();
+        firstContractGiven.clear();
+        v1Pending = false;
         if (!Files.isRegularFile(file)) return;
         try {
             BsonDocument doc = BsonDocument.parse(Files.readString(file, StandardCharsets.UTF_8));
+            boolean v2 = doc.containsKey("version") && doc.get("version").isNumber() && doc.get("version").asNumber().intValue() >= 2;
+            v1Pending = !v2;
+            if (doc.containsKey("firstContractGiven") && doc.get("firstContractGiven").isArray()) {
+                for (var w : doc.getArray("firstContractGiven")) {
+                    if (w.isString()) firstContractGiven.add(w.asString().getValue());
+                }
+            }
             for (var v : doc.getArray("stations")) {
                 BsonDocument d = v.asDocument();
                 List<String> queue = new ArrayList<>();
                 for (var q : d.getArray("queue")) queue.add(q.asString().getValue());
-                stations.add(new Station(d.getString("name").getValue(), d.getString("world").getValue(),
-                        new Vector3i(d.getInt32("x").getValue(), d.getInt32("y").getValue(), d.getInt32("z").getValue()),
-                        Rotation.valueOf(d.getString("rotation").getValue()),
-                        d.containsKey("master") ? UUID.fromString(d.getString("master").getValue()) : null,
-                        d.containsKey("owner") ? UUID.fromString(d.getString("owner").getValue()) : null,
-                        queue, d.containsKey("kind") ? d.getString("kind").getValue() : Deployables.STATION_KIND));
+                String kind = d.containsKey("kind") ? d.getString("kind").getValue() : Deployables.STATION_KIND;
+                Vector3i origin = readCell(d);
+                Rotation rotation = Rotation.valueOf(d.getString("rotation").getValue());
+                // version 1 stored the NPC identity under "master"; in version 2 that key holds the master cell
+                String uuidKey = v2 ? "masterUuid" : "master";
+                UUID masterUuid = d.containsKey(uuidKey) ? UUID.fromString(d.getString(uuidKey).getValue()) : null;
+                UUID owner = d.containsKey("owner") ? UUID.fromString(d.getString("owner").getValue()) : null;
+                String name = d.getString("name").getValue();
+                String world = d.getString("world").getValue();
+                if (v2 && d.containsKey("master") && d.get("master").isDocument()) {
+                    Vector3i quay = d.containsKey("quay") ? readCell(d.getDocument("quay")) : null;
+                    stations.add(new Station(name, world, origin, rotation, masterUuid, owner, queue, kind,
+                            d.containsKey("fullPrefab") && d.getBoolean("fullPrefab").getValue(),
+                            d.containsKey("editable") && d.getBoolean("editable").getValue(),
+                            readCell(d.getDocument("master")),
+                            d.containsKey("masterYaw") ? (float) d.getNumber("masterYaw").doubleValue() : 0f,
+                            quay,
+                            d.containsKey("quayRotation") ? Rotation.valueOf(d.getString("quayRotation").getValue()) : rotation));
+                } else {
+                    // Version 1, or a version 2 entry without a master cell: the geometry comes from the whole prefab.
+                    if (v2) {
+                        LOGGER.at(Level.WARNING).log("Station '%s' has no master cell in stations.json, geometry converted from its prefab", name);
+                    }
+                    stations.add(new Station(name, world, origin, rotation, masterUuid, owner, queue, kind));
+                }
+                if (v2 && d.containsKey("master") && d.get("master").isDocument()
+                        && d.containsKey("arrival") && d.get("arrival").isDocument()) {
+                    stations.get(stations.size() - 1).arrival = readCell(d.getDocument("arrival"));
+                }
                 loadPayments(stations.get(stations.size() - 1), d);
             }
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("stations.json unreadable, network empty");
+            loadFailed = true;
             stations.clear();
             try {
                 Files.move(file, file.resolveSibling(file.getFileName() + ".bad"), StandardCopyOption.REPLACE_EXISTING);
@@ -300,7 +478,14 @@ final class TransitNetwork {
                 d.put("y", new BsonInt32(s.origin.y));
                 d.put("z", new BsonInt32(s.origin.z));
                 d.put("rotation", new BsonString(s.rotation.name()));
-                if (s.masterUuid != null) d.put("master", new BsonString(s.masterUuid.toString()));
+                if (s.masterUuid != null) d.put("masterUuid", new BsonString(s.masterUuid.toString()));
+                d.put("master", cellDoc(s.master));
+                d.put("masterYaw", new BsonDouble(s.masterYaw));
+                if (s.quay != null) d.put("quay", cellDoc(s.quay));
+                if (s.arrival != null) d.put("arrival", cellDoc(s.arrival));
+                if (s.quayRotation != null) d.put("quayRotation", new BsonString(s.quayRotation.name()));
+                d.put("editable", new BsonBoolean(s.editable));
+                d.put("fullPrefab", new BsonBoolean(s.fullPrefab));
                 if (s.owner != null) d.put("owner", new BsonString(s.owner.toString()));
                 d.put("kind", new BsonString(s.kind));
                 BsonArray q = new BsonArray();
@@ -321,9 +506,16 @@ final class TransitNetwork {
                 arr.add(d);
             }
             BsonDocument doc = new BsonDocument();
-            doc.put("version", new BsonInt32(1));
+            doc.put("version", new BsonInt32(2));
             doc.put("stations", arr);
+            BsonArray first = new BsonArray();
+            for (String w : firstContractGiven) first.add(new BsonString(w));
+            doc.put("firstContractGiven", first);
             Files.createDirectories(f.getParent());
+            if (v1Pending) {
+                if (Files.isRegularFile(f)) Files.copy(f, f.resolveSibling(f.getFileName() + ".v1.bak"), StandardCopyOption.REPLACE_EXISTING);
+                v1Pending = false;
+            }
             Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
             Files.writeString(tmp, doc.toJson(), StandardCharsets.UTF_8);
             try {

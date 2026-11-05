@@ -152,13 +152,13 @@ final class VoyagePlanner {
     static List<Destination> stationDestinations(List<TransitNetwork.Station> every, double fromX, double fromZ) {
         List<Destination> out = new ArrayList<>();
         for (TransitNetwork.Station dest : every) {
-            if (!Deployables.STATION_KIND.equals(dest.kind) && !Deployables.BOAT_STATION_KIND.equals(dest.kind)) {
+            if (!dest.inNetwork() || !Deployables.STATION_KIND.equals(dest.kind) && !Deployables.BOAT_STATION_KIND.equals(dest.kind)) {
                 continue;
             }
             Vector3d pad = StationMarkerProvider.markerPoint(dest);
             List<double[]> others = new ArrayList<>();
             for (TransitNetwork.Station other : every) {
-                if (other != dest) {
+                if (other != dest && other.quay != null) {
                     Vector3d p = StationMarkerProvider.markerPoint(other);
                     others.add(new double[]{p.x, p.z});
                 }

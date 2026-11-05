@@ -67,6 +67,9 @@ final class StationMarkerProvider implements WorldMapManager.MarkerProvider {
     private static void fill(World world, Player player, MarkersCollector collector) {
         KnownStations known = KnownStations.get();
         for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName())) {
+            if (!s.inNetwork()) {
+                continue;
+            }
             SkyLog.Reached key = new SkyLog.Reached(s.origin.x, s.origin.y, s.origin.z);
             boolean isKnown = known.known(world.getName(), player.getUuid(), key);
             Display mode = display(isKnown, isKnown && known.isShared(world.getName(), key), TransitSettings.markerSharing());
@@ -92,10 +95,8 @@ final class StationMarkerProvider implements WorldMapManager.MarkerProvider {
         return "orbishorizon map sharestation " + x + " " + y + " " + z;
     }
 
-    /** World point of the map marker of a station: its marker cell rotated with the station, then the cell centre. */
+    /** World point of the map marker of a station: the centre of its quay cell, one block up. */
     static Vector3d markerPoint(TransitNetwork.Station s) {
-        int[] c = StationSpec.of(s.kind).markerCell();
-        Vector3f r = s.rotation.rotateYaw(new Vector3f(c[0], c[1], c[2]), new Vector3f());
-        return new Vector3d(s.origin.x + r.x + 0.5, s.origin.y + r.y, s.origin.z + r.z + 0.5);
+        return StationGeometry.markerPoint(s);
     }
 }

@@ -29,7 +29,8 @@
     "DrawType": "Model",
     "Gathering": {
       "Breaking": {
-        "GatherType": "Woods"
+        "GatherType": "Woods",
+        "ItemId": "Wood_Hardwood_Fence_Gate"
       }
     },
     "HitboxType": "Fence_Gate",

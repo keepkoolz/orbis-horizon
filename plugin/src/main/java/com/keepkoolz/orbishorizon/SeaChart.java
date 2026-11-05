@@ -1,5 +1,7 @@
 package com.keepkoolz.orbishorizon;
 
+import com.keepkoolz.orbishorizon.api.TerrainProbe;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -29,6 +31,10 @@ final class SeaChart {
     private static final byte KIND_SEA = 2;
     private static final byte KIND_FRESH = 3;
     private static final int[][] NEIGHBOURS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    /** Cells around a berth searched for water when the berth cell reads as land, at most BERTH_REACH cells away. */
+    static final int BERTH_REACH = 2;
+    /** Offsets within BERTH_REACH, nearest first (squared distance, then z, then x): the same cell wins for fill and oceanNear. */
+    private static final int[][] NEAR = nearOffsets();
 
     private static final class Block {
         final short[] labels;
@@ -100,6 +106,38 @@ final class SeaChart {
         }
         int label = b.labels[index(cx, cz)] & 0xFFFF;
         return label == 0 ? 0 : find(label);
+    }
+
+    /**
+     * Ocean of a berth cell: its own ocean, or, when it is land or unknown, the ocean of the nearest labelled cell within
+     * BERTH_REACH (a rock under the sample point of the berth cell). 0 when none.
+     */
+    int oceanNear(int cx, int cz) {
+        int own = ocean(cx, cz);
+        if (own != 0) {
+            return own;
+        }
+        for (int[] d : NEAR) {
+            int o = ocean(cx + d[0], cz + d[1]);
+            if (o != 0) {
+                return o;
+            }
+        }
+        return 0;
+    }
+
+    private static int[][] nearOffsets() {
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        for (int dz = -BERTH_REACH; dz <= BERTH_REACH; dz++) {
+            for (int dx = -BERTH_REACH; dx <= BERTH_REACH; dx++) {
+                if (dx != 0 || dz != 0) {
+                    out.add(new int[] {dx, dz});
+                }
+            }
+        }
+        out.sort(java.util.Comparator.<int[]>comparingInt(d -> d[0] * d[0] + d[1] * d[1]).thenComparingInt(d -> d[1])
+                .thenComparingInt(d -> d[0]));
+        return out.toArray(new int[0][]);
     }
 
     int depth(int cx, int cz) {
@@ -184,19 +222,43 @@ final class SeaChart {
         if (startKind == UNKNOWN) {
             startKind = kindByte(readCell(p, work, sx, sz));
         }
+        int startX = sx;
+        int startZ = sz;
         if (startKind == KIND_LAND) {
-            publish(work);
-            return 0;
+            // The berth cell reads as land (a rock under its sample point): the fill starts from the nearest water cell.
+            for (int[] d : NEAR) {
+                int nx = sx + d[0];
+                int nz = sz + d[1];
+                byte k = kindAt(work, nx, nz);
+                if (k == UNKNOWN) {
+                    k = kindByte(readCell(p, work, nx, nz));
+                }
+                if (k != KIND_LAND) {
+                    startX = nx;
+                    startZ = nz;
+                    startKind = k;
+                    break;
+                }
+            }
+            if (startKind == KIND_LAND) {
+                publish(work);
+                return 0;
+            }
+            int near = labelAt(work, startX, startZ);
+            if (near != 0) {
+                publish(work);
+                return find(near);
+            }
         }
         int label = newLabel();
         if (label == 0) {
             return 0;
         }
-        setLabel(work, sx, sz, label);
+        setLabel(work, startX, startZ, label);
         long[] queue = new long[1024];
         int head = 0;
         int tail = 0;
-        queue[tail++] = pack(sx, sz);
+        queue[tail++] = pack(startX, startZ);
         while (head < tail) {
             if (Thread.currentThread().isInterrupted()) {
                 return 0; // interrupted: nothing is published, the caller discards the result

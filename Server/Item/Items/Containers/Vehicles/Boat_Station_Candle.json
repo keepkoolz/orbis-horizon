@@ -32,7 +32,8 @@
     "Flags": {},
     "Gathering": {
       "Soft": {
-        "IsWeaponBreakable": false
+        "IsWeaponBreakable": false,
+        "ItemId": "Furniture_Kweebec_Candle"
       }
     },
     "HitboxType": "Balloon_Station_Map",

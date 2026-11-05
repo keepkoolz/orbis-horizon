@@ -22,6 +22,7 @@ import com.hypixel.hytale.server.npc.NPCPlugin;
 import it.unimi.dsi.fastutil.Pair;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
+import org.joml.Vector3i;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -60,12 +61,10 @@ final class StationMaster {
 
     // ------------------------------------------------------------------ position
 
-    /** World position (feet) of the master of a station: centre of its prefab cell, rotated with the station. Pure. */
+    /** World position (feet) of the master of a station: the centre of its master cell. Pure. */
     static Vector3d masterPoint(TransitNetwork.Station s) {
-        Vector3d logical = new Vector3d(s.origin.x + 0.5, s.origin.y, s.origin.z + 0.5);
-        int[] p = StationSpec.of(s.kind).masterPos();
-        Vector3d out = BalloonManager.prefabPoint(logical, s.rotation, new Vector3f(p[0], p[1], p[2]));
-        return out.add(0, 0.05, 0);
+        Vector3i m = s.master;
+        return new Vector3d(m.x + 0.5, m.y + 0.05, m.z + 0.5);
     }
 
     // ------------------------------------------------------------------ spawn, find, remove
@@ -144,7 +143,7 @@ final class StationMaster {
             if (TransitNetwork.get().at(world.getName(), origin) == null) {
                 LOGGER.at(Level.INFO).log("Station placed at (%d, %d, %d) without a name: registered with an automatic name",
                         origin.x, origin.y, origin.z);
-                DeployStationInteraction.completeRegistration(world, origin, e.rotation(), e.owner(), null, null, kind);
+                StationPlacement.completeRegistration(world, origin, e.rotation(), e.owner(), null, null, kind);
             }
         }
     }
@@ -216,6 +215,20 @@ final class StationMaster {
                 new DisplayNameComponent(Texts.t(StationSpec.of(s.kind).masterNameKey()).param("station", s.name)));
     }
 
+    /** Puts the current name of a station on its master's name plate (the station was renamed). Never throws. On the world thread. */
+    static void refreshName(Store<EntityStore> store, World world, TransitNetwork.Station s) {
+        try {
+            Ref<EntityStore> ref = refOf(world, s);
+            if (ref != null) {
+                store.putComponent(ref, DisplayNameComponent.getComponentType(),
+                        new DisplayNameComponent(Texts.t(StationSpec.of(s.kind).masterNameKey()).param("station", s.name)));
+            }
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Name plate of the station master of '%s' not updated", s.name);
+            Telemetry.error("transit", e, null, null);
+        }
+    }
+
     /** Master NPC of a station, found by UUID, or null. */
     private static Ref<EntityStore> refOf(World world, TransitNetwork.Station s) {
         UUID id = s.masterUuid;
@@ -242,6 +255,15 @@ final class StationMaster {
         LAST_REWIRE.remove(s);
         PENDING.removeIf(p -> p.station() == s);
         TransitNetwork.get().setMaster(s, null);
+    }
+
+    /**
+     * Brings the master of a station to its (new) master cell and yaw: the NPC is removed and created again there, so it keeps the
+     * usual wiring and recovery. Never throws. On the world thread.
+     */
+    static void moveMaster(Store<EntityStore> store, World world, TransitNetwork.Station s) {
+        remove(store, s);
+        spawn(store, world, s);
     }
 
     static TransitNetwork.Station stationOfMaster(String world, UUID master) {
@@ -478,13 +500,9 @@ final class StationMaster {
         return r;
     }
 
-    /** World yaw of a master facing the look point of his station (StationSpec.masterLook) (forward = (-sin yaw, -cos yaw)). Pure. */
+    /** World yaw of a master, in radians (forward = (-sin yaw, -cos yaw)): the recorded yaw of the station in degrees. Pure. */
     static float facingYaw(TransitNetwork.Station s) {
-        Vector3d logical = new Vector3d(s.origin.x + 0.5, s.origin.y, s.origin.z + 0.5);
-        float[] look = StationSpec.of(s.kind).masterLook();
-        Vector3d foot = BalloonManager.prefabPoint(logical, s.rotation, new Vector3f(look[0], look[1], look[2]));
-        Vector3d me = masterPoint(s);
-        return (float) Math.atan2(-(foot.x - me.x), -(foot.z - me.z));
+        return (float) Math.toRadians(s.masterYaw);
     }
 
     /** Every tick: each master of the world faces the foot of his stairs (body and head), whatever his role does with them. */
@@ -589,7 +607,7 @@ final class StationMaster {
     // ------------------------------------------------------------------ talking
 
     /**
-     * A player talks to the master (Use on the NPC). Single entry point: Task 7 replaces the chat list by the destination window.
+     * A player talks to the master (Use on the NPC). Single entry point: the destination window, or the quay plan window for the owner of a station without a quay.
      * Busy master: transit.master.busy. On the world thread.
      */
     static void onTalk(Store<EntityStore> store, Ref<EntityStore> playerRef, TransitNetwork.Station s) {
@@ -597,18 +615,23 @@ final class StationMaster {
         if (player == null) {
             return;
         }
+        boolean pending = s.quay == null;
+        if (pending && !player.getUuid().equals(s.owner)) {
+            player.sendMessage(Texts.t("transit.master.pending"));
+            return;
+        }
         if (!reserve(s, player.getUuid())) {
             player.sendMessage(Texts.t("transit.master.busy"));
             return;
         }
-        // The window keeps the reservation until it ends (DestinationPage releases it on any close).
+        // The window keeps the reservation until it ends (DestinationPage and QuayPlanPage release it on any close).
         try {
             Player p = store.getComponent(playerRef, Player.getComponentType());
             if (p == null) {
                 release(s, player.getUuid());
                 return;
             }
-            p.getPageManager().openCustomPage(playerRef, store, new DestinationPage(player, s));
+            p.getPageManager().openCustomPage(playerRef, store, pending ? new QuayPlanPage(player, s) : new DestinationPage(player, s));
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Cannot open the destination window for '%s'", s.name);
             Telemetry.error("transit", e, null, null);

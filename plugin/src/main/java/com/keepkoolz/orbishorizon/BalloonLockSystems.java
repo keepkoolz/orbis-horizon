@@ -46,17 +46,22 @@ final class BalloonLockSystems {
                                 BlockType broken, boolean placing) {
         World world = store.getExternalData().getWorld();
         BalloonRegistry.Entry entry = BalloonRegistry.lockingEntry(world, target, broken, placing);
-        if (entry == null) {
+        TransitNetwork.Station clearance = entry == null && placing ? StationClearance.blocking(world, target.x, target.y, target.z) : null;
+        if (entry == null && clearance == null) {
             return false;
         }
-        Deployables.Kind kind = Deployables.get(entry.kind());
         PlayerRef player = chunk.getComponent(index, PlayerRef.getComponentType());
         if (player != null) {
             long now = System.currentTimeMillis();
             Long last = LAST_MESSAGE.get(player.getUuid());
             if (last == null || now - last >= MESSAGE_INTERVAL_MS) {
                 LAST_MESSAGE.put(player.getUuid(), now);
-                player.sendMessage(Texts.t(placing ? kind.messagePlace : kind.messageBreak));
+                if (entry != null) {
+                    Deployables.Kind kind = Deployables.get(entry.kind());
+                    player.sendMessage(Texts.t(placing ? kind.messagePlace : kind.messageBreak));
+                } else {
+                    player.sendMessage(Texts.t("lock.station.clearance").param("station", clearance.name));
+                }
             }
         }
         return true;

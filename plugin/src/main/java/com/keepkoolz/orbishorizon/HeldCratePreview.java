@@ -52,12 +52,15 @@ final class HeldCratePreview {
         String worldName;
         Vector3i origin;
         Rotation rotation;
+        int deck = -1;
         long nextCheckMs;
     }
 
     private static final Map<UUID, State> STATES = new ConcurrentHashMap<>();
     /** Rotated prefab encodings, per prefab and rotation (a 2,000-block selection is not recomputed every tick). */
     private static final Map<String, EditorBlocksChange> CACHE = new ConcurrentHashMap<>();
+    /** Boat plan previews with the shuttle merged in, per item, rotation and wood. */
+    private static final Map<String, EditorBlocksChange> MERGED = new ConcurrentHashMap<>();
 
     private HeldCratePreview() {
     }
@@ -100,6 +103,10 @@ final class HeldCratePreview {
             STATES.remove(id);
             st = null;
         }
+        if (QuayPlanPage.BOAT_ARRIVAL.equals(heldItemId(store, ref)) && store.getComponent(ref, DeathComponent.getComponentType()) == null) {
+            updateArrival(store, world, pr, ref, id, st, now);
+            return;
+        }
         DeployPlacement.Crate crate = heldCrate(store, ref);
         if (crate == null || store.getComponent(ref, DeathComponent.getComponentType()) != null) {
             if (st != null) {
@@ -135,17 +142,33 @@ final class HeldCratePreview {
             }
             p = new DeployPlacement.Placement(boat, p.facing(), p.rotation());
         }
-        if (itemId.equals("Boat_Station_Crate")) {
+        int deck = -1; // rotation index of the deck slabs of the pier end plan, -1 for the other plans
+        boolean padPlan = itemId.equals(QuayPlanPage.BALLOON_PAD);
+        boolean boatPlan = itemId.equals(QuayPlanPage.BOAT_PIER) || itemId.equals(QuayPlanPage.BOAT_FULL);
+        if (padPlan) {
+            p = new DeployPlacement.Placement(p.origin(), p.facing(), Rotation.None); // the pad is placed without a turn
+        } else if (boatPlan) {
             // Same origin as the real placement: y follows the water surface under the pier end; no water, no preview.
-            Vector3i station = DeployPlacement.boatStationOrigin(DeployPlacement.worldState(world), p.origin(), p.rotation());
-            if (station == null) {
+            DeployPlacement.CellState cells = DeployPlacement.worldState(world);
+            Vector3i boat;
+            if (itemId.equals(QuayPlanPage.BOAT_PIER)) {
+                // Same rotation as the real placement: the player's pier around the aimed block, the look breaks ties.
+                if (target != null) {
+                    p = new DeployPlacement.Placement(p.origin(), p.facing(), DeployPlacement.pierPlanRotation(cells, p.origin(), target, p.rotation()));
+                }
+                boat = DeployPlacement.pierPlanSeaOrigin(cells, p.origin(), p.rotation());
+                deck = target != null ? DeployPlacement.pierDeckRotation(world, target) : DeployPlacement.SLAB_UNTURNED;
+            } else {
+                boat = DeployPlacement.boatStationOrigin(cells, p.origin(), p.rotation(), Deployables.BOAT_STATION_PIER_END);
+            }
+            if (boat == null) {
                 if (st != null) {
                     hide(pr);
                     STATES.remove(id);
                 }
                 return;
             }
-            p = new DeployPlacement.Placement(station, p.facing(), p.rotation());
+            p = new DeployPlacement.Placement(boat, p.facing(), p.rotation());
         }
         if (st == null) {
             st = new State();
@@ -153,21 +176,31 @@ final class HeldCratePreview {
             STATES.put(id, st);
         }
         st.nextCheckMs = now + PERIOD_MS;
-        if (itemId.equals(st.itemId) && p.origin().equals(st.origin) && p.rotation() == st.rotation) {
+        if (itemId.equals(st.itemId) && p.origin().equals(st.origin) && p.rotation() == st.rotation && deck == st.deck) {
             return;
         }
         BiomeWood.Wood wood = null;
         BiomeStone.Stone stone = null;
-        if (itemId.equals("Boat_Station_Crate")) {
+        boolean pad = padPlan;
+        boolean balloonStation = itemId.equals(QuayPlanPage.BALLOON_FULL);
+        if (boatPlan) {
             // Read only when the origin, rotation or item changed (this point is only reached then).
             wood = BiomeWood.woodAt(world, p.origin().x, p.origin().z, false);
-        } else if (itemId.equals("Balloon_Station_Crate")) {
+        } else if (balloonStation) {
             wood = BiomeWood.stationWoodAt(world, p.origin().x, p.origin().z, false);
             stone = BiomeStone.stoneAt(world, p.origin().x, p.origin().z, false);
+        } else if (pad) {
+            stone = BiomeStone.stoneAt(world, p.origin().x, p.origin().z, false);
         }
-        EditorBlocksChange blocks = encoded(crate.prefabPath(), p.rotation(), wood, stone, itemId.equals("Balloon_Station_Crate"));
+        EditorBlocksChange blocks = encoded(crate.prefabPath(), p.rotation(), wood, stone, balloonStation || pad, deck);
         if (blocks == null) {
             return;
+        }
+        if (boatPlan) {
+            // The public shuttle at its berth, so the player sees on which side it arrives. Never fatal for the preview.
+            int[] end = itemId.equals(QuayPlanPage.BOAT_FULL) ? Deployables.BOAT_STATION_PIER_END : new int[]{0, 0, 0};
+            blocks = withShuttle(blocks, itemId + "#" + p.rotation().getDegrees() + "#d" + deck + (wood != null && !wood.equals(BiomeWood.DEFAULT) ? "#" + wood.species() : ""),
+                    p.rotation(), end);
         }
         BlockChange[] bc = blocks.blocksChange != null ? blocks.blocksChange : new BlockChange[0];
         FluidChange[] fc = blocks.fluidsChange != null ? blocks.fluidsChange : new FluidChange[0];
@@ -177,6 +210,44 @@ final class HeldCratePreview {
         st.worldName = world.getName();
         st.origin = new Vector3i(p.origin());
         st.rotation = p.rotation();
+        st.deck = deck;
+    }
+
+    /**
+     * Preview of the arrival point plan: a single ghost lantern on the cell above the aimed block (the cell PlaceArrivalInteraction
+     * sets), nothing without an aimed block. Resent only when the cell changes.
+     */
+    private static void updateArrival(Store<EntityStore> store, World world, PlayerRef pr, Ref<EntityStore> ref, UUID id, State st, long now) {
+        Vector3i target = TargetUtil.getTargetBlock(ref, REACH, store);
+        if (target == null) {
+            if (st != null) {
+                hide(pr);
+                STATES.remove(id);
+            }
+            return;
+        }
+        Vector3i cell = PlaceArrivalInteraction.cellAbove(target);
+        if (st == null) {
+            st = new State();
+            st.ref = ref;
+            STATES.put(id, st);
+        }
+        st.nextCheckMs = now + PERIOD_MS;
+        if (QuayPlanPage.BOAT_ARRIVAL.equals(st.itemId) && cell.equals(st.origin)) {
+            return;
+        }
+        int index = BlockType.getAssetMap().getIndex("Deco_Lantern");
+        if (index < 0) {
+            return;
+        }
+        BlockChange[] ghost = {new BlockChange(0, 0, 0, index, (byte) 0)};
+        pr.getPacketHandler().writeNoCache(new ShowTriggerVolumePastePrefabPreview(
+                new Vector3f(cell.x, cell.y, cell.z), ghost, new FluidChange[0], new ClipboardEntityChange[0], 0, 0));
+        st.itemId = QuayPlanPage.BOAT_ARRIVAL;
+        st.worldName = world.getName();
+        st.origin = cell;
+        st.rotation = Rotation.None;
+        st.deck = -1;
     }
 
     private static boolean crouching(Store<EntityStore> store, Ref<EntityStore> ref) {
@@ -206,11 +277,17 @@ final class HeldCratePreview {
      */
     private static EditorBlocksChange encoded(String prefabPath, Rotation rotation, BiomeWood.Wood wood, BiomeStone.Stone stone,
                                               boolean balloonStation) {
+        return encoded(prefabPath, rotation, wood, stone, balloonStation, -1);
+    }
+
+    /** As above, with the rotation index of the deck slabs of the pier end plan (the pasted slabs would turn with the prefab), -1 to leave the blocks as the turn gives them. */
+    private static EditorBlocksChange encoded(String prefabPath, Rotation rotation, BiomeWood.Wood wood, BiomeStone.Stone stone,
+                                              boolean balloonStation, int deckRotation) {
         boolean customWood = wood != null && (balloonStation || !wood.equals(BiomeWood.DEFAULT));
         boolean customStone = stone != null && !stone.equals(BiomeStone.DEFAULT);
         boolean remap = customWood || customStone;
         String key = prefabPath + "#" + rotation.getDegrees() + (customWood ? "#" + wood.species() : "")
-                + (customStone ? "#" + stone.family() : "");
+                + (customStone ? "#" + stone.family() : "") + (deckRotation >= 0 ? "#d" + deckRotation : "");
         java.util.function.UnaryOperator<String> rename = balloonStation
                 ? n -> BiomeStone.remap(BiomeWood.remapStation(n, wood), stone)
                 : n -> BiomeWood.remap(n, wood);
@@ -233,12 +310,82 @@ final class HeldCratePreview {
             if (remap) {
                 pkt = remapped(pkt, rename);
             }
+            if (deckRotation >= 0) {
+                pkt = deckTurned(pkt, deckRotation);
+            }
             CACHE.put(key, pkt);
             return pkt;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Preview: prefab %s not encoded", prefabPath);
             return null;
         }
+    }
+
+    /**
+     * The preview packet plus the blocks of the public shuttle at its berth. The shuttle origin relative to the preview origin is the
+     * pier end plus (0, -1, 3), all turned by the quay rotation (StationGeometry.berthOrigin from the origin), its own rotation is
+     * StationGeometry.berthRotation. Cached per item, rotation and wood. Returns the packet unchanged when the shuttle is unavailable.
+     */
+    static EditorBlocksChange withShuttle(EditorBlocksChange base, String key, Rotation quayRotation, int[] pierEnd) {
+        try {
+            EditorBlocksChange cached = MERGED.get(key);
+            if (cached != null) {
+                return cached;
+            }
+            Deployables.Kind shuttle = Deployables.STEAMBOAT_PUBLIC;
+            EditorBlocksChange boat = encoded(shuttle.prefabPath, StationGeometry.berthRotation(quayRotation, false), null, null, false);
+            if (boat == null || boat.blocksChange == null) {
+                return base;
+            }
+            Vector3i end = quayRotation.rotateYaw(new Vector3i(pierEnd[0], pierEnd[1], pierEnd[2]), new Vector3i());
+            Vector3i at = StationGeometry.berthOrigin(end, quayRotation);
+            EditorBlocksChange merged = merge(base, boat, at.x, at.y, at.z);
+            MERGED.put(key, merged);
+            return merged;
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Preview: shuttle not added");
+            return base;
+        }
+    }
+
+    /** New packet with the blocks of extra shifted by (dx, dy, dz) appended to base (neither source is modified). */
+    static EditorBlocksChange merge(EditorBlocksChange base, EditorBlocksChange extra, int dx, int dy, int dz) {
+        BlockChange[] a = base.blocksChange != null ? base.blocksChange : new BlockChange[0];
+        BlockChange[] b = extra.blocksChange != null ? extra.blocksChange : new BlockChange[0];
+        BlockChange[] out = new BlockChange[a.length + b.length];
+        System.arraycopy(a, 0, out, 0, a.length);
+        for (int i = 0; i < b.length; i++) {
+            BlockChange c = new BlockChange(b[i]);
+            c.x += dx;
+            c.y += dy;
+            c.z += dz;
+            out[a.length + i] = c;
+        }
+        EditorBlocksChange copy = new EditorBlocksChange(base);
+        copy.blocksChange = out;
+        return copy;
+    }
+
+    /** Copy of the packet whose deck slabs (blocks at height 0 named *_Planks_Half) have the given rotation index. */
+    static EditorBlocksChange deckTurned(EditorBlocksChange src, int deckRotation) {
+        if (src.blocksChange == null) {
+            return src;
+        }
+        Map<Integer, Boolean> slabs = new java.util.HashMap<>();
+        BlockChange[] out = new BlockChange[src.blocksChange.length];
+        for (int i = 0; i < out.length; i++) {
+            BlockChange b = new BlockChange(src.blocksChange[i]);
+            if (b.y == 0 && slabs.computeIfAbsent(b.block, id -> {
+                BlockType type = BlockType.getAssetMap().getAsset(id);
+                return type != null && DeployPlacement.isPierDeckSlab(type.getId());
+            })) {
+                b.rotation = (byte) deckRotation;
+            }
+            out[i] = b;
+        }
+        EditorBlocksChange copy = new EditorBlocksChange(src);
+        copy.blocksChange = out;
+        return copy;
     }
 
     /** Copy of the packet whose block ids are renamed by the biome wood and zone stone (the cached unmapped packet is left untouched). */

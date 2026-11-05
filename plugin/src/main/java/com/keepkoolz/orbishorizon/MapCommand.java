@@ -69,7 +69,7 @@ public final class MapCommand extends AbstractCommandCollection {
                     return;
                 }
                 TransitNetwork.Station s = TransitNetwork.get().at(world.getName(), new Vector3i(x.get(ctx), y.get(ctx), z.get(ctx)));
-                if (s == null) {
+                if (s == null || s.quay == null) {
                     ctx.sendMessage(Texts.t("map.station.notFound"));
                     return;
                 }

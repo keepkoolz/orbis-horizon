@@ -1,5 +1,7 @@
 package com.keepkoolz.orbishorizon;
 
+import com.keepkoolz.orbishorizon.api.TerrainProbe;
+
 /** Tells sea from land, lakes and rivers on the generated terrain. */
 final class SeaRules {
     static final int SEA_LEVEL = 114;

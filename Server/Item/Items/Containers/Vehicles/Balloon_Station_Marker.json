@@ -31,7 +31,8 @@
     "Flags": {},
     "Gathering": {
       "Breaking": {
-        "GatherType": "Rocks"
+        "GatherType": "Rocks",
+        "ItemId": "Furniture_Village_Brazier"
       }
     },
     "HitboxType": "Brazier_Large",

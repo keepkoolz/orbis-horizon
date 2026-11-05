@@ -34,7 +34,7 @@ final class StationDiscovery {
 
     /** True for a station that vehicles and players discover (balloon and boat stations). */
     private static boolean discoverable(TransitNetwork.Station s) {
-        return Deployables.STATION_KIND.equals(s.kind) || Deployables.BOAT_STATION_KIND.equals(s.kind);
+        return s.inNetwork() && (Deployables.STATION_KIND.equals(s.kind) || Deployables.BOAT_STATION_KIND.equals(s.kind));
     }
 
     /**

@@ -19,6 +19,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import java.util.logging.Level;
 
 /**
@@ -55,6 +56,11 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
         cmd.append("Pages/Transit_Destinations.ui");
         TransitUiTexts.destinations(cmd, StationSpec.of(station.kind).titleKey());
         cmd.set("#Status.Text", statusLine());
+        boolean quayBlocked = !boat && StationQueue.quayObstructed(station);
+        cmd.set("#QuayBlocked.Visible", quayBlocked);
+        if (quayBlocked) {
+            cmd.set("#QuayBlocked.Text", Message.translation("server.orbis_horizon.ui.dest.quayBlocked"));
+        }
         List<String> queue = new ArrayList<>(station.queue);
         cmd.set("#Queue.Text", queue.isEmpty()
                 ? Message.translation("server.orbis_horizon.ui.dest.queueEmpty")
@@ -80,9 +86,9 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
         for (int i = 0; i < others.size(); i++) {
             TransitNetwork.Station o = others.get(i);
             long dist = Math.round(Math.sqrt(distSq(o)));
-            double dx = o.origin.x - station.origin.x, dz = o.origin.z - station.origin.z;
-            int dock = Deployables.STATION_DOCK_ORIGIN[1];
-            double secs = boat ? 0 : tripSeconds(station.origin.y + dock, o.origin.y + dock, Math.sqrt(dx * dx + dz * dz), hSpeed, vSpeed);
+            double dx = StationGeometry.markerPoint(o).x - StationGeometry.markerPoint(station).x;
+            double dz = StationGeometry.markerPoint(o).z - StationGeometry.markerPoint(station).z;
+            double secs = boat ? 0 : tripSeconds(StationQueue.dockOrigin(station).y, StationQueue.dockOrigin(o).y, Math.sqrt(dx * dx + dz * dz), hSpeed, vSpeed);
             cmd.append("#List", "Pages/Transit_DestinationEntry.ui");
             String sel = "#List[" + i + "]";
             cmd.set(sel + " #Name.Text", o.name);
@@ -107,8 +113,19 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
         }
         events.addEventBinding(CustomUIEventBindingType.Activating, "#HireButton", EventData.of("Action", "Hire"));
         cmd.set("#RecallButton.Visible", !boat && AirshipRecall.canOffer(world, playerRef.getUuid()));
+        events.addEventBinding(CustomUIEventBindingType.Activating, "#ContractButton", EventData.of("Action", "Contract"));
+        cmd.set("#ArrivalButton.Visible", canOfferArrival(station.kind, station.quay != null, station.owner, playerRef.getUuid()));
+        events.addEventBinding(CustomUIEventBindingType.Activating, "#ArrivalButton", EventData.of("Action", "Arrival"));
         events.addEventBinding(CustomUIEventBindingType.Activating, "#RecallButton", EventData.of("Action", "Recall"));
         events.addEventBinding(CustomUIEventBindingType.Activating, "#CloseButton", EventData.of("Action", "Close"));
+    }
+
+    /**
+     * Whether the master offers the arrival point plan: a sea station with a quay, to the player who owns it (a generated station has
+     * no owner). Pure, pinned by TransitTests.arrivalButtonVisibility.
+     */
+    static boolean canOfferArrival(String kind, boolean hasQuay, UUID owner, UUID player) {
+        return Deployables.BOAT_STATION_KIND.equals(kind) && hasQuay && owner != null && owner.equals(player);
     }
 
     /**
@@ -155,9 +172,11 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
     }
 
     private double distSq(TransitNetwork.Station o) {
-        double dx = o.origin.x - station.origin.x;
-        double dy = o.origin.y - station.origin.y;
-        double dz = o.origin.z - station.origin.z;
+        org.joml.Vector3d a = StationGeometry.markerPoint(o);
+        org.joml.Vector3d b = StationGeometry.markerPoint(station);
+        double dx = a.x - b.x;
+        double dy = a.y - b.y;
+        double dz = a.z - b.z;
         return dx * dx + dy * dy + dz * dz;
     }
 
@@ -195,6 +214,38 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
             if (error != null) {
                 playerRef.sendMessage(error);
             }
+            finish();
+            close();
+            return;
+        }
+        if ("Contract".equals(data.action)) {
+            if (!StationMaster.holds(station, playerRef.getUuid())) {
+                playerRef.sendMessage(Texts.t("transit.master.expired"));
+                finished = true;
+                close();
+                return;
+            }
+            Message error = StationContracts.buy(store, ref, playerRef, station.kind);
+            if (error != null) {
+                playerRef.sendMessage(error);
+            }
+            finish();
+            close();
+            return;
+        }
+        if ("Arrival".equals(data.action)) {
+            if (!canOfferArrival(station.kind, station.quay != null, station.owner, playerRef.getUuid())) {
+                // The button is hidden for anyone else: a crafted event is ignored.
+                LOGGER.at(Level.INFO).log("Arrival ignored: %s may not set the arrival point of %s", playerRef.getUsername(), station.name);
+                return;
+            }
+            if (!StationMaster.holds(station, playerRef.getUuid())) {
+                playerRef.sendMessage(Texts.t("transit.master.expired"));
+                finished = true;
+                close();
+                return;
+            }
+            PlaceArrivalInteraction.giveArrivalPlan(store, ref, playerRef);
             finish();
             close();
             return;
@@ -244,7 +295,7 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
             }
             if (boat) {
                 // Only a destination on the same ocean and water level can be chosen (a crafted event for another one is ignored).
-                TransitNetwork.Station chosen = TransitNetwork.get().byName(world.getName(), data.dest);
+                TransitNetwork.Station chosen = TransitNetwork.get().byNameWithQuay(world.getName(), data.dest);
                 if (chosen != null && BoatQuay.reach(station, chosen) == BoatQuay.Reach.YES) {
                     BoatQuay.enqueue(world, station, data.dest, playerRef, store, ref);
                 }

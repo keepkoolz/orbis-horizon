@@ -849,7 +849,7 @@ final class AirshipManager {
         List<AirshipPassengers.Rider> riders = new ArrayList<>(passengers.assign(store, s, origin, rotation, aboard, Set.of()));
         if (riders.size() < aboard.size()) {
             // More players than seats: the extras go to the station's boarding points before the floor goes, nobody falls.
-            List<Vector3d> points = TransitAutopilot.boardingPoints(r.station);
+            List<Vector3d> points = TransitAutopilot.boardingPoints(world, r.station);
             int i = 0;
             for (BalloonManager.Occupant o : aboard) {
                 boolean seated = false;

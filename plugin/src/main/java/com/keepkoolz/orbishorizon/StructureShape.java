@@ -67,6 +67,8 @@ public final class StructureShape {
     private final Cell anchor;
     private final Cell burner;
     private final List<Cell> seats;
+    /** Cells of older placed structures that the current prefab no longer has: locked and removed, never pasted. */
+    private final List<Cell> legacyCells;
     private final List<Cell> flightCells;
     private final List<Cell> unfoldedLadder;
     private final int flightBottomGap;
@@ -75,7 +77,12 @@ public final class StructureShape {
     private final int[] bounds = new int[6];
 
     private StructureShape(String prefabPath, List<Cell> cells, Cell anchor, Cell burner, List<Cell> seats) {
+        this(prefabPath, cells, anchor, burner, seats, List.of());
+    }
+
+    private StructureShape(String prefabPath, List<Cell> cells, Cell anchor, Cell burner, List<Cell> seats, List<Cell> legacyCells) {
         this.prefabPath = prefabPath;
+        this.legacyCells = legacyCells;
         this.cells = cells;
         // a ladder cell is unfolded if another ladder is just above it.
         java.util.Set<java.util.List<Integer>> ladders = new java.util.HashSet<>();
@@ -106,6 +113,14 @@ public final class StructureShape {
         this.burner = burner;
         this.seats = seats;
         int[] b = {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
+        for (Cell c : legacyCells) {
+            b[0] = Math.min(b[0], c.x());
+            b[1] = Math.min(b[1], c.y());
+            b[2] = Math.min(b[2], c.z());
+            b[3] = Math.max(b[3], c.x());
+            b[4] = Math.max(b[4], c.y());
+            b[5] = Math.max(b[5], c.z());
+        }
         for (Cell c : cells) {
             byPosition.put(pack(c.x(), c.y(), c.z()), c);
             b[0] = Math.min(b[0], c.x());
@@ -133,8 +148,50 @@ public final class StructureShape {
         return new StructureShape("", Collections.unmodifiableList(cells), null, null, seatCells);
     }
 
+    /**
+     * Same shape with other cells. The anchor is re-read from the new cells at its position (a renamed anchor block, for
+     * example a plank in the wood of the biome); the old anchor stays when no new cell is there.
+     */
+    /** Shape made of the given cells with an anchor and legacy cells (test hook). */
+    static StructureShape ofCells(List<Cell> cells, Cell anchor, List<Cell> legacy) {
+        return new StructureShape("", Collections.unmodifiableList(cells), anchor, null, List.of(),
+                Collections.unmodifiableList(new ArrayList<>(legacy)));
+    }
+
     StructureShape withCells(List<Cell> newCells) {
-        return new StructureShape(prefabPath, Collections.unmodifiableList(newCells), anchor, burner, seats);
+        Cell a = anchor;
+        if (a != null) {
+            for (Cell c : newCells) {
+                if (c.x() == a.x() && c.y() == a.y() && c.z() == a.z() && c.filler() == a.filler()) {
+                    a = c;
+                    break;
+                }
+            }
+        }
+        return new StructureShape(prefabPath, Collections.unmodifiableList(newCells), a, burner, seats, legacyCells);
+    }
+
+    /** Same shape with legacy cells: cells of structures placed by an older prefab, counted in the bounds, locked and removed. */
+    StructureShape withLegacyCells(List<Cell> legacy) {
+        if (legacy == null || legacy.isEmpty()) {
+            return this;
+        }
+        return new StructureShape(prefabPath, cells, anchor, burner, seats, Collections.unmodifiableList(new ArrayList<>(legacy)));
+    }
+
+    /** Legacy cells (prefab frame), never part of cells(). */
+    List<Cell> legacyCells() {
+        return legacyCells;
+    }
+
+    /** The legacy cell at this position (prefab frame), null if none. */
+    Cell legacyAt(int x, int y, int z) {
+        for (Cell c : legacyCells) {
+            if (c.x() == x && c.y() == y && c.z() == z) {
+                return c;
+            }
+        }
+        return null;
     }
 
     private static long pack(int x, int y, int z) {
@@ -155,6 +212,11 @@ public final class StructureShape {
      * does not need a burner and burner() returns null.
      */
     public static StructureShape load(String prefabPath, String anchorBlock, boolean requireBurner) throws IOException {
+        return load(prefabPath, anchorBlock, requireBurner, null);
+    }
+
+    /** Same, with the anchor taken among the cells of its block at the prefab position anchorAt {x, y, z} (null: the last one). */
+    public static StructureShape load(String prefabPath, String anchorBlock, boolean requireBurner, int[] anchorAt) throws IOException {
         Path path = PrefabStore.get().findAssetPrefabPath(prefabPath);
         if (path == null) {
             throw new IOException("Prefab not found: " + prefabPath);
@@ -172,7 +234,7 @@ public final class StructureShape {
                     b.containsKey("filler") ? b.getNumber("filler").intValue() : 0);
             cells.add(c);
             // Filler cells of a multi-cell block never serve as anchor or burner: only the origin cell does.
-            if (isMarker(c, anchorBlock)) {
+            if (isMarker(c, anchorBlock) && (anchorAt == null || (c.x() == anchorAt[0] && c.y() == anchorAt[1] && c.z() == anchorAt[2]))) {
                 anchor = c;
             }
             // With requireBurner the anchor is the burner (the transit balloon's own burner block is its anchor, not the standard one).

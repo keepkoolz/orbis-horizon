@@ -169,8 +169,12 @@ final class DeployPlacement {
      * @return the origin, or null when there is no water there (refusal deploy.steamboat.noWater)
      */
     static Vector3i boatStationOrigin(CellState state, Vector3i computed, Rotation rotation) {
-        Vector3i end = rotation.rotateYaw(new Vector3i(Deployables.BOAT_STATION_PIER_END[0], Deployables.BOAT_STATION_PIER_END[1],
-                Deployables.BOAT_STATION_PIER_END[2]), new Vector3i());
+        return boatStationOrigin(state, computed, rotation, Deployables.BOAT_STATION_PIER_END);
+    }
+
+    /** Same search with the pier end given in the prefab frame: the whole station's pier end, or {0, 0, 0} for the pier end plan, whose anchor is the pier end. */
+    static Vector3i boatStationOrigin(CellState state, Vector3i computed, Rotation rotation, int[] pierEnd) {
+        Vector3i end = rotation.rotateYaw(new Vector3i(pierEnd[0], pierEnd[1], pierEnd[2]), new Vector3i());
         int cx = computed.x + end.x, cz = computed.z + end.z;
         for (int y = computed.y + 3; y >= computed.y - 10; y--) {
             int st = state.at(cx, y, cz);
@@ -183,6 +187,110 @@ final class DeployPlacement {
             }
         }
         return null;
+    }
+
+    /** Prefab-frame shift from the aimed cell to the pier end plan origin: the aimed cell sits at local (0, y, -4), one row behind the land row of the deck (z -3). */
+    static final int[] PIER_PLAN_AIM_SHIFT = {0, 0, 4};
+
+    /**
+     * Origin of the pier end plan from the origin computed for the aimed cell. The player aims at the last block of their own
+     * pier, so the deck must start right after it toward the sea: the origin moves by {@link #PIER_PLAN_AIM_SHIFT} turned with
+     * the plan, which leaves the aimed cell just behind the land row of the deck and covers none of the player's blocks.
+     */
+    static Vector3i pierPlanOrigin(Vector3i computed, Rotation rotation) {
+        Vector3i shift = rotation.rotateYaw(new Vector3i(PIER_PLAN_AIM_SHIFT[0], PIER_PLAN_AIM_SHIFT[1], PIER_PLAN_AIM_SHIFT[2]), new Vector3i());
+        return new Vector3i(computed).add(shift);
+    }
+
+    /** Rotations tried by {@link #pierPlanRotation}, as quarter turns added to the look rotation: the look itself, then a quarter turn forward, a quarter turn back, then the opposite. */
+    private static final Rotation[] PIER_PLAN_TURNS = {Rotation.None, Rotation.Ninety, Rotation.TwoSeventy, Rotation.OneEighty};
+
+    /**
+     * Rotation of the pier end plan, read from the player's construction around the aimed block so that aiming at the same block
+     * gives the same result whatever the angle of the look. A rotation is a candidate when the four cells beyond the aimed block
+     * in its seaward direction (the line of the deck, at the aimed height) hold no block or other liquid, and when
+     * {@link #boatStationOrigin} finds water under the sea-side row for the origin that {@link #pierPlanOrigin} gives. Candidates
+     * whose land side (the cell behind the aimed block) is a block are preferred: the construction continues behind the aimed
+     * block, so the pier end continues it. Among the preferred candidates, or among all of them when none is preferred, the look
+     * breaks the tie: the rotation closest to it, in the order of {@link #PIER_PLAN_TURNS} (the look, a quarter turn forward, a
+     * quarter turn back, the opposite). Without any candidate the look rotation is returned, so the usual refusals apply.
+     *
+     * @param computed     the origin {@link #compute} gives for the aimed block (only its height shift matters, it does not depend on the rotation)
+     * @param aimed        the targeted block, the last block of the player's pier
+     * @param lookRotation the rotation from the player's look, including the crate's rotation offset
+     */
+    static Rotation pierPlanRotation(CellState state, Vector3i computed, Vector3i aimed, Rotation lookRotation) {
+        Rotation best = null;
+        boolean bestPreferred = false;
+        for (Rotation turn : PIER_PLAN_TURNS) {
+            Rotation r = lookRotation.add(turn);
+            Vector3i d = r.rotateYaw(new Vector3i(0, 0, 1), new Vector3i());
+            boolean room = true;
+            for (int k = 1; k <= 4 && room; k++) {
+                room = state.at(aimed.x + d.x * k, aimed.y, aimed.z + d.z * k) != 2;
+            }
+            if (!room || pierPlanSeaOrigin(state, computed, r) == null) {
+                continue;
+            }
+            boolean preferred = state.at(aimed.x - d.x, aimed.y, aimed.z - d.z) == 2;
+            if (best == null || (preferred && !bestPreferred)) {
+                best = r;
+                bestPreferred = preferred;
+            }
+        }
+        return best != null ? best : lookRotation;
+    }
+
+    /** Block name suffix of the deck slabs of the pier end plan (the prefab names, and the names the biome look gives them). */
+    static final String PIER_DECK_SLAB_SUFFIX = "_Planks_Half";
+
+    /** Rotation index of a slab that is not turned (RotationTuple.NONE_INDEX). */
+    static final int SLAB_UNTURNED = 0;
+
+    /** True when a block name is a deck slab of the pier end plan. */
+    static boolean isPierDeckSlab(String blockName) {
+        return blockName != null && blockName.endsWith(PIER_DECK_SLAB_SUFFIX);
+    }
+
+    /**
+     * Rotation index of the deck slabs of the pier end plan: the one of the aimed block when it is a half slab lying flat in the
+     * lower half of its cell (index 0 to 3: yaw only), else the unturned slab, so a slab on its side or upside down is not copied onto the deck (a slab placed on the ground is stored unturned: VariantRotation.DoublePipe.verify drops the yaw of a slab whose pitch is None).
+     * The paste would otherwise turn them with the paste rotation (PrefabRotation adds it to the yaw of the block).
+     */
+    static int pierDeckSlabRotation(boolean aimedIsHalfSlab, int aimedRotationIndex) {
+        return aimedIsHalfSlab && aimedRotationIndex >= 0 && aimedRotationIndex <= 3 ? aimedRotationIndex : SLAB_UNTURNED;
+    }
+
+    /**
+     * True for a half slab: a model block with the half block hitbox whose rotation is the double pipe one (the asset of
+     * Wood_*_Planks_Half: DrawType Model, HitboxType Block_Half, VariantRotation DoublePipe).
+     */
+    static boolean isHalfSlab(com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType type) {
+        return type != null
+                && type.getVariantRotation() == com.hypixel.hytale.server.core.asset.type.blocktype.config.VariantRotation.DoublePipe
+                && "Block_Half".equals(type.getHitboxType());
+    }
+
+    /**
+     * Rotation index of the deck slabs of the pier end plan for the aimed block, read from the world (a section not loaded
+     * counts as no slab). Never throws.
+     */
+    static int pierDeckRotation(com.hypixel.hytale.server.core.universe.world.World world, Vector3i aimed) {
+        try {
+            com.hypixel.hytale.server.core.universe.world.accessor.SectionReader reader =
+                    new com.hypixel.hytale.server.core.universe.world.accessor.SectionReader(world.getChunkStore());
+            com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType type = SectionBlocks.typeAt(reader, aimed.x, aimed.y, aimed.z);
+            boolean slab = isHalfSlab(type);
+            return pierDeckSlabRotation(slab, slab ? reader.getRotationIndex(aimed.x, aimed.y, aimed.z) : SLAB_UNTURNED);
+        } catch (RuntimeException e) {
+            Telemetry.error("deploy", e, "pier-deck-rotation", null);
+            return SLAB_UNTURNED;
+        }
+    }
+
+    /** Origin of the pier end plan for a rotation: {@link #pierPlanOrigin} then the water surface under the pier end ({@link #boatStationOrigin}), or null without water. */
+    static Vector3i pierPlanSeaOrigin(CellState state, Vector3i computed, Rotation rotation) {
+        return boatStationOrigin(state, pierPlanOrigin(computed, rotation), rotation, new int[]{0, 0, 0});
     }
 
     /** The cell that stops the {@link #boatStationOrigin} search (first state 2 going down the column), or null when none does. */
@@ -218,12 +326,16 @@ final class DeployPlacement {
             Map.entry("Airship_Cloudwork_Crate", new Crate("The_Cloudwork.prefab.json", new Vector3i(0, 0, -15), Rotation.None)),
             Map.entry("Camping_Tent_Crate", new Crate("Camping_Tent.prefab.json", new Vector3i(0, 1, -3), Rotation.Ninety)),
             Map.entry("Camping_Tent_Big_Crate", new Crate("Camping_Tent_Big.prefab.json", new Vector3i(0, 1, -1), Rotation.OneEighty)),
-            Map.entry("Balloon_Station_Crate", new Crate("Balloon_Landing_zone.prefab.json", new Vector3i(0, 1, 0), Rotation.Ninety)),
-            Map.entry("Boat_Station_Crate", new Crate("Boat_Station.prefab.json", new Vector3i(0, 1, 0), Rotation.OneEighty)),
             // the camp packs. Same values as the legacy tent crates; the sleeping bag is shifted by one block in X so the
             // 3 x 3 camp is centred on the targeted block once turned.
             Map.entry("Camping_Pack_Bedroll", new Crate("Camping_Bedroll.prefab.json", new Vector3i(-1, 1, 0), Rotation.Ninety)),
             Map.entry("Camping_Pack_Tent", new Crate("Camping_Tent.prefab.json", new Vector3i(0, 1, -3), Rotation.Ninety)),
             Map.entry("Camping_Pack_Tent_Big", new Crate("Camping_Tent_Big.prefab.json", new Vector3i(0, 1, -1), Rotation.OneEighty)),
-            Map.entry("Steamboat_Crate", new Crate("Steamboat.prefab.json", new Vector3i(0, 0, -12), Rotation.None)));
+            Map.entry("Steamboat_Crate", new Crate("Steamboat.prefab.json", new Vector3i(0, 0, -12), Rotation.None)),
+            // the quay plans of the stations (PlaceQuayInteraction): the pad and the pier end sit on the targeted block, the whole
+            // stations are turned so that their pad or pier end faces away from the player.
+            Map.entry("Hotair_Balloon_Station_Plan_Pad", new Crate("Balloon_Station_Pad.prefab.json", new Vector3i(0, 1, 0), Rotation.None)),
+            Map.entry("Hotair_Balloon_Station_Plan_Full", new Crate("Balloon_Landing_zone.prefab.json", new Vector3i(0, 1, 0), Rotation.Ninety)),
+            Map.entry("Hotair_Balloon_Boat_Station_Plan_Pier", new Crate("Boat_Station_Pier.prefab.json", new Vector3i(0, 1, 0), Rotation.OneEighty)),
+            Map.entry("Hotair_Balloon_Boat_Station_Plan_Full", new Crate("Boat_Station.prefab.json", new Vector3i(0, 1, 0), Rotation.OneEighty)));
 }

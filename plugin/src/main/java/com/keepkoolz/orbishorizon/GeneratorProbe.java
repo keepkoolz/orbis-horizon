@@ -4,6 +4,7 @@ import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.worldgen.chunk.ChunkGenerator;
 import com.hypixel.hytale.server.worldgen.chunk.ZoneBiomeResult;
+import com.keepkoolz.orbishorizon.api.TerrainProbe;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;

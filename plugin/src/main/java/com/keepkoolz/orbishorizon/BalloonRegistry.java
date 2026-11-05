@@ -209,8 +209,13 @@ final class BalloonRegistry {
     static StructureShape shapeOf(Entry e) {
         Deployables.Kind kind = kindOf(e);
         StructureShape base = kind == null ? null : kind.shapeOrNull();
-        if (base != null && e.wood() != null && Deployables.BOAT_STATION_KIND.equals(e.kind())) {
-            return BOAT_WOOD_SHAPES.computeIfAbsent(e.wood(), w -> remapShape(base, BiomeWood.woodOf(w)));
+        if (base != null && e.wood() != null
+                && (Deployables.BOAT_STATION_KIND.equals(e.kind()) || Deployables.PIER_KIND.equals(e.kind()))) {
+            return BOAT_WOOD_SHAPES.computeIfAbsent(e.kind() + "/" + e.wood(), k -> remapShape(base, BiomeWood.woodOf(e.wood())));
+        }
+        if (base != null && e.stone() != null && Deployables.PAD_KIND.equals(e.kind())) {
+            return STATION_SHAPES.computeIfAbsent(e.kind() + "/" + e.stone(),
+                    k -> remapStationShape(base, null, new BiomeStone.Stone(e.stone()), BiomeWood::blockExists));
         }
         if (base != null && (e.wood() != null || e.stone() != null) && Deployables.STATION_KIND.equals(e.kind())) {
             return STATION_SHAPES.computeIfAbsent(e.wood() + "/" + e.stone(), k -> remapStationShape(base,
@@ -594,6 +599,10 @@ final class BalloonRegistry {
                         || TransportCage.placeForbidden(kind, e, local.x, local.y, local.z);
             } else {
                 inside = cell != null && (broken == null || BalloonManager.sameBlock(broken, cell));
+                if (!inside && cell == null && broken != null) {
+                    StructureShape.Cell legacy = shape.legacyAt(local.x, local.y, local.z);
+                    inside = legacy != null && BalloonManager.sameBlock(broken, legacy);
+                }
             }
             if (!inside) {
                 continue;
@@ -602,9 +611,27 @@ final class BalloonRegistry {
                 remove(e);
                 continue;
             }
+            if (outsideQuayCore(world, e, pos)) {
+                continue;
+            }
             return e;
         }
         return null;
+    }
+
+    /** True for a station entry whose station is editable and whose cell is outside the quay core: that cell is not locked. */
+    private static boolean outsideQuayCore(World world, Entry e, Vector3i pos) {
+        if (!Deployables.STATION_KIND.equals(e.kind) && !Deployables.BOAT_STATION_KIND.equals(e.kind)) {
+            return false;
+        }
+        try {
+            TransitNetwork.Station s = TransitNetwork.get().at(world.getName(), new Vector3i(e.x, e.y, e.z));
+            return s != null && s.quay != null && StationClearance.editable(s) && !StationGeometry.inQuayCore(s, pos.x, pos.y, pos.z);
+        } catch (RuntimeException ex) {
+            LOGGER.at(Level.WARNING).withCause(ex).log("Station lock rule not applied");
+            Telemetry.error("lock-registry", ex, null, null);
+            return false;
+        }
     }
 
     private static boolean isLadderRung(Entry e, Vector3i pos) {

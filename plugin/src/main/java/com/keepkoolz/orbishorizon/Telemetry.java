@@ -48,6 +48,11 @@ final class Telemetry {
         COUNTERS.increment(name);
     }
 
+    /** Adds counter names to the usage report (names already known are ignored). */
+    static void registerCounters(java.util.Collection<String> names) {
+        COUNTERS.register(names);
+    }
+
     /** Start mark for timing and tick, 0 when telemetry is off so that nothing is measured. */
     static long start() {
         return bridge == null || unavailable ? 0L : (System.nanoTime() | 1L);

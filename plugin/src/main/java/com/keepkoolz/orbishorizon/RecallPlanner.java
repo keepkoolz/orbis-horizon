@@ -9,8 +9,6 @@ final class RecallPlanner {
     static final double SPAWN_DISTANCE = 120.0;
     /** Distance from the pivot to the airship centre, along the bow direction. */
     static final double PIVOT_TO_CENTRE = 10.0;
-    /** Air gap between the highest station block and the lowest airship block. */
-    static final int AIR_GAP = 3;
     /** Blocks from the lowest airship block up to the pivot. */
     static final int PIVOT_ABOVE_LOWEST = 6;
 
@@ -29,13 +27,13 @@ final class RecallPlanner {
     }
 
     /**
-     * Hover pose {x, y, z, theta}: heading = station yaw (bow = (-sin t, -cos t)), airship centre above the pad centre. The pivot
+     * Hover pose {x, y, z, theta}: heading = station yaw (bow = (-sin t, -cos t)), airship centre above the pad centre, lowest block at bottomY. The pivot
      * is 10 blocks from the centre on the bow side, so pivot = centre + 10 * bow.
      */
-    static double[] hoverPivot(double padX, double padZ, int stationTopY, double stationYawRad) {
+    static double[] hoverPivot(double padX, double padZ, int bottomY, double stationYawRad) {
         double bowX = -Math.sin(stationYawRad);
         double bowZ = -Math.cos(stationYawRad);
-        double y = stationTopY + 1 + AIR_GAP + PIVOT_ABOVE_LOWEST;
+        double y = bottomY + PIVOT_ABOVE_LOWEST;
         return new double[] {padX + PIVOT_TO_CENTRE * bowX, y, padZ + PIVOT_TO_CENTRE * bowZ, stationYawRad};
     }
 

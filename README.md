@@ -1,4 +1,4 @@
-![Orbis Origin](images/logo/orbis-horizon-header-3.jpg)
+![Orbis Horizon](images/logo/orbis-horizon-header-4.png)
 
 Orbis Horizon is an adventure mod for Hytale about leaving home behind. You build your gear at the workbench, carry it in a crate, and set it up wherever the road takes you. A tent for the night, a hot air balloon to cross the valley, an airship once the world starts to feel small, a steamboat for the lakes and the sea, and stations that carry you from one place to the next by air or by water.
 
@@ -38,30 +38,36 @@ Hire a pilot and the steamboat learns the way. Ask them to note the places you l
 
 ### Balloon stations
 
-A station is a stone walkway with a landing pad at its end and a little hut for the station master. Name it when you set it up. Talk to the station master, pick a faraway station, and a balloon floats down onto the pad. Climb in, sit on a stool, and when the countdown ends it carries you across the sky on its own while you watch it fly from the outside. You step off on the boarding platform of the other station, with its name across the screen. No fuel to find, nothing to steer. The station master only sends you to stations you have found yourself, or that a fellow traveller shared from their map.
+A station is a station master and a landing pad. Talk to a station master and buy a contract with life essences, then use it where you want your own station. The station master appears first, and a plan for the landing pad comes next: a bare pad, or a ready-made station with a walkway and a little hut. Name the station and it joins the network. Build around it however you like, with your own walls, roofs and gardens. Only the pad stays locked, and the sky above it stays clear for the balloon.
+
+Talk to the station master, pick a faraway station, and a balloon floats down onto the pad. Climb in, sit on a stool, and when the countdown ends it carries you across the sky on its own while you watch it fly from the outside. You step off beside the station master of the other station, with its name across the screen. No fuel to find, nothing to steer. The station master only sends you to stations you have found yourself, or that a fellow traveller shared from their map.
+
+In a new world without any station, the first traveller to arrive is handed a contract to found the first one.
 
 ### Boat stations
 
-A boat station is a wooden pier on a shore with its own station master. Pick another boat station and a small shuttle boat comes alongside the pier. Step aboard during the countdown and it sails you there along the water. In frozen seas the shuttle breaks its way through the ice.
+A boat station is a station master on a shore and the end of a wooden pier. Buy a boat station contract from a boat station master, place your own station master by the water, then choose the end of the pier or a ready-made station. Pick another boat station and a small shuttle boat comes alongside the pier. Step aboard during the countdown and it sails you there along the water. In frozen seas the shuttle breaks its way through the ice. Build your own harbour around the pier, and leave the water in front of it open for the shuttle.
 
 ### Stations in the wild
 
 You will not always find an empty world. As you explore new land, balloon stations appear across the land, with more of them near the portals of the Forgotten Temple, and ports rise along the sea coasts, with a partner port waiting across the water. They have their own names and belong to nobody: discover one, talk to its station master and travel.
+
+These wild stations come from Orbis Horizon Worldgen, an optional add-on you download from the same CurseForge page as the mod and drop in your Mods folder next to it. The game lists it switched off, like Orbis Horizon itself, both when you create a world and in a world you already play: tick both in that world's mod list (for a world you already play, reopen it afterwards). Without it, the world stays quiet and you found your own stations with contracts. Operators can let players build on wild stations too, and can give contracts with a command.
 
 Each trip, by balloon or by boat, costs a ticket paid in life essences by the traveller who picks the destination, unless the server makes tickets free. If the trip never happens, the ticket is refunded.
 
 ## Before you set off
 
 - Everything is crafted at the Explorer's workbench, an explorer's desk with its own tabs. Upgrade it and plans and little models of what you can build appear on top of it, down to a balloon floating above the bench. Its Gear tab holds a diving outfit for exploring under water.
-- Hold a crate and you see where the structure will go, block by block, before you set it up.
+- Hold a crate or a station plan and you see where the structure will go, block by block, before you set it up.
 - Pack a camp and what you left in its chests and campfire travels in the pack, ready for your next camp. Crouch to set up camp, and use a tent pack standing to rummage through its chests. The small tent has a chest outside for your things.
-- Once set up, a tent, balloon, airship or station is locked, so nobody breaks it by accident. Beds, chests, burners and seats still work.
+- Once set up, a tent, balloon or airship, and the landing pad of a station, is locked, so nobody breaks it by accident. Beds, chests, burners and seats still work.
 - Friends standing on board when you take off travel with you, seated, and watch the sky from outside the vehicle. Passengers can leave mid-flight with a glider. Other players see you fly by.
-- Stations keep a clear area around their landing pad, and you can only own one airship at a time.
+- Stations keep the sky above their landing pad clear, and you can only own one airship at a time.
 
-Orbis Horizon 1.8 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8.
+Orbis Horizon 2.0 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8.
 
-The wiki has the exact recipes, how to fly each vehicle and the operator commands.
+The wiki explains how to fly each vehicle, how to found your stations and the operator commands.
 
 ## Telemetry
 

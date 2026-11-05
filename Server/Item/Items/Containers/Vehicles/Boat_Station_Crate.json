@@ -11,38 +11,6 @@
   "Categories": [
     "Items.Vehicles"
   ],
-  "Recipe": {
-    "Input": [
-      {
-        "ResourceTypeId": "Wood_Trunk",
-        "Quantity": 80
-      },
-      {
-        "ItemId": "Cloth_Block_Wool_White",
-        "Quantity": 7
-      },
-      {
-        "ItemId": "Cloth_Block_Wool_Blue",
-        "Quantity": 7
-      },
-      {
-        "ItemId": "Ingredient_Bar_Iron",
-        "Quantity": 4
-      }
-    ],
-    "BenchRequirement": [
-      {
-        "Type": "Crafting",
-        "Categories": [
-          "OrbisHorizon_Transport"
-        ],
-        "Id": "OrbisHorizon_Bench",
-        "RequiredTierLevel": 3
-      }
-    ],
-    "TimeSeconds": 3,
-    "KnowledgeRequired": true
-  },
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Cube",
@@ -72,19 +40,7 @@
     "Secondary": {
       "Interactions": [
         {
-          "Type": "Transit_DeployStation",
-          "PrefabPath": "Boat_Station.prefab.json",
-          "Offset": {
-            "X": 0,
-            "Y": 1,
-            "Z": 0
-          },
-          "RotationOffset": "OneEighty",
-          "Force": true,
-          "Next": {
-            "Type": "ModifyInventory",
-            "AdjustHeldItemQuantity": -1
-          }
+          "Type": "Transit_ExchangeCrate"
         }
       ]
     }

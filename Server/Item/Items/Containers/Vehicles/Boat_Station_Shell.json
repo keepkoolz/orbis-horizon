@@ -29,8 +29,12 @@
     },
     "RandomRotation": "YawStep1",
     "Gathering": {
-      "Harvest": {},
-      "Soft": {}
+      "Harvest": {
+        "ItemId": "Deco_Coral_Shell_Swirly"
+      },
+      "Soft": {
+        "ItemId": "Deco_Coral_Shell_Swirly"
+      }
     },
     "BlockParticleSetId": "Stone",
     "BlockSoundSetId": "Stone",

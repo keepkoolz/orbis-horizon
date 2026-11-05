@@ -31,8 +31,6 @@ import java.util.logging.Level;
 final class AirshipRecall {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
     private static final double MAX_DT = 0.25;
-    /** Highest block of a station above its origin (the statues). */
-    static final int STATION_TOP_OFFSET = 9;
     /** Sections loaded around a point before the ship is put there. */
     private static final int LOAD_RADIUS = 20;
     private static final int LOAD_ABOVE = 24;
@@ -51,14 +49,18 @@ final class AirshipRecall {
                 double hoverY, double hoverTheta) {
     }
 
-    /** Pure: the plan of a recall of a ship parked with its pivot at (pivotX, pivotZ). */
-    static Plan plan(TransitNetwork.Station s, double pivotX, double pivotZ) {
+    /**
+     * The plan of a recall of a ship parked with its pivot at (pivotX, pivotZ), hovering over the highest solid block under it
+     * (Integer.MIN_VALUE when none). Reads the boarding points of the station, world thread.
+     */
+    static Plan plan(World world, TransitNetwork.Station s, double pivotX, double pivotZ, int highest) {
         Vector3d pad = StationMarkerProvider.markerPoint(s);
         double[] sp = RecallPlanner.spawnPoint(pad.x, pad.z, pivotX, pivotZ);
         double theta = AirshipAutopilot.headingTo(pad.x - sp[0], pad.z - sp[1]);
         // the ship hovers with the quarter turn whose side ladder is nearest to the boarding steps.
-        int[] side = RecallPlanner.ladderSide(pad.x, pad.z, boardingPoints(s));
-        double[] hover = RecallPlanner.hoverPivot(pad.x, pad.z, s.origin.y + STATION_TOP_OFFSET, side[0] * Math.PI / 2);
+        int[] side = RecallPlanner.ladderSide(pad.x, pad.z, boardingPoints(world, s));
+        int bottom = StationGeometry.hoverBottomY(s.quay.y, highest);
+        double[] hover = RecallPlanner.hoverPivot(pad.x, pad.z, bottom, side[0] * Math.PI / 2);
         int padY = StationQueue.padY(s);
         int cruise = Math.max(VoyagePlanner.cruiseY(padY, padY, BalloonManager.WORLD_MAX_Y), (int) Math.ceil(hover[1]));
         // The approach flies the pivot to the point where the ship centre (10 blocks behind the pivot) is above the pad centre.
@@ -68,9 +70,9 @@ final class AirshipRecall {
     }
 
     /** World boarding points of a station as {x, y, z}. */
-    static List<double[]> boardingPoints(TransitNetwork.Station s) {
+    static List<double[]> boardingPoints(World world, TransitNetwork.Station s) {
         List<double[]> points = new ArrayList<>();
-        for (Vector3d p : TransitAutopilot.boardingPoints(s)) {
+        for (Vector3d p : TransitAutopilot.boardingPoints(world, s)) {
             points.add(new double[] {p.x, p.y, p.z});
         }
         return points;
@@ -177,33 +179,77 @@ final class AirshipRecall {
         Vector3i origin = new Vector3i(entry.x(), entry.y(), entry.z());
         Rotation rotation = entry.rotation();
         Vector3d parked = AirshipManager.get().parkedPivot(Deployables.AIRSHIP, origin, rotation);
-        Plan plan = plan(s, parked.x, parked.z);
-        LOGGER.at(Level.INFO).log("Recall: airship of %s requested at %s, spawning at (%.0f, %d, %.0f)", owner.getUsername(), s.name,
-                plan.spawnX(), plan.cruiseY(), plan.spawnZ());
-        int sx = (int) Math.floor(plan.spawnX());
-        int sz = (int) Math.floor(plan.spawnZ());
         int[] box = AirshipManager.shipBox(origin);
-        CompletableFuture<Void> parkedLoad = SectionBlocks.loadSections(world.getChunkStore(), box[0], box[1], box[2], box[3], box[4], box[5]);
-        CompletableFuture<Void> spawnLoad = SectionBlocks.loadSections(world.getChunkStore(), sx - LOAD_RADIUS, plan.cruiseY() - 12,
-                sz - LOAD_RADIUS, sx + LOAD_RADIUS, plan.cruiseY() + LOAD_ABOVE, sz + LOAD_RADIUS);
-        CompletableFuture.allOf(parkedLoad, spawnLoad).whenComplete((v, t) -> {
+        int[] hb = StationGeometry.hoverBox(s.quay);
+        // The blocks under the hover point are read once their sections are loaded, then the rest of the recall is loaded.
+        SectionBlocks.loadSections(world.getChunkStore(), hb[0], hb[1], hb[2], hb[3], hb[4], hb[5]).whenComplete((hv, ht) -> {
             try {
-                if (t != null) {
-                    // Never detach a structure that is not in memory: the recall ends cleanly, the ship stays where it is.
-                    LOGGER.at(Level.WARNING).withCause(t).log("Recall: loading the sections failed, recall cancelled");
-                    Telemetry.error("airship.recall", t, null, null);
-                    world.execute(() -> {
-                        StationQueue.endRecall(s, flightId);
-                        owner.sendMessage(Texts.t("crew.recall.unreachable"));
-                    });
-                    return;
-                }
-                world.execute(() -> launch(world, owner, s, entry, flightId, plan));
+                world.execute(() -> beginLoaded(store, world, owner, s, entry, flightId, parked, box, ht));
             } catch (RuntimeException e) {
                 StationQueue.endRecall(s, flightId);
                 LOGGER.at(Level.WARNING).withCause(e).log("Recall: world stopped, recall cancelled");
             }
         });
+    }
+
+    /** On the world thread, the hover sections loaded: plans the recall and loads the parked ship and the spawn area. */
+    private static void beginLoaded(Store<EntityStore> store, World world, PlayerRef owner, TransitNetwork.Station s,
+                                    BalloonRegistry.Entry entry, UUID flightId, Vector3d parked, int[] box, Throwable hoverLoad) {
+        try {
+            int highest = Integer.MIN_VALUE;
+            try {
+                if (hoverLoad != null) {
+                    LOGGER.at(Level.WARNING).withCause(hoverLoad).log("Recall: loading the sections under the hover point failed");
+                }
+                // The recalled ship itself does not count as a block under the hover point.
+                highest = StationGeometry.highestSolidUnderShip(world, s.quay, box);
+            } catch (Throwable t) {
+                LOGGER.at(Level.WARNING).withCause(t).log("Recall: reading the blocks under the hover point failed");
+                Telemetry.error("recall.hoverScan", t, null, null);
+            }
+            Plan plan;
+            try {
+                plan = plan(world, s, parked.x, parked.z, highest);
+            } catch (RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Recall: planning failed, recall cancelled");
+                Telemetry.error("airship.recall", e, null, null);
+                StationQueue.endRecall(s, flightId);
+                owner.sendMessage(Texts.t("crew.recall.unreachable"));
+                return;
+            }
+            LOGGER.at(Level.INFO).log("Recall: airship of %s requested at %s, spawning at (%.0f, %d, %.0f)", owner.getUsername(), s.name,
+                    plan.spawnX(), plan.cruiseY(), plan.spawnZ());
+            int sx = (int) Math.floor(plan.spawnX());
+            int sz = (int) Math.floor(plan.spawnZ());
+            CompletableFuture<Void> parkedLoad = SectionBlocks.loadSections(world.getChunkStore(), box[0], box[1], box[2], box[3], box[4], box[5]);
+            CompletableFuture<Void> spawnLoad = SectionBlocks.loadSections(world.getChunkStore(), sx - LOAD_RADIUS, plan.cruiseY() - 12,
+                    sz - LOAD_RADIUS, sx + LOAD_RADIUS, plan.cruiseY() + LOAD_ABOVE, sz + LOAD_RADIUS);
+            CompletableFuture.allOf(parkedLoad, spawnLoad).whenComplete((v, t) -> {
+                try {
+                    if (t != null) {
+                        // Never detach a structure that is not in memory: the recall ends cleanly, the ship stays where it is.
+                        LOGGER.at(Level.WARNING).withCause(t).log("Recall: loading the sections failed, recall cancelled");
+                        Telemetry.error("airship.recall", t, null, null);
+                        world.execute(() -> {
+                            StationQueue.endRecall(s, flightId);
+                            owner.sendMessage(Texts.t("crew.recall.unreachable"));
+                        });
+                        return;
+                    }
+                    world.execute(() -> launch(world, owner, s, entry, flightId, plan));
+                } catch (Throwable e) {
+                    // Whatever fails (a stopped world included), the quay must not stay in RECALL.
+                    StationQueue.endRecall(s, flightId);
+                    LOGGER.at(Level.WARNING).withCause(e).log("Recall: world stopped, recall cancelled");
+                    Telemetry.error("airship.recall", e, null, null);
+                }
+            });
+        } catch (Throwable t) {
+            // Whatever fails, the quay must not stay in RECALL.
+            StationQueue.endRecall(s, flightId);
+            LOGGER.at(Level.WARNING).withCause(t).log("Recall: preparing the recall failed, recall cancelled");
+            Telemetry.error("airship.recall", t, null, null);
+        }
     }
 
     /** On the world thread: the airship leaves its parking place and appears in flight. */
@@ -364,7 +410,7 @@ final class AirshipRecall {
         r.origin = placed.origin();
         r.rotation = placed.rotation();
         r.quayId = f.quayId != null ? f.quayId : f.id;
-        r.sx = RecallPlanner.ladderSx(r.padX, r.padZ, boardingPoints(r.station), (int) Math.round(r.rotation.getRadians() / (Math.PI / 2)) & 3);
+        r.sx = RecallPlanner.ladderSx(r.padX, r.padZ, boardingPoints(world, r.station), (int) Math.round(r.rotation.getRadians() / (Math.PI / 2)) & 3);
         r.crew = f.crew;
         ShipLadder.lower(world, r.origin, r.rotation, r.sx);
         r.phase = RecallState.Phase.LADDER; // the minute starts when the rope ladder is down
@@ -662,7 +708,7 @@ final class AirshipRecall {
     static double[] retreatPoint(RecallState r, World world) {
         List<double[]> others = new ArrayList<>();
         for (TransitNetwork.Station other : TransitNetwork.get().stations(world.getName())) { // every kind: boat zones count too
-            if (other != r.station) {
+            if (other != r.station && other.quay != null) {
                 Vector3d p = StationMarkerProvider.markerPoint(other);
                 others.add(new double[] {p.x, p.z});
             }
@@ -903,7 +949,7 @@ final class AirshipRecall {
         try {
             com.hypixel.hytale.server.core.universe.Universe universe = com.hypixel.hytale.server.core.universe.Universe.get();
             StructureShape shape = Deployables.AIRSHIP.shape();
-            Vector3d point = TransitAutopilot.boardingPoints(station).get(0);
+            Vector3d point = TransitAutopilot.boardingPoints(world, station).get(0);
             String worldName = world.getName();
             Vector3i origin = new Vector3i(r.origin);
             Rotation rotation = r.rotation;

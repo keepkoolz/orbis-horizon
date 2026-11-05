@@ -118,7 +118,7 @@ final class BoatQuay {
     }
 
     static int[] approachSpawn(TransitNetwork.Station s) {
-        return approachSpawn(s.rotation, BoatBerth.berthCentreCell(s));
+        return approachSpawn(s.quayRotation, BoatBerth.berthCentreCell(s));
     }
 
     // ------------------------------------------------------------------ quay state machine (pure, tested in TransitTests)
@@ -314,19 +314,15 @@ final class BoatQuay {
         return l + pathLength(pts.subList(i, pts.size()));
     }
 
-    /** Drop points of a boat station in the world (feet position), one per prefab point. */
-    static List<Vector3d> dropPoints(Vector3i stationOrigin, Rotation rotation) {
-        List<Vector3d> out = new ArrayList<>();
-        for (float[] p : Deployables.BOAT_STATION_DROP_POINTS) {
-            Vector3f r = rotation.rotateYaw(new Vector3f(p[0], p[1], p[2]), new Vector3f());
-            out.add(new Vector3d(stationOrigin.x + r.x + 0.5, stationOrigin.y + r.y, stationOrigin.z + r.z + 0.5));
-        }
-        return out;
+    /** Drop points of a boat station in the world (feet position): the standable cells nearest to its arrival point, else to the end of its pier, twelve of them. */
+    static List<Vector3d> dropPoints(World world, TransitNetwork.Station s) {
+        StationGeometry.Standable standable = StationGeometry.standable(world);
+        Vector3i centre = StationGeometry.dropCentre(s, standable);
+        return StationGeometry.dropPoints(centre, DROP_POINT_COUNT, standable, !centre.equals(s.master));
     }
 
-    static List<Vector3d> dropPoints(TransitNetwork.Station s) {
-        return dropPoints(s.origin, s.rotation);
-    }
+    /** Number of drop points of a boat station, two per seat of the shuttle. */
+    private static final int DROP_POINT_COUNT = 12;
 
     /**
      * Station a rider who leaves a shuttle early (disconnect, server stop) goes back to: the departure station if it still exists, else the
@@ -360,7 +356,7 @@ final class BoatQuay {
                 others.add(s);
             }
         }
-        others.sort(java.util.Comparator.comparingDouble(s -> here.distanceSquared(s.origin.x, s.origin.y, s.origin.z)));
+        others.sort(java.util.Comparator.comparingDouble(s -> here.distanceSquared(StationGeometry.position(s))));
         out.addAll(others);
         return out;
     }
@@ -369,7 +365,7 @@ final class BoatQuay {
     static List<Vector3d> returnPoints(World world, String from, String to, Vector3d here) {
         TransitNetwork.Station st = returnStation(TransitNetwork.get().stations(world.getName(), Deployables.BOAT_STATION_KIND), from, to,
                 here);
-        return st == null ? null : dropPoints(st);
+        return st == null ? null : dropPoints(world, st);
     }
 
     // ------------------------------------------------------------------ state
@@ -418,7 +414,7 @@ final class BoatQuay {
     static StationQueue.EnqueueResult enqueue(World world, TransitNetwork.Station s, String destination, PlayerRef chooser,
                                               Store<EntityStore> store, Ref<EntityStore> ref) {
         TransitNetwork net = TransitNetwork.get();
-        TransitNetwork.Station target = net.byName(world.getName(), destination);
+        TransitNetwork.Station target = net.byNameWithQuay(world.getName(), destination);
         if (!Deployables.BOAT_STATION_KIND.equals(s.kind) || (target != null && !target.kind.equals(s.kind))) {
             LOGGER.at(Level.INFO).log("Sea station queue of %s ignored: stations of different types", s.name);
             return StationQueue.EnqueueResult.UNKNOWN;
@@ -516,7 +512,7 @@ final class BoatQuay {
             return;
         }
         long headId = TransitNetwork.get().queueHeadId(s);
-        TransitNetwork.Station dest = TransitNetwork.get().byName(world.getName(), head);
+        TransitNetwork.Station dest = TransitNetwork.get().byNameWithQuay(world.getName(), head);
         QueueAction action = dest == null || !Deployables.BOAT_STATION_KIND.equals(dest.kind) ? QueueAction.DROP : chartingAction(q, headId, reach(s, dest), now);
         if (action == QueueAction.WAIT) {
             return; // the ocean numbers are not known yet: the head stays queued
@@ -637,7 +633,7 @@ final class BoatQuay {
         }
         String head = TransitNetwork.get().queueHead(s);
         long headId = TransitNetwork.get().queueHeadId(s);
-        TransitNetwork.Station dest = head != null ? TransitNetwork.get().byName(world.getName(), head) : null;
+        TransitNetwork.Station dest = head != null ? TransitNetwork.get().byNameWithQuay(world.getName(), head) : null;
         QueueAction action = dest == null || !Deployables.BOAT_STATION_KIND.equals(dest.kind) ? QueueAction.DROP : chartingAction(q, headId, reach(s, dest), now);
         if (action == QueueAction.WAIT) {
             q.deadlineMs = now + RETRY_MS; // charting still runs: the shuttle stays moored, no failure counted
@@ -650,7 +646,7 @@ final class BoatQuay {
                 broadcast(world, s, Texts.t("transit.boatQueue.noRoute").param("name", head));
             }
             StructureShape shape = Deployables.STEAMBOAT_PUBLIC.shape();
-            setDown(store, AirshipPassengers.aboard(store, world, shape, origin, rotation, null), dropPoints(s), null);
+            setDown(store, AirshipPassengers.aboard(store, world, shape, origin, rotation, null), dropPoints(world, s), null);
             int removed = AirshipManager.get().unmoorShuttle(world, origin, rotation);
             LOGGER.at(Level.INFO).log("Sea station %s: shuttle removed without destination (%d blocks)", s.name, removed);
             q.cleared(now);
@@ -672,7 +668,7 @@ final class BoatQuay {
                 extras.add(o);
             }
         }
-        setDown(store, extras, dropPoints(s), Texts.t("transit.boat.full"));
+        setDown(store, extras, dropPoints(world, s), Texts.t("transit.boat.full"));
         am.passengers.prepare(store, riders); // held in the air before the deck goes
         AirshipFlight f;
         int removed;
@@ -692,20 +688,20 @@ final class BoatQuay {
             if (unmoored) {
                 am.pasteShuttle(store, world, origin, rotation); // the blocks came off: put them back like a failed launch
             }
-            setDown(store, ridersOf(aboard, riders), dropPoints(s), null);
+            setDown(store, ridersOf(aboard, riders), dropPoints(world, s), null);
             throw e;
         }
         if (f == null) {
             // The riders were released by launchShuttle: the shuttle comes back in blocks and they are set down on the pier.
             am.pasteShuttle(store, world, origin, rotation);
-            setDown(store, ridersOf(aboard, riders), dropPoints(s), null);
+            setDown(store, ridersOf(aboard, riders), dropPoints(world, s), null);
             LOGGER.at(Level.WARNING).log("Sea station %s: departure not possible", s.name);
             departFailed(world, s, q);
             return;
         }
         q.departFailures = 0;
         // Crash safety: until they arrive, each rider has a stranded entry on the departure pier (deleted when he is released).
-        List<Vector3d> pier = dropPoints(s);
+        List<Vector3d> pier = dropPoints(world, s);
         for (AirshipPassengers.Rider r : f.riders) {
             Vector3d spot = pier.get(Math.floorMod(r.p.seat, pier.size()));
             BalloonResume.writeStranded(r.p.uuid, world.getName(), spot.x, spot.y, spot.z);
@@ -909,7 +905,7 @@ final class BoatQuay {
                 return;
             }
             // Voyage: the passengers are set down on the pier, welcome, then 5 s before leaving.
-            List<PlayerRef> people = am.passengers.releaseAt(store, f, dropPoints(t.dest));
+            List<PlayerRef> people = am.passengers.releaseAt(store, f, dropPoints(f.world, t.dest));
             for (PlayerRef pr : people) {
                 TransitAutopilot.welcome(pr, t.dest);
             }
@@ -930,7 +926,7 @@ final class BoatQuay {
                         : returnStation(boats, t.station.name, t.dest.name, f.pos);
                 List<PlayerRef> people;
                 if (target != null) {
-                    people = am.passengers.releaseAt(store, f, dropPoints(target));
+                    people = am.passengers.releaseAt(store, f, dropPoints(f.world, target));
                 } else {
                     people = new ArrayList<>(); // no boat station left: the riders are put on the surface under their seat
                     for (AirshipPassengers.Rider r : f.riders) {
@@ -966,7 +962,7 @@ final class BoatQuay {
             // Still at the departure berth: the passengers are set down on the departure pier, what they paid is given back.
             Store<EntityStore> store = f.world.getEntityStore().getStore();
             AirshipManager am = AirshipManager.get();
-            List<PlayerRef> people = am.passengers.releaseAt(store, f, dropPoints(t.station));
+            List<PlayerRef> people = am.passengers.releaseAt(store, f, dropPoints(f.world, t.station));
             for (PlayerRef pr : people) {
                 pr.sendMessage(Texts.t("transit.boatQueue.noRoute").param("name", t.dest.name));
             }
@@ -1011,7 +1007,9 @@ final class BoatQuay {
         if (!Deployables.BOAT_STATION_KIND.equals(removed.kind)) {
             return;
         }
-        TransitFare.refundRemovedStation(removed); // its own queue is lost with it
+        if (removed.quay == null) {
+            return; // a pending station has no pier: no shuttle, berth or queue can exist for it
+        }
         Store<EntityStore> store = world.getEntityStore().getStore();
         AirshipManager am = AirshipManager.get();
         Quay q = QUAYS.remove(removed);

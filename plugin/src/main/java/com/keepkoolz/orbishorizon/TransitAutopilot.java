@@ -57,9 +57,9 @@ final class TransitAutopilot {
 
     /** Cruise height of the entity origin for a flight from a station to a destination (null destination: the departure alone counts). */
     static double cruiseY(World world, TransitNetwork.Station from, String destination) {
-        int a = from.origin.y + Deployables.STATION_DOCK_ORIGIN[1];
-        TransitNetwork.Station to = destination == null ? null : TransitNetwork.get().byName(world.getName(), destination);
-        return cruiseY(a, to != null ? to.origin.y + Deployables.STATION_DOCK_ORIGIN[1] : a);
+        int a = StationQueue.dockOrigin(from).y;
+        TransitNetwork.Station to = destination == null ? null : TransitNetwork.get().byNameWithQuay(world.getName(), destination);
+        return cruiseY(a, to != null && to.quay != null ? StationQueue.dockOrigin(to).y : a);
     }
 
     /**
@@ -90,7 +90,7 @@ final class TransitAutopilot {
             if (s.name.equals(from)) {
                 return s;
             }
-            double d = here.distanceSquared(s.origin.x, s.origin.y, s.origin.z);
+            double d = here.distanceSquared(StationGeometry.position(s));
             if (d < bestD) {
                 bestD = d;
                 best = s;
@@ -116,7 +116,7 @@ final class TransitAutopilot {
                 dest = s;
                 continue;
             }
-            double d = here.distanceSquared(s.origin.x, s.origin.y, s.origin.z);
+            double d = here.distanceSquared(StationGeometry.position(s));
             if (d < bestD) {
                 bestD = d;
                 best = s;
@@ -131,25 +131,18 @@ final class TransitAutopilot {
         return i >= 0 ? i : waitingOrder.size();
     }
 
-    /**
-     * Drop points of the passengers on the boarding platform, in the world, feet position: the prefab-frame integer corners of
-     * STATION_BOARDING_POINTS rotated with the station, moved to the cell centre (+0.5 on x and z after the rotation), circular over the list.
-     */
-    static List<Vector3d> dropPoints(Vector3i stationOrigin, Rotation rotation, int count) {
-        List<Vector3d> out = new ArrayList<>();
-        float[][] pts = Deployables.STATION_BOARDING_POINTS;
-        for (int i = 0; i < count; i++) {
-            float[] p = pts[i % pts.length];
-            Vector3f r = rotation.rotateYaw(new Vector3f(p[0], p[1], p[2]), new Vector3f());
-            out.add(new Vector3d(stationOrigin.x + r.x + 0.5, stationOrigin.y + r.y, stationOrigin.z + r.z + 0.5));
-        }
-        return out;
+    /** Drop points of the passengers arriving at a station, feet position: the standable cells nearest to its master, looped over count. */
+    static List<Vector3d> dropPoints(World world, TransitNetwork.Station s, int count) {
+        return StationGeometry.dropPoints(s.master, count, StationGeometry.standable(world));
     }
 
-    /** Boarding points of a station in the world (feet position), one per prefab point. */
-    static List<Vector3d> boardingPoints(TransitNetwork.Station s) {
-        return dropPoints(s.origin, s.rotation, Deployables.STATION_BOARDING_POINTS.length);
+    /** Boarding points of a station in the world (feet position): twelve drop points. */
+    static List<Vector3d> boardingPoints(World world, TransitNetwork.Station s) {
+        return dropPoints(world, s, BOARDING_POINT_COUNT);
     }
+
+    /** Number of boarding points of a station, one per seat of the transit balloon. */
+    static final int BOARDING_POINT_COUNT = 12;
 
     // ------------------------------------------------------------------ flight
 
@@ -166,7 +159,7 @@ final class TransitAutopilot {
         double dt = Math.min((now - f.lastDescentMs) / 1000.0, MAX_DT);
         f.lastDescentMs = now;
         TransitNetwork net = TransitNetwork.get();
-        TransitNetwork.Station dest = t.to == null ? null : net.byName(world.getName(), t.to);
+        TransitNetwork.Station dest = t.to == null ? null : net.byNameWithQuay(world.getName(), t.to);
         boolean climbing = false;
         switch (t.phase) {
             case CLIMB -> {
@@ -174,9 +167,9 @@ final class TransitAutopilot {
                 boolean blocked = moveVertical(world, s, f, t, f.descentSpeed * dt, now, true);
                 if (f.entityPos.y >= t.cruiseY || stuck(t, blocked, now)) {
                     if (dest == null) {
-                        // Nowhere to go: back on the departure platform (the rerouting of removed stations is Task 9).
-                        TransitNetwork.Station from = net.byName(world.getName(), t.from);
-                        BalloonManager.get().releaseTransitPassengers(store, f, from != null ? boardingPoints(from) : null);
+                        // Nowhere to go: back on the departure platform.
+                        TransitNetwork.Station from = net.byNameWithQuay(world.getName(), t.from);
+                        BalloonManager.get().releaseTransitPassengers(store, f, from != null ? boardingPoints(world, from) : null);
                         beginVanish(f, t, now);
                     } else {
                         t.setPhase(TransitFlight.Phase.CRUISE, now);
@@ -474,7 +467,7 @@ final class TransitAutopilot {
                 people.add(pr);
             }
         }
-        List<Vector3d> points = dest != null ? dropPoints(dest.origin, dest.rotation, Math.max(1, f.passengers.size())) : null;
+        List<Vector3d> points = dest != null ? dropPoints(world, dest, Math.max(1, f.passengers.size())) : null;
         BalloonManager.get().releaseTransitPassengers(store, f, points);
         if (dest != null) {
             for (PlayerRef pr : people) {
@@ -509,7 +502,7 @@ final class TransitAutopilot {
                 people.add(pr);
             }
         }
-        List<Vector3d> points = dest != null ? dropPoints(dest.origin, dest.rotation, Math.max(1, f.passengers.size())) : null;
+        List<Vector3d> points = dest != null ? dropPoints(world, dest, Math.max(1, f.passengers.size())) : null;
         BalloonManager.get().releaseTransitPassengers(store, f, points);
         for (PlayerRef pr : people) {
             pr.sendMessage(Texts.t("transit.rescue").param("name", dest != null ? dest.name : ""));

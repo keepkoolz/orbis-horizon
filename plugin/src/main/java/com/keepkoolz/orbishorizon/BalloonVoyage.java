@@ -277,6 +277,9 @@ final class BalloonVoyage {
     private static void chooseLanding(World world, StructureShape s, BalloonFlight f, BalloonVoyage v) {
         List<StationZone.Zone> zones = new ArrayList<>();
         for (TransitNetwork.Station st : TransitNetwork.get().stations(world.getName())) {
+            if (st.quay == null) {
+                continue;
+            }
             zones.add(StationZone.zoneOf(st));
         }
         List<int[]> candidates = landingCandidates(v.destX, v.destZ, v.fromX, v.fromZ);

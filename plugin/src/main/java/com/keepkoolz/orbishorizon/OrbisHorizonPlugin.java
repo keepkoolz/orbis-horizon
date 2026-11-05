@@ -6,10 +6,13 @@ import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.events.AddWorldEvent;
+import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 import com.hypixel.hytale.server.core.universe.world.events.StartWorldEvent;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
+
+import com.keepkoolz.orbishorizon.api.OrbisHorizonApi;
 
 import java.util.logging.Level;
 
@@ -24,13 +27,22 @@ public class OrbisHorizonPlugin extends JavaPlugin {
 
     @Override
     protected void setup() {
+        // The public API first: extensions register during their own setup, after this plugin's.
+        OrbisHorizonApi.install(new OrbisHorizonApi.Services(new ApiStations(), new ApiStationKinds(), new ApiWorldAccess(),
+                new ApiTerrain(), new ApiTelemetry(), getDataDirectory(), e -> Extensions.onRegistered(e, Extensions::startedWorlds)));
         // Interaction type usable in item JSONs: "Type": "HotairBalloon_Deploy"
         getCodecRegistry(Interaction.CODEC)
                 .register(DeployBalloonInteraction.TYPE_ID, DeployBalloonInteraction.class, DeployBalloonInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
                 .register(DeployTentInteraction.TYPE_ID, DeployTentInteraction.class, DeployTentInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
-                .register(DeployStationInteraction.TYPE_ID, DeployStationInteraction.class, DeployStationInteraction.CODEC);
+                .register(ExchangeCrateInteraction.TYPE_ID, ExchangeCrateInteraction.class, ExchangeCrateInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
+                .register(PlaceMasterInteraction.TYPE_ID, PlaceMasterInteraction.class, PlaceMasterInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
+                .register(PlaceQuayInteraction.TYPE_ID, PlaceQuayInteraction.class, PlaceQuayInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
+                .register(PlaceArrivalInteraction.TYPE_ID, PlaceArrivalInteraction.class, PlaceArrivalInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
                 .register(StationMasterInteraction.TYPE_ID, StationMasterInteraction.class, StationMasterInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
@@ -91,8 +103,6 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         BalloonRegistry.init(getDataDirectory());
         // Transit: station network (stations.json).
         TransitNetwork.get().load(getDataDirectory());
-        GeneratedStations.get().load(getDataDirectory());
-        NewChunks.init(getDataDirectory());
         TransitFare.loadRefunds(getDataDirectory());
         deleteStoredRoutes(getDataDirectory());
         SeaCharts.start(getDataDirectory());
@@ -167,9 +177,12 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         }
         try {
             getEventRegistry().registerGlobal(com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent.class,
-                    event -> TransitFare.onReady(event.getPlayerRef()));
+                    event -> {
+                        TransitFare.onReady(event.getPlayerRef());
+                        StationContracts.onReady(event.getPlayerRef());
+                    });
         } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Ticket refunds on arrival disabled");
+            getLogger().at(Level.WARNING).withCause(e).log("Ticket refunds and first station contract on arrival disabled");
         }
         // dual rendering of the vehicles in flight needs the per-viewer visibility filter. Without it every flight keeps the single entity.
         try {
@@ -190,7 +203,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         getEventRegistry().registerGlobal(AddPlayerToWorldEvent.class,
                 event -> {
                     BalloonManager.get().onPlayerAdded(event.getHolder(), event.getWorld());
-                    // Mod recipes follow the server setting (station crates are learned or forgotten, the rest is sent to the client).
+                    // Mod recipes follow the server setting (the disabled ones are hidden on the client).
                     try {
                         RecipeToggles.syncOnArrival(event.getHolder());
                     } catch (RuntimeException e) {
@@ -225,7 +238,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         });
         getEventRegistry().registerGlobal(StartWorldEvent.class, event -> {
             BalloonManager.get().recoverWorld(event.getWorld());
-            GenerationListener.onWorldStart(event.getWorld());
+            Extensions.worldStart(event.getWorld());
             SeaCharts.onWorldStart(event.getWorld());
             CageAnimals.recoverWorld(event.getWorld());
             StationMaster.recoverWorld(event.getWorld());
@@ -238,17 +251,8 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             }
             AirshipManager.get().recoverWorld(event.getWorld());
         });
-        // Stations generated with the world: every new chunk is marked, planned stations are built once their chunks are all new.
-        try {
-            GenerationListener.start();
-            getEventRegistry().registerGlobal(com.hypixel.hytale.server.core.universe.world.events.ChunkPreLoadProcessEvent.class,
-                    GenerationListener::onChunk);
-        } catch (RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Generated stations: chunk listening disabled");
-        }
-        getCommandRegistry().registerCommand(new OrbisHorizonCommand());
-        getLogger().at(Level.INFO).log("Orbis Horizon plugin: interaction %s, /orbishorizon balloon command and flight system registered",
-                DeployBalloonInteraction.TYPE_ID);
+        // A world being removed (another mod may cancel the removal: the extension tolerates a stop without a removal).
+        getEventRegistry().registerGlobal(RemoveWorldEvent.class, event -> Extensions.worldStop(event.getWorld()));
     }
 
     @Override
@@ -320,7 +324,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             } catch (RuntimeException e) {
                 getLogger().at(Level.WARNING).withCause(e).log("Respawn point map markers not registered for %s", world.getName());
             }
-            GenerationListener.onWorldStart(world);
+            Extensions.worldStart(world);
             SeaCharts.onWorldStart(world);
             // One failing resume must never stop the plugin: StartWorldEvent calls them again when the world is ready.
             try {
@@ -355,6 +359,11 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 getLogger().at(Level.WARNING).withCause(e).log("Resume of the airships of %s deferred to world start", world.getName());
             }
         }
+        Extensions.markStarted();
+        // Every extension has registered during setup, so the command tree is complete: addSubCommand refuses a registered command.
+        getCommandRegistry().registerCommand(new OrbisHorizonCommand());
+        getLogger().at(Level.INFO).log("Orbis Horizon plugin: interaction %s, /orbishorizon balloon command and flight system registered",
+                DeployBalloonInteraction.TYPE_ID);
         Telemetry.start(this); // last: Beacon starts after the normal setup
     }
 
@@ -363,7 +372,6 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         BalloonManager.get().landAll();
         AirshipManager.get().landAll();
         BalloonRegistry.flushCage();
-        GenerationListener.stop();
         SeaCharts.stop();
         BenchTabs.unregister();
         Telemetry.stop();

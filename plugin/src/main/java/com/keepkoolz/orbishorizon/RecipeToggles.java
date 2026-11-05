@@ -1,6 +1,5 @@
 package com.keepkoolz.orbishorizon;
 
-import com.hypixel.hytale.builtin.crafting.CraftingPlugin;
 import com.hypixel.hytale.component.ArchetypeChunk;
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Holder;
@@ -36,6 +35,7 @@ final class RecipeToggles {
     private RecipeToggles() {
     }
 
+    /** A recipe follows its own switch. */
     static boolean enabled(String itemId) {
         return !TransitSettings.disabledRecipes().contains(itemId);
     }
@@ -46,6 +46,11 @@ final class RecipeToggles {
             return;
         }
         TransitSettings.setRecipeDisabled(itemId, !on);
+        sendToPlayers();
+    }
+
+    /** Sends the recipe list to every connected player of every world, on the world thread. */
+    private static void sendToPlayers() {
         Universe universe = Universe.get();
         if (universe == null) {
             return;
@@ -58,10 +63,6 @@ final class RecipeToggles {
                         if (r == null || !r.isValid()) {
                             continue;
                         }
-                        if (StationSpec.CRATE_IDS.contains(itemId)) {
-                            if (on) CraftingPlugin.learnRecipe(r, itemId, r.getStore());
-                            else CraftingPlugin.forgetRecipe(r, itemId, r.getStore());
-                        }
                         send(pr);
                     } catch (RuntimeException e) {
                         LOGGER.at(Level.WARNING).withCause(e).log("Mod recipes not synced for %s", pr.getUsername());
@@ -72,20 +73,8 @@ final class RecipeToggles {
         }
     }
 
-    /** Learns or forgets the station crate recipes and hides the disabled ones for a player arriving in a world (holder not in the store yet). */
+    /** Hides the disabled recipes for a player arriving in a world (holder not in the store yet). */
     static void syncOnArrival(Holder<EntityStore> holder) {
-        Player p = holder.getComponent(Player.getComponentType());
-        if (p == null) {
-            return;
-        }
-        Set<String> known = new HashSet<>(p.getPlayerConfigData().getKnownRecipes());
-        boolean changed = false;
-        for (String id : StationSpec.CRATE_IDS) {
-            changed |= enabled(id) ? known.add(id) : known.remove(id);
-        }
-        if (changed) {
-            p.getPlayerConfigData().setKnownRecipes(known);
-        }
         PlayerRef pr = holder.getComponent(PlayerRef.getComponentType());
         if (pr != null) {
             send(pr);

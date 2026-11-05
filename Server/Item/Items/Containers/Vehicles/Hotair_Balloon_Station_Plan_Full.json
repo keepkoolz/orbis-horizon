@@ -1,0 +1,49 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.hotair_balloon_station_plan_full.name",
+    "Description": "server.orbis_horizon.items.hotair_balloon_station_plan_full.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Recipe_Page.png",
+  "Quality": "Rare",
+  "Categories": [
+    "Items.Recipes"
+  ],
+  "PlayerAnimationsId": "Item",
+  "Model": "Items/Consumables/Recipes/Recipe.blockymodel",
+  "Texture": "Items/Consumables/Recipes/Recipe_Texture.png",
+  "IconProperties": {
+    "Scale": 0.76,
+    "Rotation": [
+      135,
+      135,
+      0
+    ],
+    "Translation": [
+      -1,
+      5
+    ]
+  },
+  "MaxStack": 10,
+  "Interactions": {
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "Transit_PlaceQuay",
+          "StationKind": "station",
+          "Model": "Full",
+          "PrefabPath": "Balloon_Landing_zone.prefab.json",
+          "Offset": {
+            "X": 0,
+            "Y": 1,
+            "Z": 0
+          },
+          "RotationOffset": "Ninety",
+          "Next": {
+            "Type": "ModifyInventory",
+            "AdjustHeldItemQuantity": -1
+          }
+        }
+      ]
+    }
+  }
+}

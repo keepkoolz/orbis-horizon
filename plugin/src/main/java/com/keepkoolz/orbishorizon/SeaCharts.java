@@ -146,7 +146,7 @@ final class SeaCharts {
             return 0;
         }
         Vector3i b = BoatBerth.berthCentreCell(s);
-        return c.ocean(SeaChart.cellOf(b.x), SeaChart.cellOf(b.z));
+        return c.oceanNear(SeaChart.cellOf(b.x), SeaChart.cellOf(b.z));
     }
 
     /**
@@ -195,8 +195,9 @@ final class SeaCharts {
             for (TransitNetwork.Station s : TransitNetwork.get().stations(name, Deployables.BOAT_STATION_KIND)) {
                 try {
                     Vector3i b = BoatBerth.berthCentreCell(s);
-                    if (chart.ocean(SeaChart.cellOf(b.x), SeaChart.cellOf(b.z)) != 0) {
-                        s.oceanId = chart.ocean(SeaChart.cellOf(b.x), SeaChart.cellOf(b.z));
+                    int known = chart.oceanNear(SeaChart.cellOf(b.x), SeaChart.cellOf(b.z));
+                    if (known != 0) {
+                        s.oceanId = known;
                     } else {
                         submit(world, chart, b.x, b.z, 0);
                     }

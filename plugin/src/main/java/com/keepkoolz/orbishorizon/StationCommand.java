@@ -3,7 +3,9 @@ package com.keepkoolz.orbishorizon;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.server.core.command.system.AbstractCommand;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
+import com.hypixel.hytale.server.core.command.system.arguments.system.OptionalArg;
 import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
 import com.hypixel.hytale.server.core.command.system.arguments.types.SingleArgumentType;
@@ -12,15 +14,14 @@ import com.hypixel.hytale.server.core.command.system.ParseResult;
 import com.hypixel.hytale.server.core.command.system.suggestion.SuggestionResult;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractCommandCollection;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
-import com.hypixel.hytale.math.vector.Rotation3f;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
-import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
 import com.hypixel.hytale.server.core.permissions.provider.HytalePermissionsProvider;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -33,14 +34,21 @@ public final class StationCommand extends AbstractCommandCollection {
     public StationCommand() {
         super("station", Texts.cmd("station.desc"));
         setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
-        addSubCommand(new Recipe());
-        addSubCommand(new Worldgen());
         addSubCommand(new ListStations());
         addSubCommand(new Debug());
         addSubCommand(new Despawn());
+        addSubCommand(new Contract());
         addSubCommand(new Tp());
+        addSubCommand(new Unlock());
+        addSubCommand(new Lock());
         addSubCommand(new Nearest());
-        addSubCommand(new Planned());
+        for (AbstractCommand extra : Extensions.stationSubCommands()) {
+            try {
+                addSubCommand(extra);
+            } catch (RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Extension station command not added");
+            }
+        }
     }
 
     private static org.joml.Vector3d posOf(Store<EntityStore> store, Ref<EntityStore> ref) {
@@ -57,8 +65,16 @@ public final class StationCommand extends AbstractCommandCollection {
         if (detail) {
             b.append("\n  owner ").append(s.owner).append("\n  master ").append(s.masterUuid)
                     .append("\n  countdown ").append(StationQueue.secondsLeft(s)).append(" s")
-                    .append("\n  dock origin ").append(StationQueue.dockOrigin(s)).append(", pad y ").append(StationQueue.padY(s))
-                    .append("\n  master point ").append(StationMaster.masterPoint(s));
+                    .append("\n  geometry: full prefab ").append(s.fullPrefab).append(", editable ").append(s.editable)
+                    .append("\n  master cell ").append(s.master).append(", yaw ").append(s.masterYaw)
+                    .append("\n  quay ").append(s.quay).append(" ").append(s.quayRotation);
+            if (s.quay != null) {
+                b.append("\n  dock origin ").append(StationQueue.dockOrigin(s)).append(", pad y ").append(StationQueue.padY(s))
+                        .append("\n  marker point ").append(StationGeometry.markerPoint(s));
+            }
+            if (s.master != null) {
+                b.append("\n  master point ").append(StationMaster.masterPoint(s));
+            }
         }
         return b.toString();
     }
@@ -101,8 +117,58 @@ public final class StationCommand extends AbstractCommandCollection {
         }
     }
 
-    /** /orbishorizon station despawn: removes the nearest station (48 blocks) and gives its crate back to the operator. */
+    /**
+     * Master cell of the station whose master is nearest to pos and within radius of it, null when none is. Stations without a master
+     * cell are skipped, stations without a quay (pending) count. Pure.
+     */
+    static org.joml.Vector3i nearestMaster(List<TransitNetwork.Station> all, org.joml.Vector3d pos, double radius) {
+        org.joml.Vector3i best = null;
+        double bestD = radius * radius;
+        for (TransitNetwork.Station s : all) {
+            org.joml.Vector3i m = s.master;
+            if (m == null) continue;
+            double d = pos.distanceSquared(m.x + 0.5, m.y + 0.5, m.z + 0.5);
+            if (d <= bestD) {
+                bestD = d;
+                best = m;
+            }
+        }
+        return best;
+    }
+
+    /** The station designated by a name (underscores put back as spaces), null when unknown. */
+    private static TransitNetwork.Station byTypedName(World world, String wanted) {
+        TransitNetwork.Station exact = TransitNetwork.get().byName(world.getName(), wanted);
+        return exact != null || wanted.indexOf('_') < 0 ? exact : TransitNetwork.get().byName(world.getName(), wanted.replace('_', ' '));
+    }
+
+    /** Registry kind of the quay of a station that is not a full prefab. */
+    static Deployables.Kind quayKind(TransitNetwork.Station s) {
+        return Deployables.BOAT_STATION_KIND.equals(s.kind) ? Deployables.BOAT_STATION_PIER : Deployables.STATION_PAD;
+    }
+
+    /**
+     * The cells of a shape that belong to the locked quay core of a station (StationGeometry.inQuayCore), the shape of what is taken
+     * down from a whole-prefab station whose structure may be edited: the rest of the structure stays in the world. Pure.
+     */
+    static StructureShape quayCoreShape(TransitNetwork.Station s, StructureShape shape, Rotation rotation, org.joml.Vector3i origin) {
+        List<StructureShape.Cell> core = new java.util.ArrayList<>();
+        for (StructureShape.Cell c : shape.cells()) {
+            org.joml.Vector3i p = c.rotated(rotation).add(origin);
+            if (StationGeometry.inQuayCore(s, p.x, p.y, p.z)) {
+                core.add(c);
+            }
+        }
+        return shape.withCells(core);
+    }
+
+    /**
+     * /orbishorizon station despawn [name]: removes the station whose master is nearest (48 blocks, with or without a quay) or the
+     * named one, and gives its contract back to the operator.
+     */
     static final class Despawn extends AbstractPlayerCommand {
+        private final OptionalArg<String> name = withOptionalArg("name", Texts.cmd("station.despawn.name"), StationNameType.INSTANCE);
+
         Despawn() {
             super("despawn", Texts.cmd("station.despawn.desc"));
             addAliases("remove");
@@ -111,99 +177,149 @@ public final class StationCommand extends AbstractCommandCollection {
 
         @Override
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            try {
+                despawn(ctx, store, ref, player, world);
+            } catch (RuntimeException | LinkageError e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Station despawn failed");
+                Telemetry.error("transit", e, null, "despawn");
+                ctx.sendMessage(Texts.t("transit.cmd.despawnFailed"));
+            }
+        }
+
+        private void despawn(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
             org.joml.Vector3d here = posOf(store, ref);
-            TransitNetwork.Station s = here == null ? null
-                    : TransitNetwork.get().nearest(world.getName(), here, TransitConstants.REMOVE_RADIUS);
+            TransitNetwork.Station s = null;
+            if (name.provided(ctx)) {
+                String wanted = name.get(ctx);
+                s = byTypedName(world, wanted);
+                if (s == null) {
+                    ctx.sendMessage(Texts.t("transit.cmd.tpUnknown").param("name", TransitNetwork.normalize(wanted)));
+                    return;
+                }
+            } else if (here != null) {
+                List<TransitNetwork.Station> all = TransitNetwork.get().stations(world.getName());
+                org.joml.Vector3i master = nearestMaster(all, here, TransitConstants.REMOVE_RADIUS);
+                for (TransitNetwork.Station c : all) {
+                    if (master != null && master.equals(c.master)) {
+                        s = c;
+                        break;
+                    }
+                }
+            }
             if (s == null) {
                 ctx.sendMessage(Texts.t("transit.cmd.despawnNone").param("radius", (int) TransitConstants.REMOVE_RADIUS));
                 return;
             }
-            StationSpec spec = StationSpec.of(s.kind);
+            // What is taken down: the whole prefab of a generated or converted station, the pad or pier of a player station
+            // (nothing for a station still without a quay).
+            Deployables.Kind kind;
+            org.joml.Vector3i origin;
+            com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation rotation;
+            // A whole-prefab station whose structure may be edited loses only its quay core, the rest is ordinary blocks.
+            boolean coreOnly = s.fullPrefab && s.quay != null && StationClearance.editable(s);
+            if (s.fullPrefab) {
+                kind = StationSpec.of(s.kind).structure();
+                origin = s.origin;
+                rotation = s.rotation;
+            } else if (s.quay != null && s.quayRotation != null) {
+                kind = quayKind(s);
+                origin = s.quay;
+                rotation = s.quayRotation;
+            } else {
+                kind = null;
+                origin = null;
+                rotation = null;
+            }
             // The registry shape follows the wood of a boat station (renamed blocks), the prefab shape does not.
-            StructureShape shape;
-            try {
-                BalloonRegistry.Entry entry = BalloonRegistry.get(world, s.origin, s.rotation, s.kind);
-                StructureShape reg = entry == null ? null : BalloonRegistry.shapeOf(entry);
-                shape = reg != null ? reg : spec.structure().shape();
-            } catch (java.io.IOException | RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Shape of station %s unreadable", s.name);
-                ctx.sendMessage(Texts.t("transit.cmd.despawnFailed"));
-                return;
+            StructureShape shape = null;
+            if (kind != null) {
+                try {
+                    BalloonRegistry.Entry entry = BalloonRegistry.get(world, origin, rotation, kind.id);
+                    StructureShape reg = entry == null ? null : BalloonRegistry.shapeOf(entry);
+                    shape = reg != null ? reg : kind.shape();
+                    if (coreOnly) {
+                        shape = quayCoreShape(s, shape, rotation, origin);
+                    }
+                } catch (java.io.IOException | RuntimeException e) {
+                    LOGGER.at(Level.WARNING).withCause(e).log("Shape of station %s unreadable", s.name);
+                    ctx.sendMessage(Texts.t("transit.cmd.despawnFailed"));
+                    return;
+                }
             }
             // 0. Players on the pad, in the hut or in the docked balloon lose their floor: unseated now, put on the ground after the removal.
             java.util.Map<Ref<EntityStore>, org.joml.Vector3d> stranded = new java.util.LinkedHashMap<>();
-            try {
-                int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
-                int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
-                for (StructureShape.Cell c : shape.cells()) {
-                    org.joml.Vector3i p = c.rotated(s.rotation).add(s.origin);
-                    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); minZ = Math.min(minZ, p.z);
-                    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); maxZ = Math.max(maxZ, p.z);
-                }
-                for (PlayerRef pr : world.getPlayerRefs()) {
-                    Ref<EntityStore> pRef = pr.getReference();
-                    if (pRef == null || !pRef.isValid()) continue;
-                    org.joml.Vector3d pp = posOf(store, pRef);
-                    if (pp != null && pp.x >= minX - 1 && pp.x <= maxX + 2 && pp.y >= minY - 1 && pp.y <= maxY + 4
-                            && pp.z >= minZ - 1 && pp.z <= maxZ + 2) {
-                        stranded.put(pRef, pp);
+            if (shape != null) {
+                try {
+                    int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+                    int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+                    for (StructureShape.Cell c : shape.cells()) {
+                        org.joml.Vector3i p = c.rotated(rotation).add(origin);
+                        minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); minZ = Math.min(minZ, p.z);
+                        maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); maxZ = Math.max(maxZ, p.z);
                     }
-                }
-                org.joml.Vector3i dock = StationQueue.dockOrigin(s);
-                if (Deployables.STATION_KIND.equals(s.kind) && BalloonRegistry.get(world, dock, s.rotation, Deployables.BALLOON_PUBLIC.id) != null) {
-                    for (BalloonManager.Occupant o : BalloonManager.get().nacelleOccupants(world, store, Deployables.BALLOON_PUBLIC, dock, s.rotation)) {
-                        org.joml.Vector3d pp = posOf(store, o.ref());
-                        if (pp != null) stranded.putIfAbsent(o.ref(), pp);
+                    for (PlayerRef pr : world.getPlayerRefs()) {
+                        Ref<EntityStore> pRef = pr.getReference();
+                        if (pRef == null || !pRef.isValid()) continue;
+                        org.joml.Vector3d pp = posOf(store, pRef);
+                        if (pp != null && pp.x >= minX - 1 && pp.x <= maxX + 2 && pp.y >= minY - 1 && pp.y <= maxY + 4
+                                && pp.z >= minZ - 1 && pp.z <= maxZ + 2) {
+                            stranded.put(pRef, pp);
+                        }
                     }
+                    if (Deployables.STATION_KIND.equals(s.kind) && s.quay != null) {
+                        org.joml.Vector3i dock = StationQueue.dockOrigin(s);
+                        if (BalloonRegistry.get(world, dock, s.quayRotation, Deployables.BALLOON_PUBLIC.id) != null) {
+                            for (BalloonManager.Occupant o : BalloonManager.get().nacelleOccupants(world, store, Deployables.BALLOON_PUBLIC, dock, s.quayRotation)) {
+                                org.joml.Vector3d pp = posOf(store, o.ref());
+                                if (pp != null) stranded.putIfAbsent(o.ref(), pp);
+                            }
+                        }
+                    }
+                    for (Ref<EntityStore> sr : stranded.keySet()) MountUtil.unseat(store, sr);
+                } catch (RuntimeException e) {
+                    LOGGER.at(Level.WARNING).withCause(e).log("Players of station %s not located", s.name);
                 }
-                for (Ref<EntityStore> sr : stranded.keySet()) MountUtil.unseat(store, sr);
-            } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Players of station %s not located", s.name);
             }
             // 1. Station blocks first: it refuses (chunks not loaded) before anything else is touched. Contents dropped, lock entry removed.
-            StructureRemoval.Result r;
-            try {
-                r = StructureRemoval.remove(store, world, spec.structure(), shape, s.origin, s.rotation);
-            } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Station %s not removed", s.name);
-                ctx.sendMessage(Texts.t("transit.cmd.despawnFailed"));
-                return;
+            int removedBlocks = 0;
+            int droppedItems = 0;
+            int filled = 0;
+            if (shape != null) {
+                StructureRemoval.Result r;
+                try {
+                    r = StructureRemoval.remove(store, world, kind, shape, origin, rotation);
+                } catch (RuntimeException e) {
+                    LOGGER.at(Level.WARNING).withCause(e).log("Station %s not removed", s.name);
+                    ctx.sendMessage(Texts.t("transit.cmd.despawnFailed"));
+                    return;
+                }
+                if (r.error() != null) {
+                    ctx.sendMessage(r.error());
+                    return;
+                }
+                removedBlocks = r.removed();
+                droppedItems = r.items();
+                Integer soil = StationSpec.of(s.kind).soilLayerY();
+                try {
+                    filled = !s.fullPrefab || coreOnly || soil == null ? 0 : fillGroundHoles(world, shape, s.origin, s.rotation, soil);
+                } catch (RuntimeException e) {
+                    filled = 0;
+                }
             }
-            if (r.error() != null) {
-                ctx.sendMessage(r.error());
-                return;
-            }
-            int filled;
-            try {
-                filled = spec.soilLayerY() == null ? 0
-                        : fillGroundHoles(world, shape, s.origin, s.rotation, spec.soilLayerY());
-            } catch (RuntimeException e) {
-                filled = 0;
-            }
-            // 2. Master NPC (also clears its reservation, rewire stamp and pending recovery), 3. network entry.
-            // Refund first: the payments must be written to refunds.json before the station leaves stations.json.
-            TransitFare.refundRemovedStation(s);
-            StationMaster.remove(store, s);
-            TransitNetwork.get().remove(s);
-            TransitNetwork.get().save();
-            StationNameType.stationsChanged();
-            // 4. Quay (QUAYS entry), approaching or departing flight, docked balloon, flights heading here, other queues. World thread.
-            StationQueue.onStationRemoved(world, s);
-            BoatQuay.onStationRemoved(world, s); // boat stations only: shuttles, moored shuttle, other queues
+            // 2. Master NPC, network entry, quay, flights and shuttles heading here, other queues.
+            StationRemoval.fromNetwork(world, s);
             for (java.util.Map.Entry<Ref<EntityStore>, org.joml.Vector3d> e : stranded.entrySet()) {
                 if (e.getKey().isValid()) BalloonManager.putOnGround(store, world, e.getKey(), e.getValue());
             }
-            try {
-                GeneratedStations.Entry generated = GeneratedStations.get().at(world.getName(), s.origin.x, s.origin.z);
-                if (generated != null) GeneratedStations.get().setState(generated, GeneratedStations.State.REMOVED);
-            } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Station %s removed but its registry entry did not change state", s.name);
-                Telemetry.error("worldgen", e, s.kind, "remove");
-            }
-            boolean given = BalloonManager.get().giveCrate(store, ref, here, spec.crateId());
+            Extensions.stationRemoved(world, s);
+            StationContracts.Given given = StationContracts.give(player, s.kind);
             LOGGER.at(Level.INFO).log("Station '%s' removed by %s: %d block(s), %d item(s) dropped, %d ground hole(s) filled",
-                    s.name, player.getUsername(), r.removed(), r.items(), filled);
-            ctx.sendMessage(Texts.t(given ? "transit.cmd.despawnDone" : "transit.cmd.despawnDoneFull").param("name", s.name));
+                    s.name, player.getUsername(), removedBlocks, droppedItems, filled);
+            ctx.sendMessage(Texts.t(given == StationContracts.Given.GIVEN ? "transit.cmd.despawnDone" : "transit.cmd.despawnDoneFull")
+                    .param("name", s.name));
+            if (given == StationContracts.Given.FAILED) {
+                ctx.sendMessage(Texts.t("transit.contract.failed"));
+            }
         }
     }
 
@@ -230,29 +346,113 @@ public final class StationCommand extends AbstractCommandCollection {
                 ctx.sendMessage(Texts.t("transit.cmd.tpUnknown").param("name", TransitNetwork.normalize(wanted)));
                 return;
             }
-            teleport(ctx, ref, world, StationSpec.teleportPoint(s), Texts.t("transit.cmd.tpDone").param("name", s.name), s.name);
+            ApiStations.teleportTo(ctx, ref, world, StationSpec.teleportPoint(world, s), Texts.t("transit.cmd.tpDone").param("name", s.name), s.name);
         }
     }
 
-    /** Teleports the player to target once the sections around it are loaded, then sends done. Never throws. */
-    private static void teleport(CommandContext ctx, Ref<EntityStore> ref, World world, org.joml.Vector3d target,
-                                 com.hypixel.hytale.server.core.Message done, String label) {
-        int bx = (int) Math.floor(target.x), by = (int) Math.floor(target.y), bz = (int) Math.floor(target.z);
-        SectionBlocks.loadSections(world.getChunkStore(), bx, by - 2, bz, bx, by + 2, bz).whenComplete((c, t) -> {
+    /** /orbishorizon station contract (balloon|boat) [--player name]: gives a station contract to the operator or to the named player. */
+    static final class Contract extends AbstractPlayerCommand {
+        private final RequiredArg<String> kind = withRequiredArg("kind", Texts.cmd("station.contract.kind"), ArgTypes.STRING);
+        private final OptionalArg<PlayerRef> target = withOptionalArg("player", Texts.cmd("station.contract.player"), ArgTypes.PLAYER_REF);
+
+        Contract() {
+            super("contract", Texts.cmd("station.contract.desc"));
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
             try {
-                world.execute(() -> {
-                    if (!ref.isValid()) return;
-                    Store<EntityStore> st = ref.getStore();
-                    TransformComponent tr = st.getComponent(ref, TransformComponent.getComponentType());
-                    Rotation3f look = tr != null ? new Rotation3f(tr.getRotation()) : new Rotation3f();
-                    MountUtil.unseat(st, ref);
-                    st.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(target, look));
-                    ctx.sendMessage(done);
+                String k = kind.get(ctx).trim().toLowerCase(java.util.Locale.ROOT);
+                String stationKind = switch (k) {
+                    case "balloon" -> Deployables.STATION_KIND;
+                    case "boat" -> Deployables.BOAT_STATION_KIND;
+                    default -> null;
+                };
+                if (stationKind == null) {
+                    ctx.sendMessage(Texts.t("transit.cmd.contractUsage"));
+                    return;
+                }
+                PlayerRef who = target.provided(ctx) ? target.get(ctx) : player;
+                Ref<EntityStore> whoRef = who == null ? null : who.getReference();
+                if (whoRef == null || !whoRef.isValid()) {
+                    ctx.sendMessage(Texts.t("transit.cmd.contractNoPlayer"));
+                    return;
+                }
+                World where = whoRef.getStore().getExternalData().getWorld();
+                where.execute(() -> {
+                    if (StationContracts.give(who, stationKind) == StationContracts.Given.FAILED) {
+                        who.sendMessage(Texts.t("transit.contract.failed"));
+                    }
                 });
+                ctx.sendMessage(Texts.t("transit.cmd.contractGiven").param("player", who.getUsername()));
             } catch (RuntimeException e) {
-                LOGGER.at(Level.WARNING).withCause(e).log("Cannot teleport to '%s'", label);
+                LOGGER.at(Level.WARNING).withCause(e).log("Station contract command failed");
+                Telemetry.error("station.contract", e, null, null);
+                ctx.sendMessage(Texts.t("transit.contract.failed"));
             }
-        });
+        }
+    }
+
+    /** Finds a station by the name typed (spaces may be given as underscores), null if none. */
+    private static TransitNetwork.Station stationNamed(World world, String wanted) {
+        TransitNetwork.Station exact = TransitNetwork.get().byName(world.getName(), wanted);
+        return exact != null || wanted.indexOf('_') < 0 ? exact : TransitNetwork.get().byName(world.getName(), wanted.replace('_', ' '));
+    }
+
+    /** Message key of the refusal to lock a station, null when it may be locked: the structure of a player station is always editable. Pure. */
+    static String lockRefusal(TransitNetwork.Station s, boolean editable) {
+        return !editable && s.owner != null ? "transit.cmd.lockPlayerStation" : null;
+    }
+
+    private static void setEditable(CommandContext ctx, World world, String wanted, boolean editable) {
+        TransitNetwork.Station s = stationNamed(world, wanted);
+        if (s == null) {
+            ctx.sendMessage(Texts.t("transit.cmd.unknownStation").param("name", TransitNetwork.normalize(wanted)));
+            return;
+        }
+        if (lockRefusal(s, editable) != null) {
+            ctx.sendMessage(Texts.t(lockRefusal(s, editable)).param("name", s.name));
+            return;
+        }
+        s.editable = editable;
+        TransitNetwork.get().save();
+        LOGGER.at(Level.INFO).log("Station '%s' %s by an operator", s.name, editable ? "unlocked" : "locked");
+        if (!editable && StationClearance.editable(s)) {
+            ctx.sendMessage(Texts.t("transit.cmd.lockedSetting").param("name", s.name));
+            return;
+        }
+        ctx.sendMessage(Texts.t(editable ? "transit.cmd.unlocked" : "transit.cmd.locked").param("name", s.name));
+    }
+
+    /** /orbishorizon station unlock (name): lets the structure of the station be edited, only its quay core stays locked. */
+    static final class Unlock extends AbstractPlayerCommand {
+        private final RequiredArg<String> name = withRequiredArg("name", Texts.cmd("station.unlock.name"), StationNameType.INSTANCE);
+
+        Unlock() {
+            super("unlock", Texts.cmd("station.unlock.desc"));
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            setEditable(ctx, world, name.get(ctx), true);
+        }
+    }
+
+    /** /orbishorizon station lock (name): locks the whole structure of the station again. */
+    static final class Lock extends AbstractPlayerCommand {
+        private final RequiredArg<String> name = withRequiredArg("name", Texts.cmd("station.lock.name"), StationNameType.INSTANCE);
+
+        Lock() {
+            super("lock", Texts.cmd("station.lock.desc"));
+            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
+            setEditable(ctx, world, name.get(ctx), false);
+        }
     }
 
     /** /orbishorizon station nearest: teleports the operator to the nearest station of the current world, of any kind. */
@@ -270,60 +470,11 @@ public final class StationCommand extends AbstractCommandCollection {
                 ctx.sendMessage(Texts.t("transit.cmd.nearestNone"));
                 return;
             }
-            long dist = Math.round(Math.hypot(s.origin.x - pos.x, s.origin.z - pos.z));
-            teleport(ctx, ref, world, StationSpec.teleportPoint(s),
+            org.joml.Vector3d at = StationGeometry.position(s);
+            long dist = Math.round(Math.hypot(at.x - pos.x, at.z - pos.z));
+            ApiStations.teleportTo(ctx, ref, world, StationSpec.teleportPoint(world, s),
                     Texts.t("transit.cmd.nearestDone").param("name", s.name).param("distance", dist), s.name);
         }
-    }
-
-    /**
-     * /orbishorizon station planned: teleports the operator above the nearest generated station that is not built (planned or
-     * abandoned) and gives its kind, state and distance.
-     */
-    static final class Planned extends AbstractPlayerCommand {
-        Planned() {
-            super("planned", Texts.cmd("station.planned.desc"));
-            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
-        }
-
-        @Override
-        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
-            if (!TransitSettings.worldgenEnabled()) {
-                ctx.sendMessage(Texts.t("transit.cmd.plannedWorldgenOff"));
-                return;
-            }
-            org.joml.Vector3d pos = posOf(store, ref);
-            GeneratedStations.Entry e = pos == null ? null
-                    : nearestUnbuilt(GeneratedStations.get().entries(world.getName()), pos.x, pos.z);
-            if (e == null) {
-                ctx.sendMessage(Texts.t("transit.cmd.plannedNone"));
-                return;
-            }
-            GeneratorProbe probe = GeneratorProbe.of(world);
-            double y = probe != null ? Math.max(probe.height(e.x, e.z), SeaRules.SEA_LEVEL) + 3 : pos.y;
-            long dist = Math.round(Math.hypot(e.x - pos.x, e.z - pos.z));
-            String kind = Deployables.BOAT_STATION_KIND.equals(e.kind) ? "boat" : "balloon";
-            teleport(ctx, ref, world, new org.joml.Vector3d(e.x + 0.5, y, e.z + 0.5),
-                    Texts.t("transit.cmd.plannedDone." + kind).param("state", Texts.t("transit.cmd.state." + e.state.name().toLowerCase(java.util.Locale.ROOT))).param("distance", dist)
-                            .param("x", e.x).param("z", e.z), "(" + e.x + ", " + e.z + ")");
-        }
-    }
-
-    /** Nearest generated entry still planned or abandoned, horizontally, or null. */
-    static GeneratedStations.Entry nearestUnbuilt(List<GeneratedStations.Entry> entries, double x, double z) {
-        GeneratedStations.Entry best = null;
-        double bestD = Double.MAX_VALUE;
-        for (GeneratedStations.Entry e : entries) {
-            if (e.state != GeneratedStations.State.PLANNED && e.state != GeneratedStations.State.ABANDONED) {
-                continue;
-            }
-            double d = (e.x - x) * (e.x - x) + (e.z - z) * (e.z - z);
-            if (d < bestD) {
-                bestD = d;
-                best = e;
-            }
-        }
-        return best;
     }
 
     /**
@@ -452,97 +603,6 @@ public final class StationCommand extends AbstractCommandCollection {
                 if (token.toLowerCase(java.util.Locale.ROOT).startsWith(p)) {
                     out.suggest(token);
                 }
-            }
-        }
-    }
-
-    static final class Recipe extends AbstractPlayerCommand {
-        private final RequiredArg<String> mode = withRequiredArg("mode", Texts.cmd("station.recipe.mode"), ArgTypes.STRING);
-
-        Recipe() {
-            super("recipe", Texts.cmd("station.recipe.desc"));
-            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
-        }
-
-        @Override
-        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
-            String m = mode.get(ctx).trim().toLowerCase(java.util.Locale.ROOT);
-            switch (m) {
-                case "on", "off" -> {
-                    boolean on = m.equals("on");
-                    for (String id : StationSpec.CRATE_IDS) RecipeToggles.set(id, on);
-                    ctx.sendMessage(Texts.t(on ? "transit.recipe.on" : "transit.recipe.off"));
-                }
-                case "show" -> ctx.sendMessage(Texts.t("transit.recipe.show")
-                        .param("state", recipeState()));
-                default -> ctx.sendMessage(Texts.t("transit.recipe.usage"));
-            }
-        }
-    }
-
-    /** "on" or "off" when both station crates agree, "mixed" when their recipes differ. */
-    private static String recipeState() {
-        boolean any = false, all = true;
-        for (String id : StationSpec.CRATE_IDS) {
-            boolean e = RecipeToggles.enabled(id);
-            any |= e;
-            all &= e;
-        }
-        return all ? "on" : any ? "mixed" : "off";
-    }
-
-    /** /orbishorizon station worldgen on|off|show: turns the generated stations on or off for the whole server. */
-    static final class Worldgen extends AbstractPlayerCommand {
-        private final RequiredArg<String> mode = withRequiredArg("mode", Texts.cmd("station.worldgen.mode"), ArgTypes.STRING);
-
-        Worldgen() {
-            super("worldgen", Texts.cmd("station.worldgen.desc"));
-            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
-            addUsageVariant(new OldTerrain());
-        }
-
-        @Override
-        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
-            String m = mode.get(ctx).trim().toLowerCase(java.util.Locale.ROOT);
-            switch (m) {
-                case "on", "off" -> {
-                    boolean on = m.equals("on");
-                    TransitSettings.setWorldgenEnabled(on);
-                    ctx.sendMessage(Texts.t(on ? "transit.worldgen.on" : "transit.worldgen.off"));
-                }
-                case "show" -> ctx.sendMessage(Texts.t("transit.worldgen.show")
-                        .param("state", TransitSettings.worldgenEnabled() ? "on" : "off"));
-                default -> ctx.sendMessage(Texts.t("transit.worldgen.usage"));
-            }
-        }
-    }
-
-    /** /orbishorizon station worldgen oldterrain on|off|show: lets the generated stations also be built on terrain explored before. */
-    static final class OldTerrain extends AbstractPlayerCommand {
-        private final RequiredArg<String> topic = withRequiredArg("topic", Texts.cmd("station.worldgen.oldterrain.topic"), ArgTypes.STRING);
-        private final RequiredArg<String> mode = withRequiredArg("mode", Texts.cmd("station.worldgen.mode"), ArgTypes.STRING);
-
-        OldTerrain() {
-            super(Texts.cmd("station.worldgen.oldterrain.desc"));
-            setPermissionGroups(HytalePermissionsProvider.GROUP_ADMIN);
-        }
-
-        @Override
-        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
-            if (!topic.get(ctx).trim().equalsIgnoreCase("oldterrain")) {
-                ctx.sendMessage(Texts.t("transit.worldgen.oldTerrain.usage"));
-                return;
-            }
-            String m = mode.get(ctx).trim().toLowerCase(java.util.Locale.ROOT);
-            switch (m) {
-                case "on", "off" -> {
-                    boolean on = m.equals("on");
-                    TransitSettings.setWorldgenOldTerrain(on);
-                    ctx.sendMessage(Texts.t(on ? "transit.worldgen.oldTerrain.on" : "transit.worldgen.oldTerrain.off"));
-                }
-                case "show" -> ctx.sendMessage(Texts.t("transit.worldgen.oldTerrain.show")
-                        .param("state", TransitSettings.worldgenOldTerrain() ? "on" : "off"));
-                default -> ctx.sendMessage(Texts.t("transit.worldgen.oldTerrain.usage"));
             }
         }
     }

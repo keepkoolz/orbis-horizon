@@ -32,9 +32,7 @@ final class BoatBerth {
 
     /** Prefab origin of the shuttle moored at the berth of this station, world cell. */
     static Vector3i berthOrigin(TransitNetwork.Station s) {
-        Vector3i local = new Vector3i(Deployables.BOAT_STATION_BERTH_ORIGIN[0], Deployables.BOAT_STATION_BERTH_ORIGIN[1],
-                Deployables.BOAT_STATION_BERTH_ORIGIN[2]);
-        return s.rotation.rotateYaw(local, new Vector3i()).add(s.origin);
+        return StationGeometry.berthOrigin(s.quay, s.quayRotation);
     }
 
     /**
@@ -49,12 +47,12 @@ final class BoatBerth {
 
     /** World rotation of the shuttle moored the usual way (not flipped). */
     static Rotation berthRotation(TransitNetwork.Station s) {
-        return berthRotation(s.rotation, false);
+        return berthRotation(s, false);
     }
 
     /** World rotation of the shuttle moored with this heading. */
     static Rotation berthRotation(TransitNetwork.Station s, boolean flipped) {
-        return berthRotation(s.rotation, flipped);
+        return StationGeometry.berthRotation(s.quayRotation, flipped);
     }
 
     /** Cell of the pivot of the moored shuttle. */
@@ -128,7 +126,7 @@ final class BoatBerth {
 
     /** Pre-berth column of a station. */
     static Vector3i preBerthCell(TransitNetwork.Station s) {
-        return preBerthCell(s.rotation, berthCentreCell(s), BERTH_STANDOFF);
+        return preBerthCell(s.quayRotation, berthCentreCell(s), BERTH_STANDOFF);
     }
 
     private static double cellDistance(int[] wp, Vector3i cell) {
@@ -224,8 +222,21 @@ final class BoatBerth {
      * s need not be registered. Reads the loaded chunks only: an unloaded column counts as blocked.
      */
     static boolean hasOpenWaterExit(World world, TransitNetwork.Station s) {
+        return hasOpenWaterExit(world, s, java.util.Set.of());
+    }
+
+    /** Same test reading the cells of water as water too (the basin a pier is about to dig). */
+    static boolean hasOpenWaterExit(World world, TransitNetwork.Station s, java.util.Set<Vector3i> water) {
         Vector3i pa = berthCentreCell(s);
-        return exitsToOpenWaterAt(world, s, pa.x, pa.z);
+        SectionReader[] holder = {new SectionReader(world.getChunkStore())};
+        int[] range = stationRange(s);
+        if (water.isEmpty()) {
+            return WaterRoute.exitsToOpenWater(probe(holder, range), pa.x, pa.z);
+        }
+        WaterRoute.ColumnProbe probe = (x, z) -> IceBreaker.column(
+                y -> water.contains(new Vector3i(x, y, z)) ? IceBreaker.Kind.WATER : IceBreaker.kindAt(holder[0], x, y, z),
+                range[0], range[1], range[2]);
+        return WaterRoute.exitsToOpenWater(probe, pa.x, pa.z);
     }
 
     /** Same as {@link #hasOpenWaterExit} for a shuttle at the column (x, z) on the water level of the berth of s. */

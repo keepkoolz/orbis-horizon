@@ -61,7 +61,7 @@ final class ShipVoyage {
             double[] pz = pierAndZone.apply(s);
             int[] t = pz != null ? w.stationTarget(pz[0], pz[1], pz[2], pz[3]) : null;
             if (t != null && Math.hypot(t[0] - fromX, t[1] - fromZ) >= WaterLog.DEST_MIN) {
-                stations.add(new VoyagePlanner.Destination(s.name, VoyagePlanner.Kind.STATION, t[0], t[1], s.origin.y));
+                stations.add(new VoyagePlanner.Destination(s.name, VoyagePlanner.Kind.STATION, t[0], t[1], StationGeometry.padHeight(s)));
             }
         }
         Comparator<VoyagePlanner.Destination> near = Comparator.comparingDouble(d -> Math.hypot(d.x() - fromX, d.z() - fromZ));
@@ -241,7 +241,7 @@ final class ShipVoyage {
             WaterLog w = e.water() != null ? e.water().copy() : new WaterLog();
             TransitNetwork.Station station = null;
             if (d.kind() == VoyagePlanner.Kind.STATION) {
-                TransitNetwork.Station s = TransitNetwork.get().byName(world.getName(), d.name());
+                TransitNetwork.Station s = TransitNetwork.get().byNameWithQuay(world.getName(), d.name());
                 station = s != null && Deployables.BOAT_STATION_KIND.equals(s.kind) ? s : null;
             }
             double[] goal = goalOf(w, d, station, station != null ? pierAndZone(station) : null);

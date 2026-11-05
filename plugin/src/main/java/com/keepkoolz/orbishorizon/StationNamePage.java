@@ -7,7 +7,6 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
-import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
 import com.hypixel.hytale.server.core.entity.entities.player.pages.InteractiveCustomUIPage;
 import com.hypixel.hytale.server.core.ui.builder.EventData;
 import com.hypixel.hytale.server.core.ui.builder.UICommandBuilder;
@@ -15,7 +14,6 @@ import com.hypixel.hytale.server.core.ui.builder.UIEventBuilder;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
-import org.joml.Vector3i;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -23,9 +21,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Name window shown right after a station is placed (spec, "Fenêtre du nom"). The station is already locked in the registry;
- * the network registration happens here: on a valid name (Confirm), or with the automatic name when the page is closed without
- * validating (Cancel, Escape, disconnection). Registration happens exactly once.
+ * Name window shown right after a station received its quay (PlaceQuayInteraction). The station already is in the network under
+ * its automatic name: a valid name (Confirm) renames it, and a page closed without validating (Cancel, Escape, disconnection,
+ * timeout) keeps the automatic name. The station is named exactly once.
  */
 final class StationNamePage extends InteractiveCustomUIPage<StationNamePage.Data> {
 
@@ -42,18 +40,14 @@ final class StationNamePage extends InteractiveCustomUIPage<StationNamePage.Data
     private static final Map<UUID, StationNamePage> OPEN = new ConcurrentHashMap<>();
 
     private final World world;
-    private final Vector3i origin;
-    private final Rotation rotation;
-    private final String kind;
+    private final TransitNetwork.Station station;
     private boolean done;
     private final long openedMs = System.currentTimeMillis();
 
-    StationNamePage(PlayerRef player, World world, Vector3i origin, Rotation rotation, String kind) {
+    StationNamePage(PlayerRef player, World world, TransitNetwork.Station station) {
         super(player, CustomPageLifetime.CanDismiss, Data.CODEC);
         this.world = world;
-        this.origin = origin;
-        this.rotation = rotation;
-        this.kind = kind;
+        this.station = station;
         OPEN.put(player.getUuid(), this);
     }
 
@@ -61,7 +55,7 @@ final class StationNamePage extends InteractiveCustomUIPage<StationNamePage.Data
     public void build(Ref<EntityStore> ref, UICommandBuilder cmd, UIEventBuilder events, Store<EntityStore> store) {
         cmd.append("Pages/Transit_StationName.ui");
         TransitUiTexts.stationName(cmd);
-        cmd.set("#NameInput.Value", TransitNetwork.autoName(takenNames()));
+        cmd.set("#NameInput.Value", station.name);
         events.addEventBinding(CustomUIEventBindingType.Activating, "#SetButton", EventData.of("@Name", "#NameInput.Value"));
         events.addEventBinding(CustomUIEventBindingType.Activating, "#CancelButton", EventData.of("Action", "Cancel"));
     }
@@ -69,7 +63,9 @@ final class StationNamePage extends InteractiveCustomUIPage<StationNamePage.Data
     private ArrayList<String> takenNames() {
         ArrayList<String> taken = new ArrayList<>();
         for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName())) {
-            taken.add(s.name);
+            if (s != station) {
+                taken.add(s.name);
+            }
         }
         return taken;
     }
@@ -77,7 +73,7 @@ final class StationNamePage extends InteractiveCustomUIPage<StationNamePage.Data
     @Override
     public void handleDataEvent(Ref<EntityStore> ref, Store<EntityStore> store, Data data) {
         if (done) {
-            // Registered meanwhile (timeout): no second station. The player is told and the page closes.
+            // Named meanwhile (timeout): the name stays. The player is told and the page closes.
             playerRef.sendMessage(Texts.t("transit.name.late"));
             close();
             return;
@@ -109,19 +105,19 @@ final class StationNamePage extends InteractiveCustomUIPage<StationNamePage.Data
         finish(null);
     }
 
-    /** Registers the station once: with the given name, or the automatic one when null. */
+    /** Names the station once: with the given name, or keeping the automatic one when null. */
     private void finish(String name) {
         if (done) {
             return;
         }
         done = true;
         OPEN.remove(playerRef.getUuid(), this);
-        DeployStationInteraction.completeRegistration(world, origin, rotation, playerRef.getUuid(), name, playerRef, kind);
+        StationPlacement.completeNaming(world, station, name, playerRef);
     }
 
     /**
      * Safety net for a page that was replaced while the player stays online (no dismiss callback is guaranteed): after
-     * NAME_PAGE_TIMEOUT_SECONDS the station is registered with its automatic name. A later Validate is refused (transit.name.late).
+     * NAME_PAGE_TIMEOUT_SECONDS the station keeps its automatic name. A later Validate is refused (transit.name.late).
      */
     static void sweep(String worldName) {
         long now = System.currentTimeMillis();
@@ -132,7 +128,7 @@ final class StationNamePage extends InteractiveCustomUIPage<StationNamePage.Data
         }
     }
 
-    /** Called when a player disconnects: a pending name page registers its station with the automatic name. */
+    /** Called when a player disconnects: a pending name page leaves its station with the automatic name. */
     static void onPlayerGone(UUID player) {
         StationNamePage page = OPEN.get(player);
         if (page != null) {
