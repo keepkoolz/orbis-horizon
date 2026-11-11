@@ -1,0 +1,29 @@
+// Skiff packing bar, shown above the crosshair while the skiff is being packed into its crate (the crate's interaction hint is
+// under the crosshair). Same look as the mod's oxygen bar. The outer group has no Top nor Bottom, so it is centred on the screen;
+// its upper half holds the caption (text set from the plugin) and, under it, the bar, whose bottom edge is @BarAbove pixels above
+// the centre. Width and Height set the size of the bar.
+@BarWidth = 160;
+@BarHeight = 8;
+@BarAbove = 20;
+@LabelHeight = 16;
+@LabelGap = 2;
+
+Group {
+  Anchor: (Width: @BarWidth, Height: (@BarAbove + @BarHeight + @LabelGap + @LabelHeight) * 2);
+
+  Label #PackLabel {
+    Anchor: (Top: 0, Height: @LabelHeight);
+    Style: (FontSize: 12, RenderBold: true, TextColor: #ffffff, HorizontalAlignment: Center);
+  }
+
+  Group {
+    Anchor: (Top: @LabelHeight + @LabelGap, Width: @BarWidth, Height: @BarHeight);
+    Background: #000000(0.4);
+    Padding: (Full: 1);
+
+    ProgressBar #PackBar {
+      BarTexturePath: "OrbisHorizon_SkiffPackFill.png";
+      Value: 0.0;
+    }
+  }
+}

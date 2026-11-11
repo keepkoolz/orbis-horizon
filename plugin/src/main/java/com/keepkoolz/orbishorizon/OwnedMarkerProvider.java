@@ -55,6 +55,7 @@ final class OwnedMarkerProvider implements WorldMapManager.MarkerProvider {
             case Deployables.TRANSPORT_KIND -> "Owned_Balloon_Transport.png";
             case Deployables.AIRSHIP_KIND -> "Owned_Airship.png";
             case Deployables.STEAMBOAT_KIND -> "Owned_Steamboat.png";
+            case Deployables.STEAMBOAT_SKIFF_KIND -> "Owned_Steamboat_Skiff.png";
             case Deployables.TENT_KIND -> "Owned_Tent.png";
             case Deployables.TENT_BIG_KIND -> "Owned_Tent_Big.png";
             default -> null;

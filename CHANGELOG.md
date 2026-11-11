@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.1.0
+
+### The skiff
+
+- A new small propeller boat, the skiff, made of palm wood. Set it down on water with its crate and sail it yourself, it needs no fuel.
+- Use the crate standing on its deck to pack it away, wherever you are, and stay close while the bar fills up. Only its owner can, nobody else may be aboard and the skiff must be moored.
+- The contents of its chest travel in the crate and are back in the chest when you set it up again, in any ocean.
+- `/orbishorizon boat pack` packs the nearest skiff, and `/orbishorizon steamboat despawn` now removes skiffs too.
+
+### Boats
+
+- A boat crate now sets the boat down from the shore, with your feet at the water level, and always at least two blocks ahead of you.
+
 ## v2.0.0
 
 ### Found your own stations

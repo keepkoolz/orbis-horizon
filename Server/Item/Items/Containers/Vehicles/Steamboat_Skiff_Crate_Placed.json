@@ -1,0 +1,43 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.steamboat_skiff_crate_placed.name",
+    "Description": "server.orbis_horizon.items.steamboat_skiff_crate_placed.description"
+  },
+  "PlayerAnimationsId": "Block",
+  "Quality": "OrbisHorizon_Hidden",
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Cube",
+    "Opacity": "Transparent",
+    "Group": "Wood",
+    "Flags": {},
+    "BlockParticleSetId": "Wood",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "Textures": [
+      {
+        "Weight": 1,
+        "All": "BlockTextures/Furniture_Village_Crate.png"
+      }
+    ],
+    "ParticleColor": "#3f2720",
+    "TextureComputedColor": "#47291D",
+    "InteractionHint": "server.orbis_horizon.interactionHints.packSkiff",
+    "Interactions": {
+      "Use": {
+        "Interactions": [
+          {
+            "Type": "Steamboat_Skiff_Pack"
+          }
+        ]
+      }
+    }
+  },
+  "Tags": {
+    "Type": [
+      "Furniture"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood",
+  "Icon": "Icons/ItemsGenerated/Steamboat_Skiff_Crate.png"
+}

@@ -39,9 +39,9 @@ final class Texts {
             "despawn.none", "despawn.done", "despawn.doneInventoryFull", "despawn.removedByAdmin",
             "despawn.alreadyLanding", "approach");
 
-    /** True for the steamboat and the public shuttle boat (they share the boat texts). */
+    /** True for the steamboat, the skiff and the public shuttle boat (they share the boat texts). */
     static boolean isBoat(Deployables.Kind kind) {
-        return kind == Deployables.STEAMBOAT || kind == Deployables.STEAMBOAT_PUBLIC;
+        return kind == Deployables.STEAMBOAT || kind == Deployables.STEAMBOAT_PUBLIC || kind == Deployables.STEAMBOAT_SKIFF;
     }
 
     /** Message of a ship: the steamboat text for the steamboat, the airship text otherwise (unknown kind included). */

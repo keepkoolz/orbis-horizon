@@ -19,6 +19,9 @@ public final class SteamboatCommand extends AbstractCommandCollection {
         addSubCommand(new Despawn());
     }
 
+    /** The boats a player sails: removed together by this command. */
+    private static final java.util.Set<String> BOAT_KINDS = java.util.Set.of(Deployables.STEAMBOAT_KIND, Deployables.STEAMBOAT_SKIFF_KIND);
+
     static final class Despawn extends AbstractPlayerCommand {
         Despawn() {
             super("despawn", Texts.cmd("steamboat.despawn.desc"));
@@ -28,7 +31,7 @@ public final class SteamboatCommand extends AbstractCommandCollection {
 
         @Override
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef player, World world) {
-            ctx.sendMessage(AirshipManager.get().despawn(store, ref, player, world, Deployables.STEAMBOAT_KIND).message());
+            ctx.sendMessage(AirshipManager.get().despawn(store, ref, player, world, BOAT_KINDS).message());
         }
     }
 }

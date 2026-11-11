@@ -1,0 +1,95 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.steamboat_skiff_crate.name",
+    "Description": "server.orbis_horizon.items.steamboat_skiff_crate.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Steamboat_Skiff_Crate.png",
+  "PlayerAnimationsId": "Block",
+  "MaxStack": 1,
+  "ItemLevel": 3,
+  "Quality": "Rare",
+  "Categories": [
+    "Items.Vehicles"
+  ],
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Cube",
+    "Opacity": "Transparent",
+    "Group": "Wood",
+    "RandomRotation": "YawStep1",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Benches"
+      }
+    },
+    "BlockParticleSetId": "Wood",
+    "Textures": [
+      {
+        "Weight": 1,
+        "Sides": "BlockTextures/Steamboat_Skiff_Crate_Side.png",
+        "UpDown": "BlockTextures/Furniture_Village_Crate.png"
+      }
+    ],
+    "ParticleColor": "#3f2720",
+    "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
+    "TextureComputedColor": "#47291D"
+  },
+  "Interactions": {
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "HotairBalloon_Deploy",
+          "PrefabPath": "Steamboat_Skiff.prefab.json",
+          "Offset": {
+            "X": 0,
+            "Y": 0,
+            "Z": -4
+          },
+          "RotationOffset": "None",
+          "Force": true,
+          "Next": {
+            "Type": "ModifyInventory",
+            "AdjustHeldItemQuantity": -1
+          }
+        }
+      ]
+    }
+  },
+  "Recipe": {
+    "Input": [
+      {
+        "ItemId": "Wood_Palm_Trunk",
+        "Quantity": 40
+      },
+      {
+        "ItemId": "Ingredient_Bar_Iron",
+        "Quantity": 12
+      },
+      {
+        "ItemId": "Ingredient_Bar_Copper",
+        "Quantity": 8
+      },
+      {
+        "ItemId": "Ingredient_Fibre",
+        "Quantity": 30
+      },
+      {
+        "ItemId": "Furniture_Kweebec_Chest_Small",
+        "Quantity": 1
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "OrbisHorizon_Transport"
+        ],
+        "Id": "OrbisHorizon_Bench",
+        "RequiredTierLevel": 2
+      }
+    ],
+    "TimeSeconds": 3
+  }
+}

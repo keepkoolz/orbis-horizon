@@ -211,6 +211,19 @@ final class AirshipManager {
         return flights.containsKey(pilot);
     }
 
+    /**
+     * True while a flight of this world took off from this origin and has not landed: the registry entry is removed at take-off
+     * and written again at landing, so this is a guard for an entry seen between the two.
+     */
+    boolean underwayFrom(World world, Vector3i origin, String kindId) {
+        for (AirshipFlight f : flights.values()) {
+            if (f.world == world && f.kind.id.equals(kindId) && f.takeoffOrigin.equals(origin)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The voyages of this world seen by the captain's map. */
     List<CaptainMap.VoyageView> voyageViews(World world) {
         List<CaptainMap.VoyageView> out = new ArrayList<>();
@@ -1333,12 +1346,15 @@ final class AirshipManager {
         f.lastResumeMs = f.lastTickMs;
         AirshipResume.write(f, false);
         player.sendMessage(Texts.ship(f.kind, "takeoff"));
-        if (f.engines.isEmpty()) {
-            // No fuel: the ship still climbs, descends and hovers (gas lift), but cannot travel.
-            enterDry(store, f);
-            player.sendMessage(Texts.ship(f.kind, "fuel.none"));
-        } else {
-            updateFuelHud(store, f);
+        // A fuelless ship (the skiff) has no tank to read: it is never dry and shows no fuel window.
+        if (!spec.fuelless) {
+            if (f.engines.isEmpty()) {
+                // No fuel: the ship still climbs, descends and hovers (gas lift), but cannot travel.
+                enterDry(store, f);
+                player.sendMessage(Texts.ship(f.kind, "fuel.none"));
+            } else {
+                updateFuelHud(store, f);
+            }
         }
         LOGGER.at(Level.INFO).log("Takeoff of the " + spec(f.kind).logLabel + " by %s: origin %s, rotation %s, %d blocks removed, %d chest item(s), "
                         + "%d engine(s), %d engine item(s), %.0f s of fuel, upgraded benches: %s, %d passenger(s)",
@@ -1411,8 +1427,8 @@ final class AirshipManager {
         BalloonRegistry.Entry registered = BalloonRegistry.get(world, origin, rotation, kind.id);
         f.ownership = registered != null ? registered.ownership() : Ownership.NONE;
         f.crew = spec(kind).hasCrew() && registered != null ? registered.crew() : null;
-        // A boat keeps a log of the water it sails (the public shuttle has none): the registry copy, or a new one.
-        f.water = spec(kind).waterborne() && kind != Deployables.STEAMBOAT_PUBLIC
+        // A boat with voyages keeps a log of the water it sails (the shuttle and the skiff have none): the registry copy, or a new one.
+        f.water = spec(kind).waterborne() && spec(kind).voyage
                 ? (registered != null && registered.water() != null ? registered.water().copy() : new WaterLog()) : null;
         // A ship with a pilot that flies keeps what the pilot sees: the registry copy, or a new log (the take-off cell is recorded too).
         f.sky = spec(kind).hasCrew() && !spec(kind).waterborne()
@@ -1734,6 +1750,13 @@ final class AirshipManager {
      * hovering, climbing or descending, and goes dry when the fuel runs out (the fuel window shows the rest).
      */
     void burnFuel(Store<EntityStore> store, AirshipFlight f, double seconds) {
+        if (spec(f.kind).fuelless) {
+            // Nothing is burnt and the ship never goes dry, but the thrust and the propeller follow its movement.
+            boolean moving = f.travelSpeed > fuelMoveMin;
+            f.moving = moving;
+            f.burning = moving || Math.toDegrees(f.windowTurn) / Math.max(seconds, 1e-3) > turnFuelMinDeg;
+            return;
+        }
         if (f.dry || f.engines == null) {
             f.burning = false;
             return;
@@ -3461,8 +3484,8 @@ final class AirshipManager {
         if (spec(kind).waterborne()) {
             return BalloonManager.exceedsHeight(s, origin, rotation)
                     || DeployPlacement.steamboatFault(s, origin, rotation, DeployPlacement.iceState(world, origin.y
-                    + Deployables.STEAMBOAT.airship.waterlineY),
-                    Deployables.STEAMBOAT.airship.waterlineY) != null;
+                    + spec(kind).waterlineY),
+                    spec(kind).waterlineY) != null;
         }
         return BalloonManager.collides(world, s, origin, rotation);
     }
@@ -3482,9 +3505,17 @@ final class AirshipManager {
         }
     }
 
+    /**
+     * Whether the submerged layer is emptied of water after a paste. The skiff keeps it: its floor is upside-down half trunks, and
+     * emptying their lower half would leave an air gap under the hull, where the water below shows a lowered surface.
+     */
+    static boolean drainsHull(Deployables.Kind kind) {
+        return kind != Deployables.STEAMBOAT_SKIFF;
+    }
+
     private static void drainHull(World world, Deployables.Kind kind, StructureShape s, Vector3i origin, Rotation rotation) {
         Integer line = spec(kind).waterlineY;
-        if (line != null) {
+        if (line != null && drainsHull(kind)) {
             SteamboatWater.drain(world, s, origin, rotation, line);
         }
     }
@@ -4129,11 +4160,11 @@ final class AirshipManager {
         return despawn(store, adminRef, admin, world, null);
     }
 
-    /** Same, restricted to one ship kind id when onlyKind is not null (steamboat despawn). */
-    BalloonManager.DespawnResult despawn(Store<EntityStore> store, Ref<EntityStore> adminRef, PlayerRef admin, World world, String onlyKind) {
+    /** Same, restricted to some ship kind ids when onlyKinds is not null (steamboat despawn: the steamboat and the skiff). */
+    BalloonManager.DespawnResult despawn(Store<EntityStore> store, Ref<EntityStore> adminRef, PlayerRef admin, World world, Set<String> onlyKinds) {
         List<Deployables.Kind> kinds = new ArrayList<>();
         for (Deployables.Kind k : Deployables.SHIPS) {
-            if (onlyKind == null || onlyKind.equals(k.id)) {
+            if (onlyKinds == null || onlyKinds.contains(k.id)) {
                 kinds.add(k);
             }
         }
@@ -4154,7 +4185,7 @@ final class AirshipManager {
         AirshipFlight flight = null;
         double flightDist = Double.MAX_VALUE;
         for (AirshipFlight f : flights.values()) {
-            if (f.world != world || f.shuttle != null || (onlyKind != null && !onlyKind.equals(f.kind.id))) {
+            if (f.world != world || f.shuttle != null || (onlyKinds != null && !onlyKinds.contains(f.kind.id))) {
                 continue; // the shuttle is not a player's ship: never removed by these commands
             }
             double d = admin.getUuid().equals(f.pilotUuid) ? 0 : f.pos.distance(here);
@@ -4198,7 +4229,7 @@ final class AirshipManager {
             }
         }
         if (flight == null && posedOrigin == null) {
-            return new BalloonManager.DespawnResult(false, Texts.ship(Deployables.get(onlyKind), "despawn.none").param("radius", (int) DESPAWN_RADIUS));
+            return new BalloonManager.DespawnResult(false, Texts.ship(onlyKinds == null ? null : Deployables.get(onlyKinds.iterator().next()), "despawn.none").param("radius", (int) DESPAWN_RADIUS));
         }
         Message error;
         if (flight != null && (posedOrigin == null || flightDist <= posedDist)) {

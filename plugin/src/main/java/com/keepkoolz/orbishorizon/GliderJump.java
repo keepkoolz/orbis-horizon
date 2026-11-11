@@ -119,7 +119,7 @@ final class GliderJump {
 
     /** Glider jumps are not offered from every vehicle (not from the steamboat for now). */
     static boolean allowedFor(Deployables.Kind kind) {
-        return kind != Deployables.STEAMBOAT && kind != Deployables.STEAMBOAT_PUBLIC;
+        return kind != Deployables.STEAMBOAT && kind != Deployables.STEAMBOAT_PUBLIC && kind != Deployables.STEAMBOAT_SKIFF;
     }
 
     /** Countdown of the pending jumps of this world: cancels on every broken condition, shows the title, then jumps. */

@@ -104,14 +104,19 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
         Rotation rotation = placement.rotation();
         Vector3i origin = placement.origin();
         Deployables.Kind boatKind = Deployables.forPrefab(prefabPath);
-        boolean boat = boatKind != null && Deployables.STEAMBOAT_KIND.equals(boatKind.id);
+        boolean boat = isCrateBoat(boatKind);
+        int waterline = boat ? boatKind.airship.waterlineY : 0;
         DeployPlacement.CellState waterState = boat ? DeployPlacement.worldState(world) : null;
         if (boat) {
-            // The steamboat floats: the origin follows the water surface under the targeted block.
-            Vector3i boatOrigin = DeployPlacement.steamboatOrigin(waterState,
-                    target != null ? new Vector3i(target.x, target.y, target.z) : null, origin);
+            // A boat floats: the origin follows the water surface under the targeted block.
+            // The stern is the targeted cell (the player's own cell when nothing is targeted), pushed forward to stay clear of the player.
+            Vector3i aimed = target != null ? new Vector3i(target.x, target.y, target.z) : null;
+            Vector3i playerCell = Vector3dUtil.toVector3i(transform.getPosition());
+            int push = DeployPlacement.boatPush(aimed != null ? aimed : playerCell, playerCell, placement.facing());
+            Vector3i boatOrigin = DeployPlacement.steamboatOrigin(waterState, DeployPlacement.forward(aimed, placement.facing(), push),
+                    DeployPlacement.forward(origin, placement.facing(), push), waterline);
             if (boatOrigin == null) {
-                refuseBoat(commandBuffer, player, "deploy.steamboat.noWater", context);
+                refuseBoat(commandBuffer, player, refusalKey(boatKind, "deploy.steamboat.noWater"), context);
                 return;
             }
             origin = boatOrigin;
@@ -144,9 +149,9 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             return;
         }
         if (boat && shape != null) {
-            String refusal = DeployPlacement.steamboatFit(shape, origin, rotation, waterState);
+            String refusal = DeployPlacement.steamboatFit(shape, origin, rotation, waterState, waterline);
             if (refusal != null) {
-                refuseBoat(commandBuffer, player, refusal, context);
+                refuseBoat(commandBuffer, player, refusalKey(boatKind, refusal), context);
                 return;
             }
         }
@@ -188,9 +193,54 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             if (Deployables.AIRSHIP_KIND.equals(kind.id)) {
                 AirshipCaptainChest.give(world, origin, rotation);
             }
+            if (kind == Deployables.STEAMBOAT_SKIFF) {
+                Telemetry.count("boat.skiff.deploy");
+                putBackSkiffContents(context, world, origin, rotation);
+            }
         } else {
             // Unreadable shape: placed without terrain protection and without registry entry (logged by shapeOrNull).
             PrefabUtil.paste(buffer, world, origin, rotation, new FastRandom(), flags, 0, commandBuffer);
+        }
+    }
+
+    /** True for a boat placed from a crate (the steamboat and the skiff; the shuttle has no crate). */
+    static boolean isCrateBoat(Deployables.Kind kind) {
+        return kind != null && kind.airship != null && kind.airship.waterborne() && kind.airship.crateItemId != null;
+    }
+
+    /** Refusal text key of a boat: the placement checks answer with the steamboat keys, the skiff has its own texts. */
+    static String refusalKey(Deployables.Kind kind, String steamboatKey) {
+        return kind == Deployables.STEAMBOAT_SKIFF ? steamboatKey.replace("deploy.steamboat.", "deploy.skiff.") : steamboatKey;
+    }
+
+    /**
+     * The held skiff crate may carry the contents of the chests kept when the skiff was packed: they are put back once the blocks
+     * exist (deferred out of the interaction, the chests retry for a few seconds if their components are not created yet).
+     * A crate without contents, or with those of another type, places an empty skiff. Never throws.
+     */
+    private static void putBackSkiffContents(InteractionContext context, World world, Vector3i placedOrigin, Rotation rotation) {
+        try {
+            com.hypixel.hytale.server.core.inventory.ItemStack held = context.getHeldItem();
+            org.bson.BsonDocument meta = held != null ? held.getMetadata() : null;
+            if (meta == null || !meta.containsKey(TentContents.METADATA_KEY) || !meta.get(TentContents.METADATA_KEY).isDocument()) {
+                return;
+            }
+            TentContents contents = TentContents.fromBson(meta.getDocument(TentContents.METADATA_KEY), Deployables.STEAMBOAT_SKIFF_KIND);
+            if (contents == null) {
+                return;
+            }
+            final Vector3i at = new Vector3i(placedOrigin);
+            world.execute(() -> {
+                try {
+                    contents.restore(world, world.getEntityStore().getStore(), at, rotation);
+                } catch (RuntimeException e) {
+                    LOGGER.at(Level.WARNING).withCause(e).log("Skiff: crate contents not put back");
+                    Telemetry.error("deploy", e, Deployables.STEAMBOAT_SKIFF_KIND, null);
+                }
+            });
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Skiff: unreadable crate contents");
+            Telemetry.error("deploy", e, Deployables.STEAMBOAT_SKIFF_KIND, null);
         }
     }
 

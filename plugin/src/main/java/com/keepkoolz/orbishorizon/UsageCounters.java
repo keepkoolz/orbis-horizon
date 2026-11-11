@@ -11,11 +11,12 @@ import java.util.concurrent.atomic.LongAdder;
 /** Anonymous usage counters, one per feature; no player or position data. */
 final class UsageCounters {
     static final List<String> NAMES = List.of(
-            "deploy.balloon", "deploy.balloon_basic", "deploy.balloon_transport", "deploy.airship", "deploy.steamboat",
+            "deploy.balloon", "deploy.balloon_basic", "deploy.balloon_transport", "deploy.airship", "deploy.steamboat", "deploy.steamboat_skiff",
             "deploy.bedroll", "deploy.tent", "deploy.tent_big",
-            "takeoff.balloon", "takeoff.balloon_basic", "takeoff.balloon_transport", "takeoff.airship", "takeoff.steamboat",
+            "takeoff.balloon", "takeoff.balloon_basic", "takeoff.balloon_transport", "takeoff.airship", "takeoff.steamboat", "takeoff.steamboat_skiff",
             "airship.voyage", "balloon.voyage", "airship.recall", "airship.pilot_hired", "transit.trip", "transit.boatTrip",
-            "cage.capture", "glider.jump", "camp.upgrade", "station.contract", "station.masterPlaced", "station.quayPlaced");
+            "cage.capture", "glider.jump", "camp.upgrade", "station.contract", "station.masterPlaced", "station.quayPlaced",
+            "boat.skiff.deploy", "boat.skiff.pack");
 
     private final Map<String, LongAdder> counters = new ConcurrentHashMap<>();
     /** Counter names in report order: NAMES, then the registered names in the order they arrived. */

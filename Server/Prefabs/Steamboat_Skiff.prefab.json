@@ -1,0 +1,436 @@
+{
+  "version": 8,
+  "blockIdVersion": 11,
+  "anchorX": 0,
+  "anchorY": 0,
+  "anchorZ": 0,
+  "blocks": [
+    {
+      "x": -2,
+      "y": 1,
+      "z": -1,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 7
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 0,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 7
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 1,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 7
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 2,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 7
+    },
+    {
+      "x": -2,
+      "y": 1,
+      "z": 3,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 7
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": -2,
+      "name": "Wood_Palm_Trunk_Stairs",
+      "rotation": 8
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": -1,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 0,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 1,
+      "name": "Furniture_Kweebec_Chest_Small",
+      "components": {
+        "Components": {
+          "ItemContainerBlock": {
+            "ItemContainer": {
+              "Capacity": 18,
+              "Items": {}
+            },
+            "Capacity": 18
+          }
+        }
+      },
+      "rotation": 1
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 1,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 2,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 3,
+      "name": "Wood_Palm_Trunk_Stairs",
+      "rotation": 2
+    },
+    {
+      "x": -1,
+      "y": 1,
+      "z": 4,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 4
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": -3,
+      "name": "Wood_Palm_Trunk_Stairs",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -2,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": -2,
+      "name": "Wood_Palm_Trunk_Stairs"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -1,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": -1,
+      "name": "Airship_Helm",
+      "filler": 31744
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "z": -1,
+      "name": "Airship_Helm"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 1,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 2,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 3,
+      "name": "Metal_Goblin_Iron_Pipe_Large_Corner",
+      "support": 15,
+      "rotation": 10
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 3,
+      "name": "Steamboat_Skiff_Crate_Placed",
+      "rotation": 0
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 4,
+      "name": "Steamboat_Propeller"
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 4,
+      "name": "Wood_Palm_Trunk_Stairs",
+      "rotation": 10
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": -2,
+      "name": "Wood_Palm_Trunk_Stairs",
+      "rotation": 8
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": -1,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 0,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 1,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 2,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 8
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 0,
+      "name": "Furniture_Tavern_Stool",
+      "rotation": 3
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 3,
+      "name": "Wood_Palm_Trunk_Stairs",
+      "rotation": 2
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 4,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 4
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": -1,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 5
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 0,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 5
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 1,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 5
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 2,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 5
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 3,
+      "name": "Wood_Palm_Trunk_Half",
+      "rotation": 5
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 2,
+      "name": "Deco_Bucket",
+      "rotation": 0
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "z": 4,
+      "name": "Furniture_Lumberjack_Lamp",
+      "rotation": 3
+    },
+    {
+      "x": 0,
+      "y": 3,
+      "z": 4,
+      "name": "Furniture_Lumberjack_Lamp",
+      "rotation": 3,
+      "filler": 1024
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 4,
+      "name": "Furniture_Lumberjack_Lamp",
+      "rotation": 3,
+      "filler": 2048
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "z": 3,
+      "name": "Furniture_Lumberjack_Lamp",
+      "rotation": 3,
+      "filler": 3040
+    }
+  ],
+  "fluids": [
+    {
+      "x": -1,
+      "y": 0,
+      "z": -1,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 0,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 1,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": -1,
+      "y": 0,
+      "z": 2,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -2,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -1,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 1,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 2,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 3,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 4,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": -1,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 0,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 1,
+      "name": "Water_Source",
+      "level": 1
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 2,
+      "name": "Water_Source",
+      "level": 1
+    }
+  ]
+}

@@ -36,6 +36,10 @@ A paddle steamer you set down on a lake, a river or the sea, with a workshop on 
 
 Hire a pilot and the steamboat learns the way. Ask them to note the places you like as you sail, and later to take you back to one of them, or to a boat station you have already reached. The boat only goes where it has already been. In frozen seas it breaks its way through the ice floes, but it cannot cross an iceberg.
 
+### The skiff
+
+A small palm wood boat with a propeller, a lamp at the stern and room for a pilot and a friend. Set it down on the water and sail it yourself, no fuel needed. When the coast ends, pack it back into its crate from the crate on its deck, with the contents of its chest, and carry it to another sea.
+
 ### Balloon stations
 
 A station is a station master and a landing pad. Talk to a station master and buy a contract with life essences, then use it where you want your own station. The station master appears first, and a plan for the landing pad comes next: a bare pad, or a ready-made station with a walkway and a little hut. Name the station and it joins the network. Build around it however you like, with your own walls, roofs and gardens. Only the pad stays locked, and the sky above it stays clear for the balloon.
@@ -65,7 +69,7 @@ Each trip, by balloon or by boat, costs a ticket paid in life essences by the tr
 - Friends standing on board when you take off travel with you, seated, and watch the sky from outside the vehicle. Passengers can leave mid-flight with a glider. Other players see you fly by.
 - Stations keep the sky above their landing pad clear, and you can only own one airship at a time.
 
-Orbis Horizon 2.0 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8.
+Orbis Horizon 2.1 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8.
 
 The wiki explains how to fly each vehicle, how to found your stations and the operator commands.
 

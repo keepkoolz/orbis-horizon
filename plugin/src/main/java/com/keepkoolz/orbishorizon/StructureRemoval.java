@@ -85,6 +85,15 @@ final class StructureRemoval {
     /** Same, keepContents true captures the contents for the crate (tent packing) instead of dropping them. */
     static Result remove(ComponentAccessor<EntityStore> accessor, World world, Deployables.Kind kind, StructureShape shape,
                          Vector3i origin, Rotation rotation, boolean broadAttached, boolean keepContents) {
+        return remove(accessor, world, kind, shape, origin, rotation, broadAttached, keepContents, true);
+    }
+
+    /**
+     * Same, dropEjected false leaves the stacks ejected from the containers (camping packs) to the caller: they stay in
+     * the result's TentContents.ejected() and are not dropped at the chest (the skiff gives them to the player).
+     */
+    static Result remove(ComponentAccessor<EntityStore> accessor, World world, Deployables.Kind kind, StructureShape shape,
+                         Vector3i origin, Rotation rotation, boolean broadAttached, boolean keepContents, boolean dropEjected) {
         // Box of the structure, in world cells.
         int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
@@ -151,7 +160,9 @@ final class StructureRemoval {
             for (com.hypixel.hytale.server.core.inventory.ItemStack st : kept.ejected()) {
                 ejectedCount += st.getQuantity();
             }
-            BalloonManager.dropItems(accessor, kept.ejected(), at);
+            if (dropEjected) {
+                BalloonManager.dropItems(accessor, kept.ejected(), at);
+            }
         }
         return new Result(null, removed, items, shape.anchor().rotated(rotation).add(origin), kept, ejectedCount);
     }

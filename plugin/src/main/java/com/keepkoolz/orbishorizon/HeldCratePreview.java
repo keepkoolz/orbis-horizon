@@ -24,6 +24,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.util.TargetUtil;
+import com.hypixel.hytale.math.vector.Vector3dUtil;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
 
@@ -130,9 +131,13 @@ final class HeldCratePreview {
         Vector3i target = TargetUtil.getTargetBlock(ref, REACH, store);
         DeployPlacement.Placement p = DeployPlacement.compute(target, t.getPosition(), t.getRotation().y, crate.offset(), crate.rotationOffset());
         String itemId = heldItemId(store, ref);
-        if (itemId.equals("Steamboat_Crate")) {
+        Deployables.Kind crateBoat = Deployables.forPrefab(crate.prefabPath());
+        if (DeployBalloonInteraction.isCrateBoat(crateBoat)) {
             // Same origin as the real placement: y follows the water surface; no water column, no preview.
-            Vector3i boat = DeployPlacement.steamboatOrigin(DeployPlacement.worldState(world), target, p.origin());
+            Vector3i playerCell = Vector3dUtil.toVector3i(t.getPosition());
+            int push = DeployPlacement.boatPush(target != null ? target : playerCell, playerCell, p.facing());
+            Vector3i boat = DeployPlacement.steamboatOrigin(DeployPlacement.worldState(world), DeployPlacement.forward(target, p.facing(), push),
+                    DeployPlacement.forward(p.origin(), p.facing(), push), crateBoat.airship.waterlineY);
             if (boat == null) {
                 if (st != null) {
                     hide(pr);

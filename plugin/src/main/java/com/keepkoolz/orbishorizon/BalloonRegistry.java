@@ -547,7 +547,7 @@ final class BalloonRegistry {
         }
     }
 
-    private static synchronized void remove(Entry entry) {
+    static synchronized void remove(Entry entry) {
         if (ENTRIES.remove(entry)) {
             LOGGER.at(Level.INFO).log("Structure '%s' at (%d, %d, %d) of world %s is missing: removed from the lock registry",
                     entry.kind, entry.x, entry.y, entry.z, entry.world);
@@ -715,7 +715,7 @@ final class BalloonRegistry {
     }
 
     /** Is the anchor block in place? An unloaded chunk (unknown block) counts as "yes". */
-    private static boolean stillThere(World world, StructureShape shape, Entry e) {
+    static boolean stillThere(World world, StructureShape shape, Entry e) {
         StructureShape.Cell anchor = shape.anchor();
         Vector3i p = anchor.rotated(e.rotation).add(e.x, e.y, e.z);
         SectionReader reader = new SectionReader(world.getChunkStore());

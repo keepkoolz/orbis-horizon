@@ -218,6 +218,30 @@ final class Deployables {
                     "Airship_Exhaust_Smoke", "Steamboat_Chimney_Smoke_Thick",
                     false, false, false, false, 0, 0.5f, true, null, "Propeller", "shuttle", true, null));
 
+    static final String STEAMBOAT_SKIFF_KIND = "steamboat_skiff";
+    /**
+     * Skiff (a small boat the player sails and packs back into a crate), prefab frame before rotation: 43 blocks (x -2..2, y 0..2, z -3..4,
+     * bow toward -z), one tavern stool, one chest, a tall deck lamp (up to y 4) and one stern propeller, no firebox, the floor layer (y 0) is the only one under water. Pivot = (0, 1, 0),
+     * the pilot cell right behind the helm (helm at (0, 2, -1), filler (0, 1, -1)) with the floor under it. Forbidden volume = whole prefab box;
+     * z 5 keeps the lake water behind the propeller, like z 6 for the shuttle.
+     */
+    static final int[] STEAMBOAT_SKIFF_PIVOT = {0, 1, 0};
+    static final int[] STEAMBOAT_SKIFF_PLACE_MIN = {-2, 0, -3};
+    static final int[] STEAMBOAT_SKIFF_PLACE_MAX = {2, 4, 5};
+
+    /**
+     * The skiff: same helm marker as the other boats, flown by the player. It burns no fuel (the firebox stays lit), has no crew, voyage,
+     * recall, ladder, paddle wheels or limit per player, and turns one propeller like the shuttle. The crate is its own, and also carries the
+     * contents of its chests when the skiff is packed.
+     */
+    static final Kind STEAMBOAT_SKIFF = new Kind(STEAMBOAT_SKIFF_KIND, "Steamboat_Skiff.prefab.json", "Airship_Helm", false,
+            STEAMBOAT_SKIFF_PLACE_MIN, STEAMBOAT_SKIFF_PLACE_MAX,
+            "lock.steamboat.break", "lock.steamboat.place", null, null,
+            new AirshipSpec("Steamboat_Skiff", "Steamboat_Skiff_Idle", "Steamboat_Skiff_Off", "Steamboat_Skiff_Crate", STEAMBOAT_SKIFF_PIVOT,
+                    "Steamboat_Skiff", "Steamboat_Skiff", new String[]{"Airship_Exhaust_Smoke"}, new String[]{"Airship_Exhaust_Smoke"},
+                    "Airship_Exhaust_Smoke", "Steamboat_Chimney_Smoke_Thick",
+                    false, false, false, false, 0, 0.5f, true, null, "Propeller", "skiff", true, null));
+
     static final String PUBLIC_KIND = "balloon_public";
 
     /**
@@ -348,10 +372,10 @@ final class Deployables {
             .withLegacy(new StructureShape.Cell(-1, 1, -3, "Furniture_Desert_Lantern_Tall"));
 
     /** Vehicle types flown by AirshipManager (free-heading ships). */
-    static final List<Kind> SHIPS = List.of(AIRSHIP, STEAMBOAT);
+    static final List<Kind> SHIPS = List.of(AIRSHIP, STEAMBOAT, STEAMBOAT_SKIFF);
 
     private static final List<Kind> ALL = List.of(BALLOON, BALLOON_BASIC, BALLOON_TRANSPORT, BEDROLL, TENT, TENT_BIG, AIRSHIP, STEAMBOAT,
-            STEAMBOAT_PUBLIC, BALLOON_PUBLIC, STATION, BOAT_STATION, STATION_PAD, BOAT_STATION_PIER);
+            STEAMBOAT_SKIFF, STEAMBOAT_PUBLIC, BALLOON_PUBLIC, STATION, BOAT_STATION, STATION_PAD, BOAT_STATION_PIER);
 
     /** Tent types, in the order they are logged at startup. */
     /** Every structure kind. */

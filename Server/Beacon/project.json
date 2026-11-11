@@ -65,6 +65,7 @@
         "deploy.balloon_transport",
         "deploy.airship",
         "deploy.steamboat",
+        "deploy.steamboat_skiff",
         "deploy.bedroll",
         "deploy.tent",
         "deploy.tent_big",
@@ -73,6 +74,7 @@
         "takeoff.balloon_transport",
         "takeoff.airship",
         "takeoff.steamboat",
+        "takeoff.steamboat_skiff",
         "airship.voyage",
         "balloon.voyage",
         "airship.recall",
@@ -85,6 +87,8 @@
         "station.contract",
         "station.masterPlaced",
         "station.quayPlaced",
+        "boat.skiff.deploy",
+        "boat.skiff.pack",
         "worldgen.station.air",
         "worldgen.station.boat",
         "worldgen.station.abandoned",
@@ -127,6 +131,13 @@
           }
         },
         "deploy.steamboat": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "deploy.steamboat_skiff": {
           "allowedFields": {
             "count": {
               "type": "number"
@@ -183,6 +194,13 @@
           }
         },
         "takeoff.steamboat": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "takeoff.steamboat_skiff": {
           "allowedFields": {
             "count": {
               "type": "number"
@@ -267,6 +285,20 @@
           }
         },
         "station.quayPlaced": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "boat.skiff.deploy": {
+          "allowedFields": {
+            "count": {
+              "type": "number"
+            }
+          }
+        },
+        "boat.skiff.pack": {
           "allowedFields": {
             "count": {
               "type": "number"

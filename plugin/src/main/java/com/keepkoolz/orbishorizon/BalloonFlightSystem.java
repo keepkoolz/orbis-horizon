@@ -52,6 +52,7 @@ public final class BalloonFlightSystem extends TickingSystem<EntityStore> {
         LegacyCamps.tick(store, store.getExternalData().getWorld()); // never throws
         CaptainMap.tick(store, store.getExternalData().getWorld()); // never throws
         StationDiscovery.tick(store, store.getExternalData().getWorld()); // never throws
+        SkiffPackCountdown.tick(store, store.getExternalData().getWorld()); // never throws
         // Glider jump: passengers taking a glider in hand.
         try {
             GliderJump.tick(store, store.getExternalData().getWorld());

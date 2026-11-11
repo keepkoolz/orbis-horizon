@@ -50,6 +50,8 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         getCodecRegistry(Interaction.CODEC)
                 .register(PackCampInteraction.TYPE_ID, PackCampInteraction.class, PackCampInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
+                .register(SkiffPackInteraction.TYPE_ID, SkiffPackInteraction.class, SkiffPackInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
                 .register(PackTentInteraction.TYPE_ID, PackTentInteraction.class, PackTentInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
                 .register(TakeOffBalloonInteraction.TYPE_ID, TakeOffBalloonInteraction.class, TakeOffBalloonInteraction.CODEC);

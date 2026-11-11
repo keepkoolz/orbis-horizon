@@ -57,13 +57,13 @@ final class DeployPlacement {
     }
 
     /**
-     * Steamboat placement check. Prefab layers at or under the steamboat's waterline (y <= -2)
+     * Boat placement check. Prefab layers at or under the boat's waterline (-2 for the steamboat, 0 for the skiff)
      * are the hull under water and must be water, the layers above must be empty (no block, no liquid). Every cell is tested,
      * filler cells included.
      * @return null if the boat fits, otherwise the refusal key
      */
-    static String steamboatFit(StructureShape shape, Vector3i origin, Rotation rotation, CellState state) {
-        Fault fault = steamboatFault(shape, origin, rotation, state);
+    static String steamboatFit(StructureShape shape, Vector3i origin, Rotation rotation, CellState state, int waterline) {
+        Fault fault = steamboatFault(shape, origin, rotation, state, waterline);
         return fault == null ? null : fault.key();
     }
 
@@ -72,15 +72,10 @@ final class DeployPlacement {
     }
 
     /**
-     * Same check as {@link #steamboatFit} but returns the first faulty cell. A faulty hull cell wins over a blocked cell above water
-     * and returns at once.
+     * Same check as {@link #steamboatFit} but returns the first faulty cell: prefab layers at or under the waterline must be water,
+     * the layers above must be empty. A faulty hull cell wins over a blocked cell above water and returns at once.
      * @return null if the boat fits
      */
-    static Fault steamboatFault(StructureShape shape, Vector3i origin, Rotation rotation, CellState state) {
-        return steamboatFault(shape, origin, rotation, state, Deployables.STEAMBOAT.airship.waterlineY);
-    }
-
-    /** Same check with an explicit waterline: prefab layers at or under it must be water, the layers above must be empty. */
     static Fault steamboatFault(StructureShape shape, Vector3i origin, Rotation rotation, CellState state, int waterline) {
         Fault blocked = null;
         for (StructureShape.Cell c : shape.cells()) {
@@ -144,21 +139,54 @@ final class DeployPlacement {
     }
 
     /**
-     * Steamboat origin: the crate's computed origin with y replaced by surface + 2 (the waterline layer -2 lands on the highest water
-     * cell). The search column is the targeted block's x,z (the computed origin's when nothing is targeted), starting just above
+     * Boat origin: the crate's computed origin with y replaced by surface - waterline (the waterline layer lands on the highest water
+     * cell: surface + 2 for the steamboat, the surface itself for the skiff). The search column is the targeted block's x,z (the computed origin's when nothing is targeted), starting just above
      * the targeted block. If the targeted block is itself water, the search starts at its y so aiming at the surface works.
+     * When the start cell is air, the search goes down through air, BOAT_SURFACE_SCAN_DOWN cells at most, to the first water cell:
+     * with nothing targeted the start is the player's feet, which may stand at or above the water level.
      * @return the origin, or null when there is no water column (refusal deploy.steamboat.noWater)
      */
-    static Vector3i steamboatOrigin(CellState state, Vector3i target, Vector3i computed) {
+    static final int BOAT_SURFACE_SCAN_DOWN = 4;
+
+    /** A boat's stern lands at least this many blocks in front of the player, so the hull never wraps around them. */
+    static final int BOAT_MIN_AHEAD = 2;
+
+    /**
+     * Blocks to push a boat forward (along the player's facing, -z of the facing quarter turn) so that its stern, at the targeted
+     * cell or at the player's own cell when nothing is targeted, is at least BOAT_MIN_AHEAD blocks in front of the player.
+     */
+    static int boatPush(Vector3i stern, Vector3i playerCell, Rotation facing) {
+        Vector3i forward = facing.rotateYaw(new Vector3i(0, 0, -1), new Vector3i());
+        int ahead = (stern.x - playerCell.x) * forward.x + (stern.z - playerCell.z) * forward.z;
+        return Math.max(0, BOAT_MIN_AHEAD - ahead);
+    }
+
+    /** The cell moved n blocks forward along the facing (a new vector, the argument is left as is; null stays null). */
+    static Vector3i forward(Vector3i cell, Rotation facing, int n) {
+        if (cell == null) {
+            return null;
+        }
+        Vector3i f = facing.rotateYaw(new Vector3i(0, 0, -n), new Vector3i());
+        return new Vector3i(cell.x + f.x, cell.y + f.y, cell.z + f.z);
+    }
+
+    static Vector3i steamboatOrigin(CellState state, Vector3i target, Vector3i computed, int waterline) {
         int cx = target != null ? target.x : computed.x;
         int cz = target != null ? target.z : computed.z;
         int ty = target != null ? target.y : computed.y;
         int startY = state.at(cx, ty, cz) == 1 ? ty : ty + 1;
+        // Air at the start (nothing targeted and the player's feet at or above the water level): go down through air to the water.
+        for (int y = startY; y >= startY - BOAT_SURFACE_SCAN_DOWN && state.at(cx, y, cz) == 0; y--) {
+            if (state.at(cx, y - 1, cz) == 1) {
+                startY = y - 1;
+                break;
+            }
+        }
         Integer surface = waterSurfaceY(y -> state.at(cx, y, cz) == 1, startY, BalloonManager.WORLD_MAX_Y);
         if (surface == null) {
             return null;
         }
-        return new Vector3i(computed.x, surface - Deployables.STEAMBOAT.airship.waterlineY, computed.z);
+        return new Vector3i(computed.x, surface - waterline, computed.z);
     }
 
     /**
@@ -332,6 +360,8 @@ final class DeployPlacement {
             Map.entry("Camping_Pack_Tent", new Crate("Camping_Tent.prefab.json", new Vector3i(0, 1, -3), Rotation.Ninety)),
             Map.entry("Camping_Pack_Tent_Big", new Crate("Camping_Tent_Big.prefab.json", new Vector3i(0, 1, -1), Rotation.OneEighty)),
             Map.entry("Steamboat_Crate", new Crate("Steamboat.prefab.json", new Vector3i(0, 0, -12), Rotation.None)),
+            // the skiff: the targeted cell is the stern, as for the steamboat (its stern is at z 4, the box has a free cell behind it).
+            Map.entry("Steamboat_Skiff_Crate", new Crate("Steamboat_Skiff.prefab.json", new Vector3i(0, 0, -4), Rotation.None)),
             // the quay plans of the stations (PlaceQuayInteraction): the pad and the pier end sit on the targeted block, the whole
             // stations are turned so that their pad or pier end faces away from the player.
             Map.entry("Hotair_Balloon_Station_Plan_Pad", new Crate("Balloon_Station_Pad.prefab.json", new Vector3i(0, 1, 0), Rotation.None)),
