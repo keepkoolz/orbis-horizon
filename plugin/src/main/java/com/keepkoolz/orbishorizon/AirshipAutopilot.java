@@ -109,7 +109,6 @@ final class AirshipAutopilot {
             }
             v.stopped = true;
             v.arrived = false; // a stop after a refused arrival is announced as a stop only
-            LOGGER.at(Level.INFO).log("Voyage: stop (%s)", key);
             AirshipPassengers.tell(f.world.getEntityStore().getStore(), f, key);
             v.phase = VoyageState.Phase.STOPPING;
             v.progressMs = 0;
@@ -171,7 +170,6 @@ final class AirshipAutopilot {
         v.phase = VoyageState.Phase.ASHORE;
         v.progressMs = 0;
         v.ashoreGroundWaitMs = 0;
-        LOGGER.at(Level.INFO).log("Voyage: captain ashore, the airship descends");
         return true;
     }
 
@@ -191,7 +189,6 @@ final class AirshipAutopilot {
                 v.ashoreGroundWaitMs = now;
             }
             if (now - v.ashoreGroundWaitMs >= CHUNK_WAIT_MS) {
-                LOGGER.at(Level.INFO).log("Voyage: unknown ground under the ladder, landing in place");
                 finishAshore(am, f, v);
                 return;
             }
@@ -208,7 +205,6 @@ final class AirshipAutopilot {
         double before = f.pos.y;
         am.move(world, f, hull, new Vector3d(f.pos.x, f.pos.y - dy, f.pos.z), f.theta, now);
         if (f.pos.y > before - 1e-9) {
-            LOGGER.at(Level.INFO).log("Voyage: descent stopped by an obstacle, landing here");
             finishAshore(am, f, v);
         }
     }
@@ -298,7 +294,7 @@ final class AirshipAutopilot {
             return;
         }
         if (v.retries >= VoyageState.MAX_RETRIES) {
-            LOGGER.at(Level.INFO).log("Voyage: %d landings refused, landing in place", v.retries);
+            LOGGER.at(Level.WARNING).log("Voyage: %d landings refused, landing in place", v.retries);
             if (!v.forcedTried) {
                 v.forcedTried = true; // a single forced landing per voyage
                 if (AirshipManager.get().landImmediately(f)) {
@@ -461,7 +457,6 @@ final class AirshipAutopilot {
         v.phase = VoyageState.Phase.ARRIVE;
         v.arrived = true;
         v.progressMs = 0;
-        LOGGER.at(Level.INFO).log("Voyage: arrived above %s, starting the landing", v.destName);
         am.startLanding(f, false);
     }
 
@@ -519,7 +514,7 @@ final class AirshipAutopilot {
         if (moved > PROGRESS_MOVE || Math.abs(f.theta - v.progressTheta) > Math.toRadians(1)) {
             markProgress(f, v, now);
         } else if (!v.stopped && !v.ashore && now - v.progressMs >= NO_PROGRESS_MS) {
-            LOGGER.at(Level.INFO).log("Voyage: no progress for %d s", NO_PROGRESS_MS / 1000);
+            LOGGER.at(Level.WARNING).log("Voyage: no progress for %d s", NO_PROGRESS_MS / 1000);
             markProgress(f, v, now);
             stop(f, "crew.voyage.blocked");
         }

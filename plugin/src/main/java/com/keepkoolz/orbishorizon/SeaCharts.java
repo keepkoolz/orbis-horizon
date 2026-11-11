@@ -27,7 +27,6 @@ final class SeaCharts {
     private static final Map<String, SeaChart> CHARTS = new ConcurrentHashMap<>();
     /** Worlds deleted when they are removed: their chart stays in memory. */
     private static final Set<String> THROWAWAY = ConcurrentHashMap.newKeySet();
-    private static final Set<String> WARNED = ConcurrentHashMap.newKeySet();
     /** Worlds whose start was handled by this class, to react once per world object. */
     private static final Map<String, World> STARTED = new ConcurrentHashMap<>();
     /** Worlds whose chart changed since it was last written. */
@@ -257,19 +256,13 @@ final class SeaCharts {
             }
             GeneratorProbe probe = a == GeneratorProbe.Availability.READY ? GeneratorProbe.forChart(world) : null;
             if (probe == null) {
-                if (WARNED.add(world.getName())) {
-                    LOGGER.at(Level.INFO).log("Sea chart: world %s does not use the game generator, no chart for this world", world.getName());
-                }
                 return;
             }
-            long t0 = System.nanoTime();
-            int ocean = chart.fill(probe, x, z);
+            chart.fill(probe, x, z);
             DIRTY.add(world.getName());
             if (stopped) {
                 return; // an interrupted fill published nothing, and stop() saves what the chart holds
             }
-            LOGGER.at(Level.INFO).log("Sea chart: fill from (%d, %d) in %s took %d ms, ocean %d", x, z, world.getName(),
-                    (System.nanoTime() - t0) / 1_000_000L, ocean);
             if (!THROWAWAY.contains(world.getName()) && !stopped) {
                 save(world.getName(), chart);
             }

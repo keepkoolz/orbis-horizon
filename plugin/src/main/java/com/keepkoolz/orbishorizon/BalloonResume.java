@@ -50,15 +50,24 @@ final class BalloonResume {
     /** A flight read back from disk. */
     record Record(UUID pilot, String world, Deployables.Kind kind, Vector3i origin, Rotation rotation, UUID balloon,
                   BurnerFuel burner, BalloonCargo cargo, List<Seated> passengers, List<CageAnimals.Animal> animals,
-                  String transitFrom, String transitTo, int cageDescent, int cageHomeY, Ownership ownership, CrewRecord crew, SkyLog sky) {
+                  String transitFrom, String transitTo, int cageDescent, int cageHomeY, Ownership ownership, CrewRecord crew, SkyLog sky, RecallState.Saved recall) {
         /** A transit flight: nothing is placed on resume, only the passengers are set down at the destination station. */
         boolean transit() {
             return transitFrom != null;
         }
 
+        /** A recalled flight is put down at its leave point (same height), any other record is returned as it is. */
+        Record atLeavePoint() {
+            if (recall == null) {
+                return this;
+            }
+            return new Record(pilot, world, kind, new Vector3i((int) Math.floor(recall.retreatX()), origin.y, (int) Math.floor(recall.retreatZ())),
+                    rotation, balloon, burner, cargo, passengers, animals, transitFrom, transitTo, cageDescent, cageHomeY, ownership, crew, sky, recall);
+        }
+
         /** the same record with the origin moved vertically (resume of a pose outside the height range). */
         Record shiftedBy(int dy) {
-            return new Record(pilot, world, kind, new Vector3i(origin).add(0, dy, 0), rotation, balloon, burner, cargo, passengers, animals, transitFrom, transitTo, cageDescent, cageHomeY, ownership, crew, sky);
+            return new Record(pilot, world, kind, new Vector3i(origin).add(0, dy, 0), rotation, balloon, burner, cargo, passengers, animals, transitFrom, transitTo, cageDescent, cageHomeY, ownership, crew, sky, recall);
         }
     }
 
@@ -138,6 +147,11 @@ final class BalloonResume {
             if (sl != null && !sl.isEmpty()) {
                 doc.put("sky", sl.toBson()); // destinations the pilot learned, absent in older files
             }
+            RecallState rs = f.recall;
+            if (rs != null && !rs.quayFreed) {
+                // A recall flight that holds the quay: a resumed or shut-down balloon is put down at the leave point, never on the quay.
+                doc.put("recall", AirshipRecall.savedOf(rs, f.world).toBson());
+            }
             f.ownership.writeTo(doc); // keys absent in older files: read back as NONE
             if (f.burner != null) {
                 doc.put("burner", f.burner.toBson());
@@ -188,6 +202,11 @@ final class BalloonResume {
         } catch (IOException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Resume file for flight of %s not deleted", pilot);
         }
+    }
+
+    /** The "recall" key of a resume file, null if absent (a flight that holds no quay, or an older file). */
+    static RecallState.Saved recallFromBson(BsonDocument doc) {
+        return doc.containsKey("recall") && doc.get("recall").isDocument() ? RecallState.Saved.fromBson(doc.getDocument("recall")) : null;
     }
 
     /** NPC pilot as a BSON document (the "crew" key of the resume file). */
@@ -247,7 +266,8 @@ final class BalloonResume {
                         doc.containsKey("cageHomeY") ? doc.getNumber("cageHomeY").intValue() : 0,
                         Ownership.readFrom(doc),
                         doc.containsKey("crew") ? crewFromBson(doc.get("crew").isDocument() ? doc.getDocument("crew") : null) : null,
-                        doc.containsKey("sky") ? SkyLog.fromBson(doc.getDocument("sky")) : null));
+                        doc.containsKey("sky") ? SkyLog.fromBson(doc.getDocument("sky")) : null,
+                        recallFromBson(doc)));
             } catch (IOException | RuntimeException e) {
                 LOGGER.at(Level.SEVERE).withCause(e).log("Resume file unreadable: %s", p);
                 try {

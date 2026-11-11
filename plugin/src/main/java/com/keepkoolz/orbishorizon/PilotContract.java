@@ -99,7 +99,6 @@ final class PilotContract {
         } else {
             player.sendMessage(Texts.t("crew.contract.bought"));
         }
-        LOGGER.at(Level.INFO).log("Pilot: contract bought by %s", player.getUsername());
         return null;
     }
 }

@@ -246,7 +246,6 @@ final class ShipVoyage {
             }
             double[] goal = goalOf(w, d, station, station != null ? pierAndZone(station) : null);
             if (goal == null) {
-                LOGGER.at(Level.INFO).log("Boat voyage: no log cell for %s", d.name());
                 return Texts.pilot("crew.voyage.noChart", crew);
             }
             int gx = (int) Math.floor(goal[0]);
@@ -256,22 +255,17 @@ final class ShipVoyage {
             String key = keyOf(world.getName(), e);
             Plan p = new Plan(world.getName(), key, captain, e, d, onAccepted, System.currentTimeMillis(), gx, gz);
             List<int[]> logPath = w.path(sx, sz, gx, gz, Set.of());
-            String source;
             if (!logPath.isEmpty()) {
                 p.answer = corridorFromLog(logPath);
-                source = "log, " + logPath.size() + " cell(s)";
             } else {
                 SeaChart chart = SeaCharts.chart(world.getName());
                 if (chart == null) {
-                    LOGGER.at(Level.INFO).log("Boat voyage: world %s has no sea chart, no corridor to %s", world.getName(), d.name());
                     return Texts.pilot("crew.voyage.noChart", crew);
                 }
                 p.search = new ChartRoute(chart, ShuttleNav.view(SeaCharts.book(), world.getName()), sx, sz, gx, gz);
-                source = "sea chart";
             }
             PLANS.put(key, p);
             captain.sendMessage(Texts.pilot("crew.voyage.charting", crew));
-            LOGGER.at(Level.INFO).log("Boat voyage to %s: computing corridor (%s)", d.name(), source);
             return null;
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Boat voyage: cannot compute corridor");
@@ -293,7 +287,7 @@ final class ShipVoyage {
                 try {
                     if (now - p.startMs > PLAN_TIMEOUT_MS) {
                         PLANS.remove(p.key, p);
-                        LOGGER.at(Level.INFO).log("Boat voyage to %s: computation abandoned after %d s", p.dest.name(), PLAN_TIMEOUT_MS / 1000);
+                        LOGGER.at(Level.WARNING).log("Boat voyage to %s: computation abandoned after %d s", p.dest.name(), PLAN_TIMEOUT_MS / 1000);
                         p.captain.sendMessage(Texts.pilot("crew.voyage.noChart", p.entry.crew()));
                         continue;
                     }
@@ -310,7 +304,7 @@ final class ShipVoyage {
                     if (answer != null) {
                         PLANS.remove(p.key, p);
                         if (answer.isEmpty()) {
-                            LOGGER.at(Level.INFO).log("Boat voyage to %s: no corridor on the chart", p.dest.name());
+                            LOGGER.at(Level.WARNING).log("Boat voyage to %s: no corridor on the chart", p.dest.name());
                             p.captain.sendMessage(Texts.pilot("crew.voyage.noChart", p.entry.crew()));
                         } else {
                             depart(world, p, answer);
@@ -381,14 +375,12 @@ final class ShipVoyage {
                     // A back-off point is reached: try to land here (no arrival announced).
                     v.phase = VoyageState.Phase.STOPPING;
                     v.retries = 0;
-                    LOGGER.at(Level.INFO).log("Boat voyage %s: fallback point reached, trying to dock", fl.id);
                     AirshipManager.get().startLanding(fl, false);
                     return;
                 }
                 v.arrived = true;
                 v.phase = VoyageState.Phase.ARRIVE;
                 v.progressMs = 0;
-                LOGGER.at(Level.INFO).log("Boat voyage: arrived at %s, starting to dock", v.destName);
                 AirshipManager.get().startLanding(fl, false);
             }
 
@@ -498,8 +490,6 @@ final class ShipVoyage {
             st.rerouting = false;
             BoatAutopilot.resume(f, st, ShuttleState.Phase.SAIL, System.currentTimeMillis());
             v.phase = VoyageState.Phase.CRUISE;
-            LOGGER.at(Level.INFO).log("Boat voyage %s: no docking possible, falling back to (%d, %d)%s, %d point(s) left", f.id,
-                    p[0], p[1], home ? " (start point)" : "", v.backoff.size());
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Boat voyage: fallback not possible");
             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), "backoff");
@@ -520,7 +510,7 @@ final class ShipVoyage {
             CaptainMap.forget(v.captain);
             int n = f.riders.size();
             AirshipManager.get().passengers.releaseAll(store, f);
-            LOGGER.at(Level.INFO).log("Boat voyage %s: no docking possible, %d passenger(s) put on the water, the boat stays alone", f.id, n);
+            LOGGER.at(Level.WARNING).log("Boat voyage %s: no docking possible, %d passenger(s) put on the water, the boat stays alone", f.id, n);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Boat voyage: passengers not released");
             Telemetry.error("airship.autopilot", e, Telemetry.kindId(f.kind), "backoff");
@@ -542,11 +532,7 @@ final class ShipVoyage {
             @Override
             public List<int[]> retrace(int fromX, int fromZ) {
                 try {
-                    List<int[]> pts = corridorNow(world, f.water, cellsNear(st.avoid), fromX, fromZ, goalX, goalZ);
-                    if (pts != null) {
-                        LOGGER.at(Level.INFO).log("Boat voyage %s: corridor traced again from (%d, %d), %d point(s)", f.id, fromX, fromZ, pts.size());
-                    }
-                    return pts;
+                    return corridorNow(world, f.water, cellsNear(st.avoid), fromX, fromZ, goalX, goalZ);
                 } catch (RuntimeException e) {
                     LOGGER.at(Level.WARNING).withCause(e).log("Boat voyage %s: new corridor tracing failed", f.id);
                     Telemetry.error("boat.localnav", e, Telemetry.kindId(f.kind), "retrace");
@@ -585,7 +571,6 @@ final class ShipVoyage {
                 corridor = List.of(new int[] {fx, fz}, new int[] {back[0], back[1]});
             }
             startNav(f, st, back[0], back[1], corridor);
-            LOGGER.at(Level.INFO).log("Boat voyage %s at (%d, %d): local pilot to the fallback point (%d, %d)", f.id, fx, fz, back[0], back[1]);
             ShuttleNav.requestSearch(f, st, stuck);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Boat voyage %s: new search not possible", f.id);

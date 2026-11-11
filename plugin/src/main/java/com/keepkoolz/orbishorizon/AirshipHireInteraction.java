@@ -138,7 +138,6 @@ public class AirshipHireInteraction extends SimpleInstantInteraction {
         }
         Telemetry.count("airship.pilot_hired");
         playerRef.sendMessage(Texts.pilot("crew.hire.welcome", hired));
-        LOGGER.at(Level.INFO).log("Pilot: hired by %s at (%d, %d, %d)", playerRef.getUsername(), entry.x(), entry.y(), entry.z());
     }
 
     private static void fail(InteractionContext context) {

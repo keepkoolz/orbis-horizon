@@ -21,14 +21,14 @@ Wherever you sleep, that is where you come back if the road is unkind, even afte
 Fill the burner with fuel, climb into the basket, pull the chain, and the ground drops away. You fly freely as long as the burner has something to burn. Pull the chain again to stop, on the ground or right there in the sky. If the fuel runs out, the balloon sinks gently back to earth.
 
 - The small balloon is for travelling alone.
-- The large balloon takes your friends along on its stools and carries chests full of supplies. It can have a pilot too, who flies you to the stations and map markers you have already flown past while you enjoy the view.
+- The large balloon takes your friends along on its stools and carries chests full of supplies. It can have a pilot too, who flies you to the stations and map markers you have already flown past while you enjoy the view, and brings the balloon to a station when you call it.
 - The animal transport balloon has an iron cage hanging under its basket. Lower it onto a meadow, lure an animal in with its favourite food, close the cage and fly your new livestock home.
 
 ### The Cloudwork airship
 
 A flying ship with a whole workshop on board: every workbench you need, beds, chests and seats for a crew. It floats without fuel and only burns fuel while it moves or turns. It goes where you fly and turns to face where you look. Building it is a long road, with rare materials from deep in the world, and its thrusters only wake up with the core of the Gobliterator.
 
-You can hire a pilot at any station. Your pilot only knows the way to places the ship has flown past. Ask them to take you to one of those map markers or stations and they fly the ship while you sit in the captain's chair, or pick the destination on the chart in the cabin. Parked far away, the airship comes to a station when you call it, and you climb a ladder to board.
+You can hire a pilot at any station. Your pilot only knows the way to places the ship has flown past. Ask them to take you to one of those map markers or stations and they fly the ship while you sit in the captain's chair, or pick the destination on the chart in the cabin. Parked far away, the airship comes to a station when you call it, and you climb a ladder to board. Every airship, steamboat and large balloon gets a name when you set it down, so the station master knows which one to call.
 
 ### The steamboat
 
@@ -67,9 +67,9 @@ Each trip, by balloon or by boat, costs a ticket paid in life essences by the tr
 - Pack a camp and what you left in its chests and campfire travels in the pack, ready for your next camp. Crouch to set up camp, and use a tent pack standing to rummage through its chests. The small tent has a chest outside for your things.
 - Once set up, a tent, balloon or airship, and the landing pad of a station, is locked, so nobody breaks it by accident. Beds, chests, burners and seats still work.
 - Friends standing on board when you take off travel with you, seated, and watch the sky from outside the vehicle. Passengers can leave mid-flight with a glider. Other players see you fly by.
-- Stations keep the sky above their landing pad clear, and you can only own one airship at a time.
+- Stations keep the sky above their landing pad clear.
 
-Orbis Horizon 2.1 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8.
+Orbis Horizon 2.2 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8.
 
 The wiki explains how to fly each vehicle, how to found your stations and the operator commands.
 

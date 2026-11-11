@@ -13,6 +13,9 @@ final class RecallState {
 
     final TransitNetwork.Station station;
     final UUID owner;
+    /** Type of the recalled vehicle (airship, balloon) and the structure id of its registry entry. */
+    final String kind;
+    final UUID entryId;
     /** Where the ship appeared (the leave point is computed from it). */
     final double spawnX;
     final double spawnZ;
@@ -25,7 +28,6 @@ final class RecallState {
     volatile Phase phase = Phase.APPROACH;
     /** DESCEND: since when the ship made no progress (0 = progressing). */
     long stuckSinceMs;
-    boolean waitLogged;
     long waitStartMs;
     /** Last announced threshold of the wait (30, 20, 10). */
     int announced = Integer.MAX_VALUE;
@@ -45,13 +47,17 @@ final class RecallState {
     static final int MAX_LEAVE_TRIES = 10;
     /** Refused departures from the waiting place (bounded by RecallPlanner.MAX_DEPART_TRIES). */
     int departTries;
+    /** Balloon: the quay was freed (idempotent guard of BalloonRecall.endQuay). */
+    boolean quayFreed;
     /** The destination window opened for the captain (closed when the choice times out). */
     volatile AirshipVoyagePage page;
 
-    RecallState(TransitNetwork.Station station, UUID owner, double spawnX, double spawnZ, double padX, double padZ, double hoverY,
-                double hoverTheta) {
+    RecallState(TransitNetwork.Station station, UUID owner, String kind, UUID entryId, double spawnX, double spawnZ, double padX,
+                double padZ, double hoverY, double hoverTheta) {
         this.station = station;
         this.owner = owner;
+        this.kind = kind;
+        this.entryId = entryId;
         this.spawnX = spawnX;
         this.spawnZ = spawnZ;
         this.padX = padX;

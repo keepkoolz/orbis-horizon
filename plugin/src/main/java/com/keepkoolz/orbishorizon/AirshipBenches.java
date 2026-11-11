@@ -260,8 +260,6 @@ final class AirshipBenches {
             LOGGER.at(Level.WARNING).withCause(ex).log("Airship bench %s at %s: appearance of tier %d not applied",
                     e.block, p, e.tier);
         }
-        LOGGER.at(Level.INFO).log("Airship bench %s at %s restored to tier %d (%d upgrade item(s))",
-                e.block, p, e.tier, e.upgradeItems.length);
         return true;
     }
 

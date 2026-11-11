@@ -259,7 +259,7 @@ final class VehicleParts {
                     if (ref != null && ref.isValid()) {
                         ViewFilter.clear(ref);
                         store.removeEntity(ref, RemoveReason.REMOVE);
-                        LOGGER.at(Level.INFO).log("Model part %d%s left in the world removed", k, obs ? " (observer)" : "");
+                        LOGGER.at(Level.WARNING).log("Model part %d%s left in the world removed", k, obs ? " (observer)" : "");
                     }
                 } catch (RuntimeException e) {
                     LOGGER.at(Level.WARNING).withCause(e).log("Model part %d left in the world not removed", k);

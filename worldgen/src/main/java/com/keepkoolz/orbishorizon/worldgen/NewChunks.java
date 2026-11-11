@@ -119,7 +119,7 @@ final class NewChunks {
             }
             if (stored != null && current != null && !stored.equals(current)) {
                 in.close();
-                LOGGER.at(Level.INFO).log("Generated chunk map of %s: world changed identity, map empty", file.getFileName());
+                LOGGER.at(Level.WARNING).log("Generated chunk map of %s: world changed identity, map empty", file.getFileName());
                 try {
                     Files.move(file, file.resolveSibling(file.getFileName() + ".old"), StandardCopyOption.REPLACE_EXISTING);
                 } catch (IOException e2) {

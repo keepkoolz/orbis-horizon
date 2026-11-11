@@ -347,7 +347,7 @@ final class GenerationListener {
             boolean unmarked = unmarkedSea || unmarkedLand;
             reg.forgetPortals(name, cx * 32, cz * 32, cx * 32 + 31, cz * 32 + 31);
             if (!forgotten.isEmpty() || unmarked) {
-                LOGGER.at(Level.INFO).log("Generated station: chunk (%d, %d) regenerated, save restored: %d station(s) forgotten, cell %s",
+                LOGGER.at(Level.WARNING).log("Generated station: chunk (%d, %d) regenerated, save restored: %d station(s) forgotten, cell %s",
                         cx, cz, forgotten.size(), unmarked ? "to replan" : "already replanned");
             }
         } catch (RuntimeException | LinkageError e) {
@@ -377,7 +377,7 @@ final class GenerationListener {
                 if (s == null) {
                     continue;
                 }
-                LOGGER.at(Level.INFO).log("Station '%s' removed from the network: its terrain was regenerated", s.name());
+                LOGGER.at(Level.WARNING).log("Station '%s' removed from the network: its terrain was regenerated", s.name());
             } catch (RuntimeException | LinkageError ex) {
                 LOGGER.at(Level.WARNING).withCause(ex).log("%s: cannot remove from the network at (%d, %d)", logName(e.kind), e.x, e.z);
                 WorldgenApi.telemetry().error("worldgen", ex, e.kind, "rollback");
@@ -469,8 +469,6 @@ final class GenerationListener {
                 site = reg.activeSite(e);
                 e.oldTerrainSeen = true;
                 if (!REQUESTED.contains(e) && moveOffOldTerrain(reg, e, name)) {
-                    LOGGER.at(Level.INFO).log("%s: old terrain reloaded at (%d, %d), next site %d/%d", logName(e.kind), site.x(), site.z(),
-                            e.active + 1, e.sites.size());
                     decideAgain(world, e);
                 } else {
                     abandon(e, "old terrain reloaded", GeneratedStations.Reason.OLD_TERRAIN);
@@ -500,7 +498,6 @@ final class GenerationListener {
         try {
             GeneratedStations.get().abandon(e, why);
             WorldgenApi.telemetry().count("worldgen.station.abandoned");
-            LOGGER.at(Level.INFO).log("%s abandoned at (%d, %d): %s", logName(e.kind), e.x, e.z, reason);
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("%s: abandon not recorded", logName(e.kind));
             WorldgenApi.telemetry().error("worldgen", ex, e.kind, "abandon");
@@ -598,10 +595,6 @@ final class GenerationListener {
                 if (site != null) {
                     touched.add(reg.add(name, site, GeneratedStations.Origin.PORTAL));
                     world.execute(() -> displaceLandEntries(world, site));
-                    LOGGER.at(Level.INFO).log("Generated air station: portal (%d, %d) planned, site at (%d, %d)", portal[0], portal[1],
-                            site.x(), site.z());
-                } else {
-                    LOGGER.at(Level.INFO).log("Generated air station: portal (%d, %d) without a site", portal[0], portal[1]);
                 }
             }
         } catch (RuntimeException e) {
@@ -626,7 +619,6 @@ final class GenerationListener {
                 added.add(reg.add(name, s));
             }
             long ms = (System.nanoTime() - start) / 1_000_000;
-            LOGGER.at(Level.INFO).log("Generated sea station: cell (%d, %d) planned in %d ms, %d site(s)", cellX, cellZ, ms, sites.size());
             if (ms > SLOW_CELL_MS) {
                 LOGGER.at(Level.WARNING).log("Generated sea station: cell (%d, %d) took more than %d ms", cellX, cellZ, SLOW_CELL_MS);
             }
@@ -650,8 +642,6 @@ final class GenerationListener {
                 added.add(reg.add(name, site, GeneratedStations.Origin.LAND));
             }
             long ms = (System.nanoTime() - start) / 1_000_000;
-            LOGGER.at(Level.INFO).log("Generated air station: land cell (%d, %d) planned in %d ms, %s", cellX, cellZ, ms,
-                    site == null ? "no site" : "site at (" + site.x() + ", " + site.z() + ")");
             if (ms > SLOW_CELL_MS) {
                 LOGGER.at(Level.WARNING).log("Generated air station: land cell (%d, %d) took more than %d ms", cellX, cellZ, SLOW_CELL_MS);
             }
@@ -879,10 +869,7 @@ final class GenerationListener {
                 if (e.state != GeneratedStations.State.PLANNED || REQUESTED.contains(e)) {
                     continue;
                 }
-                int fromX = e.x, fromZ = e.z;
                 if (moveOffOldTerrain(reg, e, name)) {
-                    LOGGER.at(Level.INFO).log("%s: too close to the portal at (%d, %d), site (%d, %d) replaced by the next one %d/%d",
-                            logName(e.kind), portal.x(), portal.z(), fromX, fromZ, e.active + 1, e.sites.size());
                     decideAgain(world, e);
                 } else {
                     abandon(e, "too close to a portal station", GeneratedStations.Reason.OTHER);
@@ -1007,7 +994,6 @@ final class GenerationListener {
                 }
                 return out;
             });
-            LOGGER.at(Level.INFO).log("Generated stations: %d abandoned station(s) revived in world %s", revived.size(), name);
             if (!revived.isEmpty()) {
                 decideAll(world, revived);
             }
@@ -1083,8 +1069,6 @@ final class GenerationListener {
                     case ABANDON -> {
                         e.oldTerrainSeen = true;
                         if (moveOffOldTerrain(GeneratedStations.get(), e, world.getName())) {
-                            LOGGER.at(Level.INFO).log("%s: old terrain at (%d, %d), next site %d/%d", logName(e.kind), site.x(), site.z(),
-                                    e.active + 1, e.sites.size());
                             decideAgain(world, e);
                         } else {
                             abandon(e, "old terrain in the footprint", GeneratedStations.Reason.OLD_TERRAIN);

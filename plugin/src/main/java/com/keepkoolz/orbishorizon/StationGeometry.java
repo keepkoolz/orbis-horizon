@@ -48,6 +48,22 @@ final class StationGeometry {
         return new Vector3i(quay).add(0, DOCK_ABOVE_QUAY, 0);
     }
 
+    /**
+     * Offset, in the frame of the quay (not turned), from the quay anchor to the origin of the large balloon prefab docked on the
+     * pad: the basket (x 0, z 8) centred on the anchor and its lowest block (y 5) one cell above the quay layer.
+     */
+    private static final Vector3i BIG_BALLOON_DOCK_OFFSET = new Vector3i(0, 1 - 5, -8);
+
+    /** Origin of the large balloon prefab docked on the quay: the offset turned by the quay rotation, added to the quay anchor. */
+    static Vector3i bigBalloonDockOrigin(Vector3i quay, Rotation quayRotation) {
+        return quayRotation.rotateYaw(new Vector3i(BIG_BALLOON_DOCK_OFFSET), new Vector3i()).add(quay);
+    }
+
+    /** Placement rotation of the large balloon docked on the quay: the rotation of the quay. */
+    static Rotation bigBalloonDockRotation(Rotation quayRotation) {
+        return quayRotation;
+    }
+
     /** Berth origin of the station boat: the pier end plus (0, -1, 3) turned by the quay rotation. */
     static Vector3i berthOrigin(Vector3i pierEnd, Rotation r) {
         return r.rotateYaw(new Vector3i(0, -1, 3), new Vector3i()).add(pierEnd);

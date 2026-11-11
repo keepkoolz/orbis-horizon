@@ -278,10 +278,6 @@ public class PlaceQuayInteraction extends SimpleInstantInteraction {
         // sent with the interaction can be a neighbour of it, depending on the face hit.
         Vector3i ray = TargetUtil.getTargetBlock(player, HeldCratePreview.REACH, commandBuffer);
         BlockPosition target = ray != null ? new BlockPosition(ray.x, ray.y, ray.z) : clientTarget;
-        if (ray != null && clientTarget != null && (ray.x != clientTarget.x || ray.y != clientTarget.y || ray.z != clientTarget.z)) {
-            LOGGER.at(Level.INFO).log("Transit_PlaceQuay: aimed block (%d, %d, %d) read by the ray, interaction sent (%d, %d, %d)",
-                    ray.x, ray.y, ray.z, clientTarget.x, clientTarget.y, clientTarget.z);
-        }
         if (target == null) {
             playerRef.sendMessage(Texts.t("transit.quay.noTarget"));
             fail(context);
@@ -323,7 +319,6 @@ public class PlaceQuayInteraction extends SimpleInstantInteraction {
                 origin = DeployPlacement.boatStationOrigin(cells, origin, rotation, Deployables.BOAT_STATION_PIER_END);
             }
             if (origin == null) {
-                LOGGER.at(Level.INFO).log("Quay refused: no water under the end of the pier");
                 playerRef.sendMessage(Texts.t("deploy.steamboat.noWater"));
                 fail(context);
                 return;
@@ -427,8 +422,6 @@ public class PlaceQuayInteraction extends SimpleInstantInteraction {
             return;
         }
         Telemetry.count("station.quayPlaced");
-        LOGGER.at(Level.INFO).log("Quay of '%s' placed at (%d, %d, %d) rotation %s (%s) by %s", pending.name, quay.x, quay.y, quay.z, rotation,
-                model, playerRef.getUsername());
         final TransitNetwork.Station station = pending;
         world.execute(() -> {
             try {
@@ -492,7 +485,6 @@ public class PlaceQuayInteraction extends SimpleInstantInteraction {
             if (!dig.isEmpty()) {
                 water = PierDredge.chooseWater(dig, new Vector3i(quay.x, surfaceY, quay.z), p -> PierDredge.worldWater(world, p));
                 if (water == null) {
-                    LOGGER.at(Level.INFO).log("Pier refused at (%d, %d, %d): no water to dig the basin with", quay.x, quay.y, quay.z);
                     return Room.refused(Refusal.of("deploy.steamboat.noWater"));
                 }
             }
@@ -509,7 +501,6 @@ public class PlaceQuayInteraction extends SimpleInstantInteraction {
             TransitNetwork.Station future = new TransitNetwork.Station("", world.getName(), new Vector3i(quay), Rotation.None, null, null,
                     new ArrayList<>(), Deployables.BOAT_STATION_KIND, false, true, new Vector3i(quay), 0f, new Vector3i(quay), rotation);
             if (!BoatBerth.hasOpenWaterExit(world, future, dig)) {
-                LOGGER.at(Level.INFO).log("Pier refused at (%d, %d, %d): no passage to open water", quay.x, quay.y, quay.z);
                 return Room.refused(Refusal.of("transit.deploy.boatNoOpenWater"));
             }
             Refusal berth = full ? null : StationPlacement.berthRefusal(world, StationGeometry.berthOrigin(quay, rotation),
@@ -527,8 +518,6 @@ public class PlaceQuayInteraction extends SimpleInstantInteraction {
         Volume volume = padVolume(quay, (x, y, z) -> probe(reader, x, y, z));
         if (!volume.fits()) {
             Vector3i f = volume.fault();
-            LOGGER.at(Level.INFO).log("Pad refused at (%d, %d, %d): %s at (%d, %d, %d)", quay.x, quay.y, quay.z,
-                    volume.found().block(), f.x, f.y, f.z);
             return Room.refused(volume.found().content() == Content.UNLOADED
                     ? Refusal.of("transit.quay.notLoaded")
                     : Refusal.at("transit.quay.blocked", volume.found().block(), f.x, f.y, f.z));
@@ -547,8 +536,6 @@ public class PlaceQuayInteraction extends SimpleInstantInteraction {
             block = probe(new SectionReader(world.getChunkStore()), blocked.x, blocked.y, blocked.z).block();
         }
         String name = block != null ? block : "?";
-        LOGGER.at(Level.INFO).log("Pier refused at (%d, %d, %d): %s in the corridor at (%d, %d, %d)", quay.x, quay.y, quay.z, name,
-                blocked.x, blocked.y, blocked.z);
         return Refusal.at("transit.quay.corridor", name, blocked.x, blocked.y, blocked.z);
     }
 

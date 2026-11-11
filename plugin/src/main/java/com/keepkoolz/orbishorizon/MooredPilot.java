@@ -98,7 +98,6 @@ final class MooredPilot {
                 }
             } else {
                 e.warned = false;
-                LOGGER.at(Level.INFO).log("Sea station %s: pilot at the helm of the docked shuttle", s.name);
             }
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Sea station %s: docked shuttle pilot failed", s.name);

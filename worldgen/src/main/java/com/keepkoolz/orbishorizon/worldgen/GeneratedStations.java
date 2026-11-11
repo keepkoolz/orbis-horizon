@@ -258,7 +258,7 @@ final class GeneratedStations {
             cells.removeIf(p -> p.world.equals(world));
             landCells.removeIf(p -> p.world.equals(world));
             dropped = true;
-            LOGGER.at(Level.INFO).log("Generated stations: world %s changed identity, %d registry item(s) dropped", world,
+            LOGGER.at(Level.WARNING).log("Generated stations: world %s changed identity, %d registry item(s) dropped", world,
                     before - (entries.size() + portals.size() + cells.size() + landCells.size()));
         }
         worlds.put(world, uuid);

@@ -1,19 +1,13 @@
 package com.keepkoolz.orbishorizon;
 
-import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.worldgen.chunk.ChunkGenerator;
 import com.hypixel.hytale.server.worldgen.chunk.ZoneBiomeResult;
 import com.keepkoolz.orbishorizon.api.TerrainProbe;
 
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
 
 /** Terrain of a world read from the game's chunk generator with the world seed. Safe from any thread. */
 final class GeneratorProbe implements TerrainProbe {
-    private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
-    private static final Set<String> WARNED = ConcurrentHashMap.newKeySet();
 
     private final ChunkGenerator generator;
     private final int seed;
@@ -47,16 +41,13 @@ final class GeneratorProbe implements TerrainProbe {
 
     /**
      * The probe of a world, or null when the world is deleted when it is removed (an instance, a throwaway world), when its
-     * generator is not the game's chunk generator (one log line per world), or while the generator is still loading.
+     * generator is not the game's chunk generator, or while the generator is still loading.
      */
     static GeneratorProbe of(World world) {
         Object generator = world.getChunkStore().getGenerator();
         Availability a = availability(world.getWorldConfig().isDeleteOnRemove(), generator);
         if (a == Availability.READY) {
             return new GeneratorProbe((ChunkGenerator) generator, (int) world.getWorldConfig().getSeed());
-        }
-        if (a == Availability.OFF && WARNED.add(world.getName())) {
-            LOGGER.at(Level.INFO).log("Generated stations: world %s is deleted on close or does not use the game generator, feature inactive for this world", world.getName());
         }
         return null;
     }

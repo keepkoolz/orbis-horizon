@@ -116,7 +116,6 @@ final class PackBackView {
             LOGGER.at(Level.WARNING).withCause(e).log("Plugin list unreadable, camp backpack on the back left active");
         }
         otherBackpackMod = found;
-        LOGGER.at(Level.INFO).log("Camp backpack on the back: True Backpack %s", found ? "detected, nothing is drawn" : "absent");
         return found;
     }
 
@@ -313,7 +312,6 @@ final class PackBackView {
                 }
                 EntityScaleComponent scale = store.getComponent(ref, EntityScaleComponent.getComponentType());
                 self.queueUpdate(ref, new ModelUpdate(mc.getModel().toPacket(), scale != null ? scale.getScale() : 0f));
-                LOGGER.at(Level.INFO).log("Camp backpack on the back: model resent to the player after arrival");
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Camp backpack on the back: resending the model to the player failed");

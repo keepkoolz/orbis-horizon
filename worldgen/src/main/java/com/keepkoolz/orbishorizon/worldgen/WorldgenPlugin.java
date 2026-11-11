@@ -46,9 +46,6 @@ public final class WorldgenPlugin extends JavaPlugin {
     static boolean prepareGeneration(Path dir, Path legacyDir, Stations stations) {
         WorldgenMigration.Result migration = WorldgenMigration.migrate(legacyDir, dir);
         boolean generation = generationAllowed(migration);
-        if (migration != null && migration.migrated() > 0) {
-            LOGGER.at(Level.INFO).log("Generated stations: %d file(s) migrated from the Orbis Horizon data folder", migration.migrated());
-        }
         WorldgenSettings.load(dir, legacyDir);
         if (generation) {
             GeneratedStations.get().load(dir);

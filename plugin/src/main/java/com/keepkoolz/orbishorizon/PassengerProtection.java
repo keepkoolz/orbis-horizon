@@ -178,7 +178,6 @@ public final class PassengerProtection {
             // A marker the mod placed earlier and could not remove (listed) still belongs to the mod.
             boolean ours = add || (had && isMarked(uuid));
             PROTECTED.put(ref, new Entry(store.getExternalData().getWorld(), ours));
-            LOGGER.at(Level.INFO).log("Passenger protection " + name(store, ref) + " : enabled (marker placed: " + (add ? "yes" : "no") + ")");
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Passenger protection: enabling failed");
         }
@@ -196,7 +195,6 @@ public final class PassengerProtection {
                     store.tryRemoveComponent(ref, Intangible.getComponentType());
                     unmark(uuidOf(store, ref));
                 }
-                LOGGER.at(Level.INFO).log("Passenger protection " + name(store, ref) + " : removed");
             }
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Passenger protection: removal failed");
@@ -234,7 +232,7 @@ public final class PassengerProtection {
             if (isMarked(uuid) && store.getComponent(ref, Spectating.getComponentType()) == null) {
                 store.tryRemoveComponent(ref, Intangible.getComponentType());
                 unmark(uuid);
-                LOGGER.at(Level.INFO).log("Leftover mod marker removed: " + name(store, ref));
+                LOGGER.at(Level.WARNING).log("Leftover mod marker removed: %s", name(store, ref));
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Passenger protection: leftover marker not removed");
@@ -253,7 +251,7 @@ public final class PassengerProtection {
             if (holder.getComponent(Spectating.getComponentType()) == null) {
                 holder.tryRemoveComponent(Intangible.getComponentType());
                 unmark(uuid);
-                LOGGER.at(Level.INFO).log("Mod marker removed on player arrival " + uuid);
+                LOGGER.at(Level.WARNING).log("Mod marker removed on player arrival %s", uuid);
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Passenger protection: marker not removed on arrival");

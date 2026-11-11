@@ -369,8 +369,6 @@ final class CampRespawn {
                 }
                 next.add(new PlayerRespawnPointData(new Vector3i(p.block()), new Vector3d(p.pos()), p.name(), p.yaw()));
                 data.setRespawnPoints(next.toArray(new PlayerRespawnPointData[0]));
-                LOGGER.at(Level.INFO).log("Camp: respawn point restored for %s at %d, %d, %d", pr.getUsername(),
-                        p.block().x, p.block().y, p.block().z);
                 return;
             }
         } catch (RuntimeException e) {
@@ -605,8 +603,6 @@ final class CampRespawn {
                     if (rb != null && rb.getOwnerUUID() == null && (camp == null || !camp.block().equals(q.getBlockPosition()))) {
                         rb.setOwnerUUID(pr.getUuid()); // the game cleared it when it removed the point
                     }
-                    LOGGER.at(Level.INFO).log("Camp: respawn point restored for %s at %d, %d, %d", pr.getUsername(),
-                            q.getBlockPosition().x, q.getBlockPosition().y, q.getBlockPosition().z);
                 }
                 cur = next.toArray(new PlayerRespawnPointData[0]);
                 data.setRespawnPoints(cur);
@@ -675,7 +671,6 @@ final class CampRespawn {
             Vector3i center = new Vector3i((int) Math.floor(camp.pos().x), (int) Math.floor(camp.pos().y), (int) Math.floor(camp.pos().z));
             Vector3i spot = freeSpotNear(center, 8, p -> standable(r, p));
             if (spot == null) {
-                LOGGER.at(Level.INFO).log("Camp: blocked point, no free cell within 8 blocks, game choice kept");
                 return;
             }
             com.hypixel.hytale.math.vector.Rotation3f look = new com.hypixel.hytale.math.vector.Rotation3f();
@@ -683,7 +678,6 @@ final class CampRespawn {
             store.putComponent(ref, com.hypixel.hytale.server.core.modules.entity.teleport.Teleport.getComponentType(),
                     com.hypixel.hytale.server.core.modules.entity.teleport.Teleport.createForPlayer(
                             new Vector3d(spot.x + 0.5, spot.y + 0.1, spot.z + 0.5), look));
-            LOGGER.at(Level.INFO).log("Camp: blocked point, player placed at %d, %d, %d", spot.x, spot.y, spot.z);
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Camp: blocked point not handled");
         }

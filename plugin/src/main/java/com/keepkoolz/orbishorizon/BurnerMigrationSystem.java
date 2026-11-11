@@ -147,8 +147,6 @@ public final class BurnerMigrationSystem extends RefSystem<ChunkStore> {
         for (ItemStack rest : left) {
             fuel.addItemStack(rest, false, false, false);
         }
-        LOGGER.at(Level.INFO).log("Old burner: %d fuel item(s) moved to the inputs (%d left in the old container)",
-                moved, left.size());
     }
 
     /** Same block type reading as BenchSystems$ProcessingBenchLifecycle.onEntityAdded. */

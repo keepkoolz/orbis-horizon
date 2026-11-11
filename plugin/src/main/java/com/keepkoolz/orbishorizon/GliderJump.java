@@ -259,8 +259,6 @@ final class GliderJump {
                 pr.sendMessage(Texts.t("glider.cancelled"));
             }
         }
-        LOGGER.at(Level.INFO).log("Glider jump: %s, %s", pr == null ? uuid.toString() : pr.getUsername(),
-                result == Result.DONE ? "ejected" : result == Result.TOO_LOW ? "refused (too close to the ground)" : "ejection failed");
     }
 
     private static void poll(Store<EntityStore> store, Ref<EntityStore> ref, UUID uuid) {
@@ -294,9 +292,6 @@ final class GliderJump {
             }
             return;
         }
-        PlayerRef pr = store.getComponent(ref, PlayerRef.getComponentType());
         PENDING.put(uuid, new Pending(ref, store.getExternalData().getWorld(), slot, System.currentTimeMillis()));
-        LOGGER.at(Level.INFO).log("Glider jump: %s took a glider in hand (slot %d)",
-                pr == null ? uuid.toString() : pr.getUsername(), slot + 1);
     }
 }

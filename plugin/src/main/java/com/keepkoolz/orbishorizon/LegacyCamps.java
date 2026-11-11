@@ -101,7 +101,6 @@ final class LegacyCamps {
                         pack = pack.withMetadata(TentContents.METADATA_KEY, meta.get(TentContents.METADATA_KEY));
                     }
                     c.setItemStackForSlot(i, pack);
-                    LOGGER.at(Level.INFO).log("Tent crate converted to bag: %s -> %s", st.getItemId(), to);
                 }
             }
         } catch (RuntimeException e) {
@@ -141,20 +140,15 @@ final class LegacyCamps {
         boolean liquid = BalloonManager.liquidAt(reader, cell.x, cell.y, cell.z) != null;
         if (!bagCellFree(solid, liquid)) {
             String k = key(entry);
-            boolean first = !RETRY_AT.containsKey(k);
             if (entry.owner() != null) {
                 BLOCKED.put(k, entry.owner());
             }
             RETRY_AT.put(k, System.currentTimeMillis() + RETRY_MS);
-            if (first) {
-                LOGGER.at(Level.INFO).log("Tent already placed at (%d, %d, %d): bag cell taken at (%d, %d, %d)", entry.x(), entry.y(), entry.z(), cell.x, cell.y, cell.z);
-            }
             return false;
         }
         BLOCKED.remove(key(entry));
         RETRY_AT.remove(key(entry));
         if (SectionBlocks.setAt(cs, cell.x, cell.y, cell.z, tier.placedBlockId(), 4)) {
-            LOGGER.at(Level.INFO).log("Tent already placed at (%d, %d, %d): bag placed at (%d, %d, %d)", entry.x(), entry.y(), entry.z(), cell.x, cell.y, cell.z);
             return true;
         }
         return false;

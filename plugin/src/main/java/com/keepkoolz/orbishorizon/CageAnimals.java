@@ -269,7 +269,6 @@ final class CageAnimals {
             freeze(store, ref);
             kept.add(animal);
             captured++;
-            LOGGER.at(Level.INFO).log("Cage at %s: animal captured (%s, %s)", origin, animal.role(), shortId(animal.uuid()));
         }
         if (captured > 0) {
             BalloonRegistry.setAnimals(world, origin, e.rotation(), e.kind(), kept);
@@ -295,7 +294,6 @@ final class CageAnimals {
             }
         }
         BalloonRegistry.setAnimals(world, new Vector3i(e.x(), e.y(), e.z()), e.rotation(), e.kind(), List.of());
-        LOGGER.at(Level.INFO).log("Cage at (%d, %d, %d): %d animal(s) released", e.x(), e.y(), e.z(), e.animals().size());
     }
 
     // ------------------------------------------------------------------ cage movement (blocks)
@@ -393,7 +391,6 @@ final class CageAnimals {
             Ref<EntityStore> ref = p.first();
             freeze(store, ref);
             UUIDComponent id = store.getComponent(ref, UUIDComponent.getComponentType());
-            LOGGER.at(Level.INFO).log("Cage animal recreated (%s, old %s)", a.role(), shortId(a.uuid()));
             return id == null ? a : a.withUuid(id.getUuid());
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Cage animal (%s) not recreated", a.role());
@@ -468,8 +465,6 @@ final class CageAnimals {
 
             } catch (RuntimeException ex) {
                 // At plugin start the chunk store of a world that has not finished starting is not ready: StartWorldEvent calls again.
-                LOGGER.at(Level.INFO).log("World %s not ready yet: cage animals at (%d, %d, %d) restored at world start (%s)",
-                        world.getName(), e.x(), e.y(), e.z(), ex.getClass().getSimpleName());
             }
         }
     }

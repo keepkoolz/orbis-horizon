@@ -313,14 +313,14 @@ final class ShipLadder {
     }
 
     /** Writes the ladder states of this ship in the registry (a retracted ladder is left out). */
-    private static void persist(World world, Vector3i origin, Rotation rotation, boolean force) {
+    private static void persist(World world, Vector3i origin, Rotation rotation) {
         List<Saved> list = new ArrayList<>();
         for (Run r : RUNS) {
             if (r.same(world.getName(), origin, rotation) && !(r.phase == Phase.UP && r.rungs.isEmpty())) {
                 list.add(new Saved(r.side, r.phase, flat(r.rungs)));
             }
         }
-        BalloonRegistry.setLadders(world, origin, rotation, list, force);
+        BalloonRegistry.setLadders(world, origin, rotation, list);
     }
 
     /** The lever is shown turned half a turn while the ladder is down or going down. */
@@ -404,7 +404,7 @@ final class ShipLadder {
         }
         run.nextMs = 0;
         updateLever(world, run);
-        persist(world, origin, entry.rotation(), true);
+        persist(world, origin, entry.rotation());
         return null;
     }
 
@@ -419,7 +419,7 @@ final class ShipLadder {
             run.phase = Phase.LOWERING;
             run.nextMs = 0;
             updateLever(world, run);
-            persist(world, origin, rotation, true);
+            persist(world, origin, rotation);
         }
     }
 
@@ -444,7 +444,7 @@ final class ShipLadder {
             }
         }
         if (changed) {
-            persist(world, origin, rotation, true);
+            persist(world, origin, rotation);
         }
     }
 
@@ -516,9 +516,9 @@ final class ShipLadder {
                 }
             }
             if (left) {
-                persist(world, origin, rotation, true);
+                persist(world, origin, rotation);
             } else {
-                BalloonRegistry.setLadders(world, origin, rotation, List.of(), true);
+                BalloonRegistry.setLadders(world, origin, rotation, List.of());
             }
             return left;
         } catch (RuntimeException e) {
@@ -649,7 +649,7 @@ final class ShipLadder {
             if (next == Phase.DOWN) {
                 updateLever(world, run);
             }
-            persist(world, run.origin, run.rotation, next == Phase.DOWN);
+            persist(world, run.origin, run.rotation);
         } else if (run.phase == Phase.RAISING) {
             // Foreign blocks at the bottom (a block placed in the column) are forgotten, the others go bottom first.
             while (!run.rungs.isEmpty()) {
@@ -679,10 +679,8 @@ final class ShipLadder {
                 if (!run.gateByMod) {
                     RUNS.remove(run); // else the tick closes the gate first, then drops the run
                 }
-                persist(world, run.origin, run.rotation, true);
-            } else {
-                persist(world, run.origin, run.rotation, false);
             }
+            persist(world, run.origin, run.rotation);
         }
     }
 
@@ -699,7 +697,7 @@ final class ShipLadder {
                         RUNS.remove(run);
                     }
                 }
-                persist(world, new Vector3i(e.x(), e.y(), e.z()), e.rotation(), true);
+                persist(world, new Vector3i(e.x(), e.y(), e.z()), e.rotation());
             }
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Airship ladder: world resume failed");

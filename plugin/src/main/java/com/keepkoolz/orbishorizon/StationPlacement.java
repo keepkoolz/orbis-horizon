@@ -38,10 +38,10 @@ final class StationPlacement {
     /** Reads the wood (boat station: around the pier) or the wood and stone (balloon station: at the origin) of the biome and zone. */
     static Look readLook(World world, Deployables.Kind kind, Vector3i origin) {
         if (kind == Deployables.BOAT_STATION || kind == Deployables.BOAT_STATION_PIER) {
-            return new Look(BiomeWood.woodAt(world, origin.x, origin.z, true), null);
+            return new Look(BiomeWood.woodAt(world, origin.x, origin.z), null);
         }
         if (Deployables.STATION_KIND.equals(kind.id)) {
-            return new Look(BiomeWood.stationWoodAt(world, origin.x, origin.z, true), BiomeStone.stoneAt(world, origin.x, origin.z));
+            return new Look(BiomeWood.stationWoodAt(world, origin.x, origin.z), BiomeStone.stoneAt(world, origin.x, origin.z));
         }
         if (kind == Deployables.STATION_PAD) {
             return new Look(null, BiomeStone.stoneAt(world, origin.x, origin.z));
@@ -62,8 +62,7 @@ final class StationPlacement {
                 // the rewrite must not leave renamed blocks with a registry saying "no wood".
                 BalloonRegistry.setWood(world, origin, rotation, kind.id, custom ? wood.species() : null);
                 if (custom) {
-                    int changed = applyWood(world, station, origin, rotation, wood);
-                    LOGGER.at(Level.INFO).log("Sea station: %d block(s) rewritten as %s", changed, wood.species());
+                    applyWood(world, station, origin, rotation, wood);
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Sea station wood not applied");
@@ -81,15 +80,12 @@ final class StationPlacement {
             boolean customStone = stone != null && !stone.equals(BiomeStone.DEFAULT);
             BalloonRegistry.setWood(world, origin, rotation, kind.id, customWood ? wood.species() : null);
             BalloonRegistry.setStone(world, origin, rotation, kind.id, customStone ? stone.family() : null);
-            int changed = 0;
             if (customWood) {
-                changed += rewrite(world, station, origin, rotation, n -> BiomeWood.remapStation(n, wood));
+                rewrite(world, station, origin, rotation, n -> BiomeWood.remapStation(n, wood));
             }
             if (customStone) {
-                changed += applyStone(world, station, origin, rotation, stone);
+                applyStone(world, station, origin, rotation, stone);
             }
-            LOGGER.at(Level.INFO).log("Station: %d block(s) rewritten (wood %s, stone %s)", changed,
-                    customWood ? wood.species() : "d'origine", customStone ? stone.family() : "d'origine");
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Station wood and stone not applied");
             Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
@@ -133,7 +129,6 @@ final class StationPlacement {
                     changed++;
                 }
             }
-            LOGGER.at(Level.INFO).log("Pier end: %d deck slab(s) set to rotation index %d", changed, slabRotation);
             return changed;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pier end deck slabs not turned");
@@ -232,21 +227,16 @@ final class StationPlacement {
             wet = BalloonManager.underLiquid(world, balloon, dock, rotation);
         }
         if (wet != null) {
-            LOGGER.at(Level.INFO).log("Station refused at (%d, %d, %d): liquid at (%d, %d, %d)", origin.x, origin.y, origin.z, wet.x, wet.y, wet.z);
             return Refusal.of("deploy.underwater");
         }
         SectionReader reader = new SectionReader(world.getChunkStore());
         for (Vector3i p : cells) {
             if (BalloonManager.outOfHeight(p.y)) {
-                LOGGER.at(Level.INFO).log("Station refused at (%d, %d, %d): cell (%d, %d, %d) exceeds the height limit",
-                        origin.x, origin.y, origin.z, p.x, p.y, p.z);
                 return Refusal.of("deploy.heightLimit");
             }
             boolean loaded = reader.hasStorageInMemory(p.x, p.y, p.z);
             BlockType bt = loaded ? SectionBlocks.typeAt(reader, p.x, p.y, p.z) : null;
             if (!loaded || (bt != null && blocksRoom(bt.getId(), bt.getMaterial() == BlockMaterial.Solid, treatAsEmpty))) {
-                LOGGER.at(Level.INFO).log("Station refused at (%d, %d, %d): %s at (%d, %d, %d)",
-                        origin.x, origin.y, origin.z, loaded ? bt.getId() : "chunk not loaded", p.x, p.y, p.z);
                 return loaded
                         ? Refusal.at("transit.deploy.noSpaceAt", bt.getId().startsWith("*") ? bt.getId().substring(1) : bt.getId(), p.x, p.y, p.z)
                         : Refusal.of("transit.deploy.noSpace");
@@ -291,8 +281,6 @@ final class StationPlacement {
         for (StructureShape.Cell c : station.cells()) {
             Vector3i p = c.rotated(rotation).add(origin);
             if (BalloonManager.outOfHeight(p.y)) {
-                LOGGER.at(Level.INFO).log("Sea station refused at (%d, %d, %d): cell (%d, %d, %d) exceeds the height limit",
-                        origin.x, origin.y, origin.z, p.x, p.y, p.z);
                 return Refusal.of("deploy.heightLimit");
             }
             if (!reader.hasStorageInMemory(p.x, p.y, p.z)) {
@@ -303,8 +291,6 @@ final class StationPlacement {
             String liquidId = BalloonManager.liquidAt(reader, p.x, p.y, p.z);
             boolean liquid = liquidId != null && !emptied.contains(p);
             if (!boatCellAllowed(c.y(), solid, liquid)) {
-                LOGGER.at(Level.INFO).log("Sea station refused at (%d, %d, %d): %s at (%d, %d, %d)",
-                        origin.x, origin.y, origin.z, solid ? bt.getId() : liquidId, p.x, p.y, p.z);
                 String what = solid ? (bt.getId().startsWith("*") ? bt.getId().substring(1) : bt.getId()) : liquidId;
                 return Refusal.at("transit.deploy.boatNoSpaceAt", what, p.x, p.y, p.z);
             }
@@ -338,8 +324,6 @@ final class StationPlacement {
             String found = bt != null && bt.getMaterial() == BlockMaterial.Solid ? bt.getId() : liquidId != null ? liquidId
                     : bt != null ? bt.getId() : "air";
             String block = found.startsWith("*") ? found.substring(1) : found;
-            LOGGER.at(Level.INFO).log("Sea station refused at (%d, %d, %d): docking post (%s), %s at (%d, %d, %d), %s",
-                    origin.x, origin.y, origin.z, fault.key(), block, at.x, at.y, at.z, fault.hull() ? "hull" : "out of the water");
             return new Refusal("transit.deploy.boatBerth", block, new Vector3i(at), fault.key(), fault.hull());
         }
         return null;
@@ -398,7 +382,6 @@ final class StationPlacement {
                 }
             });
         }
-        LOGGER.at(Level.INFO).log("Station \"%s\" named", station.name);
     }
 
     /** First station of the same kind closer than min blocks (master cell of the other station to the given cell), null if none. Other kinds are ignored. */
@@ -451,7 +434,6 @@ final class StationPlacement {
         } catch (RuntimeException ignored) {
             // the player may be gone
         }
-        LOGGER.at(Level.INFO).log("Station \"%s\" registered at (%d, %d, %d)", chosen, origin.x, origin.y, origin.z);
     }
 
     /**

@@ -194,7 +194,6 @@ final class SteamboatWater {
             }
             if (best == null) {
                 // No neighbouring water (boat out of the water): never create water on dry land.
-                LOGGER.at(Level.INFO).log("Boat: no water nearby, hold not filled");
                 return 0;
             }
             int fluidId = best.fluidId();
@@ -205,9 +204,6 @@ final class SteamboatWater {
                     filled++;
                 }
             }
-            Fluid chosen = Fluid.getAssetMap().getAsset(fluidId);
-            LOGGER.at(Level.INFO).log("Boat: %d submerged cell(s) filled with water (fluid %s, level %d)", filled,
-                    chosen != null ? chosen.getId() : String.valueOf(fluidId), (int) level);
             return filled;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Boat: cannot fill with water");
@@ -234,7 +230,6 @@ final class SteamboatWater {
                     drained++;
                 }
             }
-            LOGGER.at(Level.INFO).log("Boat: %d submerged cell(s) drained of their water", drained);
             return drained;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Boat: cannot drain the water");

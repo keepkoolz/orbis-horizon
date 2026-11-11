@@ -1,5 +1,38 @@
 # Changelog
 
+## v2.2.0
+
+### Name your vehicles
+
+- Every airship, steamboat and large balloon you set down asks for a name. Close the window and it is called after its type and a number, such as Airship 1.
+- Names are 3 to 24 characters and each one is used once among your own vehicles.
+- A vehicle that has no name yet is named when you first talk to its pilot, who asks what the ship is called. Pick Rename the ship in the pilot's orders to change it whenever you like.
+
+### Several airships
+
+- You can own as many airships as you can craft crates for.
+
+### Recall the vehicle you choose
+
+- The station master's Recall a vehicle button opens the list of your vehicles that have a pilot, with their names, types, directions and distances.
+- Pick one and your pilot sends a pigeon. The stationmaster tells you by name when a vehicle is already in the air, already on its way or has never visited the station.
+
+### The large balloon comes to the quay
+
+- A large balloon with a pilot can be recalled to a balloon station it has already visited. It flies in without fuel and comes down onto the quay.
+- The balloon waits one minute on the quay from the moment it is set down, with a countdown at 30 and 10 seconds. With you aboard and the pilot at the helm, pick a destination or close the window and it flies off with you.
+- If nobody boards, it moves away from the quay and waits for you further out.
+- If something blocks the quay, the balloon lands outside the station zone and the station master tells you.
+
+### Look around from your seat
+
+- As a passenger you turn the view around the vehicle with the mouse. It starts behind the vehicle, a little above.
+- The view stays where you put it while the vehicle moves and turns.
+
+### For operators
+
+- The server console only shows the mod's warnings and errors. The console log setting offers three levels: warnings, errors only, or nothing.
+
 ## v2.1.0
 
 ### The skiff

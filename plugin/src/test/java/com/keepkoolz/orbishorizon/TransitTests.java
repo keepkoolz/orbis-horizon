@@ -650,6 +650,24 @@ public class TransitTests {
         }
     }
 
+    static void bigBalloonDockAllRotations() throws Exception {
+        var cells = prefabCells(Deployables.BALLOON.prefabPath);
+        Vector3i quay = new Vector3i(100, 64, 200);
+        for (Rotation r : Rotation.values()) {
+            Vector3i o = StationGeometry.bigBalloonDockOrigin(quay, r);
+            Rotation placed = StationGeometry.bigBalloonDockRotation(r);
+            int lowest = Integer.MAX_VALUE;
+            for (StructureShape.Cell c : cells) {
+                Vector3i w = placed.rotateYaw(new Vector3i(c.x(), c.y(), c.z()), new Vector3i()).add(o);
+                check(Math.abs(w.x - quay.x) <= 12 && Math.abs(w.z - quay.z) <= 12, "inside 25 x 25 " + r + " " + w);
+                check(w.y > quay.y, "above the quay layer " + r);
+                check(StationGeometry.inBalloonClearance(quay, w.x, w.y, w.z), "inside the clearance " + r + " " + w);
+                lowest = Math.min(lowest, w.y);
+            }
+            eq(quay.y + 1, lowest);
+        }
+    }
+
     /** Cells of a station prefab file read directly (Kind.shape() needs the game assets). */
     private static java.util.List<StructureShape.Cell> prefabCells(String file) throws Exception {
         var root = org.bson.BsonDocument.parse(Files.readString(Path.of("Server/Prefabs/" + file)));
@@ -1989,6 +2007,7 @@ public class TransitTests {
         run("balloonCrewSpec", TransitTests::balloonCrewSpec);
         run("balloonNoCrewUnchanged", TransitTests::balloonNoCrewUnchanged);
         run("balloonResumeKeepsCrew", TransitTests::balloonResumeKeepsCrew);
+        run("balloonResumeRecallKey", TransitTests::balloonResumeRecallKey);
         run("hireBlockRule", TransitTests::hireBlockRule);
         run("pilotOwnedByOther", TransitTests::pilotOwnedByOther);
         run("usageCountersSnapshot", TransitTests::usageCountersSnapshot);
@@ -2041,6 +2060,10 @@ public class TransitTests {
         run("laddersRoundTrip", TransitTests::laddersRoundTrip);
         run("resumeKindRead", TransitTests::resumeKindRead);
         run("nameRules", TransitTests::nameRules);
+        run("vehicleNameClean", TransitTests::vehicleNameClean);
+        run("vehicleNameUniquePerOwner", TransitTests::vehicleNameUniquePerOwner);
+        run("vehicleNameNextNumber", TransitTests::vehicleNameNextNumber);
+        run("vehicleNameFollowsId", TransitTests::vehicleNameFollowsId);
         run("componentGuard", TransitTests::componentGuard);
         run("tentContentsRoundTrip", TransitTests::tentContentsRoundTrip);
         run("tentContentsMissing", TransitTests::tentContentsMissing);
@@ -2143,7 +2166,6 @@ public class TransitTests {
         run("helmetHaircut", TransitTests::helmetHaircut);
         run("externalView", TransitTests::externalView);
         run("behindHeading", TransitTests::behindHeading);
-        run("viewResend", TransitTests::viewResend);
         run("protectionRules", TransitTests::protectionRules);
         run("protectedFileRoundTrip", TransitTests::protectedFileRoundTrip);
         run("passengerProtectionModePersists", TransitTests::passengerProtectionModePersists);
@@ -2183,13 +2205,9 @@ public class TransitTests {
         run("mapShareRules", TransitTests::mapShareRules);
         run("gliderJumpPhase", TransitTests::gliderJumpPhase);
         run("gliderExitLocal", TransitTests::gliderExitLocal);
-        run("airshipLimitCounts", TransitTests::airshipLimitCounts);
         run("shipFeatureFlags", TransitTests::shipFeatureFlags);
         run("airshipCrewSpecUnchanged", TransitTests::airshipCrewSpecUnchanged);
-        run("limitIgnoresOtherShips", TransitTests::limitIgnoresOtherShips);
         run("walkLegsAisle", TransitTests::walkLegsAisle);
-        run("staleEntryUnknownIsPresent", TransitTests::staleEntryUnknownIsPresent);
-        run("landingOwnerLimit", TransitTests::landingOwnerLimit);
         run("contractMissing", TransitTests::contractMissing);
         run("crewBsonRoundTrip", TransitTests::crewBsonRoundTrip);
         run("crewPostAfterReload", TransitTests::crewPostAfterReload);
@@ -2221,9 +2239,13 @@ public class TransitTests {
         run("stationPositionFallback", TransitTests::stationPositionFallback);
         run("recallLadderSide", TransitTests::recallLadderSide);
         run("recallLadderCells", TransitTests::recallLadderCells);
+        run("balloonRecallIgnoresFuel", TransitTests::balloonRecallIgnoresFuel);
         run("recallClimbing", TransitTests::recallClimbing);
         run("recallMarkRoundTrip", TransitTests::recallMarkRoundTrip);
         run("recallRefusal", TransitTests::recallRefusal);
+        run("recallCandidatesFilter", TransitTests::recallCandidatesFilter);
+        run("recallCandidatesSorted", TransitTests::recallCandidatesSorted);
+        run("recallChoiceRecheck", TransitTests::recallChoiceRecheck);
         run("recallWaitPhase", TransitTests::recallWaitPhase);
         run("recallWaitCrossed", TransitTests::recallWaitCrossed);
         run("quayRecallBlocks", TransitTests::quayRecallBlocks);
@@ -2278,6 +2300,7 @@ public class TransitTests {
         run("stationWoodRemap", TransitTests::stationWoodRemap);
         run("stationWoodAsh", TransitTests::stationWoodAsh);
         run("registryStoneRoundTrip", TransitTests::registryStoneRoundTrip);
+        run("registryDeferredWrite", TransitTests::registryDeferredWrite);
         run("waterLogCollapse", TransitTests::waterLogCollapse);
         run("voyageCorridorFromLog", TransitTests::voyageCorridorFromLog);
         run("voyageCorridorEndsAtGoal", TransitTests::voyageCorridorEndsAtGoal);
@@ -2437,6 +2460,7 @@ public class TransitTests {
         run("dropCentreFallbacks", TransitTests::dropCentreFallbacks);
         run("dropPointsIncludeCentre", TransitTests::dropPointsIncludeCentre);
         run("clearanceBalloonBounds", TransitTests::clearanceBalloonBounds);
+        run("bigBalloonDockAllRotations", TransitTests::bigBalloonDockAllRotations);
         run("clearanceBoatCorridor", TransitTests::clearanceBoatCorridor);
         run("quayCoreBalloon", TransitTests::quayCoreBalloon);
         run("quayCoreBoat", TransitTests::quayCoreBoat);
@@ -2635,6 +2659,31 @@ public class TransitTests {
             eq("Birch", BalloonRegistry.entriesOfNameForTest("w").get(0).wood());
         } finally {
             BalloonRegistry.init(Files.createTempDirectory("registry-stone-reset"));
+        }
+    }
+
+    /** Changes are written on the writer thread, flush() makes the last state reach the file. */
+    private static void registryDeferredWrite() throws Exception {
+        Path dir = Files.createTempDirectory("registry-deferred");
+        try {
+            BalloonRegistry.init(dir);
+            Path file = dir.resolve("deployed.json");
+            org.joml.Vector3i o = new org.joml.Vector3i(1, 2, 3);
+            var rot = com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None;
+            BalloonRegistry.addNamed("w", o, rot, Deployables.STATION_KIND, Ownership.of(java.util.UUID.randomUUID(), "Paul"));
+            BalloonRegistry.setStoneNamed("w", o, rot, Deployables.STATION_KIND, "Shale");
+            BalloonRegistry.setWoodNamed("w", o, rot, Deployables.STATION_KIND, "Birch");
+            BalloonRegistry.flush();
+            String first = Files.readString(file);
+            eq(true, first.contains("Shale") && first.contains("Birch"));
+            BalloonRegistry.setStoneNamed("w", o, rot, Deployables.STATION_KIND, "Basalt");
+            BalloonRegistry.flush();
+            String second = Files.readString(file);
+            eq(true, second.contains("Basalt") && !second.contains("Shale"));
+            eq(false, Files.exists(dir.resolve("deployed.json.tmp")));
+            BalloonRegistry.stopWriter();
+        } finally {
+            BalloonRegistry.init(Files.createTempDirectory("registry-deferred-reset"));
         }
     }
 
@@ -3103,6 +3152,24 @@ public class TransitTests {
         check(BalloonResume.crewFromBson(null) == null, "absent key");
     }
 
+    private static void balloonResumeRecallKey() {
+        java.util.UUID owner = java.util.UUID.randomUUID();
+        RecallState.Saved saved = new RecallState.Saved("Quai nord", owner, 10.5, -20.5, 70.0, 5.0);
+        org.bson.BsonDocument d = new org.bson.BsonDocument("pilot", new org.bson.BsonString("x"));
+        d.put("recall", saved.toBson());
+        RecallState.Saved back = BalloonResume.recallFromBson(org.bson.BsonDocument.parse(d.toJson()));
+        eq(saved, back);
+        check(BalloonResume.recallFromBson(new org.bson.BsonDocument("pilot", new org.bson.BsonString("x"))) == null,
+                "file without recall key reads as null");
+        BalloonResume.Record rec = new BalloonResume.Record(owner, "w", Deployables.BALLOON, new org.joml.Vector3i(3, 64, 4),
+                com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None, null, null, null, java.util.List.of(),
+                java.util.List.of(), null, null, 0, 0, Ownership.NONE, null, null, saved);
+        eq(new org.joml.Vector3i(70, 64, 5), rec.atLeavePoint().origin());
+        BalloonResume.Record plain = new BalloonResume.Record(owner, "w", Deployables.BALLOON, rec.origin(), rec.rotation(), null, null, null,
+                java.util.List.of(), java.util.List.of(), null, null, 0, 0, Ownership.NONE, null, null, null);
+        check(plain.atLeavePoint() == plain, "no recall: identity");
+    }
+
     /** Bench tabs: a category whose recipes are all disabled is dropped, anything else is kept. */
     static void benchTabsFilter() {
         java.util.function.Predicate<String> off = Set.of("a", "b", "c")::contains;
@@ -3127,6 +3194,41 @@ public class TransitTests {
         String bad = "{\"categories\":[";
         check(BenchTabs.filterTabs(bad, off) == bad, "malformed json unchanged");
         check(BenchTabs.filterTabs(null, off) == null, "null unchanged");
+    }
+
+    static void vehicleNameClean() {
+        eq("Albatros", VehicleNames.clean("  Albatros "));
+        eq(null, VehicleNames.clean("ab"));
+        eq(null, VehicleNames.clean("x".repeat(25)));
+        eq("x".repeat(24), VehicleNames.clean("x".repeat(24)));
+        eq(null, VehicleNames.clean(null));
+    }
+
+    static void vehicleNameUniquePerOwner() {
+        UUID a = UUID.randomUUID(), b = UUID.randomUUID();
+        Map<UUID, String> mine = Map.of(a, "Albatros");
+        eq(true, VehicleNames.taken("albatros", b, mine));
+        eq(false, VehicleNames.taken("albatros", a, mine)); // its own name
+        eq(false, VehicleNames.taken("albatros", b, Map.of())); // another owner: another table
+    }
+
+    static void vehicleNameNextNumber() {
+        UUID a = UUID.randomUUID(), b = UUID.randomUUID(), c = UUID.randomUUID();
+        List<VehicleNames.Owned> owned = List.of(new VehicleNames.Owned(a, "airship"), new VehicleNames.Owned(b, "airship"),
+                new VehicleNames.Owned(c, "balloon"));
+        eq(1, VehicleNames.nextNumber("airship", owned, Map.of(a, "Albatros"), "Airship"));
+        eq(2, VehicleNames.nextNumber("airship", owned, Map.of(a, "Airship 1", b, "Airship 3"), "Airship"));
+        eq(1, VehicleNames.nextNumber("balloon", owned, Map.of(a, "Large balloon 1"), "Large balloon"));
+    }
+
+    static void vehicleNameFollowsId() throws Exception {
+        Path dir = Files.createTempDirectory("names");
+        VehicleNames.init(dir);
+        UUID id = UUID.randomUUID();
+        VehicleNames.set(id, "Albatros");
+        VehicleNames.init(dir); // file read again
+        eq("Albatros", VehicleNames.get(id));
+        eq(false, VehicleNames.named(UUID.randomUUID()));
     }
 
     private static void eq(Object expected, Object actual) {
@@ -3174,17 +3276,12 @@ public class TransitTests {
         PassengerCamera.ExternalView w = PassengerCamera.externalView(-1, -1, 10, 2, 0);
         check(Math.abs(Math.hypot(w.x(), w.z()) - 20) < 1e-3, "horizontal distance = factor * size");
         check(w.x() < 0 && w.z() < 0 && Math.abs(w.pitch()) < 1e-6, "same side as the direction, level at height 0");
-    }
-
-    /** Airship external view: behind the ship is opposite to its bow (-sin t, -cos t). */
-    static void viewResend() {
-        PassengerCamera.ExternalView a = PassengerCamera.externalView(0, 1, 10, 1, 0.25, 0);
-        PassengerCamera.ExternalView b = PassengerCamera.externalView(0, 1, 10, 1, 0.25, 8);
-        check(Math.abs(b.z() - a.z() - 8) < 1e-3 && Math.abs(b.y() - 0.25 * 18) < 1e-3, "extra recoil keeps the height ratio");
-        check(!PassengerCamera.shouldResend(true, 5, 90), "no resend while turning");
-        check(!PassengerCamera.shouldResend(false, 1, 90), "no resend before enough travel");
-        check(!PassengerCamera.shouldResend(false, 5, 5), "no resend for a small direction change");
-        check(PassengerCamera.shouldResend(false, 5, 30), "resend once moving with a changed direction");
+        PassengerCamera.ExternalView ea = PassengerCamera.externalView(0, 1, 10, 1, 0.25, 0);
+        PassengerCamera.ExternalView eb = PassengerCamera.externalView(0, 1, 10, 1, 0.25, 8);
+        check(Math.abs(eb.z() - ea.z() - 8) < 1e-3 && Math.abs(eb.y() - 0.25 * 18) < 1e-3, "extra recoil keeps the height ratio");
+        PassengerCamera.ExternalView o = PassengerCamera.externalView(1, 0, 10, 1.2, 0.25);
+        check(Math.abs(o.x() - 12f) < 1e-3 && Math.abs(o.y() - 3f) < 1e-3, "known framing gives back 12 and dy 3");
+        check(Math.abs(PassengerCamera.orbitDistance(o) - (float) Math.sqrt(153)) < 1e-3, "orbit distance = hypot of horizontal recoil and height");
     }
 
     static void behindHeading() {
@@ -3757,30 +3854,31 @@ public class TransitTests {
     }
 
     static void consoleLogLevelSetting() throws Exception {
-        eq(java.util.logging.Level.ALL, ConsoleLogs.Threshold.ALL.level);
-        eq(java.util.logging.Level.INFO, ConsoleLogs.Threshold.INFO.level);
         eq(java.util.logging.Level.WARNING, ConsoleLogs.Threshold.WARNING.level);
         eq(java.util.logging.Level.SEVERE, ConsoleLogs.Threshold.SEVERE.level);
         eq(java.util.logging.Level.OFF, ConsoleLogs.Threshold.NONE.level);
-        eq(ConsoleLogs.Threshold.INFO, ConsoleLogs.Threshold.parse(null));
-        eq(ConsoleLogs.Threshold.INFO, ConsoleLogs.Threshold.parse("LOUD"));
+        eq(ConsoleLogs.Threshold.WARNING, ConsoleLogs.Threshold.parse(null));
+        eq(ConsoleLogs.Threshold.WARNING, ConsoleLogs.Threshold.parse("LOUD"));
+        eq(ConsoleLogs.Threshold.WARNING, ConsoleLogs.Threshold.parse("ALL"));
+        eq(ConsoleLogs.Threshold.WARNING, ConsoleLogs.Threshold.parse("INFO"));
         eq(ConsoleLogs.Threshold.NONE, ConsoleLogs.Threshold.parse("NONE"));
+        eq(3, ConsoleLogs.Threshold.values().length);
         Path dir = Files.createTempDirectory("transit-settings-console");
         try {
             TransitSettings.load(dir);
-            eq(ConsoleLogs.Threshold.INFO, TransitSettings.consoleLogLevel());
+            eq(ConsoleLogs.Threshold.WARNING, TransitSettings.consoleLogLevel());
             TransitSettings.setConsoleLogLevel(ConsoleLogs.Threshold.SEVERE);
             TransitSettings.load(dir);
             eq(ConsoleLogs.Threshold.SEVERE, TransitSettings.consoleLogLevel());
             check(Files.readString(dir.resolve("transit-settings.json")).contains("\"consoleLogLevel\": \"SEVERE\""), "level written by name");
             Files.writeString(dir.resolve("transit-settings.json"), "{\"consoleLogLevel\": \"LOUD\"}");
             TransitSettings.load(dir);
-            eq(ConsoleLogs.Threshold.INFO, TransitSettings.consoleLogLevel());
+            eq(ConsoleLogs.Threshold.WARNING, TransitSettings.consoleLogLevel());
             Files.writeString(dir.resolve("transit-settings.json"), "{\"packBackView\": false}");
             TransitSettings.load(dir);
-            eq(ConsoleLogs.Threshold.INFO, TransitSettings.consoleLogLevel());
+            eq(ConsoleLogs.Threshold.WARNING, TransitSettings.consoleLogLevel());
         } finally {
-            ConsoleLogs.apply(ConsoleLogs.Threshold.INFO);
+            ConsoleLogs.apply(ConsoleLogs.Threshold.WARNING);
             TransitSettings.load(Files.createTempDirectory("transit-settings-console-reset"));
             deleteAll(dir);
         }
@@ -4252,7 +4350,7 @@ public class TransitTests {
         eq(Deployables.STEAMBOAT_SKIFF_KIND, Deployables.STEAMBOAT_SKIFF.id);
         check(sp != null && sp.waterborne() && sp.waterlineY == 0, "waterline 0");
         check(sp.fuelless, "no fuel");
-        check(!sp.hasCrew() && !sp.voyage && !sp.recall && !sp.ladders && !sp.onePerPlayer, "no crew, voyage, recall, ladder or limit");
+        check(!sp.hasCrew() && !sp.voyage && !sp.recall && !sp.ladders, "no crew, voyage, recall or ladder");
         check(sp.wheelAnimPrefix == null, "no wheels");
         eq("Propeller", sp.propellerAnimPrefix);
         eq("Steamboat_Skiff_Crate", sp.crateItemId);
@@ -4261,7 +4359,6 @@ public class TransitTests {
         check(Deployables.SHIPS.contains(Deployables.STEAMBOAT_SKIFF), "flown by the ship manager like the steamboat");
         check(Deployables.all().contains(Deployables.STEAMBOAT_SKIFF), "in the structure list");
         eq(Deployables.STEAMBOAT_SKIFF, Deployables.forPrefab("Steamboat_Skiff.prefab.json"));
-        check(!AirshipLimit.countsForLimit(Deployables.STEAMBOAT_SKIFF), "no limit per player");
         check(Texts.isBoat(Deployables.STEAMBOAT_SKIFF), "boat texts");
         check(!GliderJump.allowedFor(Deployables.STEAMBOAT_SKIFF), "no glider jump from the skiff");
         eq("Owned_Steamboat_Skiff.png", OwnedMarkerProvider.icon(Deployables.STEAMBOAT_SKIFF_KIND));
@@ -5679,13 +5776,6 @@ public class TransitTests {
                 "no zone, no block");
     }
 
-    private static void staleEntryUnknownIsPresent() {
-        // World not loaded (no universe in tests): the entry is unknown, so it counts as present and is never dropped.
-        BalloonRegistry.Entry e = new BalloonRegistry.Entry("no_such_world", 0, 0, 0,
-                com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation.None, Deployables.AIRSHIP_KIND, UUID.randomUUID());
-        check(!BalloonRegistry.removeIfGone(e), "unknown entry is kept");
-    }
-
     private static void walkLegsAisle() {
         // From the stool to the helm: aisle west, aisle east, door leg on the stool side, door leg on the helm side.
         java.util.List<double[]> a = AirshipCrew.walkLegs(new double[]{-2, 8, 4}, CrewRecord.Post.HELM);
@@ -5709,13 +5799,6 @@ public class TransitTests {
         eq(2, AirshipCrew.walkLegs(new double[]{0, 8, 3.5}, CrewRecord.Post.STOOL).size());
     }
 
-    private static void airshipLimitCounts() {
-        UUID a = UUID.randomUUID(), b = UUID.randomUUID();
-        check(AirshipLimit.ownsAny(a, java.util.Arrays.asList(null, b, a)), "owned among others");
-        check(!AirshipLimit.ownsAny(a, java.util.Arrays.asList(null, b)), "not owned");
-        check(!AirshipLimit.ownsAny(null, java.util.Arrays.asList((UUID) null)), "unowned never counts");
-    }
-
     private static void airshipCrewSpecUnchanged() {
         Deployables.CrewSpec c = Deployables.crewOf(Deployables.AIRSHIP_KIND);
         check(c != null, "airship has a crew spec");
@@ -5731,20 +5814,7 @@ public class TransitTests {
 
     private static void shipFeatureFlags() {
         Deployables.AirshipSpec s = Deployables.AIRSHIP.airship;
-        check(s.hasCrew() && s.voyage && s.recall && s.ladders && s.onePerPlayer, "airship declares all its features");
-    }
-
-    private static void limitIgnoresOtherShips() {
-        check(AirshipLimit.countsForLimit(Deployables.AIRSHIP), "airship counts");
-        check(!AirshipLimit.countsForLimit(Deployables.TENT), "tent does not count");
-        check(!AirshipLimit.countsForLimit(Deployables.BALLOON), "balloon does not count");
-    }
-
-    private static void landingOwnerLimit() {
-        UUID p = UUID.randomUUID();
-        check(Ownership.landingOwner(Ownership.NONE, p, "Ann", false).owner() == null, "already owns one: stays unowned");
-        check(p.equals(Ownership.landingOwner(Ownership.NONE, p, "Ann", true).owner()), "free: becomes owner");
-        check(Ownership.landingOwner(Ownership.NONE, p, "Ann", false).id() != null, "always an id");
+        check(s.hasCrew() && s.voyage && s.recall && s.ladders, "airship declares all its features");
     }
 
     /** Under armour that hides the haircut, the game swaps it for the generic haircut of the same length (HaircutFallbacks). */
@@ -6101,8 +6171,7 @@ public class TransitTests {
         check(Deployables.SHIPS.equals(List.of(Deployables.AIRSHIP, Deployables.STEAMBOAT, Deployables.STEAMBOAT_SKIFF)), "SHIPS");
         check(Deployables.forPrefab("Steamboat.prefab.json") == Deployables.STEAMBOAT, "forPrefab");
         Deployables.AirshipSpec b = Deployables.STEAMBOAT.airship;
-        check(b.hasCrew() && b.voyage && !b.recall && !b.ladders && !b.onePerPlayer, "boat has a pilot and voyages but no recall, ladders, limit");
-        check(!AirshipLimit.countsForLimit(Deployables.STEAMBOAT), "no boat limit");
+        check(b.hasCrew() && b.voyage && !b.recall && !b.ladders, "boat has a pilot and voyages but no recall or ladders");
         check(b.pivot.equals(new Vector3f(0, 4, 5)) && "Steamboat_Crate".equals(b.crateItemId), "boat spec");
         check("Airship_Cloudwork_TurnLeft".equals(Deployables.AIRSHIP.airship.turnLeftModelId), "airship turn model kept");
         check("Airship_Cloudwork_TurnRight".equals(Deployables.AIRSHIP.airship.turnRightModelId), "airship turn right kept");
@@ -6324,6 +6393,11 @@ public class TransitTests {
         eq(true, n[0] == 1 || n[0] == 3);
     }
 
+    static void balloonRecallIgnoresFuel() {
+        eq(null, BalloonRecall.launchRefusalKey(true));
+        eq("error.noBurner", BalloonRecall.launchRefusalKey(false));
+    }
+
     static void recallLadderCells() {
         // The ladder bottom at y 19: rungs 18 down to 8, the stairs at y 7 are solid and stay.
         List<Integer> col = RecallPlanner.ladderCells(19, y -> y == 7, 48);
@@ -6366,11 +6440,34 @@ public class TransitTests {
     }
 
     static void recallRefusal() {
-        eq("recall.noAirship", RecallPlanner.recallRefusalKey(false, true, true, false));
-        eq("recall.inFlight", RecallPlanner.recallRefusalKey(true, true, true, false));
-        eq("recall.already", RecallPlanner.recallRefusalKey(true, false, true, false));
-        eq("recall.quayBusy", RecallPlanner.recallRefusalKey(true, false, false, false));
-        eq(null, RecallPlanner.recallRefusalKey(true, false, false, true));
+        eq("recall.noVehicle", RecallPlanner.recallRefusalKey(false, true, true, true, false, false));
+        eq("recall.inFlight", RecallPlanner.recallRefusalKey(true, true, true, true, false, false));
+        eq("recall.already", RecallPlanner.recallRefusalKey(true, false, true, true, false, false));
+        eq("recall.quayBusy", RecallPlanner.recallRefusalKey(true, false, false, true, false, false));
+        eq(null, RecallPlanner.recallRefusalKey(true, false, false, true, false, true));
+    }
+
+    static void recallCandidatesFilter() {
+        eq(true, VehicleRecall.eligible("airship", true, true, true));
+        eq(true, VehicleRecall.eligible("balloon", true, true, true));
+        eq(false, VehicleRecall.eligible("steamboat", true, true, true));
+        eq(false, VehicleRecall.eligible("balloon_basic", true, true, true));
+        eq(false, VehicleRecall.eligible("airship", false, true, true));
+        eq(false, VehicleRecall.eligible("airship", true, false, true));
+        eq(false, VehicleRecall.eligible("airship", true, true, false));
+    }
+
+    static void recallCandidatesSorted() {
+        java.util.UUID a = java.util.UUID.randomUUID(), b = java.util.UUID.randomUUID();
+        java.util.List<VehicleRecall.Candidate> out = VehicleRecall.sortAndFilter(java.util.List.of(
+                new VehicleRecall.Candidate(a, "airship", "Loin", 900, "n", false),
+                new VehicleRecall.Candidate(b, "balloon", "Près", 120, "e", false)));
+        eq(b, out.get(0).id());
+        eq(a, out.get(1).id());
+    }
+
+    static void recallChoiceRecheck() {
+        eq("recall.noVehicle", RecallPlanner.recallRefusalKey(false, false, false, true, false, true));
     }
 
     static void recallRefusalOccupied() {
@@ -6378,7 +6475,7 @@ public class TransitTests {
         eq("recall.occupied", RecallPlanner.recallRefusalKey(true, false, false, true, true, false));
         eq("recall.already", RecallPlanner.recallRefusalKey(true, false, true, true, true, true));
         eq("recall.inFlight", RecallPlanner.recallRefusalKey(true, true, false, true, true, true));
-        eq("recall.noAirship", RecallPlanner.recallRefusalKey(false, false, false, true, true, true));
+        eq("recall.noVehicle", RecallPlanner.recallRefusalKey(false, false, false, true, true, true));
         eq(null, RecallPlanner.recallRefusalKey(true, false, false, true, false, true));
         eq("recall.quayBusy", RecallPlanner.recallRefusalKey(true, false, false, true, false, false));
         eq("recall.unknownStation", RecallPlanner.recallRefusalKey(true, false, false, false, false, true));

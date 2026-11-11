@@ -218,7 +218,6 @@ final class PierDredge {
             Telemetry.error("deploy", e, Telemetry.kindId(Deployables.BOAT_STATION_PIER), "dredge");
             return false;
         }
-        LOGGER.at(Level.INFO).log("Pier basin dug: %d cell(s) in front of the pier end at (%d, %d, %d)", done, quay.x, quay.y, quay.z);
         return true;
     }
 }

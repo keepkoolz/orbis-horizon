@@ -31,7 +31,7 @@ import java.util.UUID;
  */
 final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.Data> {
 
-    enum CrewOrder { VOYAGE, NOTE_STOP, TAKE_HELM, RETURN_HELM }
+    enum CrewOrder { VOYAGE, NOTE_STOP, TAKE_HELM, RETURN_HELM, RENAME }
 
     static final class Data {
         static final BuilderCodec<Data> CODEC = BuilderCodec.builder(Data.class, Data::new)
@@ -124,12 +124,29 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
     @Override
     public void onDismiss(Ref<EntityStore> ref, Store<EntityStore> store) {
         if (recall != null) {
+            closedWithoutChoice();
+        }
+    }
+
+    /** The recall window closed without a choice: the waiting vehicle leaves. */
+    private void closedWithoutChoice() {
+        if (Deployables.BALLOON_KIND.equals(recall.kind)) {
+            BalloonRecall.onChoiceClosed(recall, this);
+        } else {
             AirshipRecall.onChoiceClosed(recall, this);
         }
     }
 
     private List<CrewOrder> ownerOptions(BalloonRegistry.Entry e, World world) {
-        return isOwner(e) ? crewOptions(AirshipCrew.state(world, e), Deployables.voyageOf(e.kind()), keepsLog(e.kind())) : List.of();
+        if (!isOwner(e)) {
+            return List.of();
+        }
+        List<CrewOrder> out = new java.util.ArrayList<>(
+                crewOptions(AirshipCrew.state(world, e), Deployables.voyageOf(e.kind()), keepsLog(e.kind())));
+        if (e.ownership().id() != null) {
+            out.add(CrewOrder.RENAME);
+        }
+        return out;
     }
 
     /** Whether the ship type floats on water and keeps a log of stops. */
@@ -151,6 +168,7 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
         cmd.set("#NoteStopButton.Text", m("crew.noteStop"));
         cmd.set("#TakeHelmButton.Text", m("crew.takeHelm"));
         cmd.set("#ReturnHelmButton.Text", m("crew.returnHelm"));
+        cmd.set("#RenameButton.Text", m("crew.rename"));
         World world = store.getExternalData().getWorld();
         BalloonRegistry.Entry e = AirshipCrew.entryOfPilot(world.getName(), npc);
         List<CrewOrder> options = e == null ? List.of() : ownerOptions(e, world);
@@ -164,12 +182,14 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
         cmd.set("#NoteStopButton.Visible", !list && options.contains(CrewOrder.NOTE_STOP));
         cmd.set("#TakeHelmButton.Visible", !list && options.contains(CrewOrder.TAKE_HELM));
         cmd.set("#ReturnHelmButton.Visible", !list && options.contains(CrewOrder.RETURN_HELM));
+        cmd.set("#RenameButton.Visible", !list && options.contains(CrewOrder.RENAME));
         cmd.set("#List.Visible", list);
         cmd.set("#Empty.Visible", false);
         events.addEventBinding(CustomUIEventBindingType.Activating, "#VoyageButton", EventData.of("Action", "Voyage"));
         events.addEventBinding(CustomUIEventBindingType.Activating, "#NoteStopButton", EventData.of("Action", "NoteStop"));
         events.addEventBinding(CustomUIEventBindingType.Activating, "#TakeHelmButton", EventData.of("Action", "TakeHelm"));
         events.addEventBinding(CustomUIEventBindingType.Activating, "#ReturnHelmButton", EventData.of("Action", "ReturnHelm"));
+        events.addEventBinding(CustomUIEventBindingType.Activating, "#RenameButton", EventData.of("Action", "Rename"));
         events.addEventBinding(CustomUIEventBindingType.Activating, "#CloseButton", EventData.of("Action", "Close"));
         if (list) {
             buildList(ref, cmd, events, store, world, e);
@@ -289,7 +309,7 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
         try {
             World world = store.getExternalData().getWorld();
             if (recall != null && "Close".equals(data.action)) {
-                AirshipRecall.onChoiceClosed(recall, this);
+                closedWithoutChoice();
                 return;
             }
             BalloonRegistry.Entry e = AirshipCrew.entryOfPilot(world.getName(), npc);
@@ -303,6 +323,12 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
                 }
                 keepOpen = true;
                 rebuild();
+            } else if ("Rename".equals(data.action)) {
+                if (e != null && options.contains(CrewOrder.RENAME)) {
+                    // The name window replaces this page.
+                    VehicleNamePage.open(store, ref, playerRef, e.ownership().id(), e.kind(), null);
+                    keepOpen = true;
+                }
             } else if ("NoteStop".equals(data.action)) {
                 if (e != null && options.contains(CrewOrder.NOTE_STOP)) {
                     noteStop(world, e);
@@ -342,7 +368,7 @@ final class AirshipVoyagePage extends InteractiveCustomUIPage<AirshipVoyagePage.
                 if (options.contains(CrewOrder.VOYAGE) && i >= 0 && i < shown.size()) {
                     Deployables.Kind pilotedKind = e != null ? Deployables.get(e.kind()) : null;
                     Message error = pilotedKind != null && pilotedKind.balloon != null
-                            ? BalloonManager.get().startVoyage(store, world, playerRef, e, shown.get(i))
+                            ? BalloonManager.get().startVoyage(store, world, playerRef, e, shown.get(i), recall)
                             : AirshipManager.get().startVoyage(store, world, playerRef, e, shown.get(i));
                     if (error != null && error != AirshipManager.DEFERRED) {
                         playerRef.sendMessage(error);

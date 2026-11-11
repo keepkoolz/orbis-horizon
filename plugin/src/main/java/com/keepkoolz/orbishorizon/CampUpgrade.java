@@ -336,12 +336,10 @@ final class CampUpgrade {
         for (ItemContainer c : all) {
             ItemStackTransaction t = c.addItemStack(pack);
             if (t == null || t.getRemainder() == null || t.getRemainder().isEmpty()) {
-                LOGGER.at(Level.INFO).log("Bag upgrade: contents returned in a new bag when player %s arrived", player);
                 return true;
             }
             pack = t.getRemainder();
         }
-        LOGGER.at(Level.INFO).log("Bag upgrade: inventory full when player %s arrived, contents kept for later", player);
         return false;
     }
 
@@ -367,7 +365,6 @@ final class CampUpgrade {
                 LOGGER.at(Level.WARNING).log("Bag upgrade: contents lost, player position unknown");
             }
         }
-        LOGGER.at(Level.INFO).log("Bag upgrade: craft cancelled, contents returned to the player");
     }
 
     /** CraftRecipeEvent.Post: a cancelled craft forgets the note, otherwise the contents are put on the new pack now or in the next ticks. */
@@ -556,9 +553,7 @@ final class CampUpgrade {
             List<Wait> waits = WAITS.remove(player);
             if (waits != null) {
                 for (Wait w : waits) {
-                    if (apply(containers(holder), w.note().target(), w.note().contents())) {
-                        LOGGER.at(Level.INFO).log("Bag upgrade: contents placed when player %s arrived", player);
-                    } else {
+                    if (!apply(containers(holder), w.note().target(), w.note().contents())) {
                         // The new pack is not in the inventory yet: tick re-creates the wait once the player is in the world.
                         WAIT_CARRIED.computeIfAbsent(player, k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(w.note());
                     }

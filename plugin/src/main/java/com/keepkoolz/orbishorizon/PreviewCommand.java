@@ -171,7 +171,6 @@ final class PreviewCommand extends AbstractCommandCollection {
             }
             String msg = "Wheel at " + x + ", " + y + ", " + z + " rotation " + facing + ": set " + ok + ", " + cells
                     + " wheel cell(s) found (70 expected)";
-            LOGGER.at(Level.INFO).log("Test wheel: %s", msg);
             ctx.sendMessage(com.hypixel.hytale.server.core.Message.raw(msg));
         }
     }

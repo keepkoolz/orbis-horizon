@@ -174,14 +174,12 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
         // No deployment under water.
         Vector3i wet = BalloonManager.underLiquid(world, shape, origin, rotation);
         if (wet != null) {
-            LOGGER.at(Level.INFO).log("Camp refused at (%d, %d, %d): liquid at (%d, %d, %d)", origin.x, origin.y, origin.z, wet.x, wet.y, wet.z);
             playerRef.sendMessage(Texts.t("deploy.underwater"));
             fail(context);
             return;
         }
         String zoneStation = StationZone.blockingStation(world, kind.id, shape, origin, rotation);
         if (zoneStation != null) {
-            LOGGER.at(Level.INFO).log("Camp refused at (%d, %d, %d): station zone %s", origin.x, origin.y, origin.z, zoneStation);
             playerRef.sendMessage(Texts.t("deploy.stationZone").param("station", zoneStation));
             fail(context);
             return;
@@ -192,8 +190,6 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
             Vector3i p = c.rotated(rotation).add(origin);
             if (BalloonManager.outOfHeight(p.y)) {
                 // a cell outside the world's height range would be lost.
-                LOGGER.at(Level.INFO).log("Camp refused at (%d, %d, %d): cell (%d, %d, %d) exceeds the height limit",
-                        origin.x, origin.y, origin.z, p.x, p.y, p.z);
                 playerRef.sendMessage(Texts.t("deploy.heightLimit"));
                 fail(context);
                 return;
@@ -201,8 +197,6 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
             boolean unloaded = !reader.hasStorageInMemory(p.x, p.y, p.z);
             BlockType bt = unloaded ? null : SectionBlocks.typeAt(reader, p.x, p.y, p.z);
             if (unloaded || (bt != null && bt.getMaterial() == BlockMaterial.Solid)) {
-                LOGGER.at(Level.INFO).log("Camp refused at (%d, %d, %d): %s blocked at (%d, %d, %d)",
-                        origin.x, origin.y, origin.z, unloaded ? "chunk not loaded" : bt.getId(), p.x, p.y, p.z);
                 playerRef.sendMessage(Texts.t("tent.noRoom"));
                 fail(context);
                 return;
@@ -234,11 +228,9 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
                     TentContents contents = TentContents.fromBson(meta.getDocument(TentContents.METADATA_KEY), kind.id);
                     if (contents != null) {
                         final Vector3i at = new Vector3i(origin);
-                        final int count = contents.itemCount();
                         world.execute(() -> {
                             try {
                                 contents.restore(world, world.getEntityStore().getStore(), at, rotation);
-                                LOGGER.at(Level.INFO).log("Camp: %d item(s) put back from the bag", count);
                             } catch (RuntimeException e) {
                                 LOGGER.at(Level.WARNING).withCause(e).log("Camp: bag contents not put back");
                                 Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
@@ -251,7 +243,6 @@ public class DeployCampInteraction extends SimpleInstantInteraction {
             LOGGER.at(Level.WARNING).withCause(e).log("Camp: unreadable bag contents");
             Telemetry.error("deploy", e, Telemetry.kindId(kind), null);
         }
-        LOGGER.at(Level.INFO).log("Camp \"%s\" placed at (%d, %d, %d) rotation %s by %s", kind.id, origin.x, origin.y, origin.z, rotation, playerRef.getUsername());
     }
 
     private static void fail(InteractionContext context) {

@@ -78,25 +78,15 @@ final class AirshipRecall {
         return points;
     }
 
-    /** The registry entry of this player's parked airship with a pilot NPC in this world, null if none. */
-    static BalloonRegistry.Entry parkedAirship(World world, UUID owner) {
-        for (BalloonRegistry.Entry e : BalloonRegistry.entriesOfKind(world, Deployables.AIRSHIP_KIND)) {
-            if (owner.equals(e.owner()) && e.crew() != null) {
-                return e;
-            }
-        }
-        return null;
-    }
-
-    /** True if a flight of this player has a recall in progress, or if his ship already waits in blocks above a station. */
-    private static boolean recalling(UUID owner) {
+    /** True if a flight of this vehicle has a recall in progress, or if the vehicle already waits in blocks above a station. */
+    private static boolean recalling(UUID id) {
         for (AirshipFlight f : AirshipManager.get().flights()) {
-            if (f.recall != null && owner.equals(f.ownership.owner())) {
+            if (f.recall != null && id.equals(f.ownership.id())) {
                 return true;
             }
         }
         for (RecallState r : PARKED) {
-            if (owner.equals(r.owner)) {
+            if (id.equals(r.entryId)) {
                 return true;
             }
         }
@@ -113,23 +103,10 @@ final class AirshipRecall {
         }
     }
 
-    /** True if a flight owned by this player has no recall (a voyage or a piloted flight). */
-    private static boolean flyingOther(UUID owner) {
+    /** True if the flight of this vehicle has no recall (a voyage or a piloted flight). */
+    private static boolean flyingOther(UUID id) {
         for (AirshipFlight f : AirshipManager.get().flights()) {
-            if (f.recall == null && owner.equals(f.ownership.owner())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** The recall button is offered to the owner of a parked airship with a pilot, or of a flight that has one (the refusals say why not). */
-    static boolean canOffer(World world, UUID owner) {
-        if (parkedAirship(world, owner) != null) {
-            return true;
-        }
-        for (AirshipFlight f : AirshipManager.get().flights()) {
-            if (f.crew != null && owner.equals(f.ownership.owner())) {
+            if (f.recall == null && id.equals(f.ownership.id())) {
                 return true;
             }
         }
@@ -137,25 +114,27 @@ final class AirshipRecall {
     }
 
     /**
-     * Asks the pilot of the owner's parked airship to come to the station. Null if the recall started (the ship appears once the
-     * sections are loaded, on the world thread), otherwise the refusal of the station master. Never throws.
+     * Asks the pilot of this airship (structure id {@code id}, its registry entry, null when it is in the air) to come to the
+     * station. Null if the recall started (the ship appears once the sections are loaded, on the world thread), otherwise the refusal
+     * of the station master. Never throws.
      */
-    static Message start(Store<EntityStore> store, World world, PlayerRef owner, TransitNetwork.Station s) {
+    static Message start(Store<EntityStore> store, World world, PlayerRef owner, TransitNetwork.Station s, UUID id,
+                         BalloonRegistry.Entry entry) {
+        String name = VehicleRecall.nameOf(id, Deployables.AIRSHIP_KIND, owner);
         try {
-            UUID me = owner.getUuid();
-            BalloonRegistry.Entry entry = parkedAirship(world, me);
-            boolean recalling = recalling(me);
+            boolean recalling = recalling(id);
+            boolean flying = flyingOther(id);
             boolean occupied = entry != null && !recalling && occupied(store, world, entry);
             boolean known = entry != null && entry.sky() != null
                     && entry.sky().hasReached(new SkyLog.Reached(s.origin.x, s.origin.y, s.origin.z));
-            String key = RecallPlanner.recallRefusalKey(entry != null || recalling, flyingOther(me), recalling, known || recalling, occupied,
-                    true);
+            String key = RecallPlanner.recallRefusalKey(entry != null || recalling || flying, flying, recalling, known || recalling,
+                    occupied, true);
             UUID flightId = UUID.randomUUID();
             if (key == null && !StationQueue.beginRecall(s, flightId)) {
                 key = "recall.quayBusy";
             }
             if (key != null) {
-                return Texts.t("crew." + key);
+                return Texts.t("crew." + key).param("vehicle", name);
             }
             try {
                 begin(store, world, owner, s, entry, flightId);
@@ -163,15 +142,19 @@ final class AirshipRecall {
                 StationQueue.endRecall(s, flightId);
                 LOGGER.at(Level.WARNING).withCause(e).log("Recall: start failed");
                 Telemetry.error("airship.recall", e, null, null);
-                return Texts.t("crew.recall.noAirship");
+                return Texts.t("crew.recall.noVehicle");
             }
             Telemetry.count("airship.recall");
             return null;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Recall: request failed");
             Telemetry.error("airship.recall", e, null, null);
-            return Texts.t("crew.recall.noAirship");
+            return Texts.t("crew.recall.noVehicle");
         }
+    }
+
+    private static String nameOf(BalloonRegistry.Entry entry, PlayerRef owner) {
+        return VehicleRecall.nameOf(entry.ownership().id(), Deployables.AIRSHIP_KIND, owner);
     }
 
     private static void begin(Store<EntityStore> store, World world, PlayerRef owner, TransitNetwork.Station s,
@@ -214,11 +197,9 @@ final class AirshipRecall {
                 LOGGER.at(Level.WARNING).withCause(e).log("Recall: planning failed, recall cancelled");
                 Telemetry.error("airship.recall", e, null, null);
                 StationQueue.endRecall(s, flightId);
-                owner.sendMessage(Texts.t("crew.recall.unreachable"));
+                owner.sendMessage(Texts.t("crew.recall.unreachable").param("vehicle", nameOf(entry, owner)));
                 return;
             }
-            LOGGER.at(Level.INFO).log("Recall: airship of %s requested at %s, spawning at (%.0f, %d, %.0f)", owner.getUsername(), s.name,
-                    plan.spawnX(), plan.cruiseY(), plan.spawnZ());
             int sx = (int) Math.floor(plan.spawnX());
             int sz = (int) Math.floor(plan.spawnZ());
             CompletableFuture<Void> parkedLoad = SectionBlocks.loadSections(world.getChunkStore(), box[0], box[1], box[2], box[3], box[4], box[5]);
@@ -232,7 +213,7 @@ final class AirshipRecall {
                         Telemetry.error("airship.recall", t, null, null);
                         world.execute(() -> {
                             StationQueue.endRecall(s, flightId);
-                            owner.sendMessage(Texts.t("crew.recall.unreachable"));
+                            owner.sendMessage(Texts.t("crew.recall.unreachable").param("vehicle", nameOf(entry, owner)));
                         });
                         return;
                     }
@@ -257,30 +238,27 @@ final class AirshipRecall {
         Message failure = null;
         try {
             if (!TransitNetwork.get().stations(world.getName()).contains(s)) {
-                LOGGER.at(Level.INFO).log("Recall: station %s removed before the spawn", s.name);
                 StationQueue.endRecall(s, flightId);
                 return;
             }
             BalloonRegistry.Entry current = BalloonRegistry.get(world, new Vector3i(entry.x(), entry.y(), entry.z()), entry.rotation(),
                     Deployables.AIRSHIP_KIND);
             if (current == null || current.crew() == null) {
-                LOGGER.at(Level.INFO).log("Recall: the airship is no longer landed");
                 StationQueue.endRecall(s, flightId);
-                owner.sendMessage(Texts.t("crew.recall.noAirship"));
+                owner.sendMessage(Texts.t("crew.recall.noVehicle"));
                 return;
             }
             Store<EntityStore> store = world.getEntityStore().getStore();
             if (occupied(store, world, current)) {
                 // A player stepped on the ship while the sections were loading: the floor is not taken from under his feet.
-                LOGGER.at(Level.INFO).log("Recall: a player is aboard the landed airship, recall refused");
-                failure = Texts.t("crew.recall.occupied");
+                failure = Texts.t("crew.recall.occupied").param("vehicle", nameOf(entry, owner));
             } else {
                 failure = AirshipManager.get().launchRecall(store, world, current, flightId, plan, s);
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Recall: spawn failed");
             Telemetry.error("airship.recall", e, Telemetry.kindId(Deployables.AIRSHIP), null);
-            failure = Texts.t("crew.recall.noAirship");
+            failure = Texts.t("crew.recall.noVehicle");
         }
         if (failure != null) {
             StationQueue.endRecall(s, flightId);
@@ -324,7 +302,6 @@ final class AirshipRecall {
         f.moving = false;
         f.yawRate = 0;
         f.yawAcc = 0;
-        LOGGER.at(Level.INFO).log("Recall: arrived at the approach point of %s, descending to y %.0f", r.station.name, r.hoverY);
     }
 
     /**
@@ -418,7 +395,6 @@ final class AirshipRecall {
         r.announced = Integer.MAX_VALUE;
         writeMark(world, r);
         PARKED.add(r);
-        LOGGER.at(Level.INFO).log("Recall: airship landed in mid-air above %s (%s), the rope ladder comes down", r.station.name, why);
     }
 
     /** Writes the recall mark (quay, station, spawn point, rungs) in the registry entry of the parked ship. */
@@ -456,16 +432,11 @@ final class AirshipRecall {
         }
         try {
             SectionReader reader = new SectionReader(world.getChunkStore());
-            int n = 0;
             for (int i = 0; i + 2 < flat.length; i += 3) {
                 BlockType t = SectionBlocks.typeAt(reader, flat[i], flat[i + 1], flat[i + 2]);
-                if (t != null && LADDER_BLOCK.equals(t.getId())
-                        && SectionBlocks.setAt(world.getChunkStore(), flat[i], flat[i + 1], flat[i + 2], BlockType.EMPTY_KEY, SET_NO_PARTICLES)) {
-                    n++;
+                if (t != null && LADDER_BLOCK.equals(t.getId())) {
+                    SectionBlocks.setAt(world.getChunkStore(), flat[i], flat[i + 1], flat[i + 2], BlockType.EMPTY_KEY, SET_NO_PARTICLES);
                 }
-            }
-            if (n > 0) {
-                LOGGER.at(Level.INFO).log("Recall: %d old rung(s) removed on resume", n);
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Recall: old rungs not removed");
@@ -486,7 +457,6 @@ final class AirshipRecall {
         f.recallInfo = r;
         PARKED.remove(r);
         closePage(r);
-        LOGGER.at(Level.INFO).log("Recall: the wait above %s is over, the airship has taken off", r.station.name);
     }
 
     /** Every tick of a world: the minute, the captain's window and the checks of the ships waiting above a station. Never throws. */
@@ -510,12 +480,10 @@ final class AirshipRecall {
     private static void tickWait(Store<EntityStore> store, World world, RecallState r, long now) {
         BalloonRegistry.Entry entry = BalloonRegistry.get(world, r.origin, r.rotation, Deployables.AIRSHIP_KIND);
         if (entry == null) {
-            LOGGER.at(Level.INFO).log("Recall: the airship waiting above %s has disappeared", r.station.name);
             finishWait(world, r, false);
             return;
         }
         if (!TransitNetwork.get().stations(world.getName()).contains(r.station)) {
-            LOGGER.at(Level.INFO).log("Recall: station %s removed, the airship stays landed in mid-air", r.station.name);
             finishWait(world, r, true);
             return;
         }
@@ -558,11 +526,9 @@ final class AirshipRecall {
             }
         } else if (r.phase == RecallState.Phase.CHOOSE) {
             if (!captainAboard(store, world, r)) {
-                LOGGER.at(Level.INFO).log("Recall: the captain left the airship, the airship leaves again");
                 leaveNow(store, world, r, entry); // first: closing the page runs onDismiss, which must find the ship gone or refused
                 closePage(r);
             } else if (now - r.chooseStartMs >= RecallPlanner.CHOOSE_MS) {
-                LOGGER.at(Level.INFO).log("Recall: no destination chosen, the airship leaves again");
                 leaveNow(store, world, r, entry);
                 closePage(r);
             }
@@ -606,12 +572,10 @@ final class AirshipRecall {
     /** End of the minute: the captain's window if he is aboard, otherwise the ship leaves (the ladders come up with the departure). */
     private static void endWait(Store<EntityStore> store, World world, RecallState r, BalloonRegistry.Entry entry, long now) {
         if (!captainAboard(store, world, r) || entry.crew() == null) {
-            LOGGER.at(Level.INFO).log("Recall: captain absent, the airship leaves again");
             leaveNow(store, world, r, entry);
             return;
         }
         if (AirshipCrew.state(world, entry) != AirshipCrew.CrewState.AT_HELM) {
-            LOGGER.at(Level.INFO).log("Recall: the pilot is not at the helm, no destination choice, the airship leaves again");
             leaveNow(store, world, r, entry);
             return;
         }
@@ -632,7 +596,6 @@ final class AirshipRecall {
             AirshipVoyagePage page = new AirshipVoyagePage(pr, entry.crew().uuid(), r);
             r.page = page;
             player.getPageManager().openCustomPage(pr.getReference(), store, page);
-            LOGGER.at(Level.INFO).log("Recall: destinations window opened for %s", pr.getUsername());
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Recall: destinations window failed, the airship leaves again");
             Telemetry.error("airship.recall", e, null, ph(r));
@@ -700,7 +663,6 @@ final class AirshipRecall {
             finishWait(world, r, true);
             return;
         }
-        LOGGER.at(Level.WARNING).log("Recall: departure not possible for now, retrying in 5 s above %s", r.station.name);
         r.leaveRetryMs = System.currentTimeMillis() + 5000;
     }
 
@@ -730,7 +692,6 @@ final class AirshipRecall {
         double[] point = retreatPoint(r, world);
         r.phase = RecallState.Phase.LEAVE;
         StationQueue.broadcast(world, r.station, Texts.t("crew.recall.leaving"));
-        LOGGER.at(Level.INFO).log("Recall: the airship moves away from %s toward (%.0f, %.0f)", r.station.name, point[0], point[1]);
         return new VoyageState(r.station.name, VoyagePlanner.Kind.STATION, point[0], point[1], fromY + LEAVE_CLIMB, r.owner, true,
                 VoyageState.ArrivalMode.LAND);
     }
@@ -756,15 +717,13 @@ final class AirshipRecall {
         try {
             if (++r.leaveTries > RecallState.MAX_LEAVE_TRIES) {
                 // Bound: the normal stop path (forced pose, logged) puts the ship down rather than holding the quay for ever.
-                LOGGER.at(Level.INFO).log("Recall: moving away blocked in the zone of %s after %d attempts, forced landing", f.quayStation.name,
+                LOGGER.at(Level.WARNING).log("Recall: moving away blocked in the zone of %s after %d attempts, forced landing", f.quayStation.name,
                         r.leaveTries - 1);
                 return AirshipManager.get().landImmediately(f);
             }
             v.cruiseY = Math.min(v.cruiseY + 3, BalloonManager.WORLD_MAX_Y - 10);
             v.phase = VoyageState.Phase.CLIMB;
             v.progressMs = 0;
-            LOGGER.at(Level.INFO).log("Recall: moving away blocked in the zone of %s, retrying (cruise height %.0f)",
-                    f.quayStation.name, v.cruiseY);
             return true;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Recall: retrying the move away failed");
@@ -787,10 +746,8 @@ final class AirshipRecall {
         try {
             Store<EntityStore> store = f.world.getEntityStore().getStore();
             if (RecallPlanner.approachNear(f.pos.x, f.pos.z, v.destX, v.destZ)) {
-                LOGGER.at(Level.INFO).log("Recall: approach blocked near %s, descending to the hover point", r.station.name);
                 onArrived(store, f);
             } else {
-                LOGGER.at(Level.INFO).log("Recall: approach blocked far from %s, the airship moves away", r.station.name);
                 leave(store, f, r, System.currentTimeMillis());
             }
             return true;
@@ -847,7 +804,6 @@ final class AirshipRecall {
         }
         try {
             if (outsideZone(f, s)) {
-                LOGGER.at(Level.INFO).log("Recall: the airship left the zone of %s, the pier is free", s.name);
                 endQuay(f);
             }
         } catch (RuntimeException e) {
@@ -916,69 +872,33 @@ final class AirshipRecall {
                 }
             }
             Vector3d pad = station != null ? StationMarkerProvider.markerPoint(station) : new Vector3d();
-            RecallState r = new RecallState(station, entry.owner(), mark.spawnX(), mark.spawnZ(), pad.x, pad.z, 0, 0);
+            RecallState r = new RecallState(station, entry.owner(), Deployables.AIRSHIP_KIND, entry.ownership().id(), mark.spawnX(), mark.spawnZ(), pad.x, pad.z, 0, 0);
             r.origin = origin;
             r.rotation = entry.rotation();
             r.quayId = mark.quayId();
             if (station == null) {
-                LOGGER.at(Level.INFO).log("Recall: station of the waiting airship gone, rungs and mark removed");
                 removeLegacyRungs(world, mark.ladders());
                 BalloonRegistry.setRecall(world, origin, entry.rotation(), null);
                 return;
             }
             removeLegacyRungs(world, mark.ladders()); // wooden rungs of a mark written before the rope ladder
-            strandOfflinePlayers(world, r, station);
+            StructureShape shape = Deployables.AIRSHIP.shapeOrNull();
+            if (shape == null) {
+                LOGGER.at(Level.WARNING).log("Recall: airship prefab unreadable (%s), offline players aboard not checked", Deployables.AIRSHIP.prefabPath);
+                Telemetry.error("airship.recall", new IllegalStateException("prefab unreadable: " + Deployables.AIRSHIP.prefabPath), null, ph(r));
+            } else {
+                Rotation rot = r.rotation;
+                VehicleRecall.strandOfflinePlayers(world, station, p -> AirshipManager.insideShape(shape, origin, rot, p),
+                        "airship.recall", null, ph(r));
+            }
             PARKED.add(r);
             StationQueue.beginRecall(station, r.quayId); // best effort: the quay is held while the ship leaves
-            LOGGER.at(Level.INFO).log("Recall: airship found waiting above %s after a restart, it leaves again", station.name);
             leaveNow(world.getEntityStore().getStore(), world, r, entry);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Recall: resuming the waiting airship failed");
             Telemetry.error("airship.recall", e, Telemetry.kindId(Deployables.AIRSHIP), null);
         } finally {
             RECOVERING.remove(old.id());
-        }
-    }
-
-    /**
-     * World load: players who are offline with a saved position inside the parked ship would reconnect in the air once it has left.
-     * They get a stranded entry on the station's first boarding point (put down there at their next arrival). Asynchronous: each
-     * player save is read off the world thread and the take-off never waits for it. Only a save of this world counts. Never throws.
-     */
-    private static void strandOfflinePlayers(World world, RecallState r, TransitNetwork.Station station) {
-        try {
-            com.hypixel.hytale.server.core.universe.Universe universe = com.hypixel.hytale.server.core.universe.Universe.get();
-            StructureShape shape = Deployables.AIRSHIP.shape();
-            Vector3d point = TransitAutopilot.boardingPoints(world, station).get(0);
-            String worldName = world.getName();
-            Vector3i origin = new Vector3i(r.origin);
-            Rotation rotation = r.rotation;
-            for (UUID id : universe.getPlayerStorage().getPlayers()) {
-                if (universe.getPlayer(id) != null) {
-                    continue; // online: the take-off handles him
-                }
-                universe.getPlayerStorage().load(id).whenComplete((holder, t) -> {
-                    try {
-                        if (t != null || holder == null) {
-                            return;
-                        }
-                        TransformComponent tc = holder.getComponent(TransformComponent.getComponentType());
-                        Player p = holder.getComponent(Player.getComponentType());
-                        String saved = p != null && p.getPlayerConfigData() != null ? p.getPlayerConfigData().getWorld() : null;
-                        boolean inside = tc != null && AirshipManager.insideShape(shape, origin, rotation, tc.getPosition());
-                        if (RecallPlanner.strandOffline(universe.getPlayer(id) != null, saved, worldName, inside)) {
-                            BalloonResume.writeStranded(id, worldName, point.x, point.y, point.z);
-                            LOGGER.at(Level.INFO).log("Recall: offline player %s stayed aboard, placed on the pier on return", id);
-                        }
-                    } catch (RuntimeException e) {
-                        LOGGER.at(Level.WARNING).withCause(e).log("Recall: offline player %s not checked", id);
-                        Telemetry.error("airship.recall", e, null, ph(r));
-                    }
-                });
-            }
-        } catch (Exception e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Recall: offline players aboard not checked");
-            Telemetry.error("airship.recall", e, null, ph(r));
         }
     }
 

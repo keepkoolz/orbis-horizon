@@ -134,7 +134,6 @@ public class PlaceArrivalInteraction extends SimpleInstantInteraction {
         }
         TransitNetwork.get().setArrival(station, cell);
         playerRef.sendMessage(Texts.t("transit.arrival.placed").param("name", station.name));
-        LOGGER.at(Level.INFO).log("Arrival point of '%s' set at (%d, %d, %d) by %s", station.name, cell.x, cell.y, cell.z, playerRef.getUsername());
     }
 
     /**

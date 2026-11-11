@@ -123,14 +123,11 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
         java.time.Instant target = SLEEP_TARGET.remove(ref);
         try {
             Vector3i bed = bedPosition(mount);
-            String source = "component";
             Vector3i remembered = BEDS.remove(ref);
             if (bed == null) {
                 bed = remembered;
-                source = "remembered";
             }
             if (bed == null) {
-                source = "player position";
                 // Last resort: the player's own block (they lay on the bed).
                 TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
                 if (t != null) {
@@ -142,7 +139,6 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
                 return;
             }
             Vector3i bedPos = bed;
-            String bedSource = source;
             World world = store.getExternalData().getWorld();
             // full night? Read now, the world time was set just before the mount removal.
             boolean fullNight = false;
@@ -157,7 +153,7 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
             com.hypixel.hytale.server.core.universe.PlayerRef pr = store.getComponent(ref, com.hypixel.hytale.server.core.universe.PlayerRef.getComponentType());
             final java.util.UUID sleeper = pr != null ? pr.getUuid() : null;
             // Deferred: after the dismount, and after a tent packing of the same tick (which removes the registry entry).
-            world.execute(() -> getUp(store, ref, world, bedPos, bedSource));
+            world.execute(() -> getUp(store, ref, world, bedPos));
             // Queued after getUp: the sleeping bag packs itself once its owner is out of the bed.
             world.execute(() -> autoPack(store, ref, world, bedPos, night, sleeper));
         } catch (RuntimeException e) {
@@ -178,7 +174,6 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
             }
             boolean owner = e.owner() != null && e.owner().equals(sleeper);
             if (CampPacker.shouldAutoPack(true, owner, e.kind())) {
-                LOGGER.at(Level.INFO).log("Bedroll: full night, automatic packing at %d, %d, %d", e.x(), e.y(), e.z());
                 CampPacker.pack(store, ref, world, e, false);
             }
         } catch (RuntimeException ex) {
@@ -245,26 +240,21 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
     }
 
     /** The player got up or woke up: puts them at the exit of the tent, if the bed belongs to a tent that has one. */
-    private static void getUp(Store<EntityStore> store, Ref<EntityStore> ref, World world, Vector3i bedPos, String source) {
-        String bedText = bedPos.x + ", " + bedPos.y + ", " + bedPos.z + " (" + source + ")";
+    private static void getUp(Store<EntityStore> store, Ref<EntityStore> ref, World world, Vector3i bedPos) {
         try {
             if (!ref.isValid()) {
-                LOGGER.at(Level.INFO).log("Tent bed: bed at %s, aborted: invalid player", bedText);
                 return;
             }
             // Dead, or already on another mount (bed, seat, vehicle): not our business.
             if (store.getComponent(ref, DeathComponent.getComponentType()) != null) {
-                LOGGER.at(Level.INFO).log("Tent bed: bed at %s, aborted: dead player", bedText);
                 return;
             }
             if (store.getComponent(ref, MountedComponent.getComponentType()) != null) {
-                LOGGER.at(Level.INFO).log("Tent bed: bed at %s, aborted: player mounted again", bedText);
                 return;
             }
             Lookup found = lookup(world, bedPos);
             BalloonRegistry.Entry e = found.entry();
             if (e == null) {
-                LOGGER.at(Level.INFO).log("Tent bed: bed at %s, aborted: %s", bedText, found.why());
                 return;
             }
             Deployables.TentSpec spec = Deployables.get(e.kind()).tent;
@@ -273,8 +263,6 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
             Rotation3f look = new Rotation3f();
             look.setYaw(yaw);
             store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(pos, look));
-            LOGGER.at(Level.INFO).log("Tent bed: bed at %s, teleporting to %.2f, %.2f, %.2f (yaw %.2f)",
-                    bedText, pos.x, pos.y, pos.z, yaw);
             PENDING.put(ref, new Pending(world, bedPos, pos, yaw, System.currentTimeMillis() + SECOND_TELEPORT_MS,
                     System.currentTimeMillis()));
             patchRespawnPoints(store, ref, world);
@@ -336,20 +324,16 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
     private static void secondTeleport(Store<EntityStore> store, Ref<EntityStore> ref, Pending p) {
         try {
             if (!ref.isValid()) {
-                LOGGER.at(Level.INFO).log("Tent bed: second teleport aborted: invalid player");
                 return;
             }
             if (store.getComponent(ref, DeathComponent.getComponentType()) != null) {
-                LOGGER.at(Level.INFO).log("Tent bed: second teleport aborted: dead player");
                 return;
             }
             if (store.getComponent(ref, MountedComponent.getComponentType()) != null) {
-                LOGGER.at(Level.INFO).log("Tent bed: second teleport aborted: player mounted again");
                 return;
             }
             TransformComponent t = store.getComponent(ref, TransformComponent.getComponentType());
             if (t == null) {
-                LOGGER.at(Level.INFO).log("Tent bed: second teleport aborted: no position");
                 return;
             }
             Vector3d cur = t.getPosition();
@@ -358,14 +342,11 @@ public final class TentBedSystem extends RefChangeSystem<EntityStore, MountedCom
             double dz = cur.z - (p.bed.z + 0.5);
             double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
             if (dist > MAX_BED_DISTANCE) {
-                LOGGER.at(Level.INFO).log("Tent bed: second teleport aborted: player %.2f block(s) from the bed", dist);
                 return;
             }
             Rotation3f look = new Rotation3f();
             look.setYaw(p.yaw);
             store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(p.target, look));
-            LOGGER.at(Level.INFO).log("Tent bed: second teleport sent to %.2f, %.2f, %.2f (player %.2f block(s) from the bed)",
-                    p.target.x, p.target.y, p.target.z, dist);
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Tent bed: second teleport not handled");
         }

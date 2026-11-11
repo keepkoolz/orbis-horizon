@@ -114,9 +114,6 @@ final class Telemetry {
     static synchronized void stop() {
         BeaconBridge b = bridge;
         if (b == null) return;
-        long started = System.currentTimeMillis();
-        String last = null;
-        int pending = 0;
         try {
             // Let a running periodic flush finish instead of interrupting it mid-call.
             if (executor != null) {
@@ -135,8 +132,8 @@ final class Telemetry {
             while (true) {
                 long elapsed = System.currentTimeMillis() - flushStarted;
                 BeaconBridge.FlushState st = b.state();
-                last = st.lastResult();
-                pending = st.pending();
+                String last = st.lastResult();
+                int pending = st.pending();
                 if (flushSettled(before, last, st.inProgress(), pending, elapsed) || elapsed >= SHUTDOWN_FLUSH_CAP_MS) break;
                 Thread.sleep(100);
             }
@@ -150,14 +147,6 @@ final class Telemetry {
             b.shutdown();
         } catch (Throwable e) {
             fail(e);
-        }
-        try {
-            if (owner != null) {
-                owner.getLogger().at(Level.INFO).log("Telemetry: shutdown send finished in %d ms (pending: %d, result: %s)",
-                        System.currentTimeMillis() - started, pending, last);
-            }
-        } catch (Throwable ignored) {
-            // logging must never break the mod
         }
     }
 

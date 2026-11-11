@@ -120,9 +120,6 @@ public class PackTentInteraction extends SimpleInstantInteraction {
             playerRef.sendMessage(Texts.t("camp.packInChest"));
         }
         playerRef.sendMessage(Texts.t(result.kept() != null && result.items() > 0 ? "tent.packedKept" : "tent.packed"));
-        LOGGER.at(Level.INFO).log("Tent '%s' packed by %s at (%d, %d, %d): %d block(s) removed%s",
-                kind.id, playerRef.getUsername(), origin.x, origin.y, origin.z, result.removed(),
-                result.items() > 0 ? ", " + result.items() + " item(s) kept in the crate" : "");
     }
 
     /** True if this item is the empty crate of some tent type. */

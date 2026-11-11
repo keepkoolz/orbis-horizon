@@ -138,8 +138,6 @@ public class PlaceMasterInteraction extends SimpleInstantInteraction {
         float yaw = yawToward(cell, at.x, at.z);
         TransitNetwork.Station station = net.addPending(world.getName(), cell, yaw, playerRef.getUuid(), stationKind);
         Telemetry.count("station.masterPlaced");
-        LOGGER.at(Level.INFO).log("Station master of '%s' placed at (%d, %d, %d) by %s, waiting for the quay", station.name,
-                cell.x, cell.y, cell.z, playerRef.getUsername());
         world.execute(() -> {
             try {
                 Store<EntityStore> store = world.getEntityStore().getStore();

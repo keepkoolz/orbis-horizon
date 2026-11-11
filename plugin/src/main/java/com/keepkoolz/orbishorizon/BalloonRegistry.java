@@ -17,9 +17,12 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 /**
@@ -130,6 +133,7 @@ final class BalloonRegistry {
     }
 
     static void init(Path dataDirectory) {
+        flush();
         file = dataDirectory.resolve("deployed.json");
         ENTRIES.clear();
         load();
@@ -179,7 +183,7 @@ final class BalloonRegistry {
         return list;
     }
 
-    /** The deployed structures of exactly this type, all worlds together (one airship per player). */
+    /** The deployed structures of exactly this type, all worlds together. */
     static java.util.List<Entry> entriesOfKindAllWorlds(String kindId) {
         java.util.List<Entry> list = new java.util.ArrayList<>();
         for (Entry e : ENTRIES) {
@@ -292,7 +296,12 @@ final class BalloonRegistry {
 
     /** Sets or clears the recall mark of a placed airship, written at once. Null if not registered. */
     static synchronized Entry setRecall(World world, Vector3i origin, Rotation rotation, Recall recall) {
-        Entry old = get(world, origin, rotation, Deployables.AIRSHIP_KIND);
+        return setRecall(world, origin, rotation, Deployables.AIRSHIP_KIND, recall);
+    }
+
+    /** Same for a placed vehicle of any recallable type. */
+    static synchronized Entry setRecall(World world, Vector3i origin, Rotation rotation, String kind, Recall recall) {
+        Entry old = get(world, origin, rotation, kind);
         if (old == null) {
             return null;
         }
@@ -304,14 +313,8 @@ final class BalloonRegistry {
         return next;
     }
 
-    private static volatile boolean cageDirty;
-    private static volatile long cageSavedMs;
-
-    /**
-     * Sets the cage state of a placed transport balloon. The file is written at once if force is true,
-     * otherwise at most once per second (flushIfDue, called by the tick). Returns the new entry, null if not registered.
-     */
-    static synchronized Entry setCage(World world, Vector3i origin, Rotation rotation, String kind, int descent, boolean open, boolean force) {
+    /** Sets the cage state of a placed transport balloon. Returns the new entry, null if not registered. */
+    static synchronized Entry setCage(World world, Vector3i origin, Rotation rotation, String kind, int descent, boolean open) {
         Entry old = get(world, origin, rotation, kind);
         if (old == null) {
             return null;
@@ -320,18 +323,12 @@ final class BalloonRegistry {
                 old.id, old.ownerName, old.shared, old.crew, old.recall, old.ladders, old.wood, old.water, old.sky, old.stone);
         ENTRIES.remove(old);
         ENTRIES.add(next);
-        cageDirty = true;
-        if (force || System.currentTimeMillis() - cageSavedMs >= 1000) {
-            flushCage();
-        }
+        save();
         return next;
     }
 
-    /**
-     * Sets the rope ladder state (retracted when the list is empty) of a placed airship. Written at once if force is true,
-     * otherwise at most once per second (same throttling as the cage). Returns the new entry, null if not registered.
-     */
-    static synchronized Entry setLadders(World world, Vector3i origin, Rotation rotation, java.util.List<ShipLadder.Saved> ladders, boolean force) {
+    /** Sets the rope ladder state (retracted when the list is empty) of a placed airship. Returns the new entry, null if not registered. */
+    static synchronized Entry setLadders(World world, Vector3i origin, Rotation rotation, java.util.List<ShipLadder.Saved> ladders) {
         Entry old = get(world, origin, rotation, Deployables.AIRSHIP_KIND);
         if (old == null) {
             return null;
@@ -340,10 +337,7 @@ final class BalloonRegistry {
                 old.animals, old.id, old.ownerName, old.shared, old.crew, old.recall, java.util.List.copyOf(ladders), old.wood, old.water, old.sky, old.stone);
         ENTRIES.remove(old);
         ENTRIES.add(next);
-        cageDirty = true;
-        if (force || System.currentTimeMillis() - cageSavedMs >= 1000) {
-            flushCage();
-        }
+        save();
         return next;
     }
 
@@ -459,22 +453,6 @@ final class BalloonRegistry {
         return next;
     }
 
-    /** Writes the registry if a cage change is waiting for it and the last write is more than one second old. */
-    static synchronized void flushIfDue() {
-        if (cageDirty && System.currentTimeMillis() - cageSavedMs >= 1000) {
-            flushCage();
-        }
-    }
-
-    /** Writes the registry if a cage change is waiting for it (stop of a movement, server shutdown). */
-    static synchronized void flushCage() {
-        if (cageDirty) {
-            cageDirty = false;
-            cageSavedMs = System.currentTimeMillis();
-            save();
-        }
-    }
-
     /** Registers a deployed structure of the given type, with its owner (nullable). No effect if already there. Never throws. */
     static synchronized void add(World world, Vector3i origin, Rotation rotation, String kind, UUID owner) {
         add(world, origin, rotation, kind, Ownership.of(owner, null));
@@ -549,7 +527,7 @@ final class BalloonRegistry {
 
     static synchronized void remove(Entry entry) {
         if (ENTRIES.remove(entry)) {
-            LOGGER.at(Level.INFO).log("Structure '%s' at (%d, %d, %d) of world %s is missing: removed from the lock registry",
+            LOGGER.at(Level.WARNING).log("Structure '%s' at (%d, %d, %d) of world %s is missing: removed from the lock registry",
                     entry.kind, entry.x, entry.y, entry.z, entry.world);
             save();
         }
@@ -684,36 +662,6 @@ final class BalloonRegistry {
         return kind;
     }
 
-    /**
-     * True only when the entry is provably gone: its world is loaded, its anchor section is in memory and the block there
-     * is not the anchor. Unknown (world not loaded, section not in memory, any error) counts as present. A gone entry is
-     * removed from the registry, like find and lockingEntry do.
-     */
-    static boolean removeIfGone(Entry e) {
-        try {
-            com.hypixel.hytale.server.core.universe.Universe universe = com.hypixel.hytale.server.core.universe.Universe.get();
-            if (universe == null) {
-                return false;
-            }
-            World world = null;
-            for (World w : universe.getWorlds().values()) {
-                if (w.getName().equals(e.world)) {
-                    world = w;
-                    break;
-                }
-            }
-            StructureShape shape = shapeOf(e);
-            if (world == null || shape == null || stillThere(world, shape, e)) {
-                return false;
-            }
-            remove(e);
-            return true;
-        } catch (RuntimeException ex) {
-            LOGGER.at(Level.WARNING).withCause(ex).log("Registry entry check failed: kept");
-            return false;
-        }
-    }
-
     /** Is the anchor block in place? An unloaded chunk (unknown block) counts as "yes". */
     static boolean stillThere(World world, StructureShape shape, Entry e) {
         StructureShape.Cell anchor = shape.anchor();
@@ -828,7 +776,6 @@ final class BalloonRegistry {
                 // Persist the created ids so they stay stable across restarts.
                 save();
             }
-            LOGGER.at(Level.INFO).log("Lock registry: %d structure(s)", ENTRIES.size());
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.SEVERE).withCause(e).log("Lock registry unreadable: %s", f);
             ENTRIES.clear();
@@ -840,31 +787,117 @@ final class BalloonRegistry {
         }
     }
 
-    /** Writes the whole registry (temporary file then atomic rename, like the recovery file). */
+    /** Minimum delay between two writes of the file. */
+    private static final long WRITE_INTERVAL_MS = 1000;
+
+    /** Guards the write state below, held only for a few instructions. */
+    private static final Object STATE = new Object();
+    /** Held while the file is written, so two writes never overlap. */
+    private static final Object IO = new Object();
+    private static boolean dirty;
+    private static boolean scheduled;
+    private static long lastWriteMs;
+    private static ScheduledThreadPoolExecutor writer;
+
+    /** Marks the registry changed and schedules a write on the writer thread (at most one per second). Never blocks on file I/O. */
     private static void save() {
-        Path f = file;
-        if (f == null) {
+        if (file == null) {
             return;
         }
         try {
-            BsonArray list = new BsonArray();
-            for (Entry e : ENTRIES) {
-                BsonDocument d = entryToBson(e);
-                list.add(d);
+            synchronized (STATE) {
+                dirty = true;
+                if (scheduled) {
+                    return;
+                }
+                if (writer == null) {
+                    ScheduledThreadPoolExecutor ex = new ScheduledThreadPoolExecutor(1, r -> {
+                        Thread t = new Thread(r, "OrbisHorizon-Registry");
+                        t.setDaemon(true);
+                        return t;
+                    });
+                    ex.setRemoveOnCancelPolicy(true);
+                    writer = ex;
+                }
+                long wait = Math.max(0, lastWriteMs + WRITE_INTERVAL_MS - System.currentTimeMillis());
+                writer.schedule(BalloonRegistry::runScheduled, wait, TimeUnit.MILLISECONDS);
+                scheduled = true;
             }
-            BsonDocument doc = new BsonDocument();
-            doc.put("version", new BsonInt32(VERSION));
-            doc.put("balloons", list);
-            Files.createDirectories(f.getParent());
-            Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
-            Files.writeString(tmp, doc.toJson(), StandardCharsets.UTF_8);
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Lock registry write not scheduled");
+        }
+    }
+
+    private static void runScheduled() {
+        synchronized (STATE) {
+            scheduled = false;
+        }
+        writeIfDirty();
+    }
+
+    /** Writes the registry now if a change is waiting, after any running write. Used at server shutdown. Never throws. */
+    static void flush() {
+        writeIfDirty();
+    }
+
+    /** Flushes, then stops the writer thread (a later change starts a new one). */
+    static void stopWriter() {
+        flush();
+        synchronized (STATE) {
+            if (writer != null) {
+                writer.shutdown();
+                writer = null;
+                scheduled = false;
+            }
+        }
+    }
+
+    private static void writeIfDirty() {
+        synchronized (IO) {
+            Path f = file;
+            synchronized (STATE) {
+                if (!dirty) {
+                    return;
+                }
+                dirty = false;
+                lastWriteMs = System.currentTimeMillis();
+            }
+            if (f == null) {
+                return;
+            }
             try {
-                Files.move(tmp, f, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
+                write(f, List.copyOf(ENTRIES));
+            } catch (IOException | RuntimeException e) {
+                // Kept pending: the next change or the shutdown flush writes it again.
+                synchronized (STATE) {
+                    dirty = true;
+                }
+                LOGGER.at(Level.WARNING).withCause(e).log("Lock registry not written");
+                try {
+                    Telemetry.error("lock-registry", e, null, null);
+                } catch (RuntimeException ignored) {
+                    // Reporting must not throw.
+                }
             }
-        } catch (IOException | RuntimeException e) {
-            LOGGER.at(Level.WARNING).withCause(e).log("Lock registry not written");
+        }
+    }
+
+    /** Writes the given entries (temporary file then atomic rename, like the recovery file). */
+    private static void write(Path f, List<Entry> entries) throws IOException {
+        BsonArray list = new BsonArray();
+        for (Entry e : entries) {
+            list.add(entryToBson(e));
+        }
+        BsonDocument doc = new BsonDocument();
+        doc.put("version", new BsonInt32(VERSION));
+        doc.put("balloons", list);
+        Files.createDirectories(f.getParent());
+        Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
+        Files.writeString(tmp, doc.toJson(), StandardCharsets.UTF_8);
+        try {
+            Files.move(tmp, f, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 }

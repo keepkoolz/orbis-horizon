@@ -68,7 +68,6 @@ final class PilotMannequin {
             PlayerSkinComponent skin = store.getComponent(pilotRef, PlayerSkinComponent.getComponentType());
             TransformComponent ot = store.getComponent(observer, TransformComponent.getComponentType());
             if (mc == null || mc.getModel() == null || skin == null || ot == null) {
-                LOGGER.at(Level.INFO).log("Pilot %s: no model or appearance, no pilot mannequin", pilotUuid);
                 return null;
             }
             Model model = mc.getModel();
@@ -183,7 +182,7 @@ final class PilotMannequin {
             if (ref != null && ref.isValid()) {
                 ViewFilter.clear(ref);
                 store.removeEntity(ref, RemoveReason.REMOVE);
-                LOGGER.at(Level.INFO).log("Pilot mannequin left in the world removed (%s)", vehicleUuid);
+                LOGGER.at(Level.WARNING).log("Pilot mannequin left in the world removed (%s)", vehicleUuid);
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pilot mannequin left in the world not removed");

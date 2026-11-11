@@ -241,7 +241,7 @@ final class TransportCage {
                 LOGGER.at(Level.WARNING).log("Transport balloon cage at %s: raising before the dry descent failed (%s)", origin, o);
                 return false;
             }
-            BalloonRegistry.Entry up = BalloonRegistry.setCage(world, origin, rotation, kind.id, 0, e.open(), true);
+            BalloonRegistry.Entry up = BalloonRegistry.setCage(world, origin, rotation, kind.id, 0, e.open());
             if (up != null) {
                 listener.onStep(world, up, e.descent(), 0);
                 e = up;
@@ -250,7 +250,7 @@ final class TransportCage {
         if (e.open()) {
             Outcome o = apply(world, e, 0, true, 0, false, null);
             if (o == Outcome.OK) {
-                BalloonRegistry.Entry closed = BalloonRegistry.setCage(world, origin, rotation, kind.id, 0, false, true);
+                BalloonRegistry.Entry closed = BalloonRegistry.setCage(world, origin, rotation, kind.id, 0, false);
                 if (closed != null) {
                     listener.onClosed(world, closed);
                 }
@@ -300,9 +300,7 @@ final class TransportCage {
         if (e == null || e.descent() == 0 || !groundUnder(world, e)) {
             return 0;
         }
-        if (MOVES.remove(key(world, origin, rotation)) != null) {
-            BalloonRegistry.flushCage();
-        }
+        MOVES.remove(key(world, origin, rotation));
         if (e.open()) {
             if (occupied(world, e)) {
                 return -1;
@@ -312,7 +310,7 @@ final class TransportCage {
                 LOGGER.at(Level.WARNING).log("Transport balloon cage at %s: panel not closed before the dry descent onto the cage (%s)", origin, o);
                 return -1;
             }
-            BalloonRegistry.Entry closed = BalloonRegistry.setCage(world, origin, rotation, kind.id, e.descent(), false, true);
+            BalloonRegistry.Entry closed = BalloonRegistry.setCage(world, origin, rotation, kind.id, e.descent(), false);
             if (closed != null) {
                 listener.onClosed(world, closed);
                 e = closed;
@@ -408,7 +406,7 @@ final class TransportCage {
                 SectionBlocks.setAt(cs, p.x, p.y, p.z, chain.id(), chain.type(), chain.rotation(), chain.filler(), SET_BLOCK_NO_PARTICLES);
             }
         }
-        BalloonRegistry.setCage(world, origin, rotation, Deployables.TRANSPORT_KIND, r, false, true);
+        BalloonRegistry.setCage(world, origin, rotation, Deployables.TRANSPORT_KIND, r, false);
     }
 
     // ------------------------------------------------------------------ levers
@@ -426,7 +424,6 @@ final class TransportCage {
         Vector3i origin = new Vector3i(e.x(), e.y(), e.z());
         String k = key(world, origin, e.rotation());
         if (MOVES.remove(k) != null) {
-            BalloonRegistry.flushCage();
             return Texts.t("cage.stopped");
         }
         // The side must be closed to move the cage, down or up: an open cage stays where it is.
@@ -471,7 +468,7 @@ final class TransportCage {
             if (o != Outcome.OK) {
                 return outcomeMessage(o);
             }
-            BalloonRegistry.Entry opened = BalloonRegistry.setCage(world, origin, e.rotation(), kind.id, e.descent(), true, true);
+            BalloonRegistry.Entry opened = BalloonRegistry.setCage(world, origin, e.rotation(), kind.id, e.descent(), true);
             if (opened != null) {
                 listener.onOpened(world, opened);
             }
@@ -487,7 +484,7 @@ final class TransportCage {
         if (o != Outcome.OK) {
             return outcomeMessage(o);
         }
-        BalloonRegistry.Entry closed = BalloonRegistry.setCage(world, origin, e.rotation(), kind.id, e.descent(), false, true);
+        BalloonRegistry.Entry closed = BalloonRegistry.setCage(world, origin, e.rotation(), kind.id, e.descent(), false);
         CageAnimals.CaptureResult r = closed == null ? null : listener.onClosed(world, closed);
         if (r == null) {
             return Texts.t("cage.gateClosed");
@@ -550,7 +547,7 @@ final class TransportCage {
 
     // ------------------------------------------------------------------ movement
 
-    /** Called on every tick of the world (BalloonFlightSystem): the steps due, then the registry write if it is due. */
+    /** Called on every tick of the world (BalloonFlightSystem): the steps due. */
     static void tick(World world) {
         if (!MOVES.isEmpty()) {
             long now = System.currentTimeMillis();
@@ -562,11 +559,9 @@ final class TransportCage {
                 m.nextMs = Math.max(m.nextMs + STEP_MS, now);
                 if (!step(me.getKey(), m)) {
                     MOVES.remove(me.getKey());
-                    BalloonRegistry.flushCage();
                 }
             }
         }
-        BalloonRegistry.flushIfDue();
     }
 
     /** One step of a movement. Returns false when the movement ends (end of travel, obstacle, entry gone). */
@@ -586,13 +581,13 @@ final class TransportCage {
             if (o == Outcome.DAMAGED) {
                 LOGGER.at(Level.WARNING).log("Transport balloon cage at %s: block missing, movement stopped", m.origin);
             } else if (o == Outcome.BLOCKED) {
-                LOGGER.at(Level.INFO).log("Transport balloon cage at %s: stopped after %d block(s), cell (%d, %d, %d) occupied",
+                LOGGER.at(Level.WARNING).log("Transport balloon cage at %s: stopped after %d block(s), cell (%d, %d, %d) occupied",
                         m.origin, from, blockedAt.x, blockedAt.y, blockedAt.z);
             }
             tell(m, outcomeMessage(o));
             return false;
         }
-        BalloonRegistry.Entry next = BalloonRegistry.setCage(m.world, m.origin, m.rotation, Deployables.TRANSPORT_KIND, to, e.open(), false);
+        BalloonRegistry.Entry next = BalloonRegistry.setCage(m.world, m.origin, m.rotation, Deployables.TRANSPORT_KIND, to, e.open());
         if (next != null) {
             listener.onStep(m.world, next, from, to);
         }

@@ -276,7 +276,7 @@ final class AirshipBenchContents {
         return all;
     }
 
-    /** Number of kept items, for the log. */
+    /** Number of kept items. */
     int itemCount() {
         int n = 0;
         for (Entry e : entries) {

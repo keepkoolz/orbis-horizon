@@ -416,11 +416,9 @@ final class BoatQuay {
         TransitNetwork net = TransitNetwork.get();
         TransitNetwork.Station target = net.byNameWithQuay(world.getName(), destination);
         if (!Deployables.BOAT_STATION_KIND.equals(s.kind) || (target != null && !target.kind.equals(s.kind))) {
-            LOGGER.at(Level.INFO).log("Sea station queue of %s ignored: stations of different types", s.name);
             return StationQueue.EnqueueResult.UNKNOWN;
         }
         if (target == null) {
-            LOGGER.at(Level.INFO).log("Sea station queue of %s: unknown destination \"%s\"", s.name, destination);
             if (chooser != null) chooser.sendMessage(Texts.t("transit.network.removed").param("name", TransitNetwork.normalize(destination)));
             return StationQueue.EnqueueResult.UNKNOWN;
         }
@@ -518,7 +516,6 @@ final class BoatQuay {
             return; // the ocean numbers are not known yet: the head stays queued
         }
         if (action == QueueAction.DROP) {
-            LOGGER.at(Level.INFO).log("Sea station %s: destination %s removed or out of reach, departure removed from the queue", s.name, head);
             TransitFare.refund(TransitNetwork.get().queueRemoveFirst(s, head), head);
             broadcast(world, s, Texts.t("transit.boatQueue.noRoute").param("name", head));
             return;
@@ -554,7 +551,6 @@ final class BoatQuay {
                 st.listener = LISTENER;
                 AirshipFlight f = am.launchShuttle(store, world, pivot, theta, st, List.of(), BoatAutopilot.masterLook(store, world, s));
                 if (f == null) {
-                    LOGGER.at(Level.WARNING).log("Sea station %s: approach shuttle not possible", s.name);
                     q.approachFailed(t, RETRY_MS);
                     return;
                 }
@@ -562,7 +558,6 @@ final class BoatQuay {
                 BoatAutopilot.startApproach(world, f, s);
                 q.flight = f;
                 q.approach();
-                LOGGER.at(Level.INFO).log("Sea station %s: approach shuttle for %s", s.name, head);
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Sea station %s: approach shuttle failed", s.name);
                 Telemetry.error("transit", e, Telemetry.kindId(Deployables.STEAMBOAT_PUBLIC), null);
@@ -579,7 +574,6 @@ final class BoatQuay {
         }
         Rotation moored = mooredRotation(world, s);
         if (moored == null) {
-            LOGGER.at(Level.INFO).log("Sea station %s: docked shuttle gone, quay freed", s.name);
             MooredPilot.remove(world, BoatBerth.berthOrigin(s));
             q.cleared(now);
             return;
@@ -647,8 +641,7 @@ final class BoatQuay {
             }
             StructureShape shape = Deployables.STEAMBOAT_PUBLIC.shape();
             setDown(store, AirshipPassengers.aboard(store, world, shape, origin, rotation, null), dropPoints(world, s), null);
-            int removed = AirshipManager.get().unmoorShuttle(world, origin, rotation);
-            LOGGER.at(Level.INFO).log("Sea station %s: shuttle removed without destination (%d blocks)", s.name, removed);
+            AirshipManager.get().unmoorShuttle(world, origin, rotation);
             q.cleared(now);
             return;
         }
@@ -671,10 +664,9 @@ final class BoatQuay {
         setDown(store, extras, dropPoints(world, s), Texts.t("transit.boat.full"));
         am.passengers.prepare(store, riders); // held in the air before the deck goes
         AirshipFlight f;
-        int removed;
         boolean unmoored = false;
         try {
-            removed = am.unmoorShuttle(world, origin, rotation);
+            am.unmoorShuttle(world, origin, rotation);
             unmoored = true;
             // The waypoints come from the local pilot once the navigation starts: the shuttle holds on its berth centre until then.
             Vector3i berthCell = BoatBerth.berthCentreCell(s);
@@ -695,7 +687,6 @@ final class BoatQuay {
             // The riders were released by launchShuttle: the shuttle comes back in blocks and they are set down on the pier.
             am.pasteShuttle(store, world, origin, rotation);
             setDown(store, ridersOf(aboard, riders), dropPoints(world, s), null);
-            LOGGER.at(Level.WARNING).log("Sea station %s: departure not possible", s.name);
             departFailed(world, s, q);
             return;
         }
@@ -716,8 +707,6 @@ final class BoatQuay {
         if (!f.riders.isEmpty()) {
             Telemetry.count("transit.boatTrip");
         }
-        LOGGER.at(Level.INFO).log("Sea station %s: departure to %s, %d passenger(s), %d block(s) removed", s.name, dest.name,
-                f.riders.size(), removed);
     }
 
     /** The occupants among those aboard that were seated as these riders. */
@@ -816,7 +805,6 @@ final class BoatQuay {
                     dq.register(f.id);
                     st.setPhase(ShuttleState.Phase.HOLD, now); // waits out at sea, held still by BoatAutopilot
                     t.lastWaitMsgMs = 0;
-                    LOGGER.at(Level.INFO).log("Shuttle to %s: pier busy, waiting offshore", t.dest.name);
                 }
             }
             case HOLD -> {
@@ -896,7 +884,6 @@ final class BoatQuay {
                     String head = TransitNetwork.get().queueHead(s);
                     broadcast(f.world, s, Texts.t("transit.boat.docked").param("name", head != null ? head : s.name)
                             .param("seconds", TransitConstants.COUNTDOWN_SECONDS));
-                    LOGGER.at(Level.INFO).log("Sea station %s: docked shuttle", s.name);
                 } else {
                     LOGGER.at(Level.WARNING).log("Sea station %s: shuttle not placed at the pier", s.name);
                     q.approachFailed(now, APPROACH_RETRY_MS);
@@ -911,7 +898,6 @@ final class BoatQuay {
             }
             t.dropAtMs = now;
             f.shuttle.setPhase(ShuttleState.Phase.DROP, now);
-            LOGGER.at(Level.INFO).log("Shuttle arrived at %s: %d passenger(s) dropped off", t.dest.name, people.size());
         }
 
         @Override
@@ -1062,7 +1048,6 @@ final class BoatQuay {
                     LOGGER.at(Level.WARNING).log("Docked shuttle of %s: pier sections still missing, removal abandoned", removed.name);
                     return;
                 }
-                LOGGER.at(Level.INFO).log("Docked shuttle of %s: loading pier sections before removal", removed.name);
                 int[] b = areaBox(removed, centre);
                 SectionBlocks.loadSections(world.getChunkStore(), b[0], b[1], b[2], b[3], b[4], b[5])
                         .whenComplete((v, e) -> world.execute(() -> removeMoored(world, removed, false)));
@@ -1167,8 +1152,6 @@ final class BoatQuay {
                     Rotation moored = q.state == QuayState.FREE ? mooredRotation(world, s) : null;
                     if (moored != null) {
                         q.flipped = moored == BoatBerth.berthRotation(s, true);
-                        LOGGER.at(Level.INFO).log("Sea station %s: docked shuttle found again, countdown of %d s", s.name,
-                                TransitConstants.COUNTDOWN_SECONDS);
                         q.docked(System.currentTimeMillis());
                     }
                 }

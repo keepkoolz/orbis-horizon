@@ -238,7 +238,6 @@ final class ShuttleNav {
             SeaChart chart = SeaCharts.chart(wn);
             if (chart == null) {
                 st.noCorridor = true;
-                LOGGER.at(Level.INFO).log("Shuttle %s: world %s has no sea chart, no corridor", f.id, wn);
                 st.nav = new LocalNav(noCorridor(), HullClearance.SHUTTLE, goal.x, goal.z);
                 return;
             }
@@ -256,7 +255,6 @@ final class ShuttleNav {
                             st.corridorSearch = null; // the new corridor replaces the first one, still searched
                             capTrip(st, pts);
                         }
-                        LOGGER.at(Level.INFO).log("Shuttle %s: corridor traced again from (%d, %d), %d point(s)", f.id, fromX, fromZ, pts.size());
                         return pts;
                     } catch (RuntimeException e) {
                         LOGGER.at(Level.WARNING).withCause(e).log("Shuttle %s: new corridor tracing failed", f.id);
@@ -273,10 +271,8 @@ final class ShuttleNav {
                     int cx = SeaChart.cellOf(x);
                     int cz = SeaChart.cellOf(z);
                     book.close(wn, cx, cz, System.currentTimeMillis());
-                    LOGGER.at(Level.INFO).log("Shuttle %s: chart cell (%d, %d) closed, obstacle towards (%d, %d)", f.id, cx, cz, x, z);
                 }
             }, HullClearance.SHUTTLE, goal.x, goal.z);
-            LOGGER.at(Level.INFO).log("Shuttle %s: navigating to %s from (%.0f, %.0f)", f.id, to.name, c.x, c.z);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Shuttle %s: navigation not started", f.id);
             Telemetry.error("boat.corridor", e, Telemetry.kindId(f.kind), st.phase.name());
@@ -323,7 +319,6 @@ final class ShuttleNav {
             st.nav.cancel(); // drops a search in progress: the next one starts with the columns to avoid
             st.navActive = false;
         }
-        LOGGER.at(Level.INFO).log("Shuttle %s at (%.1f, %.1f): new local pilot search requested", f.id, f.pos.x, f.pos.z);
     }
 
     // ------------------------------------------------------------------ every tick
@@ -404,7 +399,6 @@ final class ShuttleNav {
                 st.nav.setCorridor(pts);
                 st.navActive = st.navReady; // a path found before the corridor is replaced by one that follows it
                 endWait(f, st, System.currentTimeMillis());
-                LOGGER.at(Level.INFO).log("Shuttle %s: corridor found, %d point(s), %d blocks", f.id, pts.size(), corridorBlocks(pts));
                 return false;
             }
             default:
@@ -416,7 +410,7 @@ final class ShuttleNav {
 
     /** No corridor to the destination: next candidate station if one is left, else the departure fails (still at the berth) or the rescue. */
     private static void noCorridorFound(Store<EntityStore> store, AirshipFlight f, ShuttleState st, Vector3d c) {
-        LOGGER.at(Level.INFO).log("Shuttle %s: no corridor to %s", f.id, st.to != null ? st.to.name : "?");
+        LOGGER.at(Level.WARNING).log("Shuttle %s: no corridor to %s", f.id, st.to != null ? st.to.name : "?");
         failed(st); // the pair is noted incomplete
         if (BoatAutopilot.retarget(f, st)) {
             return;
@@ -467,7 +461,6 @@ final class ShuttleNav {
             st.nav.cancel(); // drops a search in progress: the pilot stays frozen
             st.arrivalFor = null;
             st.preparedFor = null;
-            LOGGER.at(Level.INFO).log("Shuttle %s: within %.0f blocks of %s, local pilot frozen", f.id, BoatAutopilot.ARRIVAL_DECIDE_RANGE, to.name);
             return false;
         }
         boolean wanted = forced || !st.navReady;
@@ -553,7 +546,6 @@ final class ShuttleNav {
             }
             BoatAutopilot.markProgress(f, st, now); // the new path gets its full 30 s
         }
-        LOGGER.at(Level.FINE).log("Shuttle %s: local path of %d point(s)", f.id, list.size());
     }
 
     /**

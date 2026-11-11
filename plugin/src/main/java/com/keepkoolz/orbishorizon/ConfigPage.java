@@ -211,7 +211,6 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
     public void handleDataEvent(Ref<EntityStore> ref, Store<EntityStore> store, Data data) {
         try {
             if (!StructureRemoval.isOp(playerRef.getUuid())) {
-                LOGGER.at(Level.INFO).log("Configuration ignored: %s is no longer an operator", playerRef.getUsername());
                 close();
                 return;
             }
@@ -258,7 +257,7 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
         switch (key) {
             case CONTRACT_ESSENCES -> TransitSettings.setContractEssences(n);
             case CONTRACT_CONCENTRATED -> TransitSettings.setContractConcentrated(n);
-            default -> LOGGER.at(Level.INFO).log("Number ignored: unknown setting '%s'", key);
+            default -> LOGGER.at(Level.WARNING).log("Number ignored: unknown setting '%s'", key);
         }
     }
 
@@ -267,10 +266,10 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
             switch (key) {
                 case PROTECT -> PassengerProtection.setMode(PassengerProtection.Mode.valueOf(name));
                 case CONSOLE_LOG_LEVEL -> TransitSettings.setConsoleLogLevel(ConsoleLogs.Threshold.valueOf(name));
-                default -> LOGGER.at(Level.INFO).log("Choice ignored: unknown setting '%s'", key);
+                default -> LOGGER.at(Level.WARNING).log("Choice ignored: unknown setting '%s'", key);
             }
         } catch (IllegalArgumentException e) {
-            LOGGER.at(Level.INFO).log("Choice ignored: unknown value '%s' for %s", name, key);
+            LOGGER.at(Level.WARNING).log("Choice ignored: unknown value '%s' for %s", name, key);
         }
     }
 

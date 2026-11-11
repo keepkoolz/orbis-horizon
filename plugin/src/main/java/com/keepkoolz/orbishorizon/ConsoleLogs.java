@@ -24,10 +24,8 @@ final class ConsoleLogs {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
     private static final String PACKAGE_PATH = "com/keepkoolz/orbishorizon/";
 
-    /** Choices of the configuration page, in display order. INFO is the level the mod logs at by default. */
+    /** Choices of the configuration page, in display order. The mod only logs warnings and errors, WARNING is the default. */
     enum Threshold {
-        ALL(Level.ALL),
-        INFO(Level.INFO),
         WARNING(Level.WARNING),
         SEVERE(Level.SEVERE),
         NONE(Level.OFF);
@@ -38,14 +36,14 @@ final class ConsoleLogs {
             this.level = level;
         }
 
-        /** The choice named {@code name}, or INFO when the name is null or unknown. */
+        /** The choice named {@code name}, or WARNING when the name is null, unknown or no longer offered. */
         static Threshold parse(String name) {
             if (name != null) {
                 for (Threshold t : values()) {
                     if (t.name().equals(name)) return t;
                 }
             }
-            return INFO;
+            return WARNING;
         }
     }
 

@@ -425,7 +425,7 @@ public final class BalloonManager {
         List<CaptainMap.VoyageView> out = new ArrayList<>();
         for (BalloonFlight f : flights.values()) {
             BalloonVoyage v = f.voyage;
-            if (f.world != world || v == null) {
+            if (f.world != world || v == null || v.captain == null) {
                 continue;
             }
             Ref<EntityStore> ref = null;
@@ -513,7 +513,6 @@ public final class BalloonManager {
             if (v.stop()) {
                 tellPassengers(f, "crew.voyage.captainGone");
             }
-            LOGGER.at(Level.INFO).log("Voyage: captain %s left, the balloon descends and lands", player);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Voyage: captain departure not handled");
             Telemetry.error("balloon.passenger", e, Telemetry.kindId(f.kind), "voyage");
@@ -613,8 +612,14 @@ public final class BalloonManager {
      * refusal for the captain (nothing was removed before the last check). The captain takes one of the free seats.
      */
     Message startVoyage(Store<EntityStore> store, World world, PlayerRef captain, BalloonRegistry.Entry e, VoyagePlanner.Destination d) {
+        return startVoyage(store, world, captain, e, d, null);
+    }
+
+    /** Same for the captain of a recalled balloon waiting on its quay: the flight keeps the recall (the quay is held until it leaves the zone). */
+    Message startVoyage(Store<EntityStore> store, World world, PlayerRef captain, BalloonRegistry.Entry e, VoyagePlanner.Destination d,
+                        RecallState recall) {
         try {
-            return startVoyageChecked(store, world, captain, e, d);
+            return startVoyageChecked(store, world, captain, e, d, recall);
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Balloon voyage: departure failed");
             Telemetry.error("balloon.flight", ex, e != null ? e.kind() : null, "voyage");
@@ -623,7 +628,7 @@ public final class BalloonManager {
     }
 
     private Message startVoyageChecked(Store<EntityStore> store, World world, PlayerRef captain, BalloonRegistry.Entry e,
-                                       VoyagePlanner.Destination d) throws RuntimeException {
+                                       VoyagePlanner.Destination d, RecallState recall) throws RuntimeException {
         Ref<EntityStore> capRef = captain.getReference();
         if (capRef == null || !capRef.isValid()) {
             return Texts.t("error.noPosition");
@@ -691,6 +696,9 @@ public final class BalloonManager {
             v.fromX = origin.x + 0.5;
             v.fromZ = origin.z + 0.5;
             f.voyage = v;
+            if (recall != null) {
+                BalloonRecall.onTakeoff(f, recall);
+            }
             made.set(f);
         });
         Found found = new Found(kind, origin, rotation, 1.0);
@@ -709,8 +717,158 @@ public final class BalloonManager {
                 pr.sendMessage(ShipVoyage.withDest(Texts.pilot("crew.voyage.depart", entry.crew()), d.kind(), d.name()));
             }
         }
-        LOGGER.at(Level.INFO).log("Voyage: takeoff of the balloon of %s to %s (%s, %.0f, %.0f), cruise at y %.0f, %d passenger(s)",
-                captain.getUsername(), d.name(), d.kind(), d.x(), d.z(), f.voyage.cruiseY, f.passengers.size());
+        return null;
+    }
+
+    /** Result of launchRecall: the flight, or the refusal for the owner. */
+    record RecallLaunch(BalloonFlight flight, Message error) {
+    }
+
+    /**
+     * Recall of a parked large balloon (world thread): the same take-off as a voyage, without captain, passengers or fuel check (the
+     * burner block must exist). The flight appears at (spawnX, cruise, spawnZ) in the rotation of the quay, already cruising toward
+     * the docking column of the station.
+     */
+    RecallLaunch launchRecall(Store<EntityStore> store, World world, BalloonRegistry.Entry e, TransitNetwork.Station station, UUID quayId,
+                              double spawnX, double spawnZ, int cruise, String name) {
+        Deployables.Kind kind = e != null ? Deployables.get(e.kind()) : null;
+        if (kind == null || kind.balloon == null || !Deployables.voyageOf(kind.id) || station.quay == null) {
+            return new RecallLaunch(null, Texts.t("crew.recall.noVehicle"));
+        }
+        Vector3i origin = new Vector3i(e.x(), e.y(), e.z());
+        Rotation rotation = e.rotation();
+        BalloonRegistry.Entry entry = world.getName().equals(e.world()) ? BalloonRegistry.get(world, origin, rotation, kind.id) : null;
+        if (entry == null || entry.crew() == null) {
+            return new RecallLaunch(null, Texts.t("crew.recall.noVehicle"));
+        }
+        StructureShape s = kind.shapeOrNull();
+        if (s == null) {
+            return new RecallLaunch(null, Texts.t("error.prefabUnreadable").param("error", kind.prefabPath));
+        }
+        ProcessingBenchBlock bench = BurnerFuel.live(world, s.burner().rotated(rotation).add(origin));
+        String refusal = BalloonRecall.launchRefusalKey(bench != null);
+        if (refusal != null) {
+            return new RecallLaunch(null, Texts.t(refusal));
+        }
+        if (!nacelleOccupants(world, store, kind, origin, rotation).isEmpty()) {
+            // A player stepped on the balloon while the sections were loading: the floor is not taken from under his feet.
+            return new RecallLaunch(null, Texts.t("crew.recall.occupied").param("vehicle", name));
+        }
+        Vector3i dock = StationGeometry.bigBalloonDockOrigin(station.quay, station.quayRotation);
+        Rotation dockRotation = StationGeometry.bigBalloonDockRotation(station.quayRotation);
+        Vector3d pad = StationGeometry.markerPoint(station);
+        // The spawn cell is raised until the flight shape fits (its sections were loaded).
+        Vector3i cell = new Vector3i((int) Math.floor(spawnX), cruise, (int) Math.floor(spawnZ));
+        for (int tries = 0; tries < 10 && collision(world, s, cell, dockRotation, false) != null && cell.y + 8 < WORLD_MAX_Y; tries++) {
+            cell.y += 8;
+        }
+        if (!SectionBlocks.entitiesLoaded(world.getChunkStore(), cell.x, cell.y, cell.z)) {
+            // No player near the spawn point: the flying entity would be stored away at once. Nothing is removed.
+            return new RecallLaunch(null, Texts.t("crew.recall.unreachable").param("vehicle", name));
+        }
+        Vector3d spawnAt = new Vector3d(cell.x + 0.5, cell.y, cell.z + 0.5);
+        java.util.concurrent.atomic.AtomicReference<BalloonFlight> made = new java.util.concurrent.atomic.AtomicReference<>();
+        VoyageLaunch vl = new VoyageLaunch(null, f -> {
+            long now = System.currentTimeMillis();
+            f.driven = true;
+            f.cruiseSpeed = defaultHorizontalSpeed(world, store);
+            f.lastDescentMs = now;
+            f.entityPos.set(spawnAt);
+            f.lastCheckedOrigin.set(cell);
+            TransformComponent tr = store.getComponent(f.balloonRef, TransformComponent.getComponentType());
+            if (tr != null) {
+                tr.setPosition(displayPosition(kind, f.entityPos, dockRotation));
+            }
+            VehicleParts.sync(store, f.parts, f.balloonRef, f.observerRef);
+            RecallState r = new RecallState(station, e.owner(), Deployables.BALLOON_KIND, e.ownership().id(), f.entityPos.x, f.entityPos.z,
+                    pad.x, pad.z, dock.y, dockRotation.getRadians());
+            r.quayId = quayId;
+            r.crew = f.crew;
+            f.recall = r;
+            BalloonVoyage v = new BalloonVoyage(station.name, VoyagePlanner.Kind.STATION, dock.x + 0.5, dock.z + 0.5, cell.y, null, now, true,
+                    BalloonVoyage.Arrival.QUAY, new int[] {dock.x, dock.y, dock.z});
+            v.fromX = f.entityPos.x;
+            v.fromZ = f.entityPos.z;
+            v.phase = BalloonVoyage.Phase.CRUISE;
+            f.voyage = v;
+            made.set(f);
+        }, dockRotation, spawnAt);
+        Message launched = launch(store, world, s, new Found(kind, origin, rotation, 1.0), bench, null, null, false, List.of(), 0, vl);
+        BalloonFlight f = made.get();
+        if (launched != null || f == null) {
+            return new RecallLaunch(null, launched != null ? launched : Texts.t("crew.recall.noVehicle"));
+        }
+        return new RecallLaunch(f, null);
+    }
+
+    /**
+     * Departure of a recalled balloon that waited on its quay (world thread): the same take-off as a voyage, fuel-free, without
+     * captain. The players in the gondola go aboard (the extras are put on the station's boarding point first) and the flight goes to
+     * (destX, destZ), landing on a free column near it. Null if it left, otherwise the refusal (nothing was removed).
+     */
+    Message launchLeave(Store<EntityStore> store, World world, BalloonRegistry.Entry e, RecallState r, double destX, double destZ) {
+        Deployables.Kind kind = e != null ? Deployables.get(e.kind()) : null;
+        if (kind == null || kind.balloon == null || r.origin == null || r.rotation == null) {
+            return Texts.t("crew.recall.noVehicle");
+        }
+        Vector3i origin = r.origin;
+        Rotation rotation = r.rotation;
+        BalloonRegistry.Entry entry = BalloonRegistry.get(world, origin, rotation, kind.id);
+        if (entry == null || entry.crew() == null) {
+            return Texts.t("crew.recall.noVehicle");
+        }
+        StructureShape s = kind.shapeOrNull();
+        if (s == null) {
+            return Texts.t("error.prefabUnreadable").param("error", kind.prefabPath);
+        }
+        ProcessingBenchBlock bench = BurnerFuel.live(world, s.burner().rotated(rotation).add(origin));
+        String burnerRefusal = BalloonRecall.launchRefusalKey(bench != null);
+        if (burnerRefusal != null) {
+            return Texts.t(burnerRefusal);
+        }
+        List<Occupant> aboard = new ArrayList<>();
+        for (Occupant o : nacelleOccupants(world, store, kind, origin, rotation)) {
+            if (!flights.containsKey(o.player().getUuid()) && !AirshipManager.get().isFlying(o.player().getUuid())) {
+                aboard.add(o);
+            }
+        }
+        // The owner first (the seats go to him), the others keep the order of distance to the pivot.
+        aboard.sort(Comparator.comparingInt((Occupant o) -> o.player().getUuid().equals(r.owner) ? 0 : 1));
+        int free = freeSeats(s, restCellOf(kind, entry)).size();
+        List<Occupant> riders = new ArrayList<>(aboard);
+        if ("error.balloonFull".equals(BalloonVoyage.departureRefusalKey(true, Math.max(0, aboard.size() - 1), free, true))) {
+            // More players than seats: the extras are put on the quay (first boarding point) before the floor goes, nobody falls.
+            riders = new ArrayList<>(aboard.subList(0, free));
+            List<Vector3d> points = TransitAutopilot.boardingPoints(world, r.station);
+            Vector3d fallback = StationGeometry.markerPoint(r.station);
+            int i = 0;
+            for (Occupant o : aboard.subList(free, aboard.size())) {
+                AirshipPassengers.teleport(store, o.ref(), points.isEmpty() ? fallback : points.get(i++ % points.size()));
+            }
+        }
+        int flightTop = Integer.MIN_VALUE;
+        for (StructureShape.Cell c : s.flightCells()) {
+            flightTop = Math.max(flightTop, c.y());
+        }
+        final int top = flightTop;
+        java.util.concurrent.atomic.AtomicReference<BalloonFlight> made = new java.util.concurrent.atomic.AtomicReference<>();
+        VoyageLaunch vl = new VoyageLaunch(null, f -> {
+            long now = System.currentTimeMillis();
+            f.driven = true;
+            f.cruiseSpeed = defaultHorizontalSpeed(world, store);
+            f.lastDescentMs = now;
+            BalloonVoyage v = new BalloonVoyage(r.station.name, VoyagePlanner.Kind.STATION, destX, destZ,
+                    BalloonVoyage.cruiseY(origin.y, origin.y, WORLD_MAX_Y, top), null, now, true, BalloonVoyage.Arrival.GROUND, null);
+            v.fromX = origin.x + 0.5;
+            v.fromZ = origin.z + 0.5;
+            f.voyage = v;
+            BalloonRecall.onTakeoff(f, r);
+            made.set(f);
+        });
+        Message launched = launch(store, world, s, new Found(kind, origin, rotation, 1.0), bench, null, null, false, riders, 0, vl);
+        if (launched != null || made.get() == null) {
+            return launched != null ? launched : Texts.t("crew.recall.noVehicle");
+        }
         return null;
     }
 
@@ -776,7 +934,19 @@ public final class BalloonManager {
     }
 
     /** NPC pilot voyage of the large balloon: the captain (notified instead of a pilot) and a hook run once the flight is set up. */
-    record VoyageLaunch(PlayerRef captain, java.util.function.Consumer<BalloonFlight> setup) {
+    /**
+     * spawnAt (nullable): position of the flying entity when it is created, instead of the parked origin. A recall creates it near the
+     * station: the parked balloon is usually far from every player, and an entity added in a section without a player near (0.7,
+     * NonTicking) is stored away at once by the world.
+     */
+    record VoyageLaunch(PlayerRef captain, java.util.function.Consumer<BalloonFlight> setup, Rotation flightRotation, Vector3d spawnAt) {
+        VoyageLaunch(PlayerRef captain, java.util.function.Consumer<BalloonFlight> setup) {
+            this(captain, setup, null, null);
+        }
+
+        VoyageLaunch(PlayerRef captain, java.util.function.Consumer<BalloonFlight> setup, Rotation flightRotation) {
+            this(captain, setup, flightRotation, null);
+        }
     }
 
     /** Timed take-off (prefab to entity); a dry run is not timed. */
@@ -809,7 +979,9 @@ public final class BalloonManager {
 
         // 1. The pilot switches to flight before the blocks are removed, to avoid falling.
         Deployables.Kind kind = found.kind();
-        BalloonFlight flight = new BalloonFlight(flightId, pilotRef, world, found.rotation, kind);
+        // The recall flight flies in the rotation of its docking place (the blocks are removed with the placed rotation).
+        Rotation flyRotation = voyageLaunch != null && voyageLaunch.flightRotation() != null ? voyageLaunch.flightRotation() : found.rotation;
+        BalloonFlight flight = new BalloonFlight(flightId, pilotRef, world, flyRotation, kind);
         flight.groundCage = groundCage;
         flight.cageHome.set(found.origin);
         if (!pilotless && !setPilotFlying(store, pilotRef, player, true)) {
@@ -826,7 +998,7 @@ public final class BalloonManager {
         for (BalloonFlight.Passenger p : seated) {
             PassengerCamera.keepSeatedLook(store, p); // seated on a stool: his look is kept
             MountUtil.unseat(store, p.ref);
-            if (voyageLaunch != null && p.uuid.equals(voyageLaunch.captain().getUuid())) {
+            if (voyageLaunch != null && voyageLaunch.captain() != null && p.uuid.equals(voyageLaunch.captain().getUuid())) {
                 p.boardPos = null; // the captain stays with the vehicle (his disconnect is handled by the voyage)
             }
         }
@@ -856,9 +1028,6 @@ public final class BalloonManager {
             try {
                 flight.crew = registered.crew();
                 crewLook = AirshipCrew.lookOf(store, AirshipCrew.refOf(world, registered));
-                if (crewLook == null) {
-                    LOGGER.at(Level.INFO).log("Pilot: absent at takeoff, no flight mannequin");
-                }
                 AirshipCrew.remove(store, world, registered);
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Balloon pilot: removal at takeoff failed");
@@ -881,12 +1050,16 @@ public final class BalloonManager {
         }
 
         // 3. Create the flying entity in its place. Dry descent: directly the model without flame.
-        flight.entityPos.set(found.origin.x + 0.5, found.origin.y, found.origin.z + 0.5);
+        if (voyageLaunch != null && voyageLaunch.spawnAt() != null) {
+            flight.entityPos.set(voyageLaunch.spawnAt());
+        } else {
+            flight.entityPos.set(found.origin.x + 0.5, found.origin.y, found.origin.z + 0.5);
+        }
         String spawnId = modelId;
         if (dry && ModelAsset.getAssetMap().getAsset(modelId + UNLIT_MODEL_SUFFIX) != null) {
             spawnId = modelId + UNLIT_MODEL_SUFFIX;
         }
-        Ref<EntityStore> balloon = spawnModelEntity(store, displayPosition(kind, flight.entityPos, found.rotation), found.rotation, spawnId);
+        Ref<EntityStore> balloon = spawnModelEntity(store, displayPosition(kind, flight.entityPos, flyRotation), flyRotation, spawnId);
         if (balloon == null) {
             // Failure: the blocks are put back and normal walking is restored.
             TransportCage.pasteOverCage(world, found.origin, found.rotation, groundCage,
@@ -939,7 +1112,7 @@ public final class BalloonManager {
         flight.parts = VehicleParts.spawn(store, partsMode, modelId, balloon, flight.balloonUuid,
                 flight.dual ? flight.observerRef : null, flight.dual ? flightId : null);
         if (crewLook != null) {
-            spawnCrewMannequin(store, flight, kind, found.rotation, crewEntry.crew(), crewLook, voyageLaunch != null);
+            spawnCrewMannequin(store, flight, kind, flyRotation, crewEntry.crew(), crewLook, voyageLaunch != null);
         }
         flight.lastCheckedOrigin.set(found.origin);
         flight.takeoffMs = System.currentTimeMillis();
@@ -962,7 +1135,7 @@ public final class BalloonManager {
         }
         flights.put(flightId, flight);
         flight.lastResumeMs = flight.takeoffMs;
-        BalloonResume.write(flight, found.origin, false);
+        BalloonResume.write(flight, voyageLaunch != null && voyageLaunch.flightRotation() != null ? flight.currentOrigin() : found.origin, false);
         if (dry) {
             if (!pilotless) {
                 player.sendMessage(Texts.t("fuel.dryDescentStart"));
@@ -973,15 +1146,7 @@ public final class BalloonManager {
             if (notified != null) {
                 FuelHud.show(store, notified, FuelHud.Vehicle.BALLOON, flight.burner.remainingSeconds(), flight.burner.fuelItems());
             }
-            // the chest contents and the number of passengers go to the log (line below), not to the chat.
-            if (!flight.cargo.isEmpty()) {
-                LOGGER.at(Level.INFO).log("Chests: %d item(s) carried", flight.cargo.itemCount());
-            }
         }
-        LOGGER.at(Level.INFO).log("%s: origin %s, rotation %s, %d blocks removed%s", dry ? "Dry descent" : "Takeoff",
-                found.origin, found.rotation, removed,
-                (pilotless ? " (no pilot)" : "") + ", " + seated.size() + " passenger(s)"
-                        + (groundCage > 0 ? ", on the cage left on the ground (descent of " + groundCage + ")" : ""));
         return null;
     }
 
@@ -1343,7 +1508,14 @@ public final class BalloonManager {
         holder.addComponent(EntityStore.REGISTRY.getNonSerializedComponentType(), NonSerialized.get());
         // carries the sound effect of the flame jet (EffectControllerComponent.addEffect). Nothing is saved (NonSerialized).
         holder.addComponent(EffectControllerComponent.getComponentType(), new EffectControllerComponent());
-        return store.addEntity(holder, AddReason.SPAWN);
+        Ref<EntityStore> ref = store.addEntity(holder, AddReason.SPAWN);
+        if (ref == null || !ref.isValid()) {
+            // 0.7 stores away at once an entity added in a section without a player near (NonTicking).
+            LOGGER.at(Level.WARNING).log("Model %s: entity not added at (%.0f, %.0f, %.0f), section without a player near",
+                    id, position.x, position.y, position.z);
+            return null;
+        }
+        return ref;
     }
 
     /** Enables or disables the pilot's free flight. */
@@ -1508,9 +1680,6 @@ public final class BalloonManager {
                 LOGGER.at(Level.WARNING).log("Terrain not restored at (%d, %d, %d): section not loaded", t.x, t.y, t.z);
             }
         }
-        if (!kept.isEmpty()) {
-            LOGGER.at(Level.INFO).log("Landing: %d ladder cell(s) left to the terrain", kept.size());
-        }
         // the placed balloon is locked (block breaking and placing cancelled, BalloonLockSystems).
         if (inscribe) {
             BalloonRegistry.add(world, origin, rotation, kind, own);
@@ -1627,7 +1796,6 @@ public final class BalloonManager {
         if (voluntary) {
             return Texts.t("deploy.stationZone").param("station", station);
         }
-        LOGGER.at(Level.INFO).log("Forced landing in the zone of station %s (%s, origin %s)", station, flight.kind.id, origin);
         return null;
     }
 
@@ -1690,7 +1858,7 @@ public final class BalloonManager {
                 setPilotFlying(store, flight.pilotRef, player, false);
             }
         }
-        LOGGER.at(Level.INFO).log("Landing: origin %s, rotation %s", origin, rotation);
+        BalloonRecall.onLeftFlightEnd(flight);
         if (flight.transit != null) {
             TransitNetwork.Station station = TransitNetwork.get().byNameWithQuay(flight.world.getName(), flight.transit.from);
             if (station != null) {
@@ -1726,7 +1894,6 @@ public final class BalloonManager {
         TransitStart start = startTransit(store, world, s, origin, station.quayRotation, tf, List.of(), false);
         if (start.error() == null) {
             StationQueue.onApproach(station, start.flight());
-            LOGGER.at(Level.INFO).log("Station %s: approaching balloon at %s", station.name, origin);
         }
         return start.error();
     }
@@ -1781,7 +1948,6 @@ public final class BalloonManager {
             }
         }
         StationQueue.onDeparting(station, flight);
-        LOGGER.at(Level.INFO).log("Station %s: departure to %s, %d passenger(s)", station.name, destination, flight.passengers.size());
         if (!flight.passengers.isEmpty()) {
             Telemetry.count("transit.trip");
         }
@@ -1868,6 +2034,7 @@ public final class BalloonManager {
         }
         hideFuel(flight);
         flight.stopping = true;
+        BalloonRecall.onFlightEnded(flight); // a recall flight ended here frees its quay
         if (flight.transit != null && flight.transit.to != null) {
             // The arrival quay (ARRIVING or waiting order) is freed whatever the way the flight ended.
             TransitNetwork.Station dest = TransitNetwork.get().byNameWithQuay(flight.world.getName(), flight.transit.to);
@@ -1890,7 +2057,6 @@ public final class BalloonManager {
         }
         BalloonResume.delete(flight.pilotUuid);
         removeEntities(store, flight);
-        LOGGER.at(Level.INFO).log("Transport balloon removed at %s", flight.entityPos);
     }
 
     /**
@@ -1984,13 +2150,11 @@ public final class BalloonManager {
             t.claimed = false;
             t.comingFrom = null;
             if (target == null) {
-                LOGGER.at(Level.INFO).log("Station %s removed: no station left, the balloon descends to the ground", removed.name);
                 t.to = null;
                 t.groundLanding = true;
                 t.setPhase(TransitFlight.Phase.DESCEND, now);
                 continue;
             }
-            LOGGER.at(Level.INFO).log("Station %s removed: the balloon is diverted to %s", removed.name, target.name);
             t.to = target.name;
             t.cruiseY = Math.max(t.cruiseY, TransitAutopilot.cruiseY(StationQueue.dockOrigin(removed).y,
                     StationQueue.dockOrigin(target).y));
@@ -2011,6 +2175,7 @@ public final class BalloonManager {
     // ------------------------------------------------------------------ flight (called every tick)
 
     void tick(Store<EntityStore> store, World world) {
+        BalloonRecall.tickParked(store, world, System.currentTimeMillis()); // balloons waiting on a quay
         if (!pendingRestores.isEmpty()) {
             retryRestores(store, world);
         }
@@ -2083,11 +2248,6 @@ public final class BalloonManager {
                 if (hit != null) {
                     // Collision: the pilot is brought back to their last valid position.
                     flight.teleportUntilMs = now + COLLISION_PAUSE_MS;
-                    // no collision message in the chat any more, the log keeps the block touched (at most every 2 s).
-                    if (now - flight.lastCollisionMsgMs > COLLISION_MSG_INTERVAL_MS) {
-                        flight.lastCollisionMsgMs = now;
-                        LOGGER.at(Level.INFO).log("Collision: %s", hit);
-                    }
                     // the height limit is not visible, so the pilot is told (at most every 3 s).
                     if (hit.contains(HEIGHT_HIT) && now - flight.lastHeightMsgMs >= HEIGHT_MSG_INTERVAL_MS) {
                         flight.lastHeightMsgMs = now;
@@ -2411,8 +2571,6 @@ public final class BalloonManager {
                 if (player != null) {
                     player.sendMessage(Texts.t("gameMode.left"));
                 }
-                LOGGER.at(Level.INFO).log("Pilot %s: game mode change (%s), %s", player != null ? player.getUsername() : ref,
-                        mode, landed ? "balloon landed in place" : "balloon without pilot");
                 continue;
             }
             for (BalloonFlight.Passenger p : new ArrayList<>(flight.passengers)) {
@@ -2430,7 +2588,6 @@ public final class BalloonManager {
                 if (pr != null) {
                     pr.sendMessage(Texts.t("gameMode.left"));
                 }
-                LOGGER.at(Level.INFO).log("Passenger %s: game mode change (%s), dismounted", p.name, mode);
             }
         }
     }
@@ -2527,7 +2684,6 @@ public final class BalloonManager {
             // passengers are freed (and unprotected by clearPose) so one of them can fly it again. Fallback below.
             TransformComponent pilotPos = store.getComponent(ref, TransformComponent.getComponentType());
             if (pilotPos != null) {
-                int count = flight.passengers.size();
                 flight.takeOver = true;
                 Message error = null;
                 try {
@@ -2547,7 +2703,6 @@ public final class BalloonManager {
                             Telemetry.error("balloon.land", e, Telemetry.kindId(flight.kind), tphase(flight));
                         }
                     }
-                    LOGGER.at(Level.INFO).log("Pilot %s died in flight: balloon landed in place, %d passenger(s) released", name, count);
                     return;
                 }
                 flight.takeOver = false;
@@ -2603,8 +2758,6 @@ public final class BalloonManager {
                 pr.sendMessage(Texts.t(dead ? "pilotDied" : "pilotLeft"));
             }
         }
-        LOGGER.at(Level.INFO).log("Pilot %s %s: balloon without pilot, automatic descent at %.2f blocks per second (%d passenger(s))",
-                name, dead ? "died in flight" : "left the flight", flight.descentSpeed, flight.passengers.size());
     }
 
     /** A passenger died: dismounted and forgotten by the flight, the flight continues. They respawn normally. */
@@ -2614,7 +2767,6 @@ public final class BalloonManager {
         }
         releaseDeadPassenger(store, flight, p);
         captainLeft(store, flight, p.uuid, p.ref);
-        LOGGER.at(Level.INFO).log("Passenger %s died in flight: dismounted, the flight continues", p.name);
     }
 
     /**
@@ -2658,7 +2810,6 @@ public final class BalloonManager {
                     store.putComponent(ref, Teleport.getComponentType(), Teleport.createForPlayer(dest, look));
                 }
             });
-            LOGGER.at(Level.INFO).log("Glider jump: passenger %s ejected at (%.1f, %.1f, %.1f)", p.name, dest.x, dest.y, dest.z);
             return GliderJump.Result.DONE;
         } catch (RuntimeException | java.io.IOException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Glider jump: passenger ejection failed");
@@ -2878,7 +3029,7 @@ public final class BalloonManager {
         }
         // The registry first (the plugin's removals do not go through the locking events).
         BalloonRegistry.remove(world, origin, rotation, kind.id);
-        int removed = removeBlocks(world, s, origin, rotation);
+        removeBlocks(world, s, origin, rotation);
         if (cageEntry != null && cageEntry.crew() != null) {
             // The NPC pilot goes with the balloon (mirror of AirshipManager.despawnPosed).
             try {
@@ -2891,13 +3042,12 @@ public final class BalloonManager {
         CageAnimals.releaseToGround(world, cageAnimals, cagePos);
         hovers.remove(world.getName() + ":" + burnerPos.x + "," + burnerPos.y + "," + burnerPos.z);
 
-        int items = 0;
-        items += dropAndCount(store, burnerItems, burnerPos);
-        items += dropAndCount(store, pendingBurnerItems, burnerPos);
+        dropAndCount(store, burnerItems, burnerPos);
+        dropAndCount(store, pendingBurnerItems, burnerPos);
         for (BalloonCargo.Entry e : cargo.entries()) {
-            items += dropAndCount(store, e.items(), rotation.rotateYaw(new Vector3i(e.local), new Vector3i()).add(origin));
+            dropAndCount(store, e.items(), rotation.rotateYaw(new Vector3i(e.local), new Vector3i()).add(origin));
         }
-        items += dropAndCount(store, pendingCargoItems, burnerPos);
+        dropAndCount(store, pendingCargoItems, burnerPos);
 
         for (int i = 0; i < inside.size(); i++) {
             Occupant o = inside.get(i);
@@ -2911,8 +3061,6 @@ public final class BalloonManager {
                 Telemetry.error("balloon.despawn", e, Telemetry.kindId(kind), null);
             }
         }
-        LOGGER.at(Level.INFO).log("Removal by %s: balloon landed at %s (rotation %s), %d blocks removed, %d item(s) dropped",
-                admin.getUsername(), origin, rotation, removed, items);
         return null;
     }
 
@@ -2944,6 +3092,7 @@ public final class BalloonManager {
         flights.remove(flight.pilotUuid);
         hideFuel(flight);
         endVoyageCleanup(store, flight);
+        BalloonRecall.onFlightEnded(flight); // a recall flight removed by an administrator frees its quay
         BalloonLights.removeAll(store, flight);
         BalloonLights.removeChain(store, flight);
         setBurnerRoar(store, flight, false);
@@ -2997,12 +3146,11 @@ public final class BalloonManager {
         Vector3d ground = groundBelow(world, pivot);
         Vector3d where = ground.y != pivot.y ? ground : adminPos;
         Vector3i dropPos = new Vector3i((int) Math.floor(where.x), (int) Math.floor(where.y), (int) Math.floor(where.z));
-        int items = 0;
         if (flight.burner != null) {
-            items += dropAndCount(store, flight.burner.takeAllItems(), dropPos);
+            dropAndCount(store, flight.burner.takeAllItems(), dropPos);
         }
         if (flight.cargo != null) {
-            items += dropAndCount(store, flight.cargo.takeAllItems(), dropPos);
+            dropAndCount(store, flight.cargo.takeAllItems(), dropPos);
         }
         // animals of the cage released and put on the ground under the balloon.
         Vector3d[] flightAnimalPos = new Vector3d[flight.animals.size()];
@@ -3017,8 +3165,6 @@ public final class BalloonManager {
         }
         BalloonResume.delete(flight.pilotUuid);
         removeEntities(store, flight);
-        LOGGER.at(Level.INFO).log("Removal by %s: balloon in flight at %s, %d item(s) dropped", admin.getUsername(),
-                fmt(pivot), items);
         return null;
     }
 
@@ -3077,7 +3223,6 @@ public final class BalloonManager {
         if (chain != null) {
             ViewFilter.clear(chain.ref);
         }
-        LOGGER.at(Level.INFO).log("Double display finished: a single entity visible to everyone");
     }
 
     private volatile boolean renderDual = true;
@@ -3172,9 +3317,9 @@ public final class BalloonManager {
             return;
         }
         boolean ok = runOnWorld(flight.world, () -> landNow(flight, true), LAND_WAIT_MS);
-        LOGGER.at(ok ? Level.INFO : Level.WARNING).log(ok
-                ? "Pilot %s left: balloon landed again"
-                : "Pilot %s left: landing failed, the resume file will land it again on the next world load", pilotUuid);
+        if (!ok) {
+            LOGGER.at(Level.WARNING).log("Pilot %s left: landing failed, the resume file will land it again on the next world load", pilotUuid);
+        }
     }
 
     /**
@@ -3185,7 +3330,12 @@ public final class BalloonManager {
      */
     void landAll() {
         for (BalloonFlight flight : new ArrayList<>(flights.values())) {
-            boolean ok = runOnWorld(flight.world, () -> landNow(flight, true), LAND_WAIT_MS);
+            boolean ok = runOnWorld(flight.world, () -> {
+                if (BalloonRecall.placeForShutdown(flight)) { // a recall flight is first moved to its leave point
+                    landNow(flight, true);
+                    BalloonRecall.onFlightEnded(flight); // the quay is freed once, whatever path ended the flight
+                }
+            }, LAND_WAIT_MS);
             if (!ok) {
                 LOGGER.at(Level.WARNING).log("Balloon of %s not landed again: resume file kept", flight.pilotUuid);
             }
@@ -3198,7 +3348,9 @@ public final class BalloonManager {
      * StartWorldEvent and at plugin start for worlds already running.
      */
     void recoverWorld(World world) {
-        for (BalloonResume.Record rec : BalloonResume.loadAll(world.getName())) {
+        for (BalloonResume.Record saved : BalloonResume.loadAll(world.getName())) {
+            // A recalled balloon is put down at its leave point, never above the station.
+            final BalloonResume.Record rec = saved.atLeavePoint();
             if (flights.containsKey(rec.pilot()) || !recovering.add(rec.pilot())) {
                 continue;
             }
@@ -3217,6 +3369,9 @@ public final class BalloonManager {
                     maxZ = Math.max(maxZ, p.z);
                 }
                 List<CompletableFuture<?>> loads = new ArrayList<>();
+                if (rec.recall() != null) {
+                    maxY += BalloonRecall.LIFT_MAX; // the pose at the leave point may be lifted
+                }
                 loads.add(SectionBlocks.loadSections(world.getChunkStore(), minX, minY, minZ, maxX, maxY, maxZ));
                 if (rec.transit()) {
                     // Passengers are set down at the destination: its sections must be loaded too.
@@ -3230,8 +3385,6 @@ public final class BalloonManager {
                                 centre.x, centre.y + 32, centre.z));
                     }
                 }
-                LOGGER.at(Level.INFO).log("Flight resume of %s in %s: origin %s, sections to load",
-                        rec.pilot(), world.getName(), rec.origin());
                 CompletableFuture.allOf(loads.toArray(new CompletableFuture[0])).whenComplete((v, t) -> {
                     if (t != null) {
                         LOGGER.at(Level.WARNING).withCause(t).log("Loading resume chunks failed for %s", rec.pilot());
@@ -3267,7 +3420,7 @@ public final class BalloonManager {
                 Ref<EntityStore> orphan = world.getEntityStore().getRefFromUUID(rec.balloon());
                 if (orphan != null && orphan.isValid()) {
                     store.removeEntity(orphan, RemoveReason.REMOVE);
-                    LOGGER.at(Level.INFO).log("Flying entity left in the world removed (%s)", rec.balloon());
+                    LOGGER.at(Level.WARNING).log("Flying entity left in the world removed (%s)", rec.balloon());
                 }
             }
             StructureShape s = rec.kind().shape();
@@ -3277,6 +3430,14 @@ public final class BalloonManager {
             if (dy == Integer.MIN_VALUE) {
                 LOGGER.at(Level.WARNING).log("Flight resume of %s failed: the balloon exceeds the world height, file kept", rec.pilot());
                 return;
+            }
+            if (rec.recall() != null) {
+                // Free pose at the leave point: up in steps of 8 blocks while the shape would touch something.
+                Vector3i o = new Vector3i(rec.origin());
+                for (int tries = 0; tries < BalloonRecall.LIFT_MAX / 8 && collision(world, s, o, rec.rotation(), false) != null && o.y + 8 < WORLD_MAX_Y; tries++) {
+                    o.y += 8;
+                }
+                dy += o.y - rec.origin().y;
             }
             if (dy != 0) {
                 LOGGER.at(Level.WARNING).log("Flight resume of %s: landing outside the height limit, shifted by %d block(s)", rec.pilot(), dy);
@@ -3312,7 +3473,7 @@ public final class BalloonManager {
             }
             if (rec.crew() != null) {
                 try {
-                    BalloonRegistry.setCrew(world, rec.origin(), rec.rotation(), rec.kind().id, rec.crew().withPost(CrewRecord.Post.STOOL));
+                    BalloonRegistry.setCrew(world, rec.origin(), rec.rotation(), rec.kind().id, rec.crew().withPost(rec.recall() != null ? CrewRecord.Post.HELM : CrewRecord.Post.STOOL));
                     AirshipCrew.ensure(world, BalloonRegistry.get(world, rec.origin(), rec.rotation(), rec.kind().id));
                 } catch (RuntimeException e) {
                     LOGGER.at(Level.WARNING).withCause(e).log("Resume: balloon pilot not recreated");
@@ -3321,7 +3482,6 @@ public final class BalloonManager {
             }
             restoreStrandedPassengers(world, store, rec);
             BalloonResume.delete(rec.pilot());
-            LOGGER.at(Level.INFO).log("Balloon of %s landed again at %s (resume after shutdown in flight)", rec.pilot(), rec.origin());
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.SEVERE).withCause(e).log("Flight resume of %s failed: file kept for a later attempt", rec.pilot());
             Telemetry.error("balloon.recover", e, Telemetry.kindId(rec.kind()), null);
@@ -3377,8 +3537,6 @@ public final class BalloonManager {
             }
         }
         BalloonResume.delete(rec.pilot());
-        LOGGER.at(Level.INFO).log("Transport flight %s resumed after shutdown: %d passenger(s) landed at %s", rec.pilot(),
-                rec.passengers().size(), points != null ? "the departure station" : "the ground");
     }
 
     // ------------------------------------------------------------------ passengers
@@ -3552,7 +3710,6 @@ public final class BalloonManager {
             if (pr != null && p.seat >= 0) {
                 pr.sendMessage(Texts.t("seated"));
             }
-            LOGGER.at(Level.INFO).log("Passenger %s: seat %d, %s, pose %s", p.name, p.seat + 1, p.mode, p.pose.describe());
         }
     }
 
@@ -3994,9 +4151,9 @@ public final class BalloonManager {
                     continue;
                 }
                 boolean ok = runOnWorld(f.world, () -> dropPassenger(f, p), LAND_WAIT_MS);
-                LOGGER.at(ok ? Level.INFO : Level.WARNING).log(ok
-                        ? "Passenger %s left: dismounted, position saved on the ground"
-                        : "Passenger %s left: dismount failed", p.name);
+                if (!ok) {
+                    LOGGER.at(Level.WARNING).log("Passenger %s left: dismount failed", p.name);
+                }
             }
         }
     }
@@ -4138,7 +4295,6 @@ public final class BalloonManager {
             TransformComponent t = holder.getComponent(TransformComponent.getComponentType());
             if (t != null) {
                 t.setPosition(new Vector3d(st.x(), st.y(), st.z()));
-                LOGGER.at(Level.INFO).log("Passenger %s put back on the balloon after the flight resume", pr.getUsername());
             }
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Putting the arrived passenger back failed");
@@ -4368,6 +4524,16 @@ public final class BalloonManager {
         } catch (RuntimeException e) {
             // No effect on the flight: the burner contents will be saved at the next normal save.
         }
+    }
+
+    /** True if the position is inside the gondola box of the balloon placed at this origin and rotation. */
+    static boolean inNacelle(Deployables.Kind kind, Vector3i origin, Rotation rotation, Vector3d pos) {
+        Vector3f nMin = kind.balloon.nacelleMin;
+        Vector3f nMax = kind.balloon.nacelleMax;
+        Rotation back = Rotation.None.subtract(rotation);
+        Vector3f local = back.rotateYaw(new Vector3f((float) (pos.x - origin.x - 0.5), (float) (pos.y - origin.y), (float) (pos.z - origin.z - 0.5)),
+                new Vector3f());
+        return local.x >= nMin.x && local.x <= nMax.x && local.y >= nMin.y && local.y <= nMax.y && local.z >= nMin.z && local.z <= nMax.z;
     }
 
     /**
@@ -4831,7 +4997,6 @@ public final class BalloonManager {
                 block, new Vector3f(pv.x, pv.y + seatHeight, pv.z), false, passengerMode, pose);
         boardPassengers(store, flight, List.of(p));
         flight.driven = true;
-        LOGGER.at(Level.INFO).log("Automatic descent of %s: %.2f blocks per second, pilot seated", p.name, flight.descentSpeed);
     }
 
     /** Vertical flight speed of the pilot (after FLY_SPEED_FACTOR), falling back to the default speed. */

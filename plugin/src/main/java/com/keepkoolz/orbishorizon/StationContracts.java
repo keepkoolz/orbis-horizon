@@ -130,7 +130,6 @@ final class StationContracts {
             Given result = give(player, Deployables.STATION_KIND);
             if (result != Given.FAILED) {
                 player.sendMessage(Texts.t(result == Given.DROPPED ? "transit.contract.firstDropped" : "transit.contract.first"));
-                LOGGER.at(Level.INFO).log("First station contract given to %s in %s", player.getUsername(), name);
             } else {
                 net.setFirstContract(name, false); // try again at the next arrival
             }
@@ -235,7 +234,6 @@ final class StationContracts {
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Station contract: message not sent");
         }
-        LOGGER.at(Level.INFO).log("Station contract (%s) bought by %s", kind, player.getUsername());
         return null;
     }
 }

@@ -144,7 +144,6 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             if (playerRef != null) {
                 playerRef.sendMessage(Texts.t("deploy.heightLimit"));
             }
-            LOGGER.at(Level.INFO).log("Crate %s refused at (%d, %d, %d): the structure exceeds the height limit", kind.id, origin.x, origin.y, origin.z);
             context.getState().state = InteractionState.Failed;
             return;
         }
@@ -161,8 +160,6 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             if (playerRef != null) {
                 playerRef.sendMessage(Texts.t("deploy.underwater"));
             }
-            LOGGER.at(Level.INFO).log("Crate %s refused at (%d, %d, %d): liquid at (%d, %d, %d)", kind.id, origin.x, origin.y, origin.z,
-                    wet.x, wet.y, wet.z);
             context.getState().state = InteractionState.Failed;
             return;
         }
@@ -172,18 +169,8 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
             if (playerRef != null) {
                 playerRef.sendMessage(Texts.t("deploy.stationZone").param("station", zoneStation));
             }
-            LOGGER.at(Level.INFO).log("Crate %s refused at (%d, %d, %d): station zone %s", kind.id, origin.x, origin.y, origin.z, zoneStation);
             context.getState().state = InteractionState.Failed;
             return;
-        }
-        if (AirshipLimit.countsForLimit(kind)) {
-            PlayerRef owner = commandBuffer.getComponent(player, PlayerRef.getComponentType());
-            if (owner != null && AirshipLimit.ownsAirship(owner.getUuid())) {
-                owner.sendMessage(Texts.t("airship.error.alreadyOwned"));
-                LOGGER.at(Level.INFO).log("Crate %s refused at (%d, %d, %d): %s already owns an airship", kind.id, origin.x, origin.y, origin.z, owner.getUsername());
-                context.getState().state = InteractionState.Failed;
-                return;
-            }
         }
         if (shape != null) {
             PlayerRef placer = commandBuffer.getComponent(player, PlayerRef.getComponentType());
@@ -197,10 +184,42 @@ public class DeployBalloonInteraction extends SimpleInstantInteraction {
                 Telemetry.count("boat.skiff.deploy");
                 putBackSkiffContents(context, world, origin, rotation);
             }
+            if (isNamedKind(kind.id)) {
+                openNameWindow(world, player, commandBuffer, kind.id, origin, rotation);
+            }
         } else {
             // Unreadable shape: placed without terrain protection and without registry entry (logged by shapeOrNull).
             PrefabUtil.paste(buffer, world, origin, rotation, new FastRandom(), flags, 0, commandBuffer);
         }
+    }
+
+    /** True for the vehicle types that carry a name. */
+    private static boolean isNamedKind(String kindId) {
+        return Deployables.AIRSHIP_KIND.equals(kindId) || Deployables.STEAMBOAT_KIND.equals(kindId) || Deployables.BALLOON_KIND.equals(kindId);
+    }
+
+    /** Opens the name window of the vehicle just placed (on the world thread, once the registry entry exists). Never throws. */
+    private static void openNameWindow(World world, Ref<EntityStore> player, CommandBuffer<EntityStore> commandBuffer, String kindId,
+                                       Vector3i origin, Rotation rotation) {
+        PlayerRef pr = commandBuffer.getComponent(player, PlayerRef.getComponentType());
+        if (pr == null) {
+            return;
+        }
+        final Vector3i at = new Vector3i(origin);
+        world.execute(() -> {
+            try {
+                if (!player.isValid()) {
+                    return;
+                }
+                BalloonRegistry.Entry entry = BalloonRegistry.get(world, at, rotation, kindId);
+                if (entry != null) {
+                    VehicleNamePage.open(world.getEntityStore().getStore(), player, pr, entry.ownership().id(), kindId, null);
+                }
+            } catch (RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Vehicle name window not opened");
+                Telemetry.error("deploy", e, kindId, "name");
+            }
+        });
     }
 
     /** True for a boat placed from a crate (the steamboat and the skiff; the shuttle has no crate). */

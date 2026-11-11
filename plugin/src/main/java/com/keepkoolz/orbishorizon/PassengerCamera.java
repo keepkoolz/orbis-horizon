@@ -9,6 +9,7 @@ import com.hypixel.hytale.protocol.AttachedToType;
 import com.hypixel.hytale.protocol.ClientCameraView;
 import com.hypixel.hytale.protocol.Direction;
 import com.hypixel.hytale.protocol.Position;
+import com.hypixel.hytale.protocol.PositionDistanceOffsetType;
 import com.hypixel.hytale.protocol.PositionType;
 import com.hypixel.hytale.protocol.RotationType;
 import com.hypixel.hytale.protocol.ServerCameraSettings;
@@ -25,7 +26,7 @@ import java.util.logging.Level;
 /**
  * Passenger view of a flight (transit balloons, piloted balloons, airship, shared by BalloonManager and AirshipPassengers): external
  * view (attachExternal) for every vehicle, balloons and airship: camera attached to the entity the client
- * sees, behind the horizontal movement of the vehicle and above, looking at the middle of it. The body is not mounted: it stays parked in
+ * sees, orbiting the middle of the vehicle, starting behind it and above, then turned by the passenger with the mouse. The body is not mounted: it stays parked in
  * forced flight at zero speed, follows the vehicle by itself and is teleported back to the seat only beyond TransitConstants.BODY_SAFETY_DISTANCE.
  * Never throws.
  */
@@ -37,24 +38,9 @@ final class PassengerCamera {
 
     /**
      * What the external view needs from a vehicle for one tick: its type (framing), the live position of the entity the camera follows and the
-     * horizontal direction behind its heading (used before the first movement). Built every tick by the caller.
+     * horizontal direction behind its heading (the start direction of the view). Built every tick by the caller.
      */
-    record Source(Deployables.Kind kind, Vector3d pos, double behindX, double behindZ, boolean turning) {
-        /** Balloons never turn: only the airship passes turning. */
-        Source(Deployables.Kind kind, Vector3d pos, double behindX, double behindZ) {
-            this(kind, pos, behindX, behindZ, false);
-        }
-    }
-
-    /** Yaw rate (rad/s) above which the airship counts as turning in place for the external view (about 1 degree per second). */
-    static final double TURNING_YAW_RATE = Math.toRadians(1.0);
-
-    /**
-     * Pure decision: re-send the external view only when the vehicle is not turning, moved enough horizontally, and its travel direction
-     * changed by more than the threshold. A heading change alone never re-sends. Pinned by TransitTests.viewResend.
-     */
-    static boolean shouldResend(boolean turning, double travelled, double changeDegrees) {
-        return !turning && travelled >= TransitConstants.VIEW_DIRECTION_MIN_MOVE && changeDegrees > TransitConstants.VIEW_DIRECTION_CHANGE_DEGREES;
+    record Source(Deployables.Kind kind, Vector3d pos, double behindX, double behindZ) {
     }
 
     /** Horizontal direction behind a heading yaw theta of the mod (bow = (-sin, -cos), so behind = (sin, cos)). Pure, pinned by TransitTests.behindHeading. */
@@ -129,11 +115,16 @@ final class PassengerCamera {
         });
     }
 
+    /** Distance from the aim point to the camera of an external view (length of its offset vector). Pure, pinned by TransitTests.externalView. */
+    static float orbitDistance(ExternalView v) {
+        return (float) Math.sqrt((double) v.x() * v.x() + (double) v.y() * v.y() + (double) v.z() * v.z());
+    }
+
     /**
-     * sends the external view of a passenger (balloon or airship): camera attached to the entity the client sees, behind the travel direction
-     * and above, looking at the middle of the balloon. The position offset is in the world frame (not turned by the client). Direction:
-     * opposite to the horizontal move of the entity (before the first move: behind the heading, given by the source).
-     * Re-sent by directionChanged. Never throws.
+     * Sends the external view of a passenger (balloon or airship): a spectator-style follow camera attached to the entity the client sees,
+     * orbiting the aim point at the middle of the vehicle (position offset (0, centreY, 0), fixed distance, no raycast so terrain never
+     * pulls it in). It starts behind the vehicle (behind the heading, given by the source) at the framing height and distance, then the
+     * passenger turns it with the mouse. The server never re-aligns it. Never throws.
      */
     static void attachExternal(Store<EntityStore> store, Source src, BalloonFlight.Passenger p, Ref<EntityStore> target) {
         try {
@@ -146,8 +137,6 @@ final class PassengerCamera {
                 p.camDirX = src.behindX();
                 p.camDirZ = src.behindZ();
                 p.camDirSet = true;
-                p.camLastX = src.pos().x;
-                p.camLastZ = src.pos().z;
             }
             Framing f = framing(src.kind());
             ExternalView v = externalView(p.camDirX, p.camDirZ, f.size(), distanceFactor, heightFactor,
@@ -159,11 +148,13 @@ final class PassengerCamera {
             s.eyeOffset = false;
             s.isFirstPerson = false;
             s.positionType = PositionType.AttachedToPlusOffset;
-            // The entity sits at the pivot: the aim point is (0, centreY, 0) from it, the camera is the view offset from the aim point.
-            s.positionOffset = new Position(v.x(), f.centreY() + v.y(), v.z());
+            // The entity sits at the pivot: the orbit centre is the aim point (0, centreY, 0) from it, the camera is orbitDistance away.
+            s.positionOffset = new Position(0, f.centreY(), 0);
+            s.positionDistanceOffsetType = PositionDistanceOffsetType.DistanceOffset;
+            s.distance = orbitDistance(v);
             s.positionLerpSpeed = 1f;
             s.rotationType = RotationType.Custom;
-            s.applyLookType = ApplyLookType.LocalPlayerLookOrientation;
+            s.applyLookType = ApplyLookType.Rotation;
             s.allowPitchControls = false;
             s.displayReticle = false;
             s.skipCharacterPhysics = true;
@@ -174,35 +165,6 @@ final class PassengerCamera {
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Outside view of passenger %s not sent", p.name);
         }
-    }
-
-    /** True when the balloon's travel direction changed enough (after enough horizontal move) to re-send the external view. */
-    static boolean directionChanged(Source src, BalloonFlight.Passenger p) {
-        if (!p.camDirSet) {
-            return false;
-        }
-        if (src.turning()) {
-            // The rider's position sweeps an arc while the ship turns: not travel. Re-baseline so the arc is not counted later.
-            p.camLastX = src.pos().x;
-            p.camLastZ = src.pos().z;
-            return false;
-        }
-        double mx = src.pos().x - p.camLastX;
-        double mz = src.pos().z - p.camLastZ;
-        if (Math.hypot(mx, mz) < TransitConstants.VIEW_DIRECTION_MIN_MOVE) {
-            return false;
-        }
-        p.camLastX = src.pos().x;
-        p.camLastZ = src.pos().z;
-        double nx = -mx;
-        double nz = -mz;
-        double cos = (nx * p.camDirX + nz * p.camDirZ) / (Math.hypot(nx, nz) * Math.max(1e-6, Math.hypot(p.camDirX, p.camDirZ)));
-        if (shouldResend(false, Math.hypot(mx, mz), Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, cos)))))) {
-            p.camDirX = nx;
-            p.camDirZ = nz;
-            return true;
-        }
-        return false;
     }
 
     /** Largest turn of a transit passenger's view away from the travel direction, toward the outside of his seat. */

@@ -121,9 +121,6 @@ final class CampPacker {
                 playerRef.sendMessage(Texts.t("camp.packInChest"));
             }
             playerRef.sendMessage(Texts.t(!inInventory ? "camp.droppedAtFeet" : kept ? "camp.packedKept" : "camp.packed"));
-            LOGGER.at(Level.INFO).log("Camp \"%s\" packed by %s at (%d, %d, %d): %d block(s) removed%s",
-                    kind.id, playerRef.getUsername(), origin.x, origin.y, origin.z, removal.removed(),
-                    kept ? ", " + removal.items() + " item(s) kept in the bag" : "");
             return new Result(null, kept, !inInventory);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Camp: packing failed");

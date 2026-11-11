@@ -93,7 +93,6 @@ final class StationMaster {
             }
             Vector3d point = masterPoint(s);
             if (!SectionBlocks.entitiesLoaded(world.getChunkStore(), (int) Math.floor(point.x), (int) Math.floor(point.y), (int) Math.floor(point.z))) {
-                LOGGER.at(Level.INFO).log("Station master of '%s': section not loaded, it will be created when it loads", s.name);
                 ensure(world, s, false);
                 return null;
             }
@@ -115,7 +114,6 @@ final class StationMaster {
                 return null;
             }
             TransitNetwork.get().setMaster(s, id.getUuid());
-            LOGGER.at(Level.INFO).log("Station master of '%s' created (%s)", s.name, id.getUuid());
             return id.getUuid();
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Station master of '%s' not created", s.name);
@@ -141,8 +139,6 @@ final class StationMaster {
         {
             org.joml.Vector3i origin = new org.joml.Vector3i(e.x(), e.y(), e.z());
             if (TransitNetwork.get().at(world.getName(), origin) == null) {
-                LOGGER.at(Level.INFO).log("Station placed at (%d, %d, %d) without a name: registered with an automatic name",
-                        origin.x, origin.y, origin.z);
                 StationPlacement.completeRegistration(world, origin, e.rotation(), e.owner(), null, null, kind);
             }
         }
@@ -357,8 +353,6 @@ final class StationMaster {
             });
         } catch (RuntimeException ex) {
             // At plugin start a world that has not finished starting is not ready: StartWorldEvent calls again.
-            LOGGER.at(Level.INFO).log("World %s not ready yet: station master of '%s' resumed at world start (%s)",
-                    world.getName(), s.name, ex.getClass().getSimpleName());
         }
     }
 
@@ -402,7 +396,6 @@ final class StationMaster {
                     if (id != null) {
                         TransitNetwork.get().setMaster(s, id.getUuid());
                         wire(store, orphan, s);
-                        LOGGER.at(Level.INFO).log("Station master of '%s' resumed in place (%s)", s.name, id.getUuid());
                         removeDuplicates(store, s, orphan);
                         continue;
                     }
@@ -449,7 +442,7 @@ final class StationMaster {
             }
         }
         if (removed > 0) {
-            LOGGER.at(Level.INFO).log("Station master of '%s': %d duplicate(s) removed", s.name, removed);
+            LOGGER.at(Level.WARNING).log("Station master of '%s': %d duplicate(s) removed", s.name, removed);
         }
     }
 

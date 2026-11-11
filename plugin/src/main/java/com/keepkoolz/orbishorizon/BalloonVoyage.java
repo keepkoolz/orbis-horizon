@@ -20,11 +20,19 @@ final class BalloonVoyage {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
     private static final double MAX_DT = 0.25;
     enum Phase { CLIMB, CRUISE, DESCEND }
+    /** GROUND: lands on a free column near the destination. QUAY: descends onto the docking origin and is placed there. */
+    enum Arrival { GROUND, QUAY }
 
     final String destName;
     final VoyagePlanner.Kind destKind;
-    final double destX, destZ;
+    volatile double destX, destZ;
+    /** Null for the recall flight (no captain aboard). */
     final UUID captain;
+    /** No fuel is burned and no fuel window is shown (recall flight). */
+    final boolean fuelFree;
+    volatile Arrival arrival;
+    /** QUAY: origin {x, y, z} of the placement on the quay. */
+    final int[] dock;
     /** Where the voyage started (block centre of the origin), used to pick the landing columns on the way back. */
     volatile double fromX, fromZ;
     volatile double cruiseY;
@@ -39,6 +47,14 @@ final class BalloonVoyage {
     final TransitFlight motion;
 
     BalloonVoyage(String destName, VoyagePlanner.Kind destKind, double destX, double destZ, double cruiseY, UUID captain, long now) {
+        this(destName, destKind, destX, destZ, cruiseY, captain, now, false, Arrival.GROUND, null);
+    }
+
+    BalloonVoyage(String destName, VoyagePlanner.Kind destKind, double destX, double destZ, double cruiseY, UUID captain, long now,
+                  boolean fuelFree, Arrival arrival, int[] dock) {
+        this.fuelFree = fuelFree;
+        this.arrival = arrival;
+        this.dock = dock;
         this.destName = destName;
         this.destKind = destKind;
         this.destX = destX;
@@ -130,8 +146,11 @@ final class BalloonVoyage {
             return;
         }
         try {
+            if (f.recall != null) {
+                BalloonRecall.releaseQuayIfLeft(f); // a departing recall holds the quay until it is out of the zone
+            }
             // Watchdog: a voyage whose captain is no longer among the passengers stops (whatever path removed him).
-            if (!v.stopped) {
+            if (!v.stopped && v.captain != null) {
                 List<UUID> aboard = new ArrayList<>();
                 for (BalloonFlight.Passenger p : f.passengers) {
                     aboard.add(p.uuid);
@@ -185,11 +204,21 @@ final class BalloonVoyage {
                     v.phase = Phase.CRUISE;
                     m.lastProgressMs = now;
                 } else if (blocked && now - m.lastProgressMs > TransitConstants.RESCUE_NO_PROGRESS_SECONDS * 1000L) {
-                    blockedStop(store, f, v);
+                    if (v.arrival == Arrival.QUAY && f.recall != null && !v.stopped) {
+                        BalloonRecall.obstructed(store, world, f, v, now);
+                    } else if (!BalloonRecall.leaveStuck(f, v)) {
+                        blockedStop(store, f, v);
+                    }
                 }
             }
             case CRUISE -> climbing = cruise(store, world, s, f, v, dt, now);
             case DESCEND -> {
+                if (v.arrival == Arrival.QUAY && !v.stopped) {
+                    if (descendToQuay(store, world, s, f, v, tr, bm, dt, now)) {
+                        return;
+                    }
+                    break;
+                }
                 boolean blocked = TransitAutopilot.moveVertical(world, s, f, m, -f.descentSpeed * dt, now, false);
                 if (blocked || f.entityPos.y <= 1) {
                     land(store, world, f, v, tr, bm);
@@ -208,6 +237,9 @@ final class BalloonVoyage {
 
     /** Burns the fuel and shows the fuel window to the captain; dry: flame off, the voyage stops and the pilot says so. */
     private static void burn(Store<EntityStore> store, BalloonFlight f, BalloonVoyage v, BalloonManager bm, long now) {
+        if (v.fuelFree) {
+            return;
+        }
         BurnerFuel fuel = f.burner;
         if (fuel == null) {
             return;
@@ -250,11 +282,30 @@ final class BalloonVoyage {
                                   long now) {
         TransitFlight m = v.motion;
         if (now - m.lastProgressMs > TransitConstants.RESCUE_NO_PROGRESS_SECONDS * 1000L) {
-            blockedStop(store, f, v);
+            if (v.arrival == Arrival.QUAY && f.recall != null && !v.stopped) {
+                BalloonRecall.obstructed(store, world, f, v, now);
+            } else if (!BalloonRecall.leaveStuck(f, v)) {
+                blockedStop(store, f, v);
+            }
             return false;
         }
         if (f.dry) {
             return false;
+        }
+        if (v.arrival == Arrival.QUAY && !v.stopped) {
+            double qx = v.dock[0] + 0.5;
+            double qz = v.dock[2] + 0.5;
+            boolean climbing = TransitAutopilot.flyToward(world, s, f, m, qx, qz, dt, now, false);
+            if (Math.hypot(qx - f.entityPos.x, qz - f.entityPos.z) < TransitAutopilot.ARRIVED) {
+                // Above the quay column: centred on it (less than a block) for the vertical descent.
+                f.entityPos.x = qx;
+                f.entityPos.z = qz;
+                f.lastCheckedOrigin.x = v.dock[0];
+                f.lastCheckedOrigin.z = v.dock[2];
+                v.phase = Phase.DESCEND;
+                m.lastProgressMs = now;
+            }
+            return climbing;
         }
         if (v.landing == null) {
             boolean climbing = TransitAutopilot.flyToward(world, s, f, m, v.destX, v.destZ, dt, now, false);
@@ -294,16 +345,21 @@ final class BalloonVoyage {
     /** Contact (or y 1): the balloon is placed in blocks here, on the next world task. */
     private static void land(Store<EntityStore> store, World world, BalloonFlight f, BalloonVoyage v, TransformComponent tr,
                              BalloonManager bm) {
+        land(store, world, f, v, tr, bm, new Vector3i(f.lastCheckedOrigin), false);
+    }
+
+    /** Same at a given origin; docked: the balloon is placed on the quay and the recall goes on (BalloonRecall.onDocked). */
+    private static void land(Store<EntityStore> store, World world, BalloonFlight f, BalloonVoyage v, TransformComponent tr,
+                             BalloonManager bm, Vector3i origin, boolean docked) {
         f.stopping = true;
+        if (!docked && f.recall != null && f.recall.phase != RecallState.Phase.LEAVE) {
+            BalloonRecall.obstructed(store, world, f, v, System.currentTimeMillis()); // safety net: the quay is freed, the owner told
+        }
         tr.setPosition(bm.displayPosition(f.kind, f.entityPos, f.rotation));
-        Vector3i origin = new Vector3i(f.lastCheckedOrigin);
         PlayerRef captain = captainOf(store, f, v);
         Ref<EntityStore> capRef = captain != null ? captain.getReference() : null;
         if (v.arrived && captain != null) {
             captain.sendMessage(ShipVoyage.withDest(Texts.pilot("crew.voyage.arrivedBalloon", f.crew), v.destKind, v.destName));
-        }
-        if (v.forced) {
-            LOGGER.at(Level.INFO).log("Forced landing in a station zone: balloon voyage to %s, origin %s", v.destName, origin);
         }
         CaptainMap.forget(v.captain);
         if (capRef != null && capRef.isValid()) {
@@ -315,10 +371,35 @@ final class BalloonVoyage {
             }
             try {
                 bm.finishFlight(store, f, origin);
+                if (docked) {
+                    BalloonRecall.onDocked(store, world, f);
+                }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Balloon voyage: landing failed");
-                Telemetry.error("balloon.flight", e, Telemetry.kindId(f.kind), "voyage");
+                Telemetry.error(docked ? "recall" : "balloon.flight", e, Telemetry.kindId(f.kind), docked ? "recall" : "voyage");
+                if (docked && f.recall != null) {
+                    BalloonRecall.endQuay(f.recall);
+                }
             }
         });
+    }
+
+    /**
+     * Recall descent onto the quay column. At the docking height the balloon is placed there (true returned, the tick ends). A block
+     * stopping the descent above it, or no progress for too long, hands over to BalloonRecall.obstructed.
+     */
+    private static boolean descendToQuay(Store<EntityStore> store, World world, StructureShape s, BalloonFlight f, BalloonVoyage v,
+                                         TransformComponent tr, BalloonManager bm, double dt, long now) {
+        TransitFlight m = v.motion;
+        double dy = Math.min(f.descentSpeed * dt, Math.max(0, f.entityPos.y - v.dock[1]));
+        boolean blocked = TransitAutopilot.moveVertical(world, s, f, m, -dy, now, false);
+        if (f.entityPos.y <= v.dock[1] + 1e-6) {
+            land(store, world, f, v, tr, bm, new Vector3i(v.dock[0], v.dock[1], v.dock[2]), true);
+            return true;
+        }
+        if (blocked || now - m.lastProgressMs > TransitConstants.RESCUE_NO_PROGRESS_SECONDS * 1000L) {
+            BalloonRecall.obstructed(store, world, f, v, now);
+        }
+        return false;
     }
 }

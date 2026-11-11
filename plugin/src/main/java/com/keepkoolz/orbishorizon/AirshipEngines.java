@@ -213,7 +213,7 @@ final class AirshipEngines {
         return all;
     }
 
-    /** Number of items kept (fuel, charcoal, surplus), for the log. */
+    /** Number of items kept (fuel, charcoal, surplus). */
     int itemCount() {
         int n = 0;
         for (Entry e : entries) {

@@ -13,8 +13,12 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import java.util.UUID;
+
 /** Interaction "Airship_CrewTalk": the Use interaction of an airship pilot NPC (root Airship_Pilot_Use). */
 public class AirshipCrewTalkInteraction extends SimpleInstantInteraction {
+
+    private static final com.hypixel.hytale.logger.HytaleLogger LOGGER = com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass();
 
     public static final String TYPE_ID = "Airship_CrewTalk";
 
@@ -55,10 +59,25 @@ public class AirshipCrewTalkInteraction extends SimpleInstantInteraction {
                     pr.sendMessage(Texts.pilot("crew.talk.busy", e.crew()));
                     return;
                 }
-                p.getPageManager().openCustomPage(player, store, new AirshipVoyagePage(pr, id.getUuid()));
+                UUID pilot = id.getUuid();
+                Runnable orders = () -> {
+                    try {
+                        if (player.isValid()) {
+                            p.getPageManager().openCustomPage(player, store, new AirshipVoyagePage(pr, pilot));
+                        }
+                    } catch (RuntimeException ex) {
+                        LOGGER.at(java.util.logging.Level.WARNING).withCause(ex).log("Pilot: dialogue not opened");
+                    }
+                };
+                UUID vehicle = e.ownership().id();
+                if (vehicle != null && !VehicleNames.named(vehicle)) {
+                    pr.sendMessage(Texts.pilot("crew.name.ask", e.crew()));
+                    VehicleNamePage.open(store, player, pr, vehicle, e.kind(), orders);
+                    return;
+                }
+                orders.run();
             } catch (RuntimeException ex) {
-                com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.WARNING).withCause(ex)
-                        .log("Pilot: dialogue not opened");
+                LOGGER.at(java.util.logging.Level.WARNING).withCause(ex).log("Pilot: dialogue not opened");
             }
         });
     }

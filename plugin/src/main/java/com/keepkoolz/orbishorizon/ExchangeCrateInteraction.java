@@ -89,7 +89,6 @@ public class ExchangeCrateInteraction extends SimpleInstantInteraction {
                 Telemetry.error("station.contract", new IllegalStateException("crate not removed"), null, null);
             }
             playerRef.sendMessage(Texts.t(given == StationContracts.Given.DROPPED ? "transit.crate.exchangedDropped" : "transit.crate.exchanged"));
-            LOGGER.at(Level.INFO).log("Station crate exchanged for a contract by %s", playerRef.getUsername());
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Station crate exchange failed");
             Telemetry.error("station.contract", e, null, null);

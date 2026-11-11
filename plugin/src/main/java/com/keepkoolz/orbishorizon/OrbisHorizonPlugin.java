@@ -103,6 +103,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         AirshipResume.init(getDataDirectory());
         // registry of placed balloons and locking (breaking, break damage and block placement cancelled).
         BalloonRegistry.init(getDataDirectory());
+        VehicleNames.init(getDataDirectory());
         // Transit: station network (stations.json).
         TransitNetwork.get().load(getDataDirectory());
         TransitFare.loadRefunds(getDataDirectory());
@@ -199,6 +200,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                     BalloonManager.get().onPlayerGone(event.getPlayerRef().getUuid());
                     AirshipManager.get().onPlayerGone(event.getPlayerRef().getUuid());
                     StationNamePage.onPlayerGone(event.getPlayerRef().getUuid());
+                    VehicleNamePage.onPlayerGone(event.getPlayerRef().getUuid());
                     HeldCratePreview.onPlayerGone(event.getPlayerRef().getUuid());
                 });
         // a passenger left in the air when a flight was resumed is put down on their next arrival.
@@ -217,7 +219,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         getEventRegistry().register((short) -50, ShutdownEvent.class, event -> {
             BalloonManager.get().landAll();
             AirshipManager.get().landAll();
-            BalloonRegistry.flushCage();
+            BalloonRegistry.flush();
             Telemetry.stop();
         });
         // World map markers of the stations, registered on every world like the game's warps.
@@ -252,6 +254,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                 getLogger().at(Level.WARNING).withCause(e).log("Resume of the pilots of %s failed", event.getWorld().getName());
             }
             AirshipManager.get().recoverWorld(event.getWorld());
+            BalloonRecall.recoverWorld(event.getWorld());
         });
         // A world being removed (another mod may cancel the removal: the extension tolerates a stop without a removal).
         getEventRegistry().registerGlobal(RemoveWorldEvent.class, event -> Extensions.worldStop(event.getWorld()));
@@ -263,50 +266,27 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         // the tent shape is read once (asset prefabs are loaded before start). A failure
         // is logged by Deployables and the shape will be read again on demand.
         for (Deployables.Kind kind : Deployables.TENTS) {
-            StructureShape tent = kind.shapeOrNull();
-            if (tent != null) {
-                StructureShape.Cell anchor = tent.anchor();
-                getLogger().at(Level.INFO).log("%s: %d cell(s), anchor at (%d, %d, %d)",
-                        kind == Deployables.TENT ? "Tent" : kind == Deployables.BEDROLL ? "Bedroll" : "Large tent", tent.cells().size(), anchor.x(), anchor.y(), anchor.z());
-            }
+            kind.shapeOrNull();
         }
         // Airship prototype: the shape is read once and the collision hull computed (logged by AirshipManager).
         for (Deployables.Kind shipKind : Deployables.SHIPS) {
             StructureShape airship = shipKind.shapeOrNull();
             if (airship != null) {
-                getLogger().at(Level.INFO).log("%s: %d cell(s), anchor '%s' at (%d, %d, %d)",
-                        AirshipManager.cap(shipKind.airship.logLabel), airship.cells().size(),
-                        airship.anchor().baseName(), airship.anchor().x(), airship.anchor().y(), airship.anchor().z());
                 AirshipManager.get().warmUp(shipKind, airship);
             }
         }
         // balloon types, with their number of seats (limit of passengers).
         for (Deployables.Kind kind : Deployables.BALLOONS) {
-            StructureShape shape = kind.shapeOrNull();
-            if (shape != null) {
-                getLogger().at(Level.INFO).log("Balloon '%s': %d cell(s), %d seat(s)", kind.id, shape.cells().size(), shape.seats().size());
-            }
+            kind.shapeOrNull();
         }
-        // Transit network: the transit balloon (not in BALLOONS) and the station, same startup log lines.
-        StructureShape transit = Deployables.BALLOON_PUBLIC.shapeOrNull();
-        if (transit != null) {
-            getLogger().at(Level.INFO).log("Balloon '%s': %d cell(s), %d seat(s)", Deployables.BALLOON_PUBLIC.id,
-                    transit.cells().size(), transit.seats().size());
-        } else {
+        // Transit network: the transit balloon (not in BALLOONS) and the stations.
+        if (Deployables.BALLOON_PUBLIC.shapeOrNull() == null) {
             getLogger().at(Level.WARNING).log("Balloon '%s': unreadable prefab", Deployables.BALLOON_PUBLIC.id);
         }
-        StructureShape station = Deployables.STATION.shapeOrNull();
-        if (station != null) {
-            getLogger().at(Level.INFO).log("Station: %d cell(s), anchor at (%d, %d, %d)", station.cells().size(),
-                    station.anchor().x(), station.anchor().y(), station.anchor().z());
-        } else {
+        if (Deployables.STATION.shapeOrNull() == null) {
             getLogger().at(Level.WARNING).log("Station: unreadable prefab");
         }
-        StructureShape boatStation = Deployables.BOAT_STATION.shapeOrNull();
-        if (boatStation != null) {
-            getLogger().at(Level.INFO).log("Sea station: %d cell(s), anchor at (%d, %d, %d)", boatStation.cells().size(),
-                    boatStation.anchor().x(), boatStation.anchor().y(), boatStation.anchor().z());
-        } else {
+        if (Deployables.BOAT_STATION.shapeOrNull() == null) {
             getLogger().at(Level.WARNING).log("Sea station: unreadable prefab");
         }
         // Worlds already started when the plugin starts (StartWorldEvent has already passed).
@@ -360,12 +340,15 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             } catch (RuntimeException e) {
                 getLogger().at(Level.WARNING).withCause(e).log("Resume of the airships of %s deferred to world start", world.getName());
             }
+            try {
+                BalloonRecall.recoverWorld(world);
+            } catch (RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Resume of the recalled balloons of %s deferred to world start", world.getName());
+            }
         }
         Extensions.markStarted();
         // Every extension has registered during setup, so the command tree is complete: addSubCommand refuses a registered command.
         getCommandRegistry().registerCommand(new OrbisHorizonCommand());
-        getLogger().at(Level.INFO).log("Orbis Horizon plugin: interaction %s, /orbishorizon balloon command and flight system registered",
-                DeployBalloonInteraction.TYPE_ID);
         Telemetry.start(this); // last: Beacon starts after the normal setup
     }
 
@@ -373,24 +356,20 @@ public class OrbisHorizonPlugin extends JavaPlugin {
     protected void shutdown() {
         BalloonManager.get().landAll();
         AirshipManager.get().landAll();
-        BalloonRegistry.flushCage();
+        BalloonRegistry.stopWriter();
         SeaCharts.stop();
         BenchTabs.unregister();
         Telemetry.stop();
     }
 
-    /** Deletes the file of stored boat routes (and its .bad copy), which is not read any more, with one log line. */
+    /** Deletes the file of stored boat routes (and its .bad copy), which is not read any more. */
     private void deleteStoredRoutes(java.nio.file.Path dataDir) {
-        boolean deleted = false;
         for (String name : new String[] {"boat-routes.json", "boat-routes.json.bad"}) {
             try {
-                deleted |= java.nio.file.Files.deleteIfExists(dataDir.resolve(name));
+                java.nio.file.Files.deleteIfExists(dataDir.resolve(name));
             } catch (java.io.IOException | RuntimeException e) {
                 getLogger().at(Level.WARNING).withCause(e).log("%s: cannot delete", name);
             }
-        }
-        if (deleted) {
-            getLogger().at(Level.INFO).log("boat-routes.json deleted: the saved water routes are no longer used");
         }
     }
 

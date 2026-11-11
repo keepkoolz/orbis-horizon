@@ -190,12 +190,12 @@ final class HeldCratePreview {
         boolean balloonStation = itemId.equals(QuayPlanPage.BALLOON_FULL);
         if (boatPlan) {
             // Read only when the origin, rotation or item changed (this point is only reached then).
-            wood = BiomeWood.woodAt(world, p.origin().x, p.origin().z, false);
+            wood = BiomeWood.woodAt(world, p.origin().x, p.origin().z);
         } else if (balloonStation) {
-            wood = BiomeWood.stationWoodAt(world, p.origin().x, p.origin().z, false);
-            stone = BiomeStone.stoneAt(world, p.origin().x, p.origin().z, false);
+            wood = BiomeWood.stationWoodAt(world, p.origin().x, p.origin().z);
+            stone = BiomeStone.stoneAt(world, p.origin().x, p.origin().z);
         } else if (pad) {
-            stone = BiomeStone.stoneAt(world, p.origin().x, p.origin().z, false);
+            stone = BiomeStone.stoneAt(world, p.origin().x, p.origin().z);
         }
         EditorBlocksChange blocks = encoded(crate.prefabPath(), p.rotation(), wood, stone, balloonStation || pad, deck);
         if (blocks == null) {
@@ -424,7 +424,7 @@ final class HeldCratePreview {
         try {
             pr.getPacketHandler().writeNoCache(new HideTriggerVolumePastePrefabPreview());
         } catch (RuntimeException e) {
-            LOGGER.at(Level.FINE).withCause(e).log("Preview not hidden");
+            // best effort
         }
     }
 

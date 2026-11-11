@@ -54,11 +54,6 @@ final class BiomeStone {
 
     /** Stone of the zone at (x, z), read from the world generator. Never throws, DEFAULT on any failure. */
     static Stone stoneAt(World world, int x, int z) {
-        return stoneAt(world, x, z, true);
-    }
-
-    /** The log flag is true only for a real placement (the preview calls this often). */
-    static Stone stoneAt(World world, int x, int z, boolean log) {
         try {
             Object gen = world.getChunkStore().getGenerator();
             if (!(gen instanceof com.hypixel.hytale.server.worldgen.chunk.ChunkGenerator generator)) {
@@ -70,12 +65,7 @@ final class BiomeStone {
                 return DEFAULT;
             }
             String zone = r.getZoneResult().getZone().name();
-            Stone stone = stoneOfZone(zone);
-            if (log) {
-                com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.INFO)
-                        .log("Balloon station: stone %s, zone %s", stone.family(), zone);
-            }
-            return stone;
+            return stoneOfZone(zone);
         } catch (RuntimeException | LinkageError e) {
             return DEFAULT;
         }

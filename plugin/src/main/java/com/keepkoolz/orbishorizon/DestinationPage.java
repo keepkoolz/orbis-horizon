@@ -112,7 +112,7 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
             }
         }
         events.addEventBinding(CustomUIEventBindingType.Activating, "#HireButton", EventData.of("Action", "Hire"));
-        cmd.set("#RecallButton.Visible", !boat && AirshipRecall.canOffer(world, playerRef.getUuid()));
+        cmd.set("#RecallButton.Visible", !boat && VehicleRecall.canOffer(world, playerRef.getUuid()));
         events.addEventBinding(CustomUIEventBindingType.Activating, "#ContractButton", EventData.of("Action", "Contract"));
         cmd.set("#ArrivalButton.Visible", canOfferArrival(station.kind, station.quay != null, station.owner, playerRef.getUuid()));
         events.addEventBinding(CustomUIEventBindingType.Activating, "#ArrivalButton", EventData.of("Action", "Arrival"));
@@ -236,7 +236,6 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
         if ("Arrival".equals(data.action)) {
             if (!canOfferArrival(station.kind, station.quay != null, station.owner, playerRef.getUuid())) {
                 // The button is hidden for anyone else: a crafted event is ignored.
-                LOGGER.at(Level.INFO).log("Arrival ignored: %s may not set the arrival point of %s", playerRef.getUsername(), station.name);
                 return;
             }
             if (!StationMaster.holds(station, playerRef.getUuid())) {
@@ -252,7 +251,6 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
         }
         if ("Recall".equals(data.action)) {
             if (boat) { // the button is hidden on a boat station: a crafted event is ignored
-                LOGGER.at(Level.INFO).log("Recall ignored: %s is a sea station", station.name);
                 return;
             }
             if (!StationMaster.holds(station, playerRef.getUuid())) {
@@ -261,12 +259,22 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
                 close();
                 return;
             }
-            Message refusal = AirshipRecall.start(store, store.getExternalData().getWorld(), playerRef, station);
-            if (refusal != null) {
-                playerRef.sendMessage(refusal);
+            // The recall window takes over the reservation of the master.
+            finished = true;
+            try {
+                com.hypixel.hytale.server.core.entity.entities.Player p = store.getComponent(ref,
+                        com.hypixel.hytale.server.core.entity.entities.Player.getComponentType());
+                if (p == null) {
+                    StationMaster.release(station, playerRef.getUuid());
+                    return;
+                }
+                p.getPageManager().openCustomPage(ref, store, new RecallPage(playerRef, station));
+            } catch (RuntimeException e) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Cannot open the recall window for '%s'", station.name);
+                Telemetry.error("transit", e, null, null);
+                StationMaster.release(station, playerRef.getUuid());
+                close();
             }
-            finish();
-            close();
             return;
         }
         if (data.dest != null && !data.dest.isEmpty()) {
@@ -288,7 +296,7 @@ final class DestinationPage extends InteractiveCustomUIPage<DestinationPage.Data
                 }
             }
             if (!offered) {
-                LOGGER.at(Level.INFO).log("Destination ignored: '%s' is not known to the player", data.dest);
+                LOGGER.at(Level.WARNING).log("Destination ignored: '%s' is not known to the player", data.dest);
                 finish();
                 close();
                 return;

@@ -222,8 +222,7 @@ final class PackChests {
             PackWindow window = new PackWindow(shown, boxes, new Tracker(heldContainer, (short) context.getHeldItemSlot(),
                     held.getItemId(), meta, contents, cells, layout.leftovers(), kind.id));
             Store<EntityStore> store = ref.getStore();
-            boolean ok = player.getPageManager().setPageWithWindows(ref, store, Page.Bench, true, new Window[]{window});
-            LOGGER.at(Level.INFO).log("Pack chests of \"%s\" opened by %s (%d chest(s), shown: %s)", kind.id, playerRef.getUsername(), boxes.length, ok);
+            player.getPageManager().setPageWithWindows(ref, store, Page.Bench, true, new Window[]{window});
             return true;
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pack chests: cannot open");
@@ -246,7 +245,7 @@ final class PackChests {
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Pack chests: chest capacity unreadable");
         }
-        LOGGER.at(Level.INFO).log("Pack chests: chest capacity not found in the block type, using %d", DEFAULT_CAPACITY);
+        LOGGER.at(Level.WARNING).log("Pack chests: chest capacity not found in the block type, using %d", DEFAULT_CAPACITY);
         return DEFAULT_CAPACITY;
     }
 
@@ -374,7 +373,6 @@ final class PackChests {
             }
             try {
                 if (!tracker.packInPlace()) {
-                    LOGGER.at(Level.INFO).log("Pack chests: the pack left its slot, window closed");
                     shut(ref, store);
                 }
             } catch (RuntimeException e) {
@@ -400,7 +398,6 @@ final class PackChests {
             }
             try {
                 if (!tracker.write(boxes)) {
-                    LOGGER.at(Level.INFO).log("Pack chests: the pack left its slot, window closed and nothing written");
                     closing = true;
                     unregister();
                     close(ref, store);

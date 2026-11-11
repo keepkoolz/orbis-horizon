@@ -34,7 +34,7 @@ final class TransitSettings {
     private static volatile BsonValue rawWorldgenOldTerrain;
     private static volatile boolean fareEnabled = true;
     private static volatile boolean generatedStationsEditable = false;
-    private static volatile ConsoleLogs.Threshold consoleLogLevel = ConsoleLogs.Threshold.INFO;
+    private static volatile ConsoleLogs.Threshold consoleLogLevel = ConsoleLogs.Threshold.WARNING;
     private static volatile Path file;
 
     private TransitSettings() {
@@ -115,7 +115,7 @@ final class TransitSettings {
         markerSharing = true;
         fareEnabled = true;
         generatedStationsEditable = false;
-        consoleLogLevel = ConsoleLogs.Threshold.INFO;
+        consoleLogLevel = ConsoleLogs.Threshold.WARNING;
         if (!Files.isRegularFile(file)) return;
         try {
             BsonDocument doc = BsonDocument.parse(Files.readString(file, StandardCharsets.UTF_8));
@@ -136,7 +136,7 @@ final class TransitSettings {
             generatedStationsEditable = doc.containsKey("generatedStationsEditable") && doc.get("generatedStationsEditable").isBoolean()
                     && doc.getBoolean("generatedStationsEditable").getValue();
             consoleLogLevel = doc.containsKey("consoleLogLevel") && doc.get("consoleLogLevel").isString()
-                    ? ConsoleLogs.Threshold.parse(doc.getString("consoleLogLevel").getValue()) : ConsoleLogs.Threshold.INFO;
+                    ? ConsoleLogs.Threshold.parse(doc.getString("consoleLogLevel").getValue()) : ConsoleLogs.Threshold.WARNING;
         } catch (IOException | RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("transit-settings.json unreadable, default settings");
             disabledRecipes = new HashSet<>();

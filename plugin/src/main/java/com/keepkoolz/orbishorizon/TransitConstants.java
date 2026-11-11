@@ -10,10 +10,6 @@ final class TransitConstants {
     static final int COUNTDOWN_SECONDS = 30;
     /** Interval between countdown messages. */
     static final int MESSAGE_INTERVAL_SECONDS = 10;
-    /** external view of balloon passengers: horizontal move (blocks) after which the travel direction is sampled again. */
-    static final double VIEW_DIRECTION_MIN_MOVE = 2.0;
-    /** external view: change of travel direction (degrees) that re-sends the camera. */
-    static final double VIEW_DIRECTION_CHANGE_DEGREES = 10.0;
     /** external view: default camera distance, in times the size of the balloon. */
     static final double VIEW_DISTANCE_FACTOR = 1.2;
     /** external view: default camera height above the target, in times the camera distance. */

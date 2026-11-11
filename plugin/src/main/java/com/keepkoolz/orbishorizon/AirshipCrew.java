@@ -140,7 +140,6 @@ final class AirshipCrew {
             if (id == null) {
                 return null;
             }
-            LOGGER.at(Level.INFO).log("Pilot: created at (%d, %d, %d) (%s, post %s)", e.x(), e.y(), e.z(), id.getUuid(), crew.post().key);
             if (crew.post() == CrewRecord.Post.STOOL) {
                 seat(store, ref, e, id.getUuid());
             }
@@ -243,7 +242,6 @@ final class AirshipCrew {
                     return;
                 }
             }
-            String[] names = {"gender + outfit", "drawn + outfit", "gender only", "drawn only"};
             PlayerSkin[] cands = new PlayerSkin[4];
             cands[0] = new PlayerSkin(gendered);
             String bad = applyOutfit(cands[0], OUTFIT);
@@ -262,7 +260,6 @@ final class AirshipCrew {
                 c.setNetworkOutdated(); // sent again to the clients that already see the pilot
                 store.putComponent(ref, PlayerSkinComponent.getComponentType(), c);
                 SKIN_DONE.add(key);
-                LOGGER.at(Level.INFO).log("Pilot: appearance applied (%s)", names[i]);
                 return;
             }
             SKIN_DONE.add(key); // nothing usable: do not retry every pass
@@ -534,7 +531,7 @@ final class AirshipCrew {
                 if (ref != null && ref.isValid()) {
                     ViewFilter.clear(ref);
                     store.removeEntity(ref, RemoveReason.REMOVE);
-                    LOGGER.at(Level.INFO).log("Pilot: flight mannequin left in the world removed (%s)", shipUuid);
+                    LOGGER.at(Level.WARNING).log("Pilot: flight mannequin left in the world removed (%s)", shipUuid);
                 }
             }
         } catch (RuntimeException e) {
@@ -678,7 +675,7 @@ final class AirshipCrew {
             }
         }
         if (removed > 0) {
-            LOGGER.at(Level.INFO).log("Pilot: %d duplicate(s) removed at (%d, %d, %d)", removed, e.x(), e.y(), e.z());
+            LOGGER.at(Level.WARNING).log("Pilot: %d duplicate(s) removed at (%d, %d, %d)", removed, e.x(), e.y(), e.z());
         }
     }
 
@@ -750,7 +747,7 @@ final class AirshipCrew {
                 }
             });
         } catch (RuntimeException ex) {
-            LOGGER.at(Level.INFO).log("World %s not ready yet: pilot resumed at world start (%s)", world.getName(), ex.getClass().getSimpleName());
+            // the pilot is resumed at the world start
         }
     }
 
@@ -811,7 +808,6 @@ final class AirshipCrew {
                         BalloonRegistry.Entry updated = BalloonRegistry.setCrew(world, origin, e.rotation(), e.kind(), e.crew().withUuid(id.getUuid()));
                         wire(store, orphan, updated != null ? updated : e, e.crew());
                         standUp(store, orphan, id.getUuid());
-                        LOGGER.at(Level.INFO).log("Pilot resumed in place at (%d, %d, %d) (%s)", e.x(), e.y(), e.z(), id.getUuid());
                         removeDuplicates(store, e, orphan);
                         continue;
                     }
@@ -886,8 +882,6 @@ final class AirshipCrew {
     private static final double DOOR_LEG = 1.5;
     private static final double HELM_APPROACH = 1.5;
     private static final long WALK_TIMEOUT_MS = 45_000;
-    /** Logs the walk of the pilot once per second (position, distance, mount and sitting flags, leash). Set to false to silence. */
-    private static final boolean WALK_DIAGNOSTICS = true;
     private static final long WALK_STEP_MS = 250; // the walk logic runs about 4 times a second, not every tick
     private static final double HELM_FREE_HORIZONTAL = 0.8;
     private static final double HELM_FREE_VERTICAL = 1.5;
@@ -901,9 +895,7 @@ final class AirshipCrew {
         boolean waiting;
         /** Set by standUp: the leash is applied again on the next step (a component removal may only land after the current tick). */
         boolean leashDirty;
-        /** Diagnostics: last log time, position and ms at the start of the walk window. */
-        long lastLogMs;
-        Vector3d lastLogPos;
+        /** Diagnostics: ms and position at the start of the walk window. */
         long windowStartMs;
         Vector3d windowStartPos;
         boolean stuckWarned;
@@ -990,14 +982,12 @@ final class AirshipCrew {
         }
     }
 
-    /** Diagnostics of the walk (log once per second, warning when stuck). Never throws. */
+    /** Diagnostics of the walk: a warning when the pilot has not moved for 5 s. Returns true when the walk has been stuck for long. Never throws. */
     private static boolean walkDiagnostics(Store<EntityStore> store, Ref<EntityStore> ref, NPCEntity npc, Walk walk, Vector3d p, long now) {
         try {
             if (walk.windowStartPos == null) {
                 walk.windowStartPos = new Vector3d(p);
                 walk.windowStartMs = now;
-                walk.lastLogPos = new Vector3d(p);
-                walk.lastLogMs = now;
                 return false;
             }
             if (p.distance(walk.windowStartPos) >= 0.3) { // progress: the stuck window starts again here
@@ -1005,10 +995,9 @@ final class AirshipCrew {
                 walk.windowStartMs = now;
                 walk.stuckWarned = false;
             }
-            boolean oncePerSecond = WALK_DIAGNOSTICS && now - walk.lastLogMs >= 1000;
             boolean stuck = !walk.stuckWarned && now - walk.windowStartMs >= 5000 && p.distance(walk.windowStartPos) < 0.3;
             boolean stuckLong = walk.stuckWarned && now - walk.stuckWarnMs >= 10_000;
-            if (!oncePerSecond && !stuck) {
+            if (!stuck) {
                 return stuckLong;
             }
             Vector3d target = walk.legs.isEmpty() ? walk.finalTarget : walk.legs.get(0);
@@ -1017,22 +1006,14 @@ final class AirshipCrew {
             boolean mounting = msc != null && msc.getMovementStates() != null && msc.getMovementStates().mounting;
             boolean mounted = store.getComponent(ref, MountedComponent.getComponentType()) != null;
             Vector3d leash = npc.getLeashPoint();
-            double progress = walk.lastLogPos == null ? 0 : p.distance(walk.lastLogPos);
-            String line = String.format("walk %s position (%.1f, %.1f, %.1f), %.1f block(s) left toward (%.1f, %.1f, %.1f), mounted %s, sitting %s, mounting %s, leash %s, progress %.2f block(s)",
+            String line = String.format("walk %s position (%.1f, %.1f, %.1f), %.1f block(s) left toward (%.1f, %.1f, %.1f), mounted %s, sitting %s, mounting %s, leash %s",
                     walk.target.key, p.x, p.y, p.z, target == null ? -1.0 : p.distance(target),
                     target == null ? 0.0 : target.x, target == null ? 0.0 : target.y, target == null ? 0.0 : target.z,
                     mounted, sitting, mounting,
-                    leash == null ? "null" : String.format("(%.1f, %.1f, %.1f)", leash.x, leash.y, leash.z), progress);
-            if (stuck) {
-                walk.stuckWarned = true;
-                walk.stuckWarnMs = now;
-                LOGGER.at(Level.WARNING).log("Pilot: stuck for 5 s, %s", line);
-            }
-            if (oncePerSecond) {
-                LOGGER.at(Level.INFO).log("Pilot: %s", line);
-                walk.lastLogMs = now;
-                walk.lastLogPos = new Vector3d(p);
-            }
+                    leash == null ? "null" : String.format("(%.1f, %.1f, %.1f)", leash.x, leash.y, leash.z));
+            walk.stuckWarned = true;
+            walk.stuckWarnMs = now;
+            LOGGER.at(Level.WARNING).log("Pilot: stuck for 5 s, %s", line);
             return stuckLong;
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: walk log failed");
@@ -1132,7 +1113,6 @@ final class AirshipCrew {
             }
             store.putComponent(ref, Frozen.getComponentType(), Frozen.get());
             startSit(ref, store, npc);
-            LOGGER.at(Level.INFO).log("Pilot: seated on the stool at (%.1f, %.1f, %.1f)", stool.x, stool.y, stool.z);
         } catch (RuntimeException ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("Pilot: seating on the stool failed");
             Telemetry.error("airship.crew", ex, null, null);
@@ -1167,7 +1147,6 @@ final class AirshipCrew {
         Vector3d c = postPoint(e, door);
         boolean ok = SectionBlocks.setStateAt(world.getChunkStore(), (int) Math.floor(c.x), (int) Math.floor(c.y), (int) Math.floor(c.z),
                 bt, open ? "OpenDoorOut" : "CloseDoorOut");
-        LOGGER.at(Level.INFO).log("Pilot: door %s (write %s)", open ? "opened" : "closed", ok);
         return ok;
     }
 
@@ -1270,7 +1249,6 @@ final class AirshipCrew {
         setLeash(store, ref, w.legs.isEmpty() ? dest : w.legs.get(0));
         w.leashDirty = true; // applied again on the next step, once the removal of a MountedComponent has landed
         WALKS.put(key(e), w);
-        LOGGER.at(Level.INFO).log("Pilot: walking to %s at (%d, %d, %d), %d intermediate leg(s)", target.key, e.x(), e.y(), e.z(), w.legs.size());
         return true;
     }
 
@@ -1322,7 +1300,6 @@ final class AirshipCrew {
             return ResetResult.NOT_OWNER;
         }
         Ref<EntityStore> ref = refOf(world, best);
-        LOGGER.at(Level.INFO).log("Pilot: return to post requested at (%d, %d, %d), pilot %s", best.x(), best.y(), best.z(), ref == null ? "absent" : "present");
         if (ref == null) {
             ensure(world, best);
             return ResetResult.DONE;
@@ -1431,7 +1408,6 @@ final class AirshipCrew {
             return;
         }
         if (!seated && p.distance(postPoint) > REST_DRIFT) {
-            LOGGER.at(Level.INFO).log("Pilot: moved %.1f block(s) from the post, returning to post %s", p.distance(postPoint), post.key);
             orderWalk(store, world, e, post);
         }
     }
@@ -1488,7 +1464,6 @@ final class AirshipCrew {
             return;
         }
         WALKS.remove(k);
-        LOGGER.at(Level.INFO).log("Pilot: arrived at post %s in %.0f s", walk.target.key, (now - walk.startMs) / 1000.0);
         if (walk.target == CrewRecord.Post.STOOL) {
             seat(store, ref, e, e.crew().uuid());
         }

@@ -118,11 +118,9 @@ final class StationQueue {
         TransitNetwork net = TransitNetwork.get();
         TransitNetwork.Station target = net.byNameWithQuay(world.getName(), destination);
         if (!Deployables.STATION_KIND.equals(s.kind) || (target != null && !target.kind.equals(s.kind))) {
-            LOGGER.at(Level.INFO).log("Queue of %s ignored: stations of different types or sea station", s.name);
             return EnqueueResult.UNKNOWN;
         }
         if (target == null) {
-            LOGGER.at(Level.INFO).log("Queue of %s: unknown destination '%s'", s.name, destination);
             if (chooser != null) chooser.sendMessage(Texts.t("transit.network.removed").param("name", TransitNetwork.normalize(destination)));
             return EnqueueResult.UNKNOWN;
         }
@@ -233,7 +231,6 @@ final class StationQueue {
             return;
         }
         if (BalloonRegistry.get(world, dockOrigin(s), s.quayRotation, Deployables.BALLOON_PUBLIC.id) == null) {
-            LOGGER.at(Level.INFO).log("Station %s: docked balloon gone, dock freed", s.name);
             q.state = QuayState.FREE;
             return;
         }
@@ -509,6 +506,12 @@ final class StationQueue {
             LOGGER.at(Level.WARNING).withCause(e).log("Recalled airship not placed after the removal of %s", removed.name);
             Telemetry.error("airship.recall", e, null, null);
         }
+        try {
+            BalloonRecall.onStationRemoved(world, removed); // a recalled balloon lands in place, one waiting on its quay stays
+        } catch (RuntimeException e) {
+            LOGGER.at(Level.WARNING).withCause(e).log("Recalled balloon not handled after the removal of %s", removed.name);
+            Telemetry.error("recall", e, "balloon", null);
+        }
         // Flights in the air heading to the removed station (the network no longer contains it when this is called).
         BalloonManager.get().rerouteTransitTo(world, removed);
         for (TransitNetwork.Station other : TransitNetwork.get().stations(world.getName(), Deployables.STATION_KIND)) {
@@ -542,8 +545,6 @@ final class StationQueue {
         for (TransitNetwork.Station s : TransitNetwork.get().stations(world.getName(), Deployables.STATION_KIND)) {
             if (quay(s).state == QuayState.FREE
                     && BalloonRegistry.get(world, dockOrigin(s), s.quayRotation, Deployables.BALLOON_PUBLIC.id) != null) {
-                LOGGER.at(Level.INFO).log("Station %s: docked balloon found again, countdown of %d s", s.name,
-                        TransitConstants.COUNTDOWN_SECONDS);
                 startCountdown(world, s, quay(s));
             }
         }

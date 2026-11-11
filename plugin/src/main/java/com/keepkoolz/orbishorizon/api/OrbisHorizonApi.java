@@ -54,7 +54,6 @@ public final class OrbisHorizonApi {
             return false;
         }
         this.extension = extension;
-        LOGGER.at(Level.INFO).log("Extension %s registered", nameOf(extension));
         try {
             services.onRegistered().accept(extension);
         } catch (RuntimeException | LinkageError e) {

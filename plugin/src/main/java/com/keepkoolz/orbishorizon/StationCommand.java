@@ -281,9 +281,6 @@ public final class StationCommand extends AbstractCommandCollection {
                 }
             }
             // 1. Station blocks first: it refuses (chunks not loaded) before anything else is touched. Contents dropped, lock entry removed.
-            int removedBlocks = 0;
-            int droppedItems = 0;
-            int filled = 0;
             if (shape != null) {
                 StructureRemoval.Result r;
                 try {
@@ -297,13 +294,13 @@ public final class StationCommand extends AbstractCommandCollection {
                     ctx.sendMessage(r.error());
                     return;
                 }
-                removedBlocks = r.removed();
-                droppedItems = r.items();
                 Integer soil = StationSpec.of(s.kind).soilLayerY();
                 try {
-                    filled = !s.fullPrefab || coreOnly || soil == null ? 0 : fillGroundHoles(world, shape, s.origin, s.rotation, soil);
+                    if (s.fullPrefab && !coreOnly && soil != null) {
+                        fillGroundHoles(world, shape, s.origin, s.rotation, soil);
+                    }
                 } catch (RuntimeException e) {
-                    filled = 0;
+                    // the ground holes stay as they are
                 }
             }
             // 2. Master NPC, network entry, quay, flights and shuttles heading here, other queues.
@@ -313,8 +310,6 @@ public final class StationCommand extends AbstractCommandCollection {
             }
             Extensions.stationRemoved(world, s);
             StationContracts.Given given = StationContracts.give(player, s.kind);
-            LOGGER.at(Level.INFO).log("Station '%s' removed by %s: %d block(s), %d item(s) dropped, %d ground hole(s) filled",
-                    s.name, player.getUsername(), removedBlocks, droppedItems, filled);
             ctx.sendMessage(Texts.t(given == StationContracts.Given.GIVEN ? "transit.cmd.despawnDone" : "transit.cmd.despawnDoneFull")
                     .param("name", s.name));
             if (given == StationContracts.Given.FAILED) {
@@ -417,7 +412,6 @@ public final class StationCommand extends AbstractCommandCollection {
         }
         s.editable = editable;
         TransitNetwork.get().save();
-        LOGGER.at(Level.INFO).log("Station '%s' %s by an operator", s.name, editable ? "unlocked" : "locked");
         if (!editable && StationClearance.editable(s)) {
             ctx.sendMessage(Texts.t("transit.cmd.lockedSetting").param("name", s.name));
             return;

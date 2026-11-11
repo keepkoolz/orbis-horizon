@@ -221,7 +221,6 @@ final class CaptainMap {
             ItemComponent item = store.getComponent(e, ItemComponent.getComponentType());
             if (item != null && isMap(item.getItemStack())) {
                 store.removeEntity(e, RemoveReason.REMOVE);
-                LOGGER.at(Level.INFO).log("Voyage: captain's map dropped on the ground, deleted");
             }
         }
     }
@@ -320,7 +319,6 @@ final class CaptainMap {
                 hideTitle(pr, GliderJump.JUMP_HIDE_FADE_S);
             }
             if (STOPPED.putIfAbsent(captain, Boolean.TRUE) == null) {
-                LOGGER.at(Level.INFO).log("Voyage: stop requested by the captain's map");
                 f.stop().run();
             }
         }

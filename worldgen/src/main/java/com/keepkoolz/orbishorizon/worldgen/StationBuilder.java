@@ -100,7 +100,7 @@ final class StationBuilder {
             ChunkStoreBox cb = new ChunkStoreBox(scan ? widen(box, BUILT_MARGIN) : box);
             if (!cb.loaded(world)) {
                 if (!mayLoad) {
-                    nextSiteOrAbandon(world, e, site, "sections not loaded");
+                    nextSite(world, e);
                     return;
                 }
                 cb.load(world).copy().orTimeout(LOAD_TIMEOUT_S, TimeUnit.SECONDS).whenComplete((v, t) -> {
@@ -129,8 +129,6 @@ final class StationBuilder {
             if (scan) {
                 BuiltBlocks.Found built = builtNear(world, builtScan, box);
                 if (built != null) {
-                    LOGGER.at(Level.INFO).log("%s: site %d/%d refused at (%d, %d): construction %s at (%d, %d, %d)", GenerationListener.logName(e.kind),
-                            e.active + 1, e.sites.size(), site.x(), site.z(), built.block(), built.x(), built.y(), built.z());
                     nextSite(world, e);
                     return;
                 }
@@ -145,14 +143,13 @@ final class StationBuilder {
                 BoatAttempt attempt = boatAttempt(world, station, shuttle, site);
                 boatOutcome = e.active > 0 ? "fallback" : "first";
                 if (attempt.origin() == null) {
-                    BoatAttempt refused = attempt;
                     BoatRepair repair = repairBoat(world, e, station, shuttle, site, builtScan);
                     attempt = repair.found();
                     if (attempt != null) {
                         boatOutcome = "repaired";
                     }
                     if (attempt == null) {
-                        refuseBoat(world, e, site, repair.tries(), refused);
+                        nextSite(world, e);
                         return;
                     }
                     at = attempt.site();
@@ -163,25 +160,24 @@ final class StationBuilder {
             } else {
                 int ground = groundY(world, site.x(), site.z(), generator.getHeight(seed, site.x(), site.z()));
                 if (ground == Integer.MIN_VALUE) {
-                    nextSiteOrAbandon(world, e, site, "no ground under the station");
+                    nextSite(world, e);
                     return;
                 }
                 origin = new Vector3i(site.x(), ground + 1, site.z());
                 // No irreversible change before every refusal is known: distance, then room (vegetation counts as empty), then clearing.
                 StationInfo nearAir = WorldgenApi.stations().nearStation(world.getName(), kind, origin);
                 if (nearAir != null) {
-                    nextSiteOrAbandon(world, e, site, "too close to \"" + nearAir.name() + "\"");
+                    nextSite(world, e);
                     return;
                 }
                 Refusal refusal = WorldgenApi.stations().balloonRoomRefusal(world, origin, site.rotation(), GenClear::removable);
                 if (refusal != null) {
-                    nextSiteOrAbandon(world, e, site, refusal.key() != null ? refusal.key() : "refusal without key");
+                    nextSite(world, e);
                     return;
                 }
-                int cleared = GenClear.clearBox(world, WorldgenApi.kinds().placeMin(StationKinds.AIR),
+                GenClear.clearBox(world, WorldgenApi.kinds().placeMin(StationKinds.AIR),
                         WorldgenApi.kinds().placeMax(StationKinds.AIR), origin, site.rotation());
-                cleared += GenClear.clear(world, balloon, WorldgenApi.kinds().dockOrigin(origin, site.rotation()), site.rotation());
-                LOGGER.at(Level.INFO).log("Generated air station: %d cell(s) of vegetation cleared at (%d, %d, %d)", cleared, origin.x, origin.y, origin.z);
+                GenClear.clear(world, balloon, WorldgenApi.kinds().dockOrigin(origin, site.rotation()), site.rotation());
             }
 
             // Always forced: the room was checked above, so the paste must not skip cells.
@@ -218,7 +214,6 @@ final class StationBuilder {
             } else {
                 WorldgenApi.telemetry().count("worldgen.air.built." + (e.active > 0 ? "fallback" : "first"));
             }
-            LOGGER.at(Level.INFO).log("%s '%s' built at (%d, %d, %d)", GenerationListener.logName(e.kind), name, origin.x, origin.y, origin.z);
         } catch (IOException | RuntimeException | LinkageError ex) {
             LOGGER.at(Level.WARNING).withCause(ex).log("%s: cannot build at (%d, %d)", GenerationListener.logName(e.kind),
                     planned == null ? e.x : planned.x(), planned == null ? e.z : planned.z());
@@ -234,8 +229,6 @@ final class StationBuilder {
     private static void resumeAfterLoad(World world, GeneratedStations.Entry e, WorldStationPlanner.Site requested) {
         try {
             if (e.state == GeneratedStations.State.PLANNED && !requested.equals(GeneratedStations.get().activeSite(e))) {
-                LOGGER.at(Level.INFO).log("%s: site changed during loading at (%d, %d), deciding again", GenerationListener.logName(e.kind),
-                        requested.x(), requested.z());
                 GenerationListener.decideAgain(world, e);
                 return;
             }
@@ -392,9 +385,7 @@ final class StationBuilder {
      * is checked here, the attempt did it all.
      */
     private static void writeBoatGround(World world, Vector3i origin, BoatAttempt plan) {
-        long started = System.nanoTime();
         SectionReader reader = new SectionReader(world.getChunkStore());
-        int cleared = 0;
         // Highest cell of the dome in each column, from which trees cut by the dome are cleared upward.
         Map<Long, Vector3i> tops = new HashMap<>();
         for (Vector3i p : plan.clear()) {
@@ -404,7 +395,7 @@ final class StationBuilder {
             if (WorldgenApi.world().outOfHeight(p.y)) {
                 continue;
             }
-            // Only cells that hold a block or a fluid are written, so the count is the cells really emptied.
+            // Only cells that hold a block or a fluid are written.
             if (!reader.hasStorageInMemory(p.x, p.y, p.z)) {
                 continue;
             }
@@ -417,7 +408,6 @@ final class StationBuilder {
                 GenClear.erase(world, p.x, p.y, p.z);
             }
             emptyFluid(world, reader, p);
-            cleared++;
         }
         int ceiling = origin.y + BoatSiteGround.DOME_HEIGHT + 12;
         for (Vector3i top : tops.values()) {
@@ -426,9 +416,7 @@ final class StationBuilder {
                 if (!reader.hasStorageInMemory(top.x, y, top.z) || !GenClear.removableAt(reader, top.x, y, top.z)) {
                     break;
                 }
-                if (GenClear.erase(world, top.x, y, top.z)) {
-                    cleared++;
-                }
+                GenClear.erase(world, top.x, y, top.z);
             }
         }
         int dredged = 0;
@@ -444,18 +432,14 @@ final class StationBuilder {
         if (dredged > 0) {
             WorldgenApi.telemetry().count("worldgen.boat.dredged");
         }
-        int filled = 0;
         for (Map.Entry<Vector3i, String> f : plan.fill().entrySet()) {
             Vector3i p = f.getKey();
             if (WorldgenApi.world().outOfHeight(p.y)) {
                 continue;
             }
             emptyFluid(world, reader, p);
-            filled += WorldgenApi.world().setBlock(world.getChunkStore(), p.x, p.y, p.z, f.getValue(), SET_NO_PARTICLES) ? 1 : 0;
+            WorldgenApi.world().setBlock(world.getChunkStore(), p.x, p.y, p.z, f.getValue(), SET_NO_PARTICLES);
         }
-        long elapsedMs = (System.nanoTime() - started) / 1_000_000;
-        LOGGER.at(Level.INFO).log("Generated sea station: %d cell(s) cleared, %d filled and %d dug in %d ms at (%d, %d, %d)", cleared, filled, dredged, elapsedMs,
-                origin.x, origin.y, origin.z);
     }
 
     private static void emptyFluid(World world, SectionReader reader, Vector3i p) {
@@ -614,26 +598,7 @@ final class StationBuilder {
             fitting[0] = a.origin() != null ? a : null;
             return fitting[0] != null;
         });
-        if (fitting[0] != null) {
-            LOGGER.at(Level.INFO).log("%s: pier (%d, %d) refused, repaired at (%d, %d) after %d try(ies)", GenerationListener.logName(e.kind), site.x(), site.z(),
-                    result.site().x(), result.site().z(), result.tries());
-        }
         return new BoatRepair(fitting[0], result.tries());
-    }
-
-    /** No way to build on the active boat site: logs the refusal and goes to the next site or abandons the entry. */
-    private static void refuseBoat(World world, GeneratedStations.Entry e, WorldStationPlanner.Site site, int tries, BoatAttempt refused) {
-        LOGGER.at(Level.INFO).log("%s: site %d/%d refused at (%d, %d) after %d tries: %s at (%d, %d, %d), %s", GenerationListener.logName(e.kind),
-                e.active + 1, e.sites.size(), site.x(), site.z(), tries, refused.block(), refused.at().x, refused.at().y,
-                refused.at().z, refused.face());
-        nextSite(world, e);
-    }
-
-    /** The active site is refused or cannot be read: logs the reason, then goes to the next site or abandons the entry. */
-    private static void nextSiteOrAbandon(World world, GeneratedStations.Entry e, WorldStationPlanner.Site site, String reason) {
-        LOGGER.at(Level.INFO).log("%s: site %d/%d discarded at (%d, %d): %s", GenerationListener.logName(e.kind), e.active + 1, e.sites.size(), site.x(), site.z(),
-                reason);
-        nextSite(world, e);
     }
 
     /** Moves the entry to its next site, decided again at once, or abandons it when the sites are used up. */
@@ -750,8 +715,6 @@ final class StationBuilder {
 
     private static void abandon(GeneratedStations.Entry e, String reason, GeneratedStations.Reason why) {
         try {
-            WorldStationPlanner.Site site = GeneratedStations.get().activeSite(e);
-            LOGGER.at(Level.INFO).log("%s abandoned at (%d, %d): %s", GenerationListener.logName(e.kind), site.x(), site.z(), reason);
             GeneratedStations.get().abandon(e, why);
             WorldgenApi.telemetry().count("worldgen.station.abandoned");
         } catch (RuntimeException ex) {

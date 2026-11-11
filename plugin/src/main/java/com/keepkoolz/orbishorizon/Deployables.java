@@ -178,7 +178,7 @@ final class Deployables {
                     new String[]{"Airship_Burner_Flame_Weak_Left", "Airship_Burner_Flame_Strong_Right"},
                     new String[]{"Airship_Burner_Flame_Strong_Left", "Airship_Burner_Flame_Weak_Right"},
                     "Airship_Exhaust_Smoke", "Airship_Burner_Flame",
-                    true, true, true, true, null, 1f, false, null, null, "airship", false,
+                    true, true, true, null, 1f, false, null, null, false,
                     new CrewSpec(new int[]{0, 8, -10}, new int[]{-2, 8, 4}, new int[]{0, 8, 2}, new int[]{0, 8, 9}, new int[]{0, 9, 8},
                             AirshipCrew::walkLegs, 1)));
 
@@ -195,7 +195,7 @@ final class Deployables {
             new AirshipSpec("Steamboat", "Steamboat_Idle", "Steamboat_Off", "Steamboat_Crate", STEAMBOAT_PIVOT,
                     "Steamboat", "Steamboat", new String[]{"Airship_Exhaust_Smoke"}, new String[]{"Airship_Exhaust_Smoke"},
                     "Airship_Exhaust_Smoke", "Steamboat_Chimney_Smoke_Thick",
-                    true, false, false, false, -2, 0.5f, true, "Steamboat", null, "steamboat", false,
+                    true, false, false, -2, 0.5f, true, "Steamboat", null, false,
                     new CrewSpec(STEAMBOAT_PIVOT, new int[]{0, 4, 8}, null, new int[]{0, 1, 8}, new int[]{0, 2, 7}, AirshipCrew::straightLegs, 1)));
 
     static final String STEAMBOAT_PUBLIC_KIND = "steamboat_public";
@@ -216,7 +216,7 @@ final class Deployables {
             new AirshipSpec("Steamboat_Public", "Steamboat_Public_Idle", "Steamboat_Public_Off", null, STEAMBOAT_PUBLIC_PIVOT,
                     "Steamboat_Public", "Steamboat_Public", new String[]{"Airship_Exhaust_Smoke"}, new String[]{"Airship_Exhaust_Smoke"},
                     "Airship_Exhaust_Smoke", "Steamboat_Chimney_Smoke_Thick",
-                    false, false, false, false, 0, 0.5f, true, null, "Propeller", "shuttle", true, null));
+                    false, false, false, 0, 0.5f, true, null, "Propeller", true, null));
 
     static final String STEAMBOAT_SKIFF_KIND = "steamboat_skiff";
     /**
@@ -240,7 +240,7 @@ final class Deployables {
             new AirshipSpec("Steamboat_Skiff", "Steamboat_Skiff_Idle", "Steamboat_Skiff_Off", "Steamboat_Skiff_Crate", STEAMBOAT_SKIFF_PIVOT,
                     "Steamboat_Skiff", "Steamboat_Skiff", new String[]{"Airship_Exhaust_Smoke"}, new String[]{"Airship_Exhaust_Smoke"},
                     "Airship_Exhaust_Smoke", "Steamboat_Chimney_Smoke_Thick",
-                    false, false, false, false, 0, 0.5f, true, null, "Propeller", "skiff", true, null));
+                    false, false, false, 0, 0.5f, true, null, "Propeller", true, null));
 
     static final String PUBLIC_KIND = "balloon_public";
 
@@ -512,7 +512,6 @@ final class Deployables {
         final boolean voyage;
         final boolean recall;
         final boolean ladders;
-        final boolean onePerPlayer;
         /** Posts of the NPC pilot on this ship, null for a ship without a pilot. */
         final CrewSpec crewSpec;
         /** Prefab-frame y of the highest layer under water when afloat (cells with y at or under it are submerged) (null: a dry ship, the airship). */
@@ -530,8 +529,6 @@ final class Deployables {
         final String propellerAnimPrefix;
         /** True when the flight model has the animated "Helm" node (the helm block turns with the ship, see ShipHelm). All ships. */
         final boolean helmAnimated = true;
-        /** Word used for this ship in server log lines (lower case: "airship", "steamboat"). */
-        final String logLabel;
         /** True for a ship that burns no fuel (the public shuttle): the engine and the tank are not used. */
         final boolean fuelless;
 
@@ -548,11 +545,10 @@ final class Deployables {
         AirshipSpec(String modelId, String idleModelId, String offModelId, String crateItemId, int[] pivot,
                     String turnLeftModelId, String turnRightModelId, String[] turnLeftSystems, String[] turnRightSystems,
                     String smokeSystemId, String flameSystemId,
-                    boolean voyage, boolean recall, boolean ladders, boolean onePerPlayer,
+                    boolean voyage, boolean recall, boolean ladders,
                     Integer waterlineY, float reverseSpeedFactor, boolean sternFollowsInReverse, String wheelAnimPrefix,
-                    String propellerAnimPrefix, String logLabel, boolean fuelless, CrewSpec crewSpec) {
+                    String propellerAnimPrefix, boolean fuelless, CrewSpec crewSpec) {
             this.crewSpec = crewSpec;
-            this.logLabel = logLabel;
             this.fuelless = fuelless;
             this.wheelAnimPrefix = wheelAnimPrefix;
             this.propellerAnimPrefix = propellerAnimPrefix;
@@ -568,7 +564,6 @@ final class Deployables {
             this.voyage = voyage;
             this.recall = recall;
             this.ladders = ladders;
-            this.onePerPlayer = onePerPlayer;
             this.modelId = modelId;
             this.idleModelId = idleModelId;
             this.offModelId = offModelId;

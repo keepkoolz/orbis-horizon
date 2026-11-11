@@ -137,22 +137,21 @@ final class BiomeWood {
 
     /**
      * Wood of the biome around (x, z), read from the world generator (25 samples, most frequent species).
-     * The log flag is true only for a real placement (the preview calls this often).
      * Any other generator, no tree, or any failure gives DEFAULT: this never throws.
      */
-    static Wood woodAt(World world, int x, int z, boolean log) {
-        String species = speciesAt(world, x, z, log, "Sea station");
+    static Wood woodAt(World world, int x, int z) {
+        String species = speciesAt(world, x, z);
         return species == null ? DEFAULT : woodOf(species);
     }
 
     /** Wood for the balloon station: null when no tree species is found (the prefab wood is kept), Ash included otherwise. */
-    static Wood stationWoodAt(World world, int x, int z, boolean log) {
-        String species = speciesAt(world, x, z, log, "Balloon station");
+    static Wood stationWoodAt(World world, int x, int z) {
+        String species = speciesAt(world, x, z);
         return species == null ? null : woodOf(species);
     }
 
     /** Most frequent tree species around (x, z), null when there is none, another generator is used, or on failure. Never throws. */
-    static String speciesAt(World world, int x, int z, boolean log, String station) {
+    static String speciesAt(World world, int x, int z) {
         try {
             Object gen = world.getChunkStore().getGenerator();
             if (!(gen instanceof com.hypixel.hytale.server.worldgen.chunk.ChunkGenerator generator)) {
@@ -160,7 +159,6 @@ final class BiomeWood {
             }
             int seed = (int) world.getWorldConfig().getSeed();
             List<String> samples = new ArrayList<>();
-            String firstBiome = null;
             for (int[] o : samplePoints()) {
                 com.hypixel.hytale.server.worldgen.chunk.ZoneBiomeResult r = generator.getZoneBiomeResultAt(seed, x + o[0], z + o[1]);
                 if (r == null || r.getBiome() == null || r.getZoneResult() == null || r.getZoneResult().getZone() == null) {
@@ -169,23 +167,9 @@ final class BiomeWood {
                 }
                 String zone = r.getZoneResult().getZone().name();
                 String biome = r.getBiome().getName();
-                if (firstBiome == null) {
-                    firstBiome = zone + "/" + biome;
-                }
                 samples.add(speciesOf(zone, biome));
             }
-            String species = chooseSpecies(samples);
-            if (log) {
-                var l = com.hypixel.hytale.logger.HytaleLogger.forEnclosingClass().at(java.util.logging.Level.INFO);
-                if (firstBiome == null) {
-                    l.log("%s: no biome read, original wood", station);
-                } else if (species == null) {
-                    l.log("%s: no tree, original wood, biome %s", station, firstBiome);
-                } else {
-                    l.log("%s: wood %s, biome %s", station, species, firstBiome);
-                }
-            }
-            return species;
+            return chooseSpecies(samples);
         } catch (RuntimeException | LinkageError e) {
             return null;
         }

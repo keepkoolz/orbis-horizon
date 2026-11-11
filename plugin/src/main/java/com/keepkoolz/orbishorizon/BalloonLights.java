@@ -371,7 +371,7 @@ final class BalloonLights {
                 if (ref != null && ref.isValid()) {
                     ViewFilter.clear(ref);
                     store.removeEntity(ref, RemoveReason.REMOVE);
-                    LOGGER.at(Level.INFO).log("Light %s left in the world removed", key);
+                    LOGGER.at(Level.WARNING).log("Light %s left in the world removed", key);
                 }
             } catch (RuntimeException e) {
                 LOGGER.at(Level.WARNING).withCause(e).log("Light %s left in the world not removed", key);

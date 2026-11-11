@@ -119,11 +119,8 @@ final class PassengerSeatView {
                 face(store, s.twin, c.facingYaw());
             }
             replayAnimation(store, p, s, now);
-            // external view, re-sent when the travel direction changes or the entity the client sees changes.
+            // external view, sent once and re-sent only when the entity the client sees changes.
             NetworkId tn = store.getComponent(target, NetworkId.getComponentType());
-            if (tn != null && p.cameraOn && PassengerCamera.directionChanged(c.view(), p)) {
-                PassengerCamera.attachExternal(store, c.view(), p, target);
-            }
             if (tn != null && now - s.createdMs >= CAMERA_DELAY_MS && (!p.cameraOn || tn.getId() != p.cameraTargetId)) {
                 PassengerCamera.attachExternal(store, c.view(), p, target);
             }
@@ -195,10 +192,6 @@ final class PassengerSeatView {
         PlayerSkinComponent skin = valid(p.ref) ? store.getComponent(p.ref, PlayerSkinComponent.getComponentType()) : null;
         if (mc == null || mc.getModel() == null || skin == null) {
             s.noMannequin = true;
-            if (!p.noMannequinLogged) {
-                p.noMannequinLogged = true;
-                LOGGER.at(Level.INFO).log("Passenger %s: no model or appearance, no mannequin", p.name);
-            }
             return s;
         }
         Model model = mc.getModel();
@@ -365,7 +358,7 @@ final class PassengerSeatView {
                     if (ref != null && ref.isValid()) {
                         ViewFilter.clear(ref);
                         store.removeEntity(ref, RemoveReason.REMOVE);
-                        LOGGER.at(Level.INFO).log("Seat view entity left in the world removed (%s)", id);
+                        LOGGER.at(Level.WARNING).log("Seat view entity left in the world removed (%s)", id);
                     }
                 } catch (RuntimeException e) {
                     LOGGER.at(Level.WARNING).withCause(e).log("Seat view entity left in the world not removed");

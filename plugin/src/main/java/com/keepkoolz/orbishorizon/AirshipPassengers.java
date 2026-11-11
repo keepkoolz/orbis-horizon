@@ -322,7 +322,6 @@ final class AirshipPassengers {
                         && p.seatBlock.z == cs.captainSeat()[2];
                 pr.sendMessage(chair ? Texts.t("crew.voyage.seatedChair") : Texts.ship(f.kind, "passenger.seated"));
             }
-            LOGGER.at(Level.INFO).log("Airship passenger %s: stool %s, %s", p.name, p.seatBlock, r.mode);
         } catch (RuntimeException e) {
             LOGGER.at(Level.WARNING).withCause(e).log("Airship passenger %s not seated", p.name);
         }
@@ -344,7 +343,6 @@ final class AirshipPassengers {
                 if (BalloonManager.isDead(store, p.ref)) {
                     release(store, r);
                     f.riders.remove(r);
-                    LOGGER.at(Level.INFO).log("Airship passenger %s died in flight: released, the flight continues", p.name);
                     continue;
                 }
                 BalloonManager.get().applyPose(store, p, now);
@@ -383,7 +381,7 @@ final class AirshipPassengers {
             // mannequins and hidden body (PassengerSeatView), the external camera is attached to the entity the rider sees.
             PassengerSeatView.sync(store, p, new PassengerSeatView.Ctx(f.shipUuid, f.shipRef, f.observerRef, f.dual, f.pilotUuid,
                     new Vector3f(-d.x, d.y, -d.z), seat, f.seatViews,
-                    new PassengerCamera.Source(f.kind, f.pos, PassengerCamera.behindHeading(f.theta)[0], PassengerCamera.behindHeading(f.theta)[1], Math.abs(f.yawRate) > PassengerCamera.TURNING_YAW_RATE),
+                    new PassengerCamera.Source(f.kind, f.pos, PassengerCamera.behindHeading(f.theta)[0], PassengerCamera.behindHeading(f.theta)[1]),
                     // the shuttle's riders look to the bow like its pilot
                     f.shuttle != null ? (float) (manager.yawSign * f.theta) : Float.NaN), now);
             PassengerCamera.safetyTeleport(store, p, seat);

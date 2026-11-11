@@ -70,8 +70,6 @@ final class BalloonFlight {
     volatile long teleportUntilMs;
     /** Entity mounted on the pilot (display stuck to the pilot on the client side). */
     volatile boolean attached;
-    /** Last collision message sent to the pilot. */
-    volatile long lastCollisionMsgMs;
     /** last "height limit reached" message sent to the pilot. */
     volatile long lastHeightMsgMs;
     /** Model used at take-off (the unlit model is this name followed by BalloonManager.UNLIT_MODEL_SUFFIX). */
@@ -272,11 +270,10 @@ final class BalloonFlight {
         boolean camYawSet;
         int cameraTargetId = -1;
         /** external view (balloons): horizontal direction from the balloon to the camera, set at the first send, and the position of the last direction sample. */
-        double camDirX, camDirZ, camLastX, camLastZ;
+        double camDirX, camDirZ;
         boolean camDirSet;
         /** CAMERA mode seat view (camera anchor, mannequins, hidden body), null when not built. */
         volatile PassengerSeatView.State seatView;
-        boolean noMannequinLogged;
 
         Passenger(Ref<EntityStore> ref, UUID uuid, String name, int seat, Vector3i seatBlock, Vector3f seatLocal,
                   boolean shared, PassengerMode mode, Pose pose) {
@@ -324,6 +321,8 @@ final class BalloonFlight {
     volatile TransitFlight transit;
     /** NPC pilot voyage of the large balloon (flown by BalloonVoyage.step), null for every other flight. */
     volatile BalloonVoyage voyage;
+    /** Recall of the large balloon to a station (flown by BalloonVoyage, state kept by BalloonRecall), null outside a recall. */
+    volatile RecallState recall;
 
     BalloonFlight(UUID pilotUuid, Ref<EntityStore> pilotRef, World world, Rotation rotation, Deployables.Kind kind) {
         this.kind = kind;
