@@ -1,0 +1,37 @@
+{
+  "Input": [
+    {
+      "ResourceTypeId": "Rock",
+      "Quantity": 4
+    },
+    {
+      "ItemId": "Ingredient_Bar_Copper",
+      "Quantity": 2
+    },
+    {
+      "ItemId": "Ingredient_Charcoal",
+      "Quantity": 2
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Crude_Brazier",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Crude_Brazier",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Lighting"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

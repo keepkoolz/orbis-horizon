@@ -2159,6 +2159,26 @@ public class TransitTests {
         run("campRecipesJson", TransitTests::campRecipesJson);
         run("explorerBenchJson", TransitTests::explorerBenchJson);
         run("recipesOnExplorerBench", TransitTests::recipesOnExplorerBench);
+        run("furnitureRecipes", TransitTests::furnitureRecipes);
+        run("furnitureFamilies", TransitTests::furnitureFamilies);
+        run("pageTextsNeverRawMessages", TransitTests::pageTextsNeverRawMessages);
+        run("furnitureLearnableMatchesRecipes", TransitTests::furnitureLearnableMatchesRecipes);
+        run("furnitureRecipesNotInGame", TransitTests::furnitureRecipesNotInGame);
+        run("discoveryStoreRoundTrip", TransitTests::discoveryStoreRoundTrip);
+        run("discoveryForgetAfterPendingWrite", TransitTests::discoveryForgetAfterPendingWrite);
+        run("discoveryStoreBadFile", TransitTests::discoveryStoreBadFile);
+        run("discoveryAddTwiceOnce", TransitTests::discoveryAddTwiceOnce);
+        run("discoveryNewFamilyAndTitle", TransitTests::discoveryNewFamilyAndTitle);
+        run("discoveryTitleOnce", TransitTests::discoveryTitleOnce);
+        run("discoveryRulesNothing", TransitTests::discoveryRulesNothing);
+        run("discoveryRulesMessages", TransitTests::discoveryRulesMessages);
+        run("discoveryTextsBothLanguages", TransitTests::discoveryTextsBothLanguages);
+        run("journalShortNamesUnique", TransitTests::journalShortNamesUnique);
+        run("journalIndexOrderAndCounts", TransitTests::journalIndexOrderAndCounts);
+        run("journalSlots", TransitTests::journalSlots);
+        run("journalNavigation", TransitTests::journalNavigation);
+        run("journalHidesUntouchedFamily", TransitTests::journalHidesUntouchedFamily);
+        run("furnitureDiscoveryPersists", TransitTests::furnitureDiscoveryPersists);
         run("creativeVisibility", TransitTests::creativeVisibility);
         run("oxygenHud", TransitTests::oxygenHud);
         run("fuelHud", TransitTests::fuelHud);
@@ -5425,7 +5445,7 @@ public class TransitTests {
                 "Hotair_Balloon_Station_Contract", "Hotair_Balloon_Boat_Station_Contract",
                 "Hotair_Balloon_Station_Plan_Pad", "Hotair_Balloon_Station_Plan_Full",
                 "Hotair_Balloon_Boat_Station_Plan_Pier", "Hotair_Balloon_Boat_Station_Plan_Full",
-                "Hotair_Balloon_Boat_Station_Plan_Arrival", "Ship_Wheel");
+                "Hotair_Balloon_Boat_Station_Plan_Arrival", "Ship_Wheel", "Orbis_Explorer_Journal");
         Set<String> found = new java.util.HashSet<>();
         int hidden = 0;
         List<Path> files;
@@ -5568,6 +5588,7 @@ public class TransitTests {
         table.put("Airship_Cloudwork_Crate", new Object[] {tr, 3});
         table.put("Steamboat_Crate", new Object[] {tr, 3});
         table.put("Steamboat_Skiff_Crate", new Object[] {tr, 2});
+        table.put("Orbis_Explorer_Journal", new Object[] {"OrbisHorizon_Gear", 1});
         java.util.List<Path> files;
         try (var w = Files.walk(Path.of("Server/Item/Items"))) {
             files = w.filter(p -> p.toString().endsWith(".json")).toList();
@@ -5637,6 +5658,243 @@ public class TransitTests {
             }
         }
         eq(4, gear);
+    }
+
+    /** The client cannot read a raw or empty Message in a .Text property: pages pass translations or plain Strings. */
+    private static void pageTextsNeverRawMessages() throws Exception {
+        Path src = Path.of("plugin/src/main/java/com/keepkoolz/orbishorizon");
+        try (java.util.stream.Stream<Path> files = Files.list(src)) {
+            for (Path p : (Iterable<Path>) files.filter(f -> f.getFileName().toString().endsWith("Page.java"))::iterator) {
+                int n = 0;
+                for (String line : Files.readAllLines(p)) {
+                    n++;
+                    check(!(line.contains("cmd.set(") && (line.contains("Message.raw(") || line.contains("Message.empty()"))),
+                            p.getFileName() + ":" + n + " passes a raw or empty Message to cmd.set");
+                }
+            }
+        }
+    }
+
+    /** learnable furniture recipes: format, bench category, ingredients and outputs exist in the game assets. */
+    private static void furnitureRecipes() throws Exception {
+        Path zip = Path.of(System.getProperty("user.home"), "repositories/hytale/server-ref/Assets.zip");
+        check(Files.exists(zip), "Assets.zip present");
+        java.util.Set<String> itemIds = new java.util.HashSet<>();
+        java.util.Set<String> resourceTypes = new java.util.HashSet<>();
+        java.util.Map<String, org.bson.BsonDocument> items = new java.util.HashMap<>();
+        java.util.Set<String> benchCategories = new java.util.HashSet<>();
+        try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(zip.toFile())) {
+            var entries = java.util.Collections.list(z.entries());
+            for (var en : entries) {
+                String n = en.getName();
+                if (!n.endsWith(".json")) {
+                    continue;
+                }
+                String id = n.substring(n.lastIndexOf('/') + 1).replace(".json", "");
+                if (n.startsWith("Server/Item/Items/")) {
+                    itemIds.add(id);
+                    if (id.startsWith("Furniture_")) {
+                        try (var in = z.getInputStream(en)) {
+                            items.put(id, org.bson.BsonDocument.parse(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)));
+                        }
+                    }
+                }
+            }
+            var bench = z.getEntry("Server/Item/Items/Bench/Bench_Furniture.json");
+            try (var in = z.getInputStream(bench)) {
+                var doc = org.bson.BsonDocument.parse(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+                for (var c : doc.getDocument("BlockType").getDocument("Bench").getArray("Categories")) {
+                    benchCategories.add(c.asDocument().getString("Id").getValue());
+                }
+            }
+            for (var en : entries) {
+                String n = en.getName();
+                if (!n.endsWith(".json") || !(n.startsWith("Server/Item/Items/") || n.startsWith("Server/Item/Recipes/"))) {
+                    continue;
+                }
+                try (var in = z.getInputStream(en)) {
+                    String txt = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                    var m = java.util.regex.Pattern.compile("\"ResourceTypeId\"\\s*:\\s*\"([^\"]+)\"").matcher(txt);
+                    while (m.find()) {
+                        resourceTypes.add(m.group(1));
+                    }
+                }
+            }
+        }
+        int count = 0;
+        try (var w = Files.list(Path.of("Server/Item/Recipes/OrbisHorizon/Furniture"))) {
+            for (Path p : w.filter(f -> f.toString().endsWith(".json")).toList()) {
+                String name = p.getFileName().toString().replace(".json", "");
+                var root = org.bson.BsonDocument.parse(Files.readString(p));
+                eq(true, root.getBoolean("KnowledgeRequired").getValue());
+                eq(name, root.getDocument("PrimaryOutput").getString("ItemId").getValue());
+                eq(1, root.getDocument("PrimaryOutput").getInt32("Quantity").getValue());
+                eq(1, root.getArray("Output").size());
+                eq(name, root.getArray("Output").get(0).asDocument().getString("ItemId").getValue());
+                eq(1, root.getArray("Output").get(0).asDocument().getInt32("Quantity").getValue());
+                eq(1, root.getArray("BenchRequirement").size());
+                var br = root.getArray("BenchRequirement").get(0).asDocument();
+                eq("Crafting", br.getString("Type").getValue());
+                eq("Furniture_Bench", br.getString("Id").getValue());
+                eq(1, br.getArray("Categories").size());
+                String cat = br.getArray("Categories").get(0).asString().getValue();
+                check(benchCategories.contains(cat), name + " category " + cat);
+                check(!root.getArray("Input").isEmpty(), name + " has ingredients");
+                for (var in : root.getArray("Input")) {
+                    var d = in.asDocument();
+                    check(d.getInt32("Quantity").getValue() > 0, name + " quantity");
+                    if (d.containsKey("ItemId")) {
+                        check(itemIds.contains(d.getString("ItemId").getValue()), name + " ingredient " + d.getString("ItemId").getValue());
+                    } else {
+                        String rt = d.getString("ResourceTypeId").getValue();
+                        check(resourceTypes.contains(rt), name + " resource type " + rt);
+                    }
+                }
+                var item = items.get(name);
+                check(item != null, name + " exists in the game assets");
+                check(!item.containsKey("Recipe"), name + " has no game recipe");
+                boolean heavy = name.contains("_Statue") || name.endsWith("_Coffin") || name.endsWith("_Chest_Large");
+                eq(heavy ? 3 : 2, ((Number) root.get("TimeSeconds").asNumber().doubleValue()).intValue());
+                count++;
+            }
+        }
+        eq(146, count);
+    }
+
+    /** the family table has the 19 families, no item twice, every item exists in the game assets. */
+    private static void furnitureFamilies() throws Exception {
+        eq(19, FurnitureDiscovery.FAMILIES.size());
+        Object[][] sizes = {
+                {"lost_civilization", 32},
+                {"village", 13},
+                {"feran", 14},
+                {"scarak_temple", 13},
+                {"kweebec", 12},
+                {"royal_magic", 7},
+                {"light_temple", 8},
+                {"ancient", 8},
+                {"scarak_hive", 7},
+                {"dark_temple", 7},
+                {"frozen_castle", 6},
+                {"jungle", 5},
+                {"wind_temple", 5},
+                {"goblin", 1},
+                {"crude", 1},
+                {"emerald_temple", 3},
+                {"tavern", 2},
+                {"desert", 1},
+                {"lumberjack", 1}};
+        for (Object[] row : sizes) {
+            var f = FurnitureDiscovery.family((String) row[0]);
+            check(f != null, row[0] + " family");
+            eq(row[1], f.items().size());
+        }
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (var f : FurnitureDiscovery.FAMILIES) {
+            for (var it : f.items()) {
+                check(seen.add(it.itemId()), it.itemId() + " in a single family");
+            }
+        }
+        Path zip = Path.of(System.getProperty("user.home"), "repositories/hytale/server-ref/Assets.zip");
+        try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(zip.toFile())) {
+            for (String id : seen) {
+                check(z.getEntry(gameItemEntry(z, id)) != null, id + " exists in the game assets");
+            }
+        }
+        check(FurnitureDiscovery.familyOf("Arcade_Machine") == null, "unknown item has no family");
+        check(FurnitureDiscovery.item("Arcade_Machine") == null, "unknown item has no entry");
+        check(FurnitureDiscovery.family("nope") == null, "unknown family");
+        eq("village", FurnitureDiscovery.familyOf("Furniture_Village_Bed").id());
+        check(FurnitureDiscovery.familyOf("Furniture_Village_Chair") == null, "a piece the game already makes is not in the journal");
+        eq("discovery.family.village.name", FurnitureDiscovery.familyNameKey("village"));
+        eq("discovery.family.village.lore", FurnitureDiscovery.familyLoreKey("village"));
+        eq("discovery.family.village.title", FurnitureDiscovery.familyTitleKey("village"));
+        eq("discovery.item.Furniture_Village_Bed", FurnitureDiscovery.itemLoreKey("Furniture_Village_Bed"));
+    }
+
+    /** the entry path of an item JSON in Assets.zip, searched by file name. */
+    private static String gameItemEntry(java.util.zip.ZipFile z, String id) {
+        for (var en : java.util.Collections.list(z.entries())) {
+            String n = en.getName();
+            if (n.startsWith("Server/Item/Items/") && n.endsWith("/" + id + ".json")) {
+                return n;
+            }
+        }
+        return "missing/" + id;
+    }
+
+    /**
+     * No piece of the journal can already be made in the game: no Recipe in its item JSON, no standalone game recipe producing it,
+     * and no block group (cycled at the builder's bench) shared with an item that has a recipe.
+     */
+    private static void furnitureRecipesNotInGame() throws Exception {
+        Path zip = Path.of(System.getProperty("user.home"), "repositories/hytale/server-ref/Assets.zip");
+        java.util.Map<String, org.bson.BsonDocument> items = new java.util.HashMap<>();
+        java.util.Set<String> produced = new java.util.HashSet<>();
+        java.util.List<java.util.List<String>> groups = new java.util.ArrayList<>();
+        try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(zip.toFile())) {
+            for (var en : java.util.Collections.list(z.entries())) {
+                String n = en.getName();
+                if (!n.endsWith(".json")) {
+                    continue;
+                }
+                boolean item = n.startsWith("Server/Item/Items/");
+                boolean recipe = n.startsWith("Server/Item/Recipes/");
+                boolean group = n.startsWith("Server/Item/Groups/");
+                if (!item && !recipe && !group) {
+                    continue;
+                }
+                org.bson.BsonDocument doc;
+                try (var in = z.getInputStream(en)) {
+                    doc = org.bson.BsonDocument.parse(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+                } catch (RuntimeException e) {
+                    continue;
+                }
+                if (item) {
+                    items.put(n.substring(n.lastIndexOf('/') + 1, n.length() - 5), doc);
+                } else if (recipe) {
+                    if (doc.containsKey("PrimaryOutput") && doc.get("PrimaryOutput").isDocument()
+                            && doc.getDocument("PrimaryOutput").containsKey("ItemId")) {
+                        produced.add(doc.getDocument("PrimaryOutput").getString("ItemId").getValue());
+                    }
+                    if (doc.containsKey("Output") && doc.get("Output").isArray()) {
+                        for (var o : doc.getArray("Output")) {
+                            if (o.isDocument() && o.asDocument().containsKey("ItemId")) {
+                                produced.add(o.asDocument().getString("ItemId").getValue());
+                            }
+                        }
+                    }
+                } else if (doc.containsKey("Blocks") && doc.get("Blocks").isArray()) {
+                    groups.add(doc.getArray("Blocks").stream().filter(v -> v.isString()).map(v -> v.asString().getValue()).toList());
+                }
+            }
+        }
+        for (var f : FurnitureDiscovery.FAMILIES) {
+            for (var it : f.items()) {
+                String id = it.itemId();
+                boolean inGame = items.containsKey(id) && items.get(id).containsKey("Recipe") || produced.contains(id)
+                        || groups.stream().anyMatch(g -> g.contains(id)
+                                && g.stream().anyMatch(b -> !b.equals(id) && items.containsKey(b) && items.get(b).containsKey("Recipe")));
+                check(!inGame, id + " is in the journal but the game already makes it");
+            }
+        }
+    }
+
+    /** the journal pieces are exactly the recipe files of the mod. */
+    private static void furnitureLearnableMatchesRecipes() throws Exception {
+        java.util.Set<String> pieces = new java.util.HashSet<>();
+        for (var f : FurnitureDiscovery.FAMILIES) {
+            for (var it : f.items()) {
+                pieces.add(it.itemId());
+            }
+        }
+        java.util.Set<String> files = new java.util.HashSet<>();
+        try (var w = Files.list(Path.of("Server/Item/Recipes/OrbisHorizon/Furniture"))) {
+            for (Path p : w.filter(f -> f.toString().endsWith(".json")).toList()) {
+                files.add(p.getFileName().toString().replace(".json", ""));
+            }
+        }
+        eq(files, pieces);
     }
 
     /** the pack recipes match the spec, the lower pack comes first, ids exist, piles <= 40, legacy crates have no recipe. */
@@ -8831,5 +9089,266 @@ public class TransitTests {
         String cmd = Files.readString(src.resolve("StationCommand.java"));
         String despawn = cmd.substring(cmd.indexOf("class Despawn"), cmd.indexOf("class Tp"));
         check(!despawn.contains("GeneratedStations"), "Despawn free of GeneratedStations");
+    }
+
+    static void discoveryStoreRoundTrip() throws Exception {
+        Path dir = Files.createTempDirectory("discovery-roundtrip");
+        try {
+            DiscoveryStore.Album album = new DiscoveryStore.Album();
+            album.add(new DiscoveryStore.Entry("Furniture_Human_Ruins_Bed", 10, 64, -20, "default"));
+            album.add(new DiscoveryStore.Entry("Furniture_Village_Bed", 1, 2, 3, "other"));
+            album.addTitle("village");
+            Path file = dir.resolve("sub").resolve("p.json");
+            DiscoveryStore.write(file, album);
+            DiscoveryStore.Album back = DiscoveryStore.read(file);
+            eq(album.entries(), back.entries());
+            eq(album.titles(), back.titles());
+            eq(new DiscoveryStore.Entry("Furniture_Human_Ruins_Bed", 10, 64, -20, "default"), back.entry("Furniture_Human_Ruins_Bed"));
+            check(back.has("Furniture_Village_Bed"), "has");
+        } finally {
+            deleteAll(dir);
+        }
+    }
+
+    static void discoveryForgetAfterPendingWrite() throws Exception {
+        Path dir = Files.createTempDirectory("discovery-forget");
+        try {
+            DiscoveryStore.init(dir);
+            java.util.UUID player = java.util.UUID.randomUUID();
+            DiscoveryStore.Entry e = new DiscoveryStore.Entry("Furniture_Village_Bed", 1, 2, 3, "default");
+            DiscoveryStore.record(player, e);
+            DiscoveryStore.forget(player);
+            DiscoveryStore.flush();
+            check(DiscoveryStore.get(player).has("Furniture_Village_Bed"), "the entry survives forget and reload");
+        } finally {
+            deleteAll(dir);
+        }
+    }
+
+    static void discoveryStoreBadFile() throws Exception {
+        Path dir = Files.createTempDirectory("discovery-bad");
+        try {
+            Path file = dir.resolve(java.util.UUID.randomUUID() + ".json");
+            eq(0, DiscoveryStore.read(file).entries().size());
+            Files.writeString(file, "{pas du json");
+            DiscoveryStore.Album album = DiscoveryStore.read(file);
+            eq(0, album.entries().size());
+            eq(0, album.titles().size());
+            check(Files.exists(file.resolveSibling(file.getFileName() + ".bad")), "bad file kept");
+        } finally {
+            deleteAll(dir);
+        }
+    }
+
+    static void discoveryAddTwiceOnce() {
+        DiscoveryStore.Album album = new DiscoveryStore.Album();
+        DiscoveryStore.Entry e = new DiscoveryStore.Entry("Furniture_Human_Ruins_Bed", 1, 2, 3, "default");
+        check(album.add(e).added(), "first add");
+        check(!album.add(e).added(), "second add");
+        eq(1, album.entries().size());
+    }
+
+    static void discoveryNewFamilyAndTitle() {
+        DiscoveryStore.Album album = new DiscoveryStore.Album();
+        var lost = FurnitureDiscovery.family("lost_civilization").items();
+        check(album.add(new DiscoveryStore.Entry(lost.get(0).itemId(), 0, 0, 0, "w")).newFamily(), "first of family");
+        check(!album.add(new DiscoveryStore.Entry(lost.get(1).itemId(), 0, 0, 0, "w")).newFamily(), "second of family");
+        var village = FurnitureDiscovery.family("village").items();
+        eq(13, village.size());
+        for (int i = 0; i < village.size(); i++) {
+            DiscoveryStore.AddResult r = album.add(new DiscoveryStore.Entry(village.get(i).itemId(), i, 0, 0, "w"));
+            eq(i == village.size() - 1 ? "village" : null, r.titleFamily());
+        }
+        check(album.titles().contains("village"), "title kept");
+        eq(13, album.found("village"));
+        eq(java.util.List.of("lost_civilization", "village"), album.familyOrder());
+    }
+
+    static void discoveryTitleOnce() {
+        DiscoveryStore.Album album = new DiscoveryStore.Album();
+        var village = FurnitureDiscovery.family("village").items();
+        int last = village.size() - 1;
+        for (int i = 0; i < last; i++) {
+            album.add(new DiscoveryStore.Entry(village.get(i).itemId(), i, 0, 0, "w"));
+        }
+        album.addTitle("village");
+        eq(null, album.add(new DiscoveryStore.Entry(village.get(last).itemId(), last, 0, 0, "w")).titleFamily());
+    }
+
+    private static java.util.List<String> keys(java.util.List<DiscoveryRules.Line> lines) {
+        return lines.stream().map(DiscoveryRules.Line::key).toList();
+    }
+
+    static void discoveryRulesNothing() {
+        eq(java.util.List.of("discovery.nothing"), keys(DiscoveryRules.messages(null, true, null, false)));
+        eq(java.util.List.of("discovery.nothing"), keys(DiscoveryRules.messages("Rock_Stone", true, null, false)));
+        eq(java.util.List.of("discovery.nothing"), keys(DiscoveryRules.messages("Rock_Stone", false, null, false)));
+    }
+
+    private static DiscoveryStore.Entry journalEntry(String id, int x) {
+        return new DiscoveryStore.Entry(id, x, 64, -3, "w");
+    }
+
+    private static void journalIndexOrderAndCounts() throws Exception {
+        DiscoveryStore.Album album = new DiscoveryStore.Album();
+        eq(java.util.List.of(), JournalView.index(album));
+        album.add(journalEntry("Furniture_Village_Bed", 1));
+        album.add(journalEntry("Furniture_Human_Ruins_Bed", 2));
+        album.add(journalEntry("Furniture_Village_Chair", 3));
+        eq(java.util.List.of(new JournalView.IndexRow("village", 1, 13, false),
+                new JournalView.IndexRow("lost_civilization", 1, 32, false)), JournalView.index(album));
+    }
+
+    private static void journalNavigation() throws Exception {
+        var album = new DiscoveryStore.Album();
+        eq(null, JournalView.previousFamily(album, "village"));
+        eq(null, JournalView.nextFamily(album, "village"));
+        album.add(journalEntry("Furniture_Village_Bed", 1));
+        eq(null, JournalView.previousFamily(album, "village"));
+        eq(null, JournalView.nextFamily(album, "village"));
+        album.add(journalEntry("Furniture_Human_Ruins_Bed", 2));
+        eq(null, JournalView.previousFamily(album, "village"));
+        eq("lost_civilization", JournalView.nextFamily(album, "village"));
+        eq("village", JournalView.previousFamily(album, "lost_civilization"));
+        eq(null, JournalView.nextFamily(album, "lost_civilization"));
+        eq(null, JournalView.nextFamily(album, "forged"));
+    }
+
+    private static void journalSlots() throws Exception {
+        DiscoveryStore.Album album = new DiscoveryStore.Album();
+        album.add(journalEntry("Furniture_Village_Bed", 7));
+        var slots = JournalView.slots(album, "village");
+        eq(13, slots.size());
+        int filled = 0;
+        for (var s : slots) {
+            if (s.itemId() != null) {
+                filled++;
+                eq("Furniture_Village_Bed", s.itemId());
+                eq(7, s.entry().x());
+                eq(64, s.entry().y());
+                eq(-3, s.entry().z());
+                eq("w", s.entry().world());
+            } else {
+                check(s.entry() == null, "empty slot has no entry");
+            }
+        }
+        eq(1, filled);
+        eq(java.util.List.of(), JournalView.slots(album, "lost_civilization"));
+        eq(java.util.List.of(), JournalView.slots(album, "forged"));
+    }
+
+    private static void journalHidesUntouchedFamily() throws Exception {
+        DiscoveryStore.Album album = new DiscoveryStore.Album();
+        album.add(journalEntry("Furniture_Village_Bed", 1));
+        var keys = JournalView.textKeys(album);
+        check(!keys.isEmpty(), "keys of the started family");
+        for (String k : keys) {
+            check(!k.startsWith("discovery.family.lost_civilization"), "family leaked: " + k);
+            check(!k.startsWith("discovery.item.Furniture_Human_Ruins"), "item leaked: " + k);
+        }
+        check(keys.contains(FurnitureDiscovery.itemLoreKey("Furniture_Village_Bed")), "found item lore");
+        check(!keys.contains(FurnitureDiscovery.itemLoreKey("Furniture_Village_Brazier")), "empty slot lore leaked");
+        check(keys.contains(FurnitureDiscovery.itemNameKey("Furniture_Village_Bed")), "found item short name");
+        check(!keys.contains(FurnitureDiscovery.itemNameKey("Furniture_Village_Brazier")), "empty slot name leaked");
+    }
+
+    /** Every text of the furniture discovery feature exists and is not blank in both languages. */
+    static void discoveryTextsBothLanguages() throws Exception {
+        List<String> keys = new ArrayList<>();
+        for (String k : new String[] {"discovery.learned", "discovery.added", "discovery.known", "discovery.newPage",
+                "discovery.titleEarned", "discovery.nothing", "discovery.disabled"}) {
+            keys.add("orbis_horizon.chat." + k);
+        }
+        for (String k : new String[] {"journal.title", "journal.empty", "journal.intro", "journal.craftable",
+                "journal.foundAt", "config.section.exploration", "config.furnitureDiscovery"}) {
+            keys.add("orbis_horizon.ui." + k);
+        }
+        keys.add("orbis_horizon.items.orbis_explorer_journal.name");
+        keys.add("orbis_horizon.items.orbis_explorer_journal.description");
+        for (FurnitureDiscovery.Family f : FurnitureDiscovery.FAMILIES) {
+            keys.add("orbis_horizon.chat." + FurnitureDiscovery.familyNameKey(f.id()));
+            keys.add("orbis_horizon.chat." + FurnitureDiscovery.familyLoreKey(f.id()));
+            keys.add("orbis_horizon.chat." + FurnitureDiscovery.familyTitleKey(f.id()));
+            for (FurnitureDiscovery.Item it : f.items()) {
+                keys.add("orbis_horizon.chat." + FurnitureDiscovery.itemLoreKey(it.itemId()));
+                keys.add("orbis_horizon.chat." + FurnitureDiscovery.itemNameKey(it.itemId()));
+            }
+        }
+        for (String lang : new String[] {"en-US", "fr-FR"}) {
+            Map<String, String> lines = new HashMap<>();
+            for (String line : Files.readAllLines(Path.of("Server/Languages/" + lang + "/server.lang"))) {
+                int eq = line.indexOf(" = ");
+                if (eq > 0) {
+                    lines.put(line.substring(0, eq), line.substring(eq + 3));
+                }
+            }
+            for (String k : keys) {
+                String v = lines.get(k);
+                check(v != null && !v.isBlank(), lang + " missing " + k);
+            }
+        }
+    }
+
+    /** Within a family the short names of the album are distinct and fit a tile, in both languages. */
+    static void journalShortNamesUnique() throws Exception {
+        for (String lang : new String[] {"en-US", "fr-FR"}) {
+            Map<String, String> lines = new HashMap<>();
+            for (String line : Files.readAllLines(Path.of("Server/Languages/" + lang + "/server.lang"))) {
+                int eq = line.indexOf(" = ");
+                if (eq > 0) {
+                    lines.put(line.substring(0, eq), line.substring(eq + 3));
+                }
+            }
+            for (FurnitureDiscovery.Family f : FurnitureDiscovery.FAMILIES) {
+                Map<String, String> seen = new HashMap<>();
+                for (FurnitureDiscovery.Item it : f.items()) {
+                    String name = lines.get("orbis_horizon.chat." + FurnitureDiscovery.itemNameKey(it.itemId()));
+                    check(name != null && !name.isBlank(), lang + " missing short name " + it.itemId());
+                    check(name.length() <= 22, lang + " short name too long: " + name);
+                    String other = seen.put(name, it.itemId());
+                    check(other == null, lang + " " + f.id() + " duplicate short name " + name + ": " + other + ", " + it.itemId());
+                }
+            }
+        }
+    }
+
+    static void discoveryRulesMessages() {
+        var family = FurnitureDiscovery.FAMILIES.get(0);
+        var learnable = family.items().get(0).itemId();
+        var plain = FurnitureDiscovery.FAMILIES.get(1).items().get(0).itemId();
+        var plainFamily = FurnitureDiscovery.familyOf(plain);
+        eq(java.util.List.of("discovery.disabled"), keys(DiscoveryRules.messages(learnable, false,
+                new DiscoveryStore.AddResult(true, true, null), true)));
+        var first = DiscoveryRules.messages(learnable, true, new DiscoveryStore.AddResult(true, true, null), true);
+        eq(java.util.List.of("discovery.newPage", "discovery.learned"), keys(first));
+        eq(FurnitureDiscovery.familyNameKey(family.id()), first.get(0).param());
+        eq(learnable, first.get(1).param());
+        var added = DiscoveryRules.messages(plain, true, new DiscoveryStore.AddResult(true, false, null), false);
+        eq(java.util.List.of("discovery.added"), keys(added));
+        eq(plain, added.get(0).param());
+        eq(java.util.List.of("discovery.known"), keys(DiscoveryRules.messages(plain, true,
+                new DiscoveryStore.AddResult(false, false, null), false)));
+        eq(java.util.List.of("discovery.learned"), keys(DiscoveryRules.messages(learnable, true,
+                new DiscoveryStore.AddResult(false, false, null), true)));
+        var last = DiscoveryRules.messages(plain, true, new DiscoveryStore.AddResult(true, false, plainFamily.id()), false);
+        eq(java.util.List.of("discovery.added", "discovery.titleEarned"), keys(last));
+        eq(FurnitureDiscovery.familyTitleKey(plainFamily.id()), last.get(1).param());
+    }
+
+    static void furnitureDiscoveryPersists() throws Exception {
+        Path dir = Files.createTempDirectory("furniture-discovery");
+        try {
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.furnitureDiscovery());
+            TransitSettings.setFurnitureDiscovery(false);
+            TransitSettings.load(dir);
+            eq(false, TransitSettings.furnitureDiscovery());
+            TransitSettings.setFurnitureDiscovery(true);
+            TransitSettings.load(dir);
+            eq(true, TransitSettings.furnitureDiscovery());
+        } finally {
+            deleteAll(dir);
+            TransitSettings.load(Files.createTempDirectory("furniture-discovery-reset"));
+        }
     }
 }

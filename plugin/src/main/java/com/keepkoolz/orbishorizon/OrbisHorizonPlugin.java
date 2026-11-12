@@ -50,6 +50,10 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         getCodecRegistry(Interaction.CODEC)
                 .register(PackCampInteraction.TYPE_ID, PackCampInteraction.class, PackCampInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
+                .register(ExamineFurnitureInteraction.TYPE_ID, ExamineFurnitureInteraction.class, ExamineFurnitureInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
+                .register(OpenJournalInteraction.TYPE_ID, OpenJournalInteraction.class, OpenJournalInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC)
                 .register(SkiffPackInteraction.TYPE_ID, SkiffPackInteraction.class, SkiffPackInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC)
                 .register(PackTentInteraction.TYPE_ID, PackTentInteraction.class, PackTentInteraction.CODEC);
@@ -104,6 +108,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         // registry of placed balloons and locking (breaking, break damage and block placement cancelled).
         BalloonRegistry.init(getDataDirectory());
         VehicleNames.init(getDataDirectory());
+        DiscoveryStore.init(getDataDirectory());
         // Transit: station network (stations.json).
         TransitNetwork.get().load(getDataDirectory());
         TransitFare.loadRefunds(getDataDirectory());
@@ -202,6 +207,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
                     StationNamePage.onPlayerGone(event.getPlayerRef().getUuid());
                     VehicleNamePage.onPlayerGone(event.getPlayerRef().getUuid());
                     HeldCratePreview.onPlayerGone(event.getPlayerRef().getUuid());
+                    DiscoveryStore.forget(event.getPlayerRef().getUuid());
                 });
         // a passenger left in the air when a flight was resumed is put down on their next arrival.
         getEventRegistry().registerGlobal(AddPlayerToWorldEvent.class,
@@ -220,6 +226,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
             BalloonManager.get().landAll();
             AirshipManager.get().landAll();
             BalloonRegistry.flush();
+            DiscoveryStore.flush();
             Telemetry.stop();
         });
         // World map markers of the stations, registered on every world like the game's warps.
@@ -357,6 +364,7 @@ public class OrbisHorizonPlugin extends JavaPlugin {
         BalloonManager.get().landAll();
         AirshipManager.get().landAll();
         BalloonRegistry.stopWriter();
+        DiscoveryStore.flush();
         SeaCharts.stop();
         BenchTabs.unregister();
         Telemetry.stop();

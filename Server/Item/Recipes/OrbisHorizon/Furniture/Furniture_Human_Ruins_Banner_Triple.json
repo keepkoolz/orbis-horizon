@@ -1,0 +1,33 @@
+{
+  "Input": [
+    {
+      "ResourceTypeId": "Wood_Planks",
+      "Quantity": 2
+    },
+    {
+      "ItemId": "Ingredient_Fabric_Scrap_Linen",
+      "Quantity": 6
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Human_Ruins_Banner_Triple",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Human_Ruins_Banner_Triple",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Textiles"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

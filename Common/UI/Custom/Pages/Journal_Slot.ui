@@ -1,0 +1,15 @@
+Button #Button {
+  Anchor: (Width: 92, Height: 104, Right: 8, Bottom: 8);
+  LayoutMode: Top;
+  Padding: (Full: 6);
+  Style: (
+    Default: (Background: (TexturePath: "Journal/SlotFilled.png", Border: 8)),
+    Hovered: (Background: (TexturePath: "Journal/SlotHover.png", Border: 8))
+  );
+  Group {
+    LayoutMode: Center;
+    Anchor: (Height: 60);
+    ItemIcon #Icon { Anchor: (Width: 56, Height: 56); }
+  }
+  Label #Name { FlexWeight: 1; Style: (FontSize: 12, TextColor: #3b2a1a, Wrap: true, HorizontalAlignment: Center); }
+}

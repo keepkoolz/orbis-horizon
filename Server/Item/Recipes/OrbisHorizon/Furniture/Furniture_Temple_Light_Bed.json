@@ -1,0 +1,37 @@
+{
+  "Input": [
+    {
+      "ItemId": "Rock_Marble",
+      "Quantity": 3
+    },
+    {
+      "ItemId": "Ingredient_Fibre",
+      "Quantity": 4
+    },
+    {
+      "ItemId": "Ingredient_Fabric_Scrap_Linen",
+      "Quantity": 2
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Temple_Light_Bed",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Temple_Light_Bed",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Beds"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

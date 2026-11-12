@@ -1,0 +1,29 @@
+{
+  "Input": [
+    {
+      "ItemId": "Wood_Drywood_Planks",
+      "Quantity": 1
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Feran_Stool",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Feran_Stool",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Misc"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

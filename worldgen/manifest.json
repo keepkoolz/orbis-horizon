@@ -1,7 +1,7 @@
 {
     "Group": "KeepKoolz",
     "Name": "Orbis Horizon Worldgen",
-    "Version": "2.2.0",
+    "Version": "2.3.0",
     "Description": "Generates balloon and boat stations with new worlds for Orbis Horizon.",
     "Authors": [
         {
@@ -11,7 +11,7 @@
     "ServerVersion": ">=0.7.0 <0.8.0",
     "Main": "com.keepkoolz.orbishorizon.worldgen.WorldgenPlugin",
     "Dependencies": {
-        "KeepKoolz:Orbis Horizon": "2.2.0"
+        "KeepKoolz:Orbis Horizon": "2.3.0"
     },
     "OptionalDependencies": {},
     "LoadBefore": {},

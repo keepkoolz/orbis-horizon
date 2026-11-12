@@ -1,0 +1,94 @@
+$C = "../Common.ui";
+
+$C.@PageOverlay {
+  LayoutMode: Middle;
+
+  Group #Book {
+    Anchor: (Width: 1100, Height: 720);
+    Background: (TexturePath: "Journal/Book.png", Border: 40);
+    LayoutMode: Left;
+
+    Group #LeftPage {
+      FlexWeight: 1;
+      LayoutMode: Top;
+      Padding: (Left: 62, Right: 52, Top: 58, Bottom: 56);
+
+      Label #JournalTitle { Style: (FontSize: 26, RenderBold: true, TextColor: #5a1e0e, HorizontalAlignment: Center, Wrap: true); Anchor: (Height: 40, Bottom: 6); Text: ""; }
+      Label #Lore { Style: (TextColor: #3b2a1a, RenderItalics: true, Wrap: true); Anchor: (Bottom: 8, Height: 150); Text: ""; }
+      Label #Counter { Style: (RenderBold: true, TextColor: #3b2a1a); Anchor: (Bottom: 4, Height: 22); Text: ""; }
+      Label #Titles { Style: (TextColor: #5a1e0e, RenderItalics: true, Wrap: true); Anchor: (Bottom: 6, Height: 40); Text: ""; }
+      Group #List { FlexWeight: 1; LayoutMode: TopScrolling; ScrollbarStyle: $C.@DefaultScrollbarStyle; }
+      Group #Detail {
+        LayoutMode: Top;
+        Anchor: (Top: 6, Bottom: 8, Height: 196);
+        Group { Anchor: (Height: 2, Bottom: 6); Background: #5a1e0e(0.35); }
+        Label #DetailName { Style: (RenderBold: true, FontSize: 18, TextColor: #5a1e0e); Anchor: (Height: 24); Text: ""; }
+        Label #DetailFamily { Style: (TextColor: #3b2a1a, RenderItalics: true); Anchor: (Height: 20); Text: ""; }
+        Label #DetailFound { Style: (TextColor: #3b2a1a, Wrap: true); Anchor: (Height: 22); Text: ""; }
+        Label #DetailLore { Style: (TextColor: #3b2a1a, RenderItalics: true, Wrap: true); Anchor: (Height: 78); Text: ""; }
+        Label #DetailCraft { Style: (TextColor: #5a1e0e, RenderBold: true); Anchor: (Height: 20); Text: ""; }
+      }
+      Group #LeftNav {
+        LayoutMode: Left;
+        Anchor: (Height: 40);
+
+        Button #PrevButton {
+          Anchor: (Width: 56, Height: 36);
+          LayoutMode: Full;
+          Style: (
+            Default: (Background: (TexturePath: "Journal/SlotFilled.png", Border: 8)),
+            Hovered: (Background: (TexturePath: "Journal/SlotHover.png", Border: 8))
+          );
+          Label #PrevLabel { Style: (FontSize: 22, RenderBold: true, TextColor: #5a1e0e, HorizontalAlignment: Center, VerticalAlignment: Center); Text: ""; }
+        }
+      }
+    }
+
+    Group #RightPage {
+      FlexWeight: 1;
+      LayoutMode: Top;
+      Padding: (Left: 52, Right: 62, Top: 58, Bottom: 56);
+
+      Group #BookmarkRow {
+        LayoutMode: Left;
+        Anchor: (Height: 38);
+        Visible: false;
+
+        Group { FlexWeight: 1; }
+        Button #Bookmark {
+          Anchor: (Width: 36, Height: 96, Top: -58, Right: 24);
+          Style: (
+            Default: (Background: "Journal/Bookmark.png"),
+            Hovered: (Background: "Journal/BookmarkHover.png")
+          );
+        }
+      }
+
+      Label #Intro { Style: (TextColor: #3b2a1a, RenderItalics: true, Wrap: true, HorizontalAlignment: Center, FontSize: 17); Anchor: (Top: 40, Height: 330); Text: ""; }
+      Label #Empty { Style: (TextColor: #5a1e0e, RenderItalics: true, Wrap: true, HorizontalAlignment: Center, FontSize: 17); Anchor: (Top: 16, Height: 90); Text: ""; }
+      Group #Grid {
+        FlexWeight: 1;
+        LayoutMode: TopScrolling;
+        ScrollbarStyle: $C.@DefaultScrollbarStyle;
+
+        Group #Slots { LayoutMode: LeftCenterWrap; }
+      }
+      Group #RightNav {
+        LayoutMode: Left;
+        Anchor: (Height: 40);
+
+        Group { FlexWeight: 1; }
+        Button #NextButton {
+          Anchor: (Width: 56, Height: 36);
+          LayoutMode: Full;
+          Style: (
+            Default: (Background: (TexturePath: "Journal/SlotFilled.png", Border: 8)),
+            Hovered: (Background: (TexturePath: "Journal/SlotHover.png", Border: 8))
+          );
+          Label #NextLabel { Style: (FontSize: 22, RenderBold: true, TextColor: #5a1e0e, HorizontalAlignment: Center, VerticalAlignment: Center); Text: ""; }
+        }
+      }
+    }
+  }
+}
+$C.@BackButton {}

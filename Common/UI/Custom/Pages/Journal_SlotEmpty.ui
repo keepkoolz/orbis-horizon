@@ -1,0 +1,6 @@
+Group #Tile {
+  Anchor: (Width: 92, Height: 104, Right: 8, Bottom: 8);
+  Background: (TexturePath: "Journal/Slot.png", Border: 8);
+  LayoutMode: CenterMiddle;
+  Label #Name { Style: (FontSize: 36, RenderBold: true, TextColor: #5a3d22(0.5), HorizontalAlignment: Center, VerticalAlignment: Center); Anchor: (Height: 44); }
+}

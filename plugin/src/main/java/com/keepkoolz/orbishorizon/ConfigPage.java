@@ -40,6 +40,7 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
 
     static final String MARKER_SHARING = "markerSharing";
     static final String PACK_BACK = "packBack";
+    static final String DISCOVERY = "furnitureDiscovery";
     static final String PROTECT = "protect";
     static final String FARE = "fare";
     static final String GENERATED_EDITABLE = "generatedStationsEditable";
@@ -48,7 +49,7 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
     static final String CONTRACT_CONCENTRATED = "contractConcentrated";
 
     /** Keys of the built-in rows, which an extension row cannot take. */
-    static final Set<String> BUILT_IN_KEYS = Set.of(MARKER_SHARING, PACK_BACK, PROTECT, FARE, GENERATED_EDITABLE, CONSOLE_LOG_LEVEL,
+    static final Set<String> BUILT_IN_KEYS = Set.of(MARKER_SHARING, PACK_BACK, DISCOVERY, PROTECT, FARE, GENERATED_EDITABLE, CONSOLE_LOG_LEVEL,
             CONTRACT_ESSENCES, CONTRACT_CONCENTRATED);
 
     static final class Data {
@@ -129,6 +130,10 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
         if (settingVisible(PACK_BACK, lang)) {
             section(cmd, index, "section.camping");
             toggleRow(cmd, events, index, PACK_BACK, Message.translation(UI + PACK_BACK), null, TransitSettings.packBackView());
+        }
+        if (settingVisible(DISCOVERY, lang)) {
+            section(cmd, index, "section.exploration");
+            toggleRow(cmd, events, index, DISCOVERY, Message.translation(UI + DISCOVERY), null, TransitSettings.furnitureDiscovery());
         }
         if (settingVisible(PROTECT, lang)) {
             section(cmd, index, "section.passengers");
@@ -247,6 +252,7 @@ final class ConfigPage extends InteractiveCustomUIPage<ConfigPage.Data> {
             case FARE -> TransitSettings.setFareEnabled(on);
             case GENERATED_EDITABLE -> TransitSettings.setGeneratedStationsEditable(on);
             case PACK_BACK -> PackBackView.set(on);
+            case DISCOVERY -> TransitSettings.setFurnitureDiscovery(on);
             default -> RecipeToggles.set(key, on); // ignores an id that is not a mod item
         }
     }

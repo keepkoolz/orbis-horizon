@@ -1,0 +1,33 @@
+{
+  "Input": [
+    {
+      "ItemId": "Ingredient_Chitin_Sturdy",
+      "Quantity": 4
+    },
+    {
+      "ItemId": "Ingredient_Bar_Thorium",
+      "Quantity": 1
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Scarak_Hive_Door_Medium",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Scarak_Hive_Door_Medium",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Misc"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

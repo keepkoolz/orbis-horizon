@@ -28,6 +28,7 @@ final class TransitSettings {
     private static volatile int contractEssences = DEFAULT_CONTRACT_ESSENCES;
     private static volatile int contractConcentrated = DEFAULT_CONTRACT_CONCENTRATED;
     private static volatile boolean packBackView = true;
+    private static volatile boolean furnitureDiscovery = true;
     private static volatile boolean markerSharing = true;
     /** The worldgenEnabled and worldgenOldTerrain values as read, not interpreted (null when absent), written back unchanged. */
     private static volatile BsonValue rawWorldgenEnabled;
@@ -78,7 +79,12 @@ final class TransitSettings {
         save();
     }
 
-    /** whether a camp pack in the inventory is drawn on the player's back. Default: on. */
+    /** Whether furniture can be discovered with the explorer's journal. */
+    static boolean furnitureDiscovery() {
+        return furnitureDiscovery;
+    }
+
+    /** Whether a camp pack in the inventory is drawn on the player's back. Default: on. */
     static boolean packBackView() {
         return packBackView;
     }
@@ -110,6 +116,7 @@ final class TransitSettings {
         contractEssences = DEFAULT_CONTRACT_ESSENCES;
         contractConcentrated = DEFAULT_CONTRACT_CONCENTRATED;
         packBackView = true;
+        furnitureDiscovery = true;
         rawWorldgenEnabled = null;
         rawWorldgenOldTerrain = null;
         markerSharing = true;
@@ -129,6 +136,7 @@ final class TransitSettings {
             contractEssences = positiveInt(doc, "contractEssences", DEFAULT_CONTRACT_ESSENCES);
             contractConcentrated = positiveInt(doc, "contractConcentrated", DEFAULT_CONTRACT_CONCENTRATED);
             packBackView = !doc.containsKey("packBackView") || doc.getBoolean("packBackView").getValue();
+            furnitureDiscovery = !doc.containsKey("furnitureDiscovery") || doc.getBoolean("furnitureDiscovery").getValue();
             rawWorldgenEnabled = doc.get("worldgenEnabled");
             rawWorldgenOldTerrain = doc.get("worldgenOldTerrain");
             markerSharing = !doc.containsKey("markerSharing") || doc.getBoolean("markerSharing").getValue();
@@ -150,6 +158,11 @@ final class TransitSettings {
                 LOGGER.at(Level.WARNING).withCause(e2).log("Cannot rename transit-settings.json to .bad");
             }
         }
+    }
+
+    static synchronized void setFurnitureDiscovery(boolean on) {
+        furnitureDiscovery = on;
+        save();
     }
 
     static synchronized void setPackBackView(boolean on) {
@@ -201,6 +214,7 @@ final class TransitSettings {
             doc.put("contractEssences", new BsonInt32(contractEssences));
             doc.put("contractConcentrated", new BsonInt32(contractConcentrated));
             doc.put("packBackView", new BsonBoolean(packBackView));
+            doc.put("furnitureDiscovery", new BsonBoolean(furnitureDiscovery));
             BsonValue legacyEnabled = rawWorldgenEnabled;
             if (legacyEnabled != null) doc.put("worldgenEnabled", legacyEnabled);
             doc.put("markerSharing", new BsonBoolean(markerSharing));

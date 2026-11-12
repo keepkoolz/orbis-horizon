@@ -1,0 +1,33 @@
+{
+  "Input": [
+    {
+      "ResourceTypeId": "Wood_Tropicalwood",
+      "Quantity": 4
+    },
+    {
+      "ItemId": "Ingredient_Fabric_Scrap_Linen",
+      "Quantity": 2
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Jungle_Bookshelf",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Jungle_Bookshelf",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Storage"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

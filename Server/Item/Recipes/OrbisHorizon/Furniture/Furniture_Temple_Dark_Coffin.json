@@ -1,0 +1,33 @@
+{
+  "Input": [
+    {
+      "ItemId": "Rock_Shale",
+      "Quantity": 6
+    },
+    {
+      "ItemId": "Ingredient_Bar_Iron",
+      "Quantity": 1
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Temple_Dark_Coffin",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Temple_Dark_Coffin",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Misc"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 3
+}

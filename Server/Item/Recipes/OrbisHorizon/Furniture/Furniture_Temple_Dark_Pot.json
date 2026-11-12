@@ -1,0 +1,29 @@
+{
+  "Input": [
+    {
+      "ItemId": "Soil_Clay_Smooth_White",
+      "Quantity": 3
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Temple_Dark_Pot",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Temple_Dark_Pot",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Pottery"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

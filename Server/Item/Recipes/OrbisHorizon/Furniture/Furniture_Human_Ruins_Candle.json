@@ -1,0 +1,33 @@
+{
+  "Input": [
+    {
+      "ItemId": "Ingredient_Fibre",
+      "Quantity": 2
+    },
+    {
+      "ItemId": "Ingredient_Tree_Sap",
+      "Quantity": 2
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Human_Ruins_Candle",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Human_Ruins_Candle",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Lighting"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

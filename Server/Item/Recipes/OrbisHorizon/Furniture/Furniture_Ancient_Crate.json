@@ -1,0 +1,33 @@
+{
+  "Input": [
+    {
+      "ItemId": "Wood_Deadwood_Planks",
+      "Quantity": 2
+    },
+    {
+      "ItemId": "Ingredient_Stick",
+      "Quantity": 2
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Ancient_Crate",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Ancient_Crate",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Misc"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

@@ -1,0 +1,71 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.orbis_explorer_journal.name",
+    "Description": "server.orbis_horizon.items.orbis_explorer_journal.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Orbis_Explorer_Journal.png",
+  "Model": "Items/Weapons/Spellbook/Frost.blockymodel",
+  "Texture": "Items/Tools/Orbis_Explorer_Journal_Texture.png",
+  "IconProperties": {
+    "Scale": 0.545,
+    "Translation": [
+      -7.8,
+      -7.8
+    ],
+    "Rotation": [
+      45,
+      90,
+      0
+    ]
+  },
+  "PlayerAnimationsId": "Spellbook",
+  "MaxStack": 1,
+  "ItemLevel": 1,
+  "Quality": "Uncommon",
+  "Categories": [
+    "Items.Tools"
+  ],
+  "Recipe": {
+    "Input": [
+      {
+        "ItemId": "Ingredient_Leather_Light",
+        "Quantity": 2
+      },
+      {
+        "ItemId": "Ingredient_Fabric_Scrap_Linen",
+        "Quantity": 4
+      },
+      {
+        "ItemId": "Ingredient_Charcoal",
+        "Quantity": 1
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "OrbisHorizon_Gear"
+        ],
+        "Id": "OrbisHorizon_Bench",
+        "RequiredTierLevel": 1
+      }
+    ],
+    "TimeSeconds": 3
+  },
+  "Interactions": {
+    "Primary": {
+      "Interactions": [
+        {
+          "Type": "OrbisHorizon_OpenJournal"
+        }
+      ]
+    },
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "OrbisHorizon_ExamineFurniture"
+        }
+      ]
+    }
+  }
+}

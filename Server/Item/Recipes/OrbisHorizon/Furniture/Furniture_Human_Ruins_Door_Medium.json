@@ -1,0 +1,33 @@
+{
+  "Input": [
+    {
+      "ResourceTypeId": "Wood_Planks",
+      "Quantity": 4
+    },
+    {
+      "ItemId": "Ingredient_Bar_Iron",
+      "Quantity": 1
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Human_Ruins_Door_Medium",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Human_Ruins_Door_Medium",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Misc"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

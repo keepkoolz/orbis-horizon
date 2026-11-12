@@ -60,6 +60,10 @@ These wild stations come from Orbis Horizon Worldgen, an optional add-on you dow
 
 Each trip, by balloon or by boat, costs a ticket paid in life essences by the traveller who picks the destination, unless the server makes tickets free. If the trip never happens, the ticket is refunded.
 
+### The explorer's journal
+
+Some of the furniture you stumble upon cannot be built anywhere: a bed in a lost ruin, a statue in a dark temple, a lantern in a Scarak temple. Aim the explorer's journal at it and examine it. The piece goes into your album, a leather-bound book with a page per family, the story of the place and a few words on every piece you found, and you learn how to make it at the furniture bench. Families stay hidden until you find their first piece, and completing one earns you an explorer's title.
+
 ## Before you set off
 
 - Everything is crafted at the Explorer's workbench, an explorer's desk with its own tabs. Upgrade it and plans and little models of what you can build appear on top of it, down to a balloon floating above the bench. Its Gear tab holds a diving outfit for exploring under water.
@@ -69,7 +73,7 @@ Each trip, by balloon or by boat, costs a ticket paid in life essences by the tr
 - Friends standing on board when you take off travel with you, seated, and watch the sky from outside the vehicle. Passengers can leave mid-flight with a glider. Other players see you fly by.
 - Stations keep the sky above their landing pad clear.
 
-Orbis Horizon 2.2 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8.
+Orbis Horizon 2.3 needs Hytale 0.7. Version 1.5 is the last one for Hytale 0.6.8.
 
 The wiki explains how to fly each vehicle, how to found your stations and the operator commands.
 

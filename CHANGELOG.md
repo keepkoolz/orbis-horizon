@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.3.0
+
+### The explorer's journal
+
+- A new item, the explorer's journal, made at the Explorer's workbench in the Gear tab. Use the primary click to open your album, an open book with a page per family and a bookmark that takes you back to the index.
+- Aim at a piece of furniture and use the secondary click to examine it, and use it anywhere else to open your album. It goes into your album, sorted by family. Nineteen families of furniture the game cannot make are listed, from the Lost civilisation and the Village to the temples, the taverns and the goblin lairs, and each one only appears once you have found a first piece.
+- Pieces you have not found yet show as a question mark. Pick a found piece to see its name, a few words about it and where you found it. Each player has their own album, kept between sessions.
+- Examining a piece of furniture teaches you how to build it, and you make it at the furniture bench of the game. 146 pieces of furniture are concerned.
+- Finding every piece of a family gives you a title, shown on screen and in your album.
+
+### For operators
+
+- The explorer's journal recipe can be switched off like the others. The Exploration section of `/orbishorizon config` holds a new setting that turns the furniture discovery off, and the album stays readable.
+
 ## v2.2.0
 
 ### Name your vehicles

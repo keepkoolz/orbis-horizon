@@ -1,0 +1,29 @@
+{
+  "Input": [
+    {
+      "ItemId": "Wood_Ice_Trunk",
+      "Quantity": 2
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Frozen_Castle_Bench",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Frozen_Castle_Bench",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Misc"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

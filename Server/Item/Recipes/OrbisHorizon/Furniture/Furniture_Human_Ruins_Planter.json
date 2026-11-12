@@ -1,0 +1,33 @@
+{
+  "Input": [
+    {
+      "ResourceTypeId": "Rock",
+      "Quantity": 3
+    },
+    {
+      "ResourceTypeId": "Soils",
+      "Quantity": 2
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Human_Ruins_Planter",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Human_Ruins_Planter",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Pottery"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

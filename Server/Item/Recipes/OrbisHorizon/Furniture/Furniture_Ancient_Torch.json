@@ -1,0 +1,37 @@
+{
+  "Input": [
+    {
+      "ResourceTypeId": "Wood_Blackwood_Deadwood",
+      "Quantity": 1
+    },
+    {
+      "ItemId": "Ingredient_Charcoal",
+      "Quantity": 1
+    },
+    {
+      "ItemId": "Ingredient_Fibre",
+      "Quantity": 1
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Ancient_Torch",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Ancient_Torch",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Lighting"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 2
+}

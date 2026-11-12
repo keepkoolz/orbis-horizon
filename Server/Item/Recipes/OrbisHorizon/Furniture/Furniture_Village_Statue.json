@@ -1,0 +1,29 @@
+{
+  "Input": [
+    {
+      "ResourceTypeId": "Rock",
+      "Quantity": 12
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Village_Statue",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Village_Statue",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Misc"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 3
+}

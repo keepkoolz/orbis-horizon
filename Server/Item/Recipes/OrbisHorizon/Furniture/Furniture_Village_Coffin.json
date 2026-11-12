@@ -1,0 +1,33 @@
+{
+  "Input": [
+    {
+      "ResourceTypeId": "Wood_Hardwood",
+      "Quantity": 6
+    },
+    {
+      "ItemId": "Ingredient_Bar_Iron",
+      "Quantity": 1
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Furniture_Village_Coffin",
+    "Quantity": 1
+  },
+  "Output": [
+    {
+      "ItemId": "Furniture_Village_Coffin",
+      "Quantity": 1
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Crafting",
+      "Id": "Furniture_Bench",
+      "Categories": [
+        "Furniture_Misc"
+      ]
+    }
+  ],
+  "KnowledgeRequired": true,
+  "TimeSeconds": 3
+}

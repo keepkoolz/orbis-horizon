@@ -1,0 +1,13 @@
+Button #Button {
+  Padding: (Full: 6);
+  LayoutMode: Left;
+  Anchor: (Bottom: 4);
+  Style: (
+    Hovered: (
+      Background: #5a1e0e(0.14),
+    )
+  );
+  Label #Name { Style: (RenderBold: true, TextColor: #3b2a1a); FlexWeight: 1; }
+  Label #Count { Style: (TextColor: #5a3d22); Anchor: (Right: 12); }
+  Label #Title { Style: (TextColor: #5a1e0e, RenderItalics: true); }
+}
