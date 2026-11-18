@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.3.1
+
+### The explorer's journal
+
+- The journal's open book is now drawn from a few small pieces instead of one large picture. It keeps its stitched leather cover and parchment pages and takes far less memory, which leaves more room for the windows of other mods in large modpacks.
+
 ## v2.3.0
 
 ### The explorer's journal
