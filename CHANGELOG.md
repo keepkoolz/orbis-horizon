@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.3.2
+
+### Stations found in the wild
+
+- Orbis Horizon Worldgen loads with this version of Orbis Horizon. Balloon stations and ports rise across new land as you explore, and the `/orbishorizon station worldgen` and `/orbishorizon station planned` commands answer operators.
+
+### Before you update
+
+- Replace both files, Orbis Horizon and Orbis Horizon Worldgen, with those of version 2.3.2. Each one only works with the other of the same version.
+
 ## v2.3.1
 
 ### The explorer's journal

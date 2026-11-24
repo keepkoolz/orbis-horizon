@@ -146,7 +146,7 @@ public class WorldgenTests {
         System.out.println("WorldgenTests: " + passed + " OK");
     }
 
-    /** The two manifests share the version and the server range, and the extension depends on exactly that version of the mod. */
+    /** The two manifests share the version and the server range, and the extension depends on exactly that version of the mod, written as a range the game parses. */
     static void manifestsAligned() throws Exception {
         org.bson.BsonDocument mod = org.bson.BsonDocument.parse(Files.readString(Path.of("manifest.json")));
         org.bson.BsonDocument ext = org.bson.BsonDocument.parse(Files.readString(Path.of("worldgen/manifest.json")));
@@ -155,7 +155,10 @@ public class WorldgenTests {
         eq(mod.getString("ServerVersion").getValue(), ext.getString("ServerVersion").getValue());
         org.bson.BsonDocument dependencies = ext.getDocument("Dependencies");
         eq(1, dependencies.size());
-        eq(version, dependencies.getString("KeepKoolz:Orbis Horizon").getValue());
+        String range = dependencies.getString("KeepKoolz:Orbis Horizon").getValue();
+        eq("=" + version, range);
+        com.hypixel.hytale.common.semver.SemverRange parsed = com.hypixel.hytale.common.semver.SemverRange.fromString(range);
+        check(parsed.satisfies(com.hypixel.hytale.common.semver.Semver.fromString(version)), "dependency range accepts the mod version");
         eq("KeepKoolz", ext.getString("Group").getValue());
         eq("Orbis Horizon Worldgen", ext.getString("Name").getValue());
         eq(true, ext.getBoolean("IncludesAssetPack").getValue());
@@ -169,7 +172,7 @@ public class WorldgenTests {
     static void worldgenLangKeysComplete() throws Exception {
         Set<String> en = langKeys(Path.of("worldgen/Server/Languages/en-US/server.lang"));
         Set<String> fr = langKeys(Path.of("worldgen/Server/Languages/fr-FR/server.lang"));
-        eq(22, en.size());
+        eq(23, en.size());
         eq(en, fr);
         for (String lang : new String[] {"en-US", "fr-FR"}) {
             String ext = Files.readString(Path.of("worldgen/Server/Languages/" + lang + "/server.lang"));

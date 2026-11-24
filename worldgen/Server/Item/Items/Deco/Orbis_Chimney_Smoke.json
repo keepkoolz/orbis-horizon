@@ -1,0 +1,47 @@
+{
+  "TranslationProperties": {
+    "Name": "server.orbis_horizon.items.orbis_chimney_smoke.name"
+  },
+  "Icon": "Icons/ItemsGenerated/Emitter_Firework_Mix.png",
+  "Categories": [
+    "Blocks.Deco"
+  ],
+  "SubCategory": "VFX Spawners",
+  "Quality": "Developer",
+  "PlayerAnimationsId": "Block",
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": "Block_Secondary"
+  },
+  "BlockType": {
+    "DrawType": "Model",
+    "Material": "Empty",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/_Debug/Model.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/_Debug/TextureEmpty.png",
+        "Weight": 1
+      }
+    ],
+    "HitboxType": "Rubble",
+    "BlockSoundSetId": "Stone",
+    "PhysicalMaterialId": "Stone",
+    "Support": {
+      "Down": [
+        {
+          "Support": "Ignored"
+        }
+      ]
+    },
+    "Particles": [
+      {
+        "SystemId": "Orbis_Chimney_Smoke",
+        "PositionOffset": {
+          "Y": 0.0
+        }
+      }
+    ],
+    "IgnoreSupportWhenPlaced": true
+  }
+}

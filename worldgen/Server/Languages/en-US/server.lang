@@ -20,3 +20,4 @@ orbis_horizon.chat.transit.cmd.state.abandoned = abandoned
 orbis_horizon.ui.config.section.world = World
 orbis_horizon.ui.config.worldgen = Generated stations
 orbis_horizon.ui.config.worldgenOldTerrain = Stations on explored terrain
+orbis_horizon.items.orbis_chimney_smoke.name = Chimney smoke

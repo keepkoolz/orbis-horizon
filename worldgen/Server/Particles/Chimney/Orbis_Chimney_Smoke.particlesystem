@@ -1,0 +1,8 @@
+{
+  "Spawners": [
+    {
+      "SpawnerId": "Orbis_Chimney_Smoke_Main"
+    }
+  ],
+  "CullDistance": 300
+}
